@@ -51,6 +51,8 @@ After this, save changes in `*.ts`/`*.tsx` files to see Fast Refresh updates. If
 
 ## Build APK and install on phone
 
+### Debug build (development)
+
 Build debug APK:
 
 ```bash
@@ -69,9 +71,33 @@ Build + install in one command:
 npm run apk
 ```
 
-Expected APK path:
+Expected APK path: `android/app/build/outputs/apk/debug/app-debug.apk`
 
-`android/app/build/outputs/apk/debug/app-debug.apk`
+### Release build (standalone, no Metro required)
+
+A release build bundles the JavaScript into the APK itself. The app works without a Metro server running on your computer.
+
+Build release APK (takes some time):
+
+```bash
+npm run build:apk-release
+```
+
+Install release APK to a connected Android device via `adb`:
+
+```bash
+npm run install:apk-release
+```
+
+Build + install in one command:
+
+```bash
+npm run apk-release
+```
+
+Expected APK path: `android/app/build/outputs/apk/release/app-release.apk`
+
+> **Note:** The release build is signed with the debug keystore by default (see `android/app/build.gradle`). This is fine for local testing but not for publishing to the Play Store.
 
 ## First-launch verification flow
 
