@@ -1,16 +1,16 @@
 # Notebox MVP: Architecture
 
-## Simplest architecture
+## Application shape
 
 Keep architecture intentionally small and explicit:
 
-- `App.tsx` decides whether setup is needed.
-- `SetupScreen` handles directory selection only.
-- `HomeScreen` proves read/write by editing one setting.
-- `appStorage.ts` stores only selected directory URI in AsyncStorage.
-- `noteboxStorage.ts` handles `.notebox/settings.json` through SAF.
+- `App.tsx` bootstraps initial route resolution and renders the root navigator.
+- `RootStack` gates onboarding (`Setup`) vs. app shell (`MainTabs`).
+- `MainTabs` hosts five feature stacks: Inbox, Podcasts, Home, Vault, Settings.
+- `VaultProvider` stores selected SAF URI and current settings for all features.
+- `core/storage/noteboxStorage.ts` owns all SAF note and settings operations.
 
-No service layer abstraction beyond these two storage modules.
+This keeps business logic near features while keeping device/storage logic centralized.
 
 ## App flow
 
@@ -20,7 +20,7 @@ App launch
     -> missing: SetupScreen
     -> present: hasPermission(uri)?
         -> false: SetupScreen
-        -> true: init .notebox + load settings -> HomeScreen
+        -> true: load MainTabs + hydrate VaultProvider
 ```
 
 ```text
@@ -29,35 +29,78 @@ SetupScreen
   -> openDocumentTree(true)
   -> save URI in AsyncStorage
   -> init .notebox/settings.json
-  -> navigate HomeScreen
+  -> set VaultProvider session
+  -> navigate MainTabs (Home tab)
 ```
 
 ```text
-HomeScreen
-  -> read settings.json
-  -> edit demo setting
-  -> save settings.json
-  -> optional "Change directory" clears saved URI and returns to SetupScreen
+InboxScreen
+  -> capture title + content
+  -> create .md note through core/storage
+  -> note appears in Vault on refresh
 ```
 
-## Source layout (minimal)
+```text
+VaultScreen
+  -> list markdown files in selected SAF directory
+  -> open NoteDetailScreen to render markdown
+```
+
+```text
+SettingsScreen
+  -> edit display name in .notebox/settings.json
+  -> optional "Change directory" clears URI and routes to Setup
+```
+
+## Navigation topology
+
+```text
+RootStack
+├── Setup
+└── MainTabs
+    ├── InboxStack -> Inbox
+    ├── PodcastsStack -> Podcasts
+    ├── HomeStack -> Home
+    ├── VaultStack -> Vault, NoteDetail
+    └── SettingsStack -> Settings
+```
+
+## Source layout (feature-first)
 
 ```text
 src/
-├── App.tsx
-├── screens/
-│   ├── SetupScreen.tsx
-│   └── HomeScreen.tsx
-├── storage/
-│   ├── appStorage.ts
-│   └── noteboxStorage.ts
+├── core/
+│   ├── bootstrap/resolveInitialRoute.ts
+│   ├── storage/
+│   │   ├── appStorage.ts
+│   │   ├── keys.ts
+│   │   └── noteboxStorage.ts
+│   └── vault/VaultContext.tsx
+├── features/
+│   ├── setup/screens/SetupScreen.tsx
+│   ├── home/screens/HomeScreen.tsx
+│   ├── inbox/screens/InboxScreen.tsx
+│   ├── podcasts/
+│   │   ├── screens/PodcastsScreen.tsx
+│   │   └── services/playbackService.ts
+│   ├── vault/
+│   │   ├── hooks/useNotes.ts
+│   │   └── screens/{VaultScreen,NoteDetailScreen}.tsx
+│   └── settings/
+│       ├── hooks/useSettings.ts
+│       └── screens/SettingsScreen.tsx
+├── navigation/
+│   ├── MainTabNavigator.tsx
+│   ├── RootNavigator.tsx
+│   └── types.ts
 └── types.ts
 ```
 
 ## Android directory ownership model
 
 - The selected Notes directory is user-owned external/shared storage.
-- App-owned files for this MVP must live in `/.notebox` under that directory.
-- App sandbox storage (AsyncStorage) only stores the pointer (`notesDirectoryUri`) needed to re-open that external location.
+- App-owned settings live in `/.notebox/settings.json` under that directory.
+- Notes are `.md` files in the selected directory and are the source of truth.
+- App sandbox storage (AsyncStorage) stores only `notesDirectoryUri`.
 
 This matches your requirement: after setup, app settings/state live inside the selected Notes directory dot folder whenever possible.

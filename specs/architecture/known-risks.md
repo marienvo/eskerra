@@ -11,6 +11,7 @@ Mitigation:
 - Start with `newArchEnabled=false`.
 - Validate on real device early (before polishing UI).
 - Keep fallback option: test maintained fork if primary package blocks progress.
+- Before RN upgrades or new native module adoption, explicitly validate New Architecture support on a real Android device.
 
 ## 2) URI handling assumptions (High)
 
@@ -56,3 +57,14 @@ Mitigation:
 
 - Mention hidden-folder behavior in README.
 - Rely on in-app read/write confirmation as ground truth.
+
+## 6) Podcast native playback integration risk (Medium)
+
+Risk:
+
+- `react-native-track-player` setup differs across Android devices/ROMs, and emulator behavior does not fully represent device playback/background behavior.
+
+Mitigation:
+
+- Keep Podcasts as a spike in MVP and verify on a physical Android device.
+- Register playback service early and validate setup before investing in player UI.

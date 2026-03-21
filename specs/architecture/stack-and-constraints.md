@@ -2,11 +2,11 @@
 
 ## Recommendation summary
 
-Use bare React Native CLI (not Expo managed) for this MVP.
+Stay with bare React Native CLI for this MVP.
 
-Reason: the core requirement is user-selected directory access on Android, which means using the Storage Access Framework (SAF) with `content://` URIs and persistable URI permissions. A bare React Native app with a SAF-focused native module is the most boring and reliable path for this.
+Expo with development builds is technically viable and supports custom native modules. This decision is not an Expo Go limitation argument.
 
-Expo managed can work for some filesystem tasks, but it is a worse fit for this specific SAF-heavy workflow and has had SAF edge-case limitations around directory/subdirectory operations.
+The choice is pragmatic: this app already relies on native modules for SAF-based file access, and bare CLI is the most direct, lowest-friction foundation with the current codebase and build scripts.
 
 ## Technical constraints
 
@@ -50,7 +50,9 @@ This lowers integration risk and keeps the implementation simple.
 - React Native CLI + TypeScript (Android-first, bare project)
 - `react-native-saf-x` (SAF directory selection + URI file operations)
 - `@react-native-async-storage/async-storage` (persist selected URI only)
-- `@react-navigation/native` + `@react-navigation/stack` (minimal 2-screen flow)
-- `react-native-screens` + `react-native-safe-area-context` (navigation peer deps)
+- `@react-navigation/native` + `@react-navigation/stack` + `@react-navigation/bottom-tabs` (setup gate + 5-tab shell)
+- `react-native-screens` + `react-native-safe-area-context` + `react-native-gesture-handler` (navigation peer deps)
+- `react-native-markdown-display` (read-only markdown rendering in Vault detail)
+- `react-native-track-player` (podcast playback spike via native module)
 
 No backend, no cloud, no sync engine, no global state library.
