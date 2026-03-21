@@ -2,13 +2,13 @@ import {useNavigation} from '@react-navigation/native';
 import {StackNavigationProp} from '@react-navigation/stack';
 import {useState} from 'react';
 import {
-  ActivityIndicator,
+  Box,
   Button,
-  Platform,
-  StyleSheet,
+  ButtonSpinner,
+  ButtonText,
   Text,
-  View,
-} from 'react-native';
+} from '@gluestack-ui/themed';
+import {Platform, StyleSheet} from 'react-native';
 import {openDocumentTree} from 'react-native-saf-x';
 
 import {RootStackParamList} from '../../../navigation/types';
@@ -56,7 +56,7 @@ export function SetupScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Set up Notebox</Text>
       <Text style={styles.description}>
         Choose the directory where Notebox can store app settings and notes.
@@ -66,16 +66,19 @@ export function SetupScreen() {
           Directory selection is currently supported on Android only.
         </Text>
       ) : null}
-      <View style={styles.buttonRow}>
+      <Box style={styles.buttonRow}>
         <Button
-          disabled={!isAndroid || isSubmitting}
+          borderRadius="$full"
+          isDisabled={!isAndroid || isSubmitting}
           onPress={handleChooseDirectory}
-          title="Choose Notes Directory"
-        />
-      </View>
-      {isSubmitting ? <ActivityIndicator style={styles.spinner} /> : null}
+          size="md">
+          {isSubmitting ? <ButtonSpinner /> : null}
+          <ButtonText>Choose Notes Directory</ButtonText>
+        </Button>
+      </Box>
+      {isSubmitting ? <ButtonSpinner style={styles.spinner} /> : null}
       {statusText ? <Text style={styles.statusText}>{statusText}</Text> : null}
-    </View>
+    </Box>
   );
 }
 

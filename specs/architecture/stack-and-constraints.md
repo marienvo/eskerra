@@ -51,6 +51,7 @@ This lowers integration risk and keeps the implementation simple.
 - `react-native-saf-x` (SAF directory selection + URI file operations)
 - `@react-native-async-storage/async-storage` (persist selected URI only)
 - `@react-navigation/native` + `@react-navigation/stack` + `@react-navigation/bottom-tabs` (setup gate + 5-tab shell)
+- `@gluestack-ui/themed` + `@gluestack-ui/config` + `@gluestack-style/react` (theme-aware UI components with system dark mode)
 - `react-native-screens` + `react-native-safe-area-context` + `react-native-gesture-handler` (navigation peer deps)
 - `react-native-markdown-display` (read-only markdown rendering in Vault detail)
 - `react-native-track-player` (podcast playback spike via native module)

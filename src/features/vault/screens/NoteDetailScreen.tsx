@@ -1,6 +1,7 @@
 import {StackScreenProps} from '@react-navigation/stack';
 import {useEffect, useState} from 'react';
-import {ActivityIndicator, ScrollView, StyleSheet, Text, View} from 'react-native';
+import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
+import {StyleSheet} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 import {VaultStackParamList} from '../../../navigation/types';
@@ -10,9 +11,12 @@ type NoteDetailScreenProps = StackScreenProps<VaultStackParamList, 'NoteDetail'>
 
 export function NoteDetailScreen({route}: NoteDetailScreenProps) {
   const {read} = useNotes();
+  const colorMode = useColorMode();
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
+  const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
 
   useEffect(() => {
     let isActive = true;
@@ -50,16 +54,26 @@ export function NoteDetailScreen({route}: NoteDetailScreenProps) {
   }, [read, route.params.noteUri]);
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>{route.params.noteTitle}</Text>
-      {isLoading ? <ActivityIndicator style={styles.spinner} /> : null}
+      {isLoading ? <Spinner style={styles.spinner} /> : null}
       {error ? <Text style={styles.status}>{error}</Text> : null}
       {!isLoading && !error ? (
         <ScrollView contentContainerStyle={styles.content}>
-          <Markdown>{content || '*Empty note*'}</Markdown>
+          <Markdown
+            style={{
+              body: {color: markdownTextColor},
+              code_block: {color: markdownTextColor},
+              code_inline: {color: markdownTextColor},
+              hr: {backgroundColor: markdownMutedColor},
+              link: {color: '#4f9dff'},
+              paragraph: {color: markdownTextColor},
+            }}>
+            {content || '*Empty note*'}
+          </Markdown>
         </ScrollView>
       ) : null}
-    </View>
+    </Box>
   );
 }
 

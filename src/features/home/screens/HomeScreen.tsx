@@ -1,4 +1,5 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {Box, Text} from '@gluestack-ui/themed';
+import {StyleSheet} from 'react-native';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
 
@@ -6,7 +7,7 @@ export function HomeScreen() {
   const {settings} = useVaultContext();
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Home</Text>
       <Text style={styles.subtitle}>
         {settings?.displayName ?? 'Notebox'}
@@ -14,7 +15,7 @@ export function HomeScreen() {
       <Text style={styles.description}>
         Inbox for fast capture, Vault for your full note collection.
       </Text>
-    </View>
+    </Box>
   );
 }
 

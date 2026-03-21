@@ -1,5 +1,13 @@
 import {useState} from 'react';
-import {Button, StyleSheet, Text, TextInput, View} from 'react-native';
+import {
+  Box,
+  Button,
+  ButtonText,
+  Input,
+  InputField,
+  Text,
+} from '@gluestack-ui/themed';
+import {StyleSheet} from 'react-native';
 
 import {useNotes} from '../../vault/hooks/useNotes';
 
@@ -40,32 +48,38 @@ export function InboxScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Inbox</Text>
       <Text style={styles.description}>Capture an idea and store it as markdown.</Text>
-      <TextInput
-        onChangeText={setTitle}
-        placeholder="Title"
-        style={styles.input}
-        value={title}
-      />
-      <TextInput
-        multiline
-        onChangeText={setContent}
-        placeholder="Write your idea..."
-        style={[styles.input, styles.textArea]}
-        textAlignVertical="top"
-        value={content}
-      />
-      <View style={styles.buttonRow}>
-        <Button
-          disabled={isSaving}
-          onPress={handleSave}
-          title={isSaving ? 'Saving...' : 'Save to Vault'}
+      <Input style={styles.input}>
+        <InputField
+          onChangeText={setTitle}
+          placeholder="Title"
+          value={title}
         />
-      </View>
+      </Input>
+      <Input style={[styles.input, styles.textArea]}>
+        <InputField
+          multiline
+          onChangeText={setContent}
+          placeholder="Write your idea..."
+          textAlignVertical="top"
+          value={content}
+        />
+      </Input>
+      <Box style={styles.buttonRow}>
+        <Button
+          action="primary"
+          borderRadius="$full"
+          isDisabled={isSaving}
+          onPress={handleSave}
+          size="md"
+          variant="solid">
+          <ButtonText>{isSaving ? 'Saving...' : 'Save to Vault'}</ButtonText>
+        </Button>
+      </Box>
       {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
-    </View>
+    </Box>
   );
 }
 
@@ -82,12 +96,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   input: {
-    borderColor: '#9e9e9e',
-    borderRadius: 6,
-    borderWidth: 1,
+    borderRadius: 12,
     marginTop: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 2,
   },
   status: {
     marginTop: 16,

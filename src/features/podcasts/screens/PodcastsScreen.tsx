@@ -1,14 +1,15 @@
-import {StyleSheet, Text, View} from 'react-native';
+import {Box, Text} from '@gluestack-ui/themed';
+import {StyleSheet} from 'react-native';
 
 export function PodcastsScreen() {
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Podcasts</Text>
       <Text style={styles.description}>
         Podcast playback is coming in a future release. The native audio library
         requires New Architecture support before it can be integrated.
       </Text>
-    </View>
+    </Box>
   );
 }
 

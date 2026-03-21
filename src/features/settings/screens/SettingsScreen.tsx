@@ -1,7 +1,15 @@
 import {useNavigation} from '@react-navigation/native';
 import {NavigationProp} from '@react-navigation/native';
 import {useEffect, useState} from 'react';
-import {Button, StyleSheet, Text, TextInput, View} from 'react-native';
+import {
+  Box,
+  Button,
+  ButtonText,
+  Input,
+  InputField,
+  Text,
+} from '@gluestack-ui/themed';
+import {StyleSheet} from 'react-native';
 
 import {RootStackParamList} from '../../../navigation/types';
 import {useSettings} from '../hooks/useSettings';
@@ -53,7 +61,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.label}>Selected directory</Text>
       <Text numberOfLines={2} style={styles.value}>
@@ -61,26 +69,36 @@ export function SettingsScreen() {
       </Text>
 
       <Text style={styles.label}>Display name</Text>
-      <TextInput
-        onChangeText={setDisplayName}
-        placeholder="Enter display name"
-        style={styles.input}
-        value={displayName}
-      />
-
-      <View style={styles.actionsRow}>
-        <Button disabled={isSaving} onPress={handleSave} title="Save" />
-      </View>
-      <View style={styles.actionsRow}>
-        <Button
-          disabled={isSaving}
-          onPress={handleChangeDirectory}
-          title="Change directory"
+      <Input style={styles.input}>
+        <InputField
+          onChangeText={setDisplayName}
+          placeholder="Enter display name"
+          value={displayName}
         />
-      </View>
+      </Input>
+
+      <Box style={styles.actionsRow}>
+        <Button
+          borderRadius="$full"
+          isDisabled={isSaving}
+          onPress={handleSave}
+          size="md">
+          <ButtonText>Save</ButtonText>
+        </Button>
+      </Box>
+      <Box style={styles.actionsRow}>
+        <Button
+          borderRadius="$full"
+          isDisabled={isSaving}
+          onPress={handleChangeDirectory}
+          size="md"
+          variant="outline">
+          <ButtonText>Change directory</ButtonText>
+        </Button>
+      </Box>
 
       {statusText ? <Text style={styles.statusText}>{statusText}</Text> : null}
-    </View>
+    </Box>
   );
 }
 
@@ -94,12 +112,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   input: {
-    borderColor: '#9e9e9e',
-    borderRadius: 6,
-    borderWidth: 1,
+    borderRadius: 12,
     marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 2,
   },
   label: {
     fontWeight: '600',

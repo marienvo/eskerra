@@ -1,14 +1,13 @@
 import {StackScreenProps} from '@react-navigation/stack';
 import {useCallback} from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
+  Box,
   Pressable,
-  RefreshControl,
-  StyleSheet,
+  Spinner,
   Text,
-  View,
-} from 'react-native';
+  useColorMode,
+} from '@gluestack-ui/themed';
+import {FlatList, RefreshControl, StyleSheet} from 'react-native';
 
 import {getNoteTitle} from '../../../core/storage/noteboxStorage';
 import {VaultStackParamList} from '../../../navigation/types';
@@ -18,6 +17,9 @@ type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
 export function VaultScreen({navigation}: VaultScreenProps) {
   const {error, isLoading, notes, refresh} = useNotes();
+  const colorMode = useColorMode();
+  const dividerColor = colorMode === 'dark' ? '#4f4f4f' : '#d6d6d6';
+  const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
 
   const openNote = useCallback(
     (noteUri: string, noteName: string) => {
@@ -30,14 +32,14 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   );
 
   return (
-    <View style={styles.container}>
+    <Box style={styles.container}>
       <Text style={styles.title}>Vault</Text>
-      <View style={styles.folderRow}>
-        <Text style={styles.folderLabel}>Folder</Text>
+      <Box style={[styles.folderRow, {borderColor: dividerColor}]}>
+        <Text style={[styles.folderLabel, {color: mutedTextColor}]}>Folder</Text>
         <Text style={styles.folderValue}>Inbox</Text>
-      </View>
+      </Box>
       {isLoading && notes.length === 0 ? (
-        <ActivityIndicator style={styles.spinner} />
+        <Spinner style={styles.spinner} />
       ) : null}
       {error ? <Text style={styles.status}>{error}</Text> : null}
       <FlatList
@@ -50,9 +52,9 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         renderItem={({item}) => (
           <Pressable
             onPress={() => openNote(item.uri, item.name)}
-            style={styles.noteRow}>
+            style={[styles.noteRow, {borderBottomColor: dividerColor}]}>
             <Text style={styles.noteTitle}>{getNoteTitle(item.name)}</Text>
-            <Text numberOfLines={1} style={styles.noteMeta}>
+            <Text numberOfLines={1} style={[styles.noteMeta, {color: mutedTextColor}]}>
               {item.uri}
             </Text>
           </Pressable>
@@ -65,7 +67,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
           ) : null
         }
       />
-    </View>
+    </Box>
   );
 }
 
@@ -76,13 +78,11 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   folderLabel: {
-    color: '#616161',
     fontSize: 12,
     textTransform: 'uppercase',
   },
   folderRow: {
     alignItems: 'center',
-    borderColor: '#d6d6d6',
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: 'row',
@@ -99,12 +99,10 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   noteMeta: {
-    color: '#616161',
     fontSize: 12,
     marginTop: 4,
   },
   noteRow: {
-    borderBottomColor: '#d6d6d6',
     borderBottomWidth: 1,
     paddingVertical: 12,
   },

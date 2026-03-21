@@ -10,6 +10,8 @@ import {
   useColorScheme,
   View,
 } from 'react-native';
+import {GluestackUIProvider} from '@gluestack-ui/themed';
+import {config} from '@gluestack-ui/config';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
@@ -50,20 +52,22 @@ function App() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaProvider>
-        <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-        {initialRoute === null ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" />
-          </View>
-        ) : (
-          <VaultProvider>
-            <RootNavigator initialRouteName={initialRoute} />
-          </VaultProvider>
-        )}
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <GluestackUIProvider colorMode={isDarkMode ? 'dark' : 'light'} config={config}>
+      <GestureHandlerRootView style={styles.container}>
+        <SafeAreaProvider>
+          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+          {initialRoute === null ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" />
+            </View>
+          ) : (
+            <VaultProvider>
+              <RootNavigator initialRouteName={initialRoute} />
+            </VaultProvider>
+          )}
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </GluestackUIProvider>
   );
 }
 
