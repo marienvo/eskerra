@@ -38,7 +38,9 @@ export function MiniPlayer() {
     togglePlayback,
   } = usePlayerContext();
   const colorMode = useColorMode();
-  const artworkUri = usePodcastArtwork(baseUri, activeEpisode?.rssFeedUrl);
+  const artworkUri = usePodcastArtwork(baseUri, activeEpisode?.rssFeedUrl, {
+    allowBackgroundFetch: true,
+  });
 
   if (!activeEpisode) {
     return null;

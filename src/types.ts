@@ -48,4 +48,6 @@ export type PlaylistEntry = {
 export type PodcastImageCacheEntry = {
   fetchedAt: string;
   imageUrl: string;
+  localImageUri?: string;
+  mimeType?: string;
 };

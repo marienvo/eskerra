@@ -22,6 +22,7 @@ import {
   readSettings,
   writePlaylist,
   writeNoteContent,
+  writePodcastImageFile,
   writeSettings,
 } from '../src/core/storage/noteboxStorage';
 
@@ -253,6 +254,23 @@ describe('noteboxStorage', () => {
       `${baseUri}/.notebox/playlist.json`,
       '',
       {encoding: 'utf8', mimeType: 'application/json'},
+    );
+  });
+
+  test('writePodcastImageFile stores base64 image in podcast-images directory', async () => {
+    existsMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(
+      writePodcastImageFile(baseUri, 'rss-abc', 'QUJDRA==', 'png', 'image/png'),
+    ).resolves.toBe(`${baseUri}/.notebox/podcast-images/rss-abc.png`);
+
+    expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/.notebox/podcast-images`);
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/.notebox/podcast-images/rss-abc.png`,
+      'QUJDRA==',
+      {encoding: 'base64', mimeType: 'image/png'},
     );
   });
 });

@@ -2,20 +2,32 @@ import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import {usePodcastArtwork} from '../src/features/podcasts/hooks/usePodcastArtwork';
-import {getPodcastArtworkUri} from '../src/features/podcasts/services/podcastImageCache';
+import {
+  getCachedPodcastArtworkUri,
+  getPodcastArtworkUri,
+} from '../src/features/podcasts/services/podcastImageCache';
 
 jest.mock('../src/features/podcasts/services/podcastImageCache', () => ({
+  getCachedPodcastArtworkUri: jest.fn(),
   getPodcastArtworkUri: jest.fn(),
 }));
 
 type HookHarnessProps = {
+  allowBackgroundFetch?: boolean;
   baseUri: string | null;
   onResult: (value: string | null) => void;
   rssFeedUrl?: string;
 };
 
-function HookHarness({baseUri, onResult, rssFeedUrl}: HookHarnessProps) {
-  const artworkUri = usePodcastArtwork(baseUri, rssFeedUrl);
+function HookHarness({
+  allowBackgroundFetch,
+  baseUri,
+  onResult,
+  rssFeedUrl,
+}: HookHarnessProps) {
+  const artworkUri = usePodcastArtwork(baseUri, rssFeedUrl, {
+    allowBackgroundFetch,
+  });
 
   useEffect(() => {
     onResult(artworkUri);
@@ -31,6 +43,8 @@ function flushPromises(): Promise<void> {
 }
 
 describe('usePodcastArtwork', () => {
+  const getCachedPodcastArtworkUriMock =
+    getCachedPodcastArtworkUri as jest.MockedFunction<typeof getCachedPodcastArtworkUri>;
   const getPodcastArtworkUriMock = getPodcastArtworkUri as jest.MockedFunction<
     typeof getPodcastArtworkUri
   >;
@@ -39,8 +53,10 @@ describe('usePodcastArtwork', () => {
     jest.clearAllMocks();
   });
 
-  test('returns null immediately and resolves artwork asynchronously', async () => {
-    getPodcastArtworkUriMock.mockResolvedValueOnce('https://cdn.example.com/art.jpg');
+  test('returns cached artwork asynchronously without fetching RSS', async () => {
+    getCachedPodcastArtworkUriMock.mockResolvedValueOnce(
+      'content://vault/.notebox/podcast-images/rss-abc.jpg',
+    );
     const values: Array<string | null> = [];
 
     await act(async () => {
@@ -55,7 +71,8 @@ describe('usePodcastArtwork', () => {
     });
 
     expect(values[0]).toBeNull();
-    expect(values).toContain('https://cdn.example.com/art.jpg');
+    expect(values).toContain('content://vault/.notebox/podcast-images/rss-abc.jpg');
+    expect(getPodcastArtworkUriMock).not.toHaveBeenCalled();
   });
 
   test('stays null when feed URL is missing', async () => {
@@ -73,5 +90,33 @@ describe('usePodcastArtwork', () => {
 
     expect(values).toEqual([null]);
     expect(getPodcastArtworkUriMock).not.toHaveBeenCalled();
+  });
+
+  test('can fetch artwork in background when explicitly allowed', async () => {
+    getCachedPodcastArtworkUriMock.mockResolvedValueOnce(null);
+    getPodcastArtworkUriMock.mockResolvedValueOnce(
+      'content://vault/.notebox/podcast-images/rss-fetched.jpg',
+    );
+    const values: Array<string | null> = [];
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(HookHarness, {
+          allowBackgroundFetch: true,
+          baseUri: 'content://vault',
+          onResult: value => values.push(value),
+          rssFeedUrl: 'https://feed.example.com/rss.xml',
+        }),
+      );
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(values[0]).toBeNull();
+    expect(values).toContain('content://vault/.notebox/podcast-images/rss-fetched.jpg');
+    expect(getPodcastArtworkUriMock).toHaveBeenCalledWith(
+      'content://vault',
+      'https://feed.example.com/rss.xml',
+    );
   });
 });

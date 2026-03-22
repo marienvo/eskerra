@@ -1,3 +1,4 @@
+import {useEffect} from 'react';
 import {Box, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {Image, SectionList, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -7,6 +8,7 @@ import {usePlayerContext} from '../context/PlayerContext';
 import {PodcastEpisode} from '../../../types';
 import {EpisodeRow} from '../components/EpisodeRow';
 import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
+import {warmPodcastArtworkCache} from '../services/podcastImageCache';
 
 type PodcastSectionListItem = {
   data: PodcastEpisode[];
@@ -26,7 +28,9 @@ function PodcastSectionHeader({
   title,
 }: PodcastSectionHeaderProps) {
   const {baseUri} = useVaultContext();
-  const artworkUri = usePodcastArtwork(baseUri, rssFeedUrl);
+  const artworkUri = usePodcastArtwork(baseUri, rssFeedUrl, {
+    allowBackgroundFetch: false,
+  });
 
   return (
     <View style={[styles.sectionHeader, {borderBottomColor: dividerColor}]}>
@@ -43,6 +47,7 @@ function PodcastSectionHeader({
 }
 
 export function PodcastsScreen() {
+  const {baseUri} = useVaultContext();
   const {
     activeEpisode,
     markEpisodeAsPlayed,
@@ -63,6 +68,34 @@ export function PodcastsScreen() {
     rssFeedUrl: section.rssFeedUrl,
     title: section.title,
   }));
+
+  useEffect(() => {
+    if (!baseUri) {
+      return;
+    }
+
+    const distinctFeedUrls = new Set<string>();
+    for (const section of sections) {
+      const normalizedFeedUrl = section.rssFeedUrl?.trim();
+      if (normalizedFeedUrl) {
+        distinctFeedUrls.add(normalizedFeedUrl);
+      }
+    }
+
+    if (distinctFeedUrls.size === 0) {
+      return;
+    }
+
+    const task = setTimeout(() => {
+      for (const feedUrl of distinctFeedUrls) {
+        warmPodcastArtworkCache(baseUri, feedUrl);
+      }
+    }, 0);
+
+    return () => {
+      clearTimeout(task);
+    };
+  }, [baseUri, sections]);
 
   return (
     <Box style={styles.container}>

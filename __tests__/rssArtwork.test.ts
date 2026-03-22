@@ -1,11 +1,14 @@
-import {fetchRssArtworkUrl} from '../src/features/podcasts/services/rssArtwork';
+import {
+  fetchRssArtworkUrl,
+  parseRssArtworkUrl,
+} from '../src/features/podcasts/services/rssArtwork';
 
 describe('fetchRssArtworkUrl', () => {
   const fetchMock = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (global as unknown as {fetch: typeof fetch}).fetch = fetchMock as never;
+    (globalThis as {fetch?: typeof fetch}).fetch = fetchMock as never;
   });
 
   test('prioritizes itunes:image over other fields', async () => {
@@ -24,6 +27,20 @@ describe('fetchRssArtworkUrl', () => {
 
     await expect(fetchRssArtworkUrl('https://feed.example.com/rss.xml')).resolves.toBe(
       'https://cdn.example.com/itunes.jpg',
+    );
+  });
+
+  test('parses NPO-like itunes:image href directly from xml', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+        <channel>
+          <title>Bureau Buitenland</title>
+          <itunes:image href="https://images.npo.nl/image/upload/v1/bureau-buitenland.jpg" />
+        </channel>
+      </rss>`;
+
+    expect(parseRssArtworkUrl(xml)).toBe(
+      'https://images.npo.nl/image/upload/v1/bureau-buitenland.jpg',
     );
   });
 
@@ -72,6 +89,16 @@ describe('fetchRssArtworkUrl', () => {
     await expect(fetchRssArtworkUrl('https://feed.example.com/with-google.xml')).resolves.toBe(
       'https://cdn.example.com/google.jpg',
     );
+  });
+
+  test('supports atom feeds with logo artwork', () => {
+    const atomXml = `<?xml version="1.0" encoding="utf-8"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <title>Atom podcast</title>
+        <logo>https://cdn.example.com/atom-logo.png</logo>
+      </feed>`;
+
+    expect(parseRssArtworkUrl(atomXml)).toBe('https://cdn.example.com/atom-logo.png');
   });
 
   test('returns null for malformed xml or missing artwork', async () => {

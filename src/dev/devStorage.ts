@@ -462,6 +462,42 @@ export async function writePodcastImageCacheEntry(
   );
 }
 
+export async function writePodcastImageFile(
+  baseUri: string,
+  cacheKey: string,
+  base64Data: string,
+  extension: string,
+  mimeType: string,
+): Promise<string> {
+  assertMockBaseUri(baseUri);
+  await ensureSeeded();
+
+  const normalizedCacheKey = cacheKey.trim();
+  const normalizedExtension = extension.trim().toLowerCase();
+  const normalizedPayload = base64Data.trim();
+  if (!normalizedCacheKey) {
+    throw new Error('Cache key cannot be empty.');
+  }
+  if (!normalizedExtension) {
+    throw new Error('Image extension cannot be empty.');
+  }
+  if (!normalizedPayload) {
+    throw new Error('Image payload cannot be empty.');
+  }
+
+  const normalizedMimeType = mimeType.trim();
+  const imageUri = `${DEV_MOCK_VAULT_URI}/.notebox/podcast-images/${normalizedCacheKey}.${normalizedExtension}`;
+  await AsyncStorage.setItem(
+    `${devPodcastImageKey(normalizedCacheKey)}:file`,
+    JSON.stringify({
+      base64Data: normalizedPayload,
+      imageUri,
+      mimeType: normalizedMimeType || 'image/*',
+    }),
+  );
+  return imageUri;
+}
+
 export async function clearPodcastImageCacheEntry(
   baseUri: string,
   cacheKey: string,

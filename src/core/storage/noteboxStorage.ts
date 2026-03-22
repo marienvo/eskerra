@@ -55,6 +55,10 @@ function getPodcastImageEntryUri(baseUri: string, cacheKey: string): string {
   return `${getPodcastImagesDirectoryUri(baseUri)}/${cacheKey}.json`;
 }
 
+function getPodcastImageFileUri(baseUri: string, cacheKey: string, extension: string): string {
+  return `${getPodcastImagesDirectoryUri(baseUri)}/${cacheKey}.${extension}`;
+}
+
 function getInboxDirectoryUri(baseUri: string): string {
   return `${baseUri}/${INBOX_DIRECTORY_NAME}`;
 }
@@ -147,9 +151,16 @@ function isValidPodcastImageCacheEntry(
   }
 
   const entry = value as Partial<PodcastImageCacheEntry>;
+  const hasValidOptionalUri =
+    entry.localImageUri === undefined || typeof entry.localImageUri === 'string';
+  const hasValidOptionalMime =
+    entry.mimeType === undefined || typeof entry.mimeType === 'string';
 
   return (
-    typeof entry.fetchedAt === 'string' && typeof entry.imageUrl === 'string'
+    typeof entry.fetchedAt === 'string' &&
+    typeof entry.imageUrl === 'string' &&
+    hasValidOptionalUri &&
+    hasValidOptionalMime
   );
 }
 
@@ -535,6 +546,56 @@ export async function writePodcastImageCacheEntry(
     encoding: 'utf8',
     mimeType: 'application/json',
   });
+}
+
+export async function writePodcastImageFile(
+  baseUri: string,
+  cacheKey: string,
+  base64Data: string,
+  extension: string,
+  mimeType: string,
+): Promise<string> {
+  if (isDevMockVaultEnabled) {
+    const devStorage = getDevStorage();
+    return devStorage.writePodcastImageFile(baseUri, cacheKey, base64Data, extension, mimeType);
+  }
+
+  const normalizedBaseUri = normalizeBaseUri(baseUri);
+  const normalizedCacheKey = cacheKey.trim();
+  const normalizedExtension = extension.trim().toLowerCase();
+  const normalizedBase64Data = base64Data.trim();
+  const normalizedMimeType = mimeType.trim();
+  if (!normalizedCacheKey) {
+    throw new Error('Cache key cannot be empty.');
+  }
+  if (!normalizedExtension) {
+    throw new Error('Image extension cannot be empty.');
+  }
+  if (!normalizedBase64Data) {
+    throw new Error('Image payload cannot be empty.');
+  }
+
+  const noteboxDirectoryUri = getNoteboxDirectoryUri(normalizedBaseUri);
+  const podcastImagesDirectoryUri = getPodcastImagesDirectoryUri(normalizedBaseUri);
+  const imageUri = getPodcastImageFileUri(
+    normalizedBaseUri,
+    normalizedCacheKey,
+    normalizedExtension,
+  );
+
+  if (!(await exists(noteboxDirectoryUri))) {
+    await mkdir(noteboxDirectoryUri);
+  }
+
+  if (!(await exists(podcastImagesDirectoryUri))) {
+    await mkdir(podcastImagesDirectoryUri);
+  }
+
+  await writeFile(imageUri, normalizedBase64Data, {
+    encoding: 'base64',
+    mimeType: normalizedMimeType || 'image/*',
+  });
+  return imageUri;
 }
 
 export async function clearPodcastImageCacheEntry(

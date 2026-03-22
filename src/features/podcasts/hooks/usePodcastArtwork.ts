@@ -1,11 +1,20 @@
 import {useEffect, useState} from 'react';
 
-import {getPodcastArtworkUri} from '../services/podcastImageCache';
+import {
+  getCachedPodcastArtworkUri,
+  getPodcastArtworkUri,
+} from '../services/podcastImageCache';
+
+type UsePodcastArtworkOptions = {
+  allowBackgroundFetch?: boolean;
+};
 
 export function usePodcastArtwork(
   baseUri: string | null,
   rssFeedUrl: string | undefined,
+  options?: UsePodcastArtworkOptions,
 ): string | null {
+  const {allowBackgroundFetch = false} = options ?? {};
   const [artworkUri, setArtworkUri] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,12 +26,22 @@ export function usePodcastArtwork(
 
     let isMounted = true;
 
-    getPodcastArtworkUri(baseUri, normalizedFeedUrl)
-      .then(nextUri => {
+    getCachedPodcastArtworkUri(baseUri, normalizedFeedUrl)
+      .then(async cachedUri => {
         if (!isMounted) {
           return;
         }
-        setArtworkUri(nextUri);
+
+        setArtworkUri(cachedUri);
+        if (cachedUri || !allowBackgroundFetch) {
+          return;
+        }
+
+        const fetchedUri = await getPodcastArtworkUri(baseUri, normalizedFeedUrl);
+        if (!isMounted) {
+          return;
+        }
+        setArtworkUri(fetchedUri);
       })
       .catch(() => {
         if (!isMounted) {
@@ -34,7 +53,7 @@ export function usePodcastArtwork(
     return () => {
       isMounted = false;
     };
-  }, [baseUri, rssFeedUrl]);
+  }, [allowBackgroundFetch, baseUri, rssFeedUrl]);
 
   return artworkUri;
 }
