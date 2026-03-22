@@ -5,11 +5,13 @@ import {usePodcastArtwork} from '../src/features/podcasts/hooks/usePodcastArtwor
 import {
   getCachedPodcastArtworkUri,
   getPodcastArtworkUri,
+  peekCachedPodcastArtworkUriFromMemory,
 } from '../src/features/podcasts/services/podcastImageCache';
 
 jest.mock('../src/features/podcasts/services/podcastImageCache', () => ({
   getCachedPodcastArtworkUri: jest.fn(),
   getPodcastArtworkUri: jest.fn(),
+  peekCachedPodcastArtworkUriFromMemory: jest.fn(() => null),
 }));
 
 type HookHarnessProps = {
@@ -48,9 +50,38 @@ describe('usePodcastArtwork', () => {
   const getPodcastArtworkUriMock = getPodcastArtworkUri as jest.MockedFunction<
     typeof getPodcastArtworkUri
   >;
+  const peekCachedPodcastArtworkUriFromMemoryMock =
+    peekCachedPodcastArtworkUriFromMemory as jest.MockedFunction<
+      typeof peekCachedPodcastArtworkUriFromMemory
+    >;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    peekCachedPodcastArtworkUriFromMemoryMock.mockReturnValue(null);
+  });
+
+  test('returns memory peek synchronously on first paint when available', async () => {
+    peekCachedPodcastArtworkUriFromMemoryMock.mockReturnValue(
+      'content://vault/.notebox/podcast-images/rss-peek.jpg',
+    );
+    getCachedPodcastArtworkUriMock.mockResolvedValueOnce(
+      'content://vault/.notebox/podcast-images/rss-peek.jpg',
+    );
+    const values: Array<string | null> = [];
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(HookHarness, {
+          baseUri: 'content://vault',
+          onResult: value => values.push(value),
+          rssFeedUrl: 'https://feed.example.com/rss.xml',
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(values[0]).toBe('content://vault/.notebox/podcast-images/rss-peek.jpg');
+    expect(getPodcastArtworkUriMock).not.toHaveBeenCalled();
   });
 
   test('returns cached artwork asynchronously without fetching RSS', async () => {

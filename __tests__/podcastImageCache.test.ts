@@ -4,6 +4,7 @@ import {
   getPodcastArtworkUri,
   getPodcastImageCacheKey,
   loadPersistentArtworkUriCache,
+  peekCachedPodcastArtworkUriFromMemory,
   PODCAST_IMAGE_CACHE_TTL_MS,
   PODCAST_IMAGE_REMOTE_FALLBACK_TTL_MS,
 } from '../src/features/podcasts/services/podcastImageCache';
@@ -242,6 +243,30 @@ describe('podcastImageCache', () => {
       `notebox:artworkUriCache:${baseUri}`,
     );
     expect(readCacheMock).not.toHaveBeenCalled();
+  });
+
+  test('peekCachedPodcastArtworkUriFromMemory returns hydrated URI without async read', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    const memoryCacheKey = `${baseUri}::${getPodcastImageCacheKey(rssFeedUrl)}`;
+    asyncStorageGetItemMock.mockResolvedValueOnce(
+      JSON.stringify({
+        [memoryCacheKey]:
+          'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-peek.jpg',
+      }),
+    );
+
+    await loadPersistentArtworkUriCache(baseUri);
+    expect(peekCachedPodcastArtworkUriFromMemory(baseUri, rssFeedUrl)).toBe(
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-peek.jpg',
+    );
+    expect(readCacheMock).not.toHaveBeenCalled();
+  });
+
+  test('peekCachedPodcastArtworkUriFromMemory returns null when memory is cold', () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    expect(peekCachedPodcastArtworkUriFromMemory(baseUri, rssFeedUrl)).toBeNull();
   });
 
   test('writes through artwork URI memory updates to AsyncStorage', async () => {

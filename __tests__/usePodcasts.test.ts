@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
@@ -19,7 +20,14 @@ import {
   loadPersistentArtworkUriCache,
   primeArtworkCacheFromDisk,
 } from '../src/features/podcasts/services/podcastImageCache';
+import {resetRssFeedUrlCacheForTesting} from '../src/features/podcasts/services/rssFeedUrlCache';
 import {PodcastEpisode} from '../src/types';
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  removeItem: jest.fn(),
+  setItem: jest.fn(),
+}));
 
 jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
@@ -132,6 +140,15 @@ describe('usePodcasts loading lifecycle', () => {
   const primeArtworkCacheFromDiskMock = primeArtworkCacheFromDisk as jest.MockedFunction<
     typeof primeArtworkCacheFromDisk
   >;
+  const asyncStorageGetItemMock = AsyncStorage.getItem as jest.MockedFunction<
+    typeof AsyncStorage.getItem
+  >;
+  const asyncStorageRemoveItemMock = AsyncStorage.removeItem as jest.MockedFunction<
+    typeof AsyncStorage.removeItem
+  >;
+  const asyncStorageSetItemMock = AsyncStorage.setItem as jest.MockedFunction<
+    typeof AsyncStorage.setItem
+  >;
 
   let baseUri = 'content://vault-root';
   const legacyEpisode: PodcastEpisode = {
@@ -147,6 +164,10 @@ describe('usePodcasts loading lifecycle', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    asyncStorageGetItemMock.mockReset();
+    asyncStorageRemoveItemMock.mockReset();
+    asyncStorageSetItemMock.mockReset();
+    resetRssFeedUrlCacheForTesting();
     baseUri = `content://vault-root-${Date.now()}-${Math.random()}`;
 
     useVaultContextMock.mockReturnValue({
@@ -161,6 +182,9 @@ describe('usePodcasts loading lifecycle', () => {
     readPlaylistMock.mockResolvedValue(null);
     loadPersistentArtworkUriCacheMock.mockResolvedValue();
     primeArtworkCacheFromDiskMock.mockResolvedValue();
+    asyncStorageGetItemMock.mockResolvedValue(null);
+    asyncStorageRemoveItemMock.mockResolvedValue();
+    asyncStorageSetItemMock.mockResolvedValue();
     listGeneralMarkdownFilesMock.mockResolvedValue([]);
     readPodcastFileContentMock.mockResolvedValue('# content');
     isPodcastFileMock.mockImplementation(fileName => fileName.includes('- podcasts.md'));
@@ -245,6 +269,167 @@ describe('usePodcasts loading lifecycle', () => {
       sectionsCount: 1,
     });
 
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('applies persisted rssFeedUrl during phase 1 when AsyncStorage has series mapping', async () => {
+    const feedUrl = 'https://example.com/persisted-feed.xml';
+    asyncStorageGetItemMock.mockImplementation(async key => {
+      if (key === `notebox:rssFeedUrlBySeries:${baseUri}`) {
+        return JSON.stringify({
+          byNormalized: {'series a': feedUrl},
+          bySeries: {'Series A': feedUrl},
+          v: 1,
+        });
+      }
+      return null;
+    });
+
+    listGeneralMarkdownFilesMock.mockResolvedValue([
+      {
+        lastModified: null,
+        name: '2026 Series A - podcasts.md',
+        uri: `${baseUri}/General/2026 Series A - podcasts.md`,
+      },
+      {
+        lastModified: null,
+        name: '📻 Series A.md',
+        uri: `${baseUri}/General/📻 Series A.md`,
+      },
+    ]);
+
+    let latestResult: PodcastsHookSnapshot | null = null;
+    const handleResult = (result: PodcastsHookSnapshot) => {
+      latestResult = result;
+    };
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(HookHarness, {onResult: handleResult}));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(latestResult).toEqual({
+      firstEpisodeRssFeedUrl: feedUrl,
+      isLoading: false,
+      sectionsCount: 1,
+    });
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('enriches episode rssFeedUrl from persisted section title when seriesName differs', async () => {
+    const feedUrl = 'https://example.com/section-title-feed.xml';
+    asyncStorageGetItemMock.mockImplementation(async key => {
+      if (key === `notebox:rssFeedUrlBySeries:${baseUri}`) {
+        return JSON.stringify({
+          byNormalized: {},
+          bySeries: {'File Section Name': feedUrl},
+          v: 1,
+        });
+      }
+      return null;
+    });
+
+    const divergentEpisode: PodcastEpisode = {
+      ...legacyEpisode,
+      sectionTitle: 'File Section Name',
+      seriesName: 'Different Line Name',
+    };
+    parsePodcastFileMock.mockReturnValue([divergentEpisode]);
+    groupBySectionMock.mockImplementation(episodes => [
+      {
+        episodes,
+        title: 'File Section Name',
+      },
+    ]);
+
+    listGeneralMarkdownFilesMock.mockResolvedValue([
+      {
+        lastModified: null,
+        name: '2026 File Section Name - podcasts.md',
+        uri: `${baseUri}/General/2026 File Section Name - podcasts.md`,
+      },
+    ]);
+
+    let latestResult: PodcastsHookSnapshot | null = null;
+    const handleResult = (result: PodcastsHookSnapshot) => {
+      latestResult = result;
+    };
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(HookHarness, {onResult: handleResult}));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(latestResult).toEqual({
+      firstEpisodeRssFeedUrl: feedUrl,
+      isLoading: false,
+      sectionsCount: 1,
+    });
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('with persisted podcast markdown index, lists General only after legacy file reads', async () => {
+    const entries = [
+      {
+        lastModified: null,
+        name: '2026 Series A - podcasts.md',
+        uri: `${baseUri}/General/2026 Series A - podcasts.md`,
+      },
+      {
+        lastModified: null,
+        name: '📻 Series A.md',
+        uri: `${baseUri}/General/📻 Series A.md`,
+      },
+    ];
+    asyncStorageGetItemMock.mockImplementation(async key => {
+      if (key === `notebox:generalPodcastMarkdownIndex:${baseUri}`) {
+        return JSON.stringify({
+          entries,
+          snapshottedAt: new Date().toISOString(),
+          v: 1,
+        });
+      }
+      return null;
+    });
+
+    let sawLegacyRead = false;
+    readPodcastFileContentMock.mockImplementation(async uri => {
+      if (uri.endsWith('/2026 Series A - podcasts.md')) {
+        sawLegacyRead = true;
+        expect(listGeneralMarkdownFilesMock).not.toHaveBeenCalled();
+      }
+      return '# legacy';
+    });
+
+    listGeneralMarkdownFilesMock.mockImplementation(async () => {
+      expect(sawLegacyRead).toBe(true);
+      return [
+        ...entries,
+        {lastModified: null, name: 'other.md', uri: `${baseUri}/General/other.md`},
+      ];
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(HookHarness, {onResult: () => {}}));
+      await flushPromises();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(listGeneralMarkdownFilesMock).toHaveBeenCalled();
     await act(async () => {
       renderer?.unmount();
     });

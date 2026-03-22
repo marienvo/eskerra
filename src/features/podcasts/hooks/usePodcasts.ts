@@ -6,33 +6,29 @@ import {
   readPlaylist,
   readPodcastFileContent,
 } from '../../../core/storage/noteboxStorage';
-import {PodcastEpisode, PodcastSection} from '../../../types';
+import {PodcastEpisode, PodcastSection, RootMarkdownFile} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {groupBySection, isPodcastFile, parsePodcastFile} from '../services/podcastParser';
 import {
-  extractRssFeedUrl,
-  extractRssPodcastTitle,
-  normalizeSeriesKey,
-} from '../services/rssParser';
+  filterPodcastRelevantGeneralMarkdownFiles,
+  loadPersistedPodcastMarkdownIndex,
+  podcastMarkdownIndexSignature,
+  savePersistedPodcastMarkdownIndex,
+  splitPodcastAndRssMarkdownFiles,
+} from '../services/generalPodcastMarkdownIndexCache';
+import {groupBySection, isPodcastFile, parsePodcastFile} from '../services/podcastParser';
+import {extractRssFeedUrl, extractRssPodcastTitle} from '../services/rssParser';
 import {
   loadPersistentArtworkUriCache,
   primeArtworkCacheFromDisk,
 } from '../services/podcastImageCache';
-
-const RSS_PODCAST_FILE_PATTERN = /^📻\s+.+\.md$/;
+import {
+  loadPersistentRssFeedUrlCache,
+  persistRssFeedUrl,
+  resolveCachedRssFeedUrl,
+} from '../services/rssFeedUrlCache';
 
 type FileContentCacheEntry = {lastModified: number; content: string};
 const fileContentCache = new Map<string, FileContentCacheEntry>();
-const rssFeedUrlBySeriesName = new Map<string, string>();
-const rssFeedUrlByNormalizedSeriesName = new Map<string, string>();
-
-type UsePodcastsResult = {
-  allEpisodes: PodcastEpisode[];
-  error: string | null;
-  isLoading: boolean;
-  refresh: () => Promise<void>;
-  sections: PodcastSection[];
-};
 
 type FileWithContent = {
   content: string;
@@ -43,39 +39,21 @@ type FileWithContent = {
   };
 };
 
-function getSeriesCacheKey(baseUri: string, seriesName: string): string {
-  return `${baseUri}::${seriesName}`;
-}
+export type RefreshPodcastsOptions = {
+  /**
+   * When true, always runs a full SAF listing of General (slow on huge folders).
+   * Use for pull-to-refresh so new podcast files appear without waiting for background reconcile.
+   */
+  forceFullScan?: boolean;
+};
 
-function getNormalizedSeriesCacheKey(baseUri: string, seriesName: string): string | null {
-  const normalizedSeriesName = normalizeSeriesKey(seriesName);
-  if (!normalizedSeriesName) {
-    return null;
-  }
-  return `${baseUri}::${normalizedSeriesName}`;
-}
-
-function resolveCachedRssFeedUrl(baseUri: string, seriesName: string): string | undefined {
-  const directMatch = rssFeedUrlBySeriesName.get(getSeriesCacheKey(baseUri, seriesName));
-  if (directMatch) {
-    return directMatch;
-  }
-
-  const normalizedKey = getNormalizedSeriesCacheKey(baseUri, seriesName);
-  if (!normalizedKey) {
-    return undefined;
-  }
-  return rssFeedUrlByNormalizedSeriesName.get(normalizedKey);
-}
-
-function persistRssFeedUrl(baseUri: string, seriesName: string, rssFeedUrl: string): void {
-  rssFeedUrlBySeriesName.set(getSeriesCacheKey(baseUri, seriesName), rssFeedUrl);
-
-  const normalizedKey = getNormalizedSeriesCacheKey(baseUri, seriesName);
-  if (normalizedKey) {
-    rssFeedUrlByNormalizedSeriesName.set(normalizedKey, rssFeedUrl);
-  }
-}
+type UsePodcastsResult = {
+  allEpisodes: PodcastEpisode[];
+  error: string | null;
+  isLoading: boolean;
+  refresh: (options?: RefreshPodcastsOptions) => Promise<void>;
+  sections: PodcastSection[];
+};
 
 function enrichEpisodesWithCachedRss(
   baseUri: string,
@@ -83,7 +61,10 @@ function enrichEpisodesWithCachedRss(
 ): PodcastEpisode[] {
   return episodes.map(episode => ({
     ...episode,
-    rssFeedUrl: episode.rssFeedUrl ?? resolveCachedRssFeedUrl(baseUri, episode.seriesName),
+    rssFeedUrl:
+      episode.rssFeedUrl ??
+      resolveCachedRssFeedUrl(baseUri, episode.seriesName) ??
+      resolveCachedRssFeedUrl(baseUri, episode.sectionTitle),
   }));
 }
 
@@ -106,6 +87,78 @@ function createSectionsWithRss(baseUri: string, episodes: PodcastEpisode[]): Pod
   });
 }
 
+async function readMarkdownWithSessionCache(
+  file: RootMarkdownFile,
+): Promise<FileWithContent> {
+  const lastModified = file.lastModified ?? -1;
+  const cached = fileContentCache.get(file.uri);
+  if (cached && lastModified > 0 && cached.lastModified === lastModified) {
+    return {content: cached.content, file};
+  }
+  const content = await readPodcastFileContent(file.uri);
+  if (lastModified > 0) {
+    fileContentCache.set(file.uri, {lastModified, content});
+  }
+  return {content, file};
+}
+
+async function buildPodcastSectionsFromPodcastMarkdownFiles(
+  baseUri: string,
+  podcastFiles: RootMarkdownFile[],
+): Promise<{
+  nextAllEpisodes: PodcastEpisode[];
+  nextSections: PodcastSection[];
+}> {
+  const contentsByFile = await Promise.all(
+    podcastFiles.map(file => readMarkdownWithSessionCache(file)),
+  );
+
+  const legacyEpisodes: PodcastEpisode[] = [];
+
+  for (const {content, file} of contentsByFile) {
+    if (isPodcastFile(file.name)) {
+      legacyEpisodes.push(...parsePodcastFile(file.name, content));
+    }
+  }
+
+  const legacyEpisodesWithRss = enrichEpisodesWithCachedRss(baseUri, legacyEpisodes);
+
+  const dedupedEpisodes = new Map<string, PodcastEpisode>();
+  for (const episode of legacyEpisodesWithRss) {
+    if (!dedupedEpisodes.has(episode.id)) {
+      dedupedEpisodes.set(episode.id, episode);
+    }
+  }
+
+  const nextAllEpisodes = Array.from(dedupedEpisodes.values()).sort((left, right) =>
+    right.date.localeCompare(left.date),
+  );
+  const nextSections = createSectionsWithRss(baseUri, nextAllEpisodes);
+
+  return {nextAllEpisodes, nextSections};
+}
+
+function primeArtworkForEpisodesAndSections(
+  baseUri: string,
+  nextAllEpisodes: PodcastEpisode[],
+  nextSections: PodcastSection[],
+): void {
+  const rssUrlsForPrime = new Set<string>();
+  for (const episode of nextAllEpisodes) {
+    const trimmed = episode.rssFeedUrl?.trim();
+    if (trimmed) {
+      rssUrlsForPrime.add(trimmed);
+    }
+  }
+  for (const section of nextSections) {
+    const trimmed = section.rssFeedUrl?.trim();
+    if (trimmed) {
+      rssUrlsForPrime.add(trimmed);
+    }
+  }
+  primeArtworkCacheFromDisk(baseUri, Array.from(rssUrlsForPrime)).catch(() => undefined);
+}
+
 export function usePodcasts(): UsePodcastsResult {
   const {baseUri} = useVaultContext();
   const [allEpisodes, setAllEpisodes] = useState<PodcastEpisode[]>([]);
@@ -113,139 +166,189 @@ export function usePodcasts(): UsePodcastsResult {
   const [isLoading, setIsLoading] = useState(false);
   const [sections, setSections] = useState<PodcastSection[]>([]);
 
-  useEffect(() => {
-    if (!baseUri) {
-      return;
-    }
-    loadPersistentArtworkUriCache(baseUri).catch(() => undefined);
-  }, [baseUri]);
+  const refresh = useCallback(
+    async (options?: RefreshPodcastsOptions) => {
+      const forceFullScan = options?.forceFullScan ?? false;
 
-  const refresh = useCallback(async () => {
-    if (!baseUri) {
-      setAllEpisodes([]);
-      setSections([]);
-      return;
-    }
-
-    setError(null);
-    setIsLoading(true);
-    let knownEpisodeIds: Set<string> | null = null;
-    let renderedEpisodes: PodcastEpisode[] | null = null;
-    let rssFeedFiles: Array<{lastModified: number | null; name: string; uri: string}> = [];
-
-    const readFileContentWithCache = async (file: {
-      lastModified: number | null;
-      name: string;
-      uri: string;
-    }): Promise<FileWithContent> => {
-      const lastModified = file.lastModified ?? -1;
-      const cached = fileContentCache.get(file.uri);
-      if (cached && lastModified > 0 && cached.lastModified === lastModified) {
-        return {content: cached.content, file};
-      }
-      const content = await readPodcastFileContent(file.uri);
-      if (lastModified > 0) {
-        fileContentCache.set(file.uri, {lastModified, content});
-      }
-      return {content, file};
-    };
-
-    try {
-      const files = await listGeneralMarkdownFiles(baseUri);
-      const podcastFiles = files.filter(file => isPodcastFile(file.name));
-      rssFeedFiles = files.filter(file => RSS_PODCAST_FILE_PATTERN.test(file.name));
-
-      const contentsByFile = await Promise.all(
-        podcastFiles.map(file => readFileContentWithCache(file)),
-      );
-
-      const legacyEpisodes: PodcastEpisode[] = [];
-
-      for (const {content, file} of contentsByFile) {
-        if (isPodcastFile(file.name)) {
-          legacyEpisodes.push(...parsePodcastFile(file.name, content));
-        }
-      }
-
-      const legacyEpisodesWithRss = enrichEpisodesWithCachedRss(baseUri, legacyEpisodes);
-
-      const dedupedEpisodes = new Map<string, PodcastEpisode>();
-      for (const episode of legacyEpisodesWithRss) {
-        if (!dedupedEpisodes.has(episode.id)) {
-          dedupedEpisodes.set(episode.id, episode);
-        }
-      }
-
-      const nextAllEpisodes = Array.from(dedupedEpisodes.values()).sort((left, right) =>
-        right.date.localeCompare(left.date),
-      );
-      const nextSections = createSectionsWithRss(baseUri, nextAllEpisodes);
-
-      setAllEpisodes(nextAllEpisodes);
-      setSections(nextSections);
-      renderedEpisodes = nextAllEpisodes;
-      knownEpisodeIds = new Set(nextAllEpisodes.map(episode => episode.id));
-    } catch (loadError) {
-      const fallbackMessage = 'Could not load podcasts from vault.';
-      setError(loadError instanceof Error ? loadError.message : fallbackMessage);
-      setAllEpisodes([]);
-      setSections([]);
-    } finally {
-      setIsLoading(false);
-    }
-
-    if (!knownEpisodeIds) {
-      return;
-    }
-
-    if (renderedEpisodes && rssFeedFiles.length > 0) {
-      const runRssEnrichment = async () => {
-        const rssContentsByFile = await Promise.all(
-          rssFeedFiles.map(file => readFileContentWithCache(file)),
-        );
-        const rssFeedUrls = new Set<string>();
-
-        for (const {content, file} of rssContentsByFile) {
-          const rssFeedUrl = extractRssFeedUrl(content);
-          if (!rssFeedUrl) {
-            continue;
-          }
-          rssFeedUrls.add(rssFeedUrl);
-          const sectionTitle = extractRssPodcastTitle(file.name, content);
-          persistRssFeedUrl(baseUri, sectionTitle, rssFeedUrl);
-        }
-
-        const enrichedEpisodes = enrichEpisodesWithCachedRss(baseUri, renderedEpisodes);
-        const hasRssUpdates = enrichedEpisodes.some(
-          (episode, index) => episode.rssFeedUrl !== renderedEpisodes[index]?.rssFeedUrl,
-        );
-        if (!hasRssUpdates) {
-          primeArtworkCacheFromDisk(baseUri, Array.from(rssFeedUrls)).catch(() => undefined);
-          return;
-        }
-
-        setAllEpisodes(enrichedEpisodes);
-        setSections(createSectionsWithRss(baseUri, enrichedEpisodes));
-        primeArtworkCacheFromDisk(baseUri, Array.from(rssFeedUrls)).catch(() => undefined);
-      };
-
-      runRssEnrichment().catch(() => undefined);
-    }
-
-    // Keep playlist cleanup off the critical render path for initial screen loading.
-    const runPlaylistHousekeeping = async () => {
-      const playlistEntry = await readPlaylist(baseUri);
-      if (!playlistEntry) {
+      if (!baseUri) {
+        setAllEpisodes([]);
+        setSections([]);
         return;
       }
 
-      if (!knownEpisodeIds.has(playlistEntry.episodeId)) {
-        await clearPlaylist(baseUri);
-      }
-    };
+      setError(null);
+      setIsLoading(true);
+      let knownEpisodeIds: Set<string> | null = null;
+      let renderedEpisodes: PodcastEpisode[] | null = null;
+      let rssFeedFiles: Array<{lastModified: number | null; name: string; uri: string}> = [];
 
-    runPlaylistHousekeeping().catch(() => undefined);
-  }, [baseUri]);
+      try {
+        await Promise.all([
+          loadPersistentArtworkUriCache(baseUri),
+          loadPersistentRssFeedUrlCache(baseUri),
+        ]);
+
+        let podcastRelevantFiles: RootMarkdownFile[];
+        let didFullVaultListingThisRefresh = false;
+
+        if (!forceFullScan) {
+          const persisted = await loadPersistedPodcastMarkdownIndex(baseUri);
+          if (persisted !== null) {
+            podcastRelevantFiles = persisted;
+          } else {
+            const full = await listGeneralMarkdownFiles(baseUri);
+            podcastRelevantFiles = filterPodcastRelevantGeneralMarkdownFiles(full);
+            await savePersistedPodcastMarkdownIndex(baseUri, podcastRelevantFiles);
+            didFullVaultListingThisRefresh = true;
+          }
+        } else {
+          const full = await listGeneralMarkdownFiles(baseUri);
+          podcastRelevantFiles = filterPodcastRelevantGeneralMarkdownFiles(full);
+          await savePersistedPodcastMarkdownIndex(baseUri, podcastRelevantFiles);
+          didFullVaultListingThisRefresh = true;
+        }
+
+        const {podcastFiles, rssFeedFiles: rssMarkdownFiles} =
+          splitPodcastAndRssMarkdownFiles(podcastRelevantFiles);
+        rssFeedFiles = rssMarkdownFiles;
+
+        const {nextAllEpisodes, nextSections} = await buildPodcastSectionsFromPodcastMarkdownFiles(
+          baseUri,
+          podcastFiles,
+        );
+
+        primeArtworkForEpisodesAndSections(baseUri, nextAllEpisodes, nextSections);
+
+        setAllEpisodes(nextAllEpisodes);
+        setSections(nextSections);
+        renderedEpisodes = nextAllEpisodes;
+        knownEpisodeIds = new Set(nextAllEpisodes.map(episode => episode.id));
+
+        const indexSignature = podcastMarkdownIndexSignature(podcastRelevantFiles);
+
+        if (!didFullVaultListingThisRefresh) {
+          (async () => {
+            try {
+              const full = await listGeneralMarkdownFiles(baseUri);
+              const subset = filterPodcastRelevantGeneralMarkdownFiles(full);
+              await savePersistedPodcastMarkdownIndex(baseUri, subset);
+              if (podcastMarkdownIndexSignature(subset) === indexSignature) {
+                return;
+              }
+
+              const {podcastFiles: freshPodcastFiles, rssFeedFiles: freshRssFiles} =
+                splitPodcastAndRssMarkdownFiles(subset);
+              const rebuilt = await buildPodcastSectionsFromPodcastMarkdownFiles(
+                baseUri,
+                freshPodcastFiles,
+              );
+              primeArtworkForEpisodesAndSections(
+                baseUri,
+                rebuilt.nextAllEpisodes,
+                rebuilt.nextSections,
+              );
+              setAllEpisodes(rebuilt.nextAllEpisodes);
+              setSections(rebuilt.nextSections);
+
+              if (freshRssFiles.length > 0) {
+                const rssContentsByFile = await Promise.all(
+                  freshRssFiles.map(file => readMarkdownWithSessionCache(file)),
+                );
+                const rssFeedUrls = new Set<string>();
+
+                for (const {content, file} of rssContentsByFile) {
+                  const rssFeedUrl = extractRssFeedUrl(content);
+                  if (!rssFeedUrl) {
+                    continue;
+                  }
+                  rssFeedUrls.add(rssFeedUrl);
+                  const sectionTitle = extractRssPodcastTitle(file.name, content);
+                  persistRssFeedUrl(baseUri, sectionTitle, rssFeedUrl);
+                }
+
+                const enrichedEpisodes = enrichEpisodesWithCachedRss(
+                  baseUri,
+                  rebuilt.nextAllEpisodes,
+                );
+                const hasRssUpdates = enrichedEpisodes.some(
+                  (episode, index) =>
+                    episode.rssFeedUrl !== rebuilt.nextAllEpisodes[index]?.rssFeedUrl,
+                );
+                if (hasRssUpdates) {
+                  setAllEpisodes(enrichedEpisodes);
+                  setSections(createSectionsWithRss(baseUri, enrichedEpisodes));
+                }
+                if (rssFeedUrls.size > 0) {
+                  primeArtworkCacheFromDisk(baseUri, Array.from(rssFeedUrls)).catch(() => undefined);
+                }
+              }
+            } catch {
+              /* ignore background reconcile errors */
+            }
+          })().catch(() => undefined);
+        }
+      } catch (loadError) {
+        const fallbackMessage = 'Could not load podcasts from vault.';
+        setError(loadError instanceof Error ? loadError.message : fallbackMessage);
+        setAllEpisodes([]);
+        setSections([]);
+      } finally {
+        setIsLoading(false);
+      }
+
+      if (!knownEpisodeIds) {
+        return;
+      }
+
+      if (renderedEpisodes && rssFeedFiles.length > 0) {
+        const runRssEnrichment = async () => {
+          const rssContentsByFile = await Promise.all(
+            rssFeedFiles.map(file => readMarkdownWithSessionCache(file)),
+          );
+          const rssFeedUrls = new Set<string>();
+
+          for (const {content, file} of rssContentsByFile) {
+            const rssFeedUrl = extractRssFeedUrl(content);
+            if (!rssFeedUrl) {
+              continue;
+            }
+            rssFeedUrls.add(rssFeedUrl);
+            const sectionTitle = extractRssPodcastTitle(file.name, content);
+            persistRssFeedUrl(baseUri, sectionTitle, rssFeedUrl);
+          }
+
+          const enrichedEpisodes = enrichEpisodesWithCachedRss(baseUri, renderedEpisodes);
+          const hasRssUpdates = enrichedEpisodes.some(
+            (episode, index) => episode.rssFeedUrl !== renderedEpisodes[index]?.rssFeedUrl,
+          );
+          if (!hasRssUpdates) {
+            primeArtworkCacheFromDisk(baseUri, Array.from(rssFeedUrls)).catch(() => undefined);
+            return;
+          }
+
+          setAllEpisodes(enrichedEpisodes);
+          setSections(createSectionsWithRss(baseUri, enrichedEpisodes));
+          primeArtworkCacheFromDisk(baseUri, Array.from(rssFeedUrls)).catch(() => undefined);
+        };
+
+        runRssEnrichment().catch(() => undefined);
+      }
+
+      const runPlaylistHousekeeping = async () => {
+        const playlistEntry = await readPlaylist(baseUri);
+        if (!playlistEntry) {
+          return;
+        }
+
+        if (!knownEpisodeIds.has(playlistEntry.episodeId)) {
+          await clearPlaylist(baseUri);
+        }
+      };
+
+      runPlaylistHousekeeping().catch(() => undefined);
+    },
+    [baseUri],
+  );
 
   useEffect(() => {
     refresh().catch(() => undefined);

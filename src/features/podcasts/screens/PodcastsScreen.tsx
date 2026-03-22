@@ -7,6 +7,7 @@ import {EpisodeRow} from '../components/EpisodeRow';
 
 type PodcastSectionListItem = {
   data: PodcastEpisode[];
+  rssFeedUrl?: string;
   title: string;
 };
 
@@ -41,6 +42,7 @@ export function PodcastsScreen() {
   const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const sectionData: PodcastSectionListItem[] = sections.map(section => ({
     data: section.episodes,
+    rssFeedUrl: section.rssFeedUrl,
     title: section.title,
   }));
 
@@ -54,11 +56,13 @@ export function PodcastsScreen() {
       <SectionList
         // SectionList expects each section to expose a `data` array.
         contentContainerStyle={styles.listContent}
-        onRefresh={refreshPodcasts}
+        onRefresh={() => {
+          refreshPodcasts({forceFullScan: true}).catch(() => undefined);
+        }}
         refreshing={podcastsLoading && sections.length > 0}
         sections={sectionData}
         keyExtractor={item => item.id}
-        renderItem={({item}) => (
+        renderItem={({item, section}) => (
           <EpisodeRow
             activeEpisodeId={activeEpisode?.id ?? null}
             dividerColor={dividerColor}
@@ -68,6 +72,7 @@ export function PodcastsScreen() {
             onPlayEpisode={playEpisode}
             playbackLoading={playbackLoading}
             playbackState={playbackState}
+            sectionRssFeedUrl={section.rssFeedUrl}
           />
         )}
         renderSectionHeader={({section}) => (

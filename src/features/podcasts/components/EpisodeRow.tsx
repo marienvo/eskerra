@@ -18,6 +18,7 @@ type EpisodeRowProps = {
   onPlayEpisode: (episode: PodcastEpisode) => Promise<void>;
   playbackLoading: boolean;
   playbackState: PlayerState;
+  sectionRssFeedUrl?: string;
 };
 
 export function EpisodeRow({
@@ -29,9 +30,12 @@ export function EpisodeRow({
   onPlayEpisode,
   playbackLoading,
   playbackState,
+  sectionRssFeedUrl,
 }: EpisodeRowProps) {
   const {baseUri} = useVaultContext();
-  const artworkUri = usePodcastArtwork(baseUri, episode.rssFeedUrl, {
+  const rssFeedUrlForArtwork =
+    episode.rssFeedUrl?.trim() || sectionRssFeedUrl?.trim() || undefined;
+  const artworkUri = usePodcastArtwork(baseUri, rssFeedUrlForArtwork, {
     allowBackgroundFetch: true,
   });
   const swipeableRef = useRef<Swipeable | null>(null);

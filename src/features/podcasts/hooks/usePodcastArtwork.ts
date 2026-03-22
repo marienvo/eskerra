@@ -3,10 +3,28 @@ import {useEffect, useState} from 'react';
 import {
   getCachedPodcastArtworkUri,
   getPodcastArtworkUri,
+  peekCachedPodcastArtworkUriFromMemory,
 } from '../services/podcastImageCache';
 
 type UsePodcastArtworkOptions = {
   allowBackgroundFetch?: boolean;
+};
+
+function resolveDisplayUri(
+  peek: string | null,
+  cachedAsync: string | null,
+  fetchedAsync: string | null,
+): string | null {
+  const fromPeek = peek?.trim() || null;
+  const fromCached = cachedAsync?.trim() || null;
+  const fromFetched = fetchedAsync?.trim() || null;
+  return fromPeek ?? fromCached ?? fromFetched ?? null;
+}
+
+type AsyncFetchState = {
+  cached: string | null;
+  fetched: string | null;
+  key: string;
 };
 
 export function usePodcastArtwork(
@@ -15,12 +33,27 @@ export function usePodcastArtwork(
   options?: UsePodcastArtworkOptions,
 ): string | null {
   const {allowBackgroundFetch = false} = options ?? {};
-  const [artworkUri, setArtworkUri] = useState<string | null>(null);
+  const normalizedFeedUrl = rssFeedUrl?.trim() ?? '';
+  const feedKey = `${baseUri ?? ''}|${normalizedFeedUrl}`;
+
+  const memoryPeek =
+    baseUri && normalizedFeedUrl
+      ? peekCachedPodcastArtworkUriFromMemory(baseUri, normalizedFeedUrl)
+      : null;
+
+  const [asyncFetch, setAsyncFetch] = useState<AsyncFetchState>({
+    cached: null,
+    fetched: null,
+    key: '',
+  });
+
+  const asyncMatchesKey = asyncFetch.key === feedKey;
+  const cachedPart = asyncMatchesKey ? asyncFetch.cached : null;
+  const fetchedPart = asyncMatchesKey ? asyncFetch.fetched : null;
 
   useEffect(() => {
-    const normalizedFeedUrl = rssFeedUrl?.trim();
     if (!baseUri || !normalizedFeedUrl) {
-      setArtworkUri(null);
+      setAsyncFetch({key: feedKey, cached: null, fetched: null});
       return;
     }
 
@@ -32,7 +65,8 @@ export function usePodcastArtwork(
           return;
         }
 
-        setArtworkUri(cachedUri);
+        setAsyncFetch({key: feedKey, cached: cachedUri, fetched: null});
+
         if (cachedUri || !allowBackgroundFetch) {
           return;
         }
@@ -41,19 +75,23 @@ export function usePodcastArtwork(
         if (!isMounted) {
           return;
         }
-        setArtworkUri(fetchedUri);
+        setAsyncFetch(previous =>
+          previous.key === feedKey
+            ? {...previous, fetched: fetchedUri}
+            : previous,
+        );
       })
       .catch(() => {
         if (!isMounted) {
           return;
         }
-        setArtworkUri(null);
+        setAsyncFetch({key: feedKey, cached: null, fetched: null});
       });
 
     return () => {
       isMounted = false;
     };
-  }, [allowBackgroundFetch, baseUri, rssFeedUrl]);
+  }, [allowBackgroundFetch, baseUri, feedKey, normalizedFeedUrl]);
 
-  return artworkUri;
+  return resolveDisplayUri(memoryPeek, cachedPart, fetchedPart);
 }

@@ -228,6 +228,30 @@ export function getPodcastImageCacheKey(rssFeedUrl: string): string {
   return `rss-${Math.floor(hash).toString(16)}`;
 }
 
+/**
+ * Synchronous read of a non-empty artwork URI already in the in-memory cache.
+ * Used for first paint without waiting on async SAF reads. Ignores stored null
+ * (negative-cache) so callers can fall through to disk/network resolution.
+ */
+export function peekCachedPodcastArtworkUriFromMemory(
+  baseUri: string,
+  rssFeedUrl: string,
+): string | null {
+  const normalizedRssFeedUrl = rssFeedUrl.trim();
+  if (!baseUri || !normalizedRssFeedUrl) {
+    return null;
+  }
+
+  const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
+  const cached = artworkUriMemoryCache.get(memoryCacheKey);
+  if (typeof cached !== 'string') {
+    return null;
+  }
+
+  const trimmed = cached.trim();
+  return trimmed || null;
+}
+
 export async function getCachedPodcastArtworkUri(
   baseUri: string,
   rssFeedUrl: string,
@@ -238,14 +262,15 @@ export async function getCachedPodcastArtworkUri(
   }
 
   const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
-  if (artworkUriMemoryCache.has(memoryCacheKey)) {
-    return artworkUriMemoryCache.get(memoryCacheKey) ?? null;
+  const memoryHit = peekCachedPodcastArtworkUriFromMemory(baseUri, normalizedRssFeedUrl);
+  if (memoryHit) {
+    return memoryHit;
   }
 
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
   const cachedEntry = await readPodcastImageCacheEntry(baseUri, cacheKey);
   if (!cachedEntry || !isEntryFresh(cachedEntry)) {
-    setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, null);
+    artworkUriMemoryCache.delete(memoryCacheKey);
     return null;
   }
 
@@ -263,10 +288,9 @@ export async function getPodcastArtworkUri(
     return null;
   }
 
-  const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
-  const memoryCachedUri = artworkUriMemoryCache.get(memoryCacheKey);
-  if (memoryCachedUri) {
-    return memoryCachedUri;
+  const memoryHit = peekCachedPodcastArtworkUriFromMemory(baseUri, normalizedRssFeedUrl);
+  if (memoryHit) {
+    return memoryHit;
   }
 
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
