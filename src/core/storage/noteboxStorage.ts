@@ -487,6 +487,24 @@ export async function clearPlaylist(baseUri: string): Promise<void> {
   });
 }
 
+/**
+ * Returns whether a SAF-backed URI still resolves to an existing document or file.
+ * Used when validating cached podcast artwork after the user clears `.notebox/podcast-images`.
+ */
+export async function safUriExists(uri: string): Promise<boolean> {
+  const normalizedUri = uri.trim();
+  if (!normalizedUri) {
+    return false;
+  }
+
+  if (isDevMockVaultEnabled) {
+    const devStorage = getDevStorage();
+    return devStorage.safUriExists(normalizedUri);
+  }
+
+  return exists(normalizedUri);
+}
+
 export async function readPodcastImageCacheEntry(
   baseUri: string,
   cacheKey: string,

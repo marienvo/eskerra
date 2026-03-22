@@ -74,12 +74,13 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - Value: serialized map of non-empty artwork URIs keyed by memory cache key.
 - Lifetime: across app restarts for the same app install.
 - Purpose: hydrate memory cache early so warm restarts can render artwork without per-series SAF checks.
+- **Local file validation:** Cached `content://` document URIs are checked with `safUriExists` (SAF `exists`). If the user deletes files under `.notebox/podcast-images`, stale pointers are removed from memory and this `AsyncStorage` map is rewritten on load; disk JSON entries drop `localImageUri` (keeping `imageUrl` when present) or are cleared so `getPodcastArtworkUri` can fall back to remote URLs or re-download.
 
 ## Loading Phases
 
 ### Phase 1 (Spinner-Blocking)
 
-`refresh()` performs rendering-critical work. It begins with `AsyncStorage` hydration (no SAF directory listing yet, no artwork network):
+`refresh()` performs rendering-critical work. It begins with `AsyncStorage` hydration (no `listFiles` on `General` yet; artwork hydration may run one `exists` check per persisted `content://` artwork URI, no artwork network):
 
 1. `await Promise.all([loadPersistentArtworkUriCache(baseUri), loadPersistentRssFeedUrlCache(baseUri)])`.
 2. Resolve podcast-relevant file list: either `loadPersistedPodcastMarkdownIndex(baseUri)` when not forcing a full scan, or `listGeneralMarkdownFiles(baseUri)` when there is no snapshot or `forceFullScan` is true; then `filterPodcastRelevantGeneralMarkdownFiles` and persist the snapshot when a full listing ran.

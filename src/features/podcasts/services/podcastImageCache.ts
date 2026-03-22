@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  clearPodcastImageCacheEntry,
   readPodcastImageCacheEntry,
-  writePodcastImageFile,
+  safUriExists,
   writePodcastImageCacheEntry,
+  writePodcastImageFile,
 } from '../../../core/storage/noteboxStorage';
 import {PodcastImageCacheEntry} from '../../../types';
 import {fetchRssArtworkUrl} from './rssArtwork';
@@ -95,6 +97,62 @@ function isRenderableUri(uri: string): boolean {
   // SAF tree-path URIs (content://…/tree/… without /document/) cannot be opened
   // by React Native Image's Glide loader. Only proper document URIs work.
   return uri.includes('/document/');
+}
+
+async function isVaultArtworkUriStillReadable(uri: string): Promise<boolean> {
+  const trimmed = uri.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return true;
+  }
+  if (trimmed.startsWith('content://')) {
+    if (!isRenderableUri(trimmed)) {
+      return false;
+    }
+    return safUriExists(trimmed);
+  }
+  if (trimmed.startsWith('file://')) {
+    return safUriExists(trimmed);
+  }
+  return true;
+}
+
+async function repairPodcastImageCacheEntryWhenLocalMissing(
+  baseUri: string,
+  cacheKey: string,
+  entry: PodcastImageCacheEntry,
+): Promise<void> {
+  const remote = entry.imageUrl?.trim();
+  if (remote) {
+    await writePodcastImageCacheEntry(baseUri, cacheKey, {
+      fetchedAt: entry.fetchedAt,
+      imageUrl: remote,
+      mimeType: entry.mimeType,
+    });
+    return;
+  }
+  await clearPodcastImageCacheEntry(baseUri, cacheKey);
+}
+
+async function resolveRenderableUriAfterDiskHit(
+  baseUri: string,
+  normalizedRssFeedUrl: string,
+  cacheKey: string,
+  cachedEntry: PodcastImageCacheEntry,
+): Promise<string | null> {
+  let renderableUri = getRenderableArtworkUri(cachedEntry);
+  if (
+    renderableUri?.startsWith('content://') &&
+    isRenderableUri(renderableUri) &&
+    !(await isVaultArtworkUriStillReadable(renderableUri))
+  ) {
+    await repairPodcastImageCacheEntryWhenLocalMissing(baseUri, cacheKey, cachedEntry);
+    const reRead = await readPodcastImageCacheEntry(baseUri, cacheKey);
+    renderableUri = getRenderableArtworkUri(reRead);
+  }
+  return renderableUri?.trim() || null;
 }
 
 function isEntryFresh(entry: PodcastImageCacheEntry): boolean {
@@ -264,7 +322,10 @@ export async function getCachedPodcastArtworkUri(
   const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
   const memoryHit = peekCachedPodcastArtworkUriFromMemory(baseUri, normalizedRssFeedUrl);
   if (memoryHit) {
-    return memoryHit;
+    if (await isVaultArtworkUriStillReadable(memoryHit)) {
+      return memoryHit;
+    }
+    setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, null);
   }
 
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
@@ -274,7 +335,17 @@ export async function getCachedPodcastArtworkUri(
     return null;
   }
 
-  const renderableUri = getRenderableArtworkUri(cachedEntry);
+  const renderableUri = await resolveRenderableUriAfterDiskHit(
+    baseUri,
+    normalizedRssFeedUrl,
+    cacheKey,
+    cachedEntry,
+  );
+  if (!renderableUri) {
+    artworkUriMemoryCache.delete(memoryCacheKey);
+    return null;
+  }
+
   setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, renderableUri);
   return renderableUri;
 }
@@ -290,7 +361,10 @@ export async function getPodcastArtworkUri(
 
   const memoryHit = peekCachedPodcastArtworkUriFromMemory(baseUri, normalizedRssFeedUrl);
   if (memoryHit) {
-    return memoryHit;
+    if (await isVaultArtworkUriStillReadable(memoryHit)) {
+      return memoryHit;
+    }
+    setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, null);
   }
 
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
@@ -302,9 +376,16 @@ export async function getPodcastArtworkUri(
   const request = (async () => {
     const cachedEntry = await readPodcastImageCacheEntry(baseUri, cacheKey);
     if (cachedEntry && isEntryFresh(cachedEntry)) {
-      const cachedUri = getRenderableArtworkUri(cachedEntry);
-      setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, cachedUri);
-      return cachedUri;
+      const cachedUri = await resolveRenderableUriAfterDiskHit(
+        baseUri,
+        normalizedRssFeedUrl,
+        cacheKey,
+        cachedEntry,
+      );
+      if (cachedUri) {
+        setArtworkUriCacheValue(baseUri, normalizedRssFeedUrl, cachedUri);
+        return cachedUri;
+      }
     }
 
     const imageUrl = await fetchRssArtworkUrl(normalizedRssFeedUrl);
@@ -384,10 +465,17 @@ export async function loadPersistentArtworkUriCache(baseUri: string): Promise<vo
     if (!normalizedValue) {
       continue;
     }
+    if (normalizedValue.startsWith('content://')) {
+      if (!isRenderableUri(normalizedValue) || !(await isVaultArtworkUriStillReadable(normalizedValue))) {
+        continue;
+      }
+    }
     if (!artworkUriMemoryCache.has(cacheKey)) {
       artworkUriMemoryCache.set(cacheKey, normalizedValue);
     }
   }
+
+  await persistArtworkUriCache(baseUri);
 }
 
 export async function primeArtworkCacheFromDisk(

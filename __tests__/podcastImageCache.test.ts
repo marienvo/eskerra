@@ -9,14 +9,18 @@ import {
   PODCAST_IMAGE_REMOTE_FALLBACK_TTL_MS,
 } from '../src/features/podcasts/services/podcastImageCache';
 import {
+  clearPodcastImageCacheEntry,
   readPodcastImageCacheEntry,
-  writePodcastImageFile,
+  safUriExists,
   writePodcastImageCacheEntry,
+  writePodcastImageFile,
 } from '../src/core/storage/noteboxStorage';
 import {fetchRssArtworkUrl} from '../src/features/podcasts/services/rssArtwork';
 
 jest.mock('../src/core/storage/noteboxStorage', () => ({
+  clearPodcastImageCacheEntry: jest.fn(),
   readPodcastImageCacheEntry: jest.fn(),
+  safUriExists: jest.fn(),
   writePodcastImageFile: jest.fn(),
   writePodcastImageCacheEntry: jest.fn(),
 }));
@@ -50,6 +54,10 @@ describe('podcastImageCache', () => {
   const writeCacheMock = writePodcastImageCacheEntry as jest.MockedFunction<
     typeof writePodcastImageCacheEntry
   >;
+  const safUriExistsMock = safUriExists as jest.MockedFunction<typeof safUriExists>;
+  const clearPodcastImageCacheEntryMock = clearPodcastImageCacheEntry as jest.MockedFunction<
+    typeof clearPodcastImageCacheEntry
+  >;
   const fetchRssArtworkUrlMock = fetchRssArtworkUrl as jest.MockedFunction<
     typeof fetchRssArtworkUrl
   >;
@@ -79,6 +87,8 @@ describe('podcastImageCache', () => {
     asyncStorageGetItemMock.mockResolvedValue(null);
     asyncStorageSetItemMock.mockResolvedValue();
     asyncStorageRemoveItemMock.mockResolvedValue();
+    safUriExistsMock.mockResolvedValue(true);
+    clearPodcastImageCacheEntryMock.mockResolvedValue();
   });
 
   test('returns fresh local cache entry without fetching RSS', async () => {
@@ -289,6 +299,78 @@ describe('podcastImageCache', () => {
       JSON.stringify({
         [expectedMemoryCacheKey]: expectedUri,
       }),
+    );
+  });
+
+  test('strips local path from disk cache when image file is missing and returns remote URL', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    const localUri =
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-missing.jpg';
+    const remoteUrl = 'https://cdn.example.com/still-here.jpg';
+    const fetchedAt = new Date(Date.now() - 60_000).toISOString();
+    readCacheMock
+      .mockResolvedValueOnce({
+        fetchedAt,
+        imageUrl: remoteUrl,
+        localImageUri: localUri,
+      })
+      .mockResolvedValueOnce({
+        fetchedAt,
+        imageUrl: remoteUrl,
+      });
+    safUriExistsMock.mockResolvedValue(false);
+
+    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBe(remoteUrl);
+
+    expect(safUriExistsMock).toHaveBeenCalledWith(localUri);
+    expect(writeCacheMock).toHaveBeenCalledWith(baseUri, getPodcastImageCacheKey(rssFeedUrl), {
+      fetchedAt,
+      imageUrl: remoteUrl,
+    });
+  });
+
+  test('clears disk cache entry when local file is missing and there is no remote URL', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    const localUri =
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-onlylocal.jpg';
+    const fetchedAt = new Date(Date.now() - 60_000).toISOString();
+    readCacheMock
+      .mockResolvedValueOnce({
+        fetchedAt,
+        imageUrl: '',
+        localImageUri: localUri,
+      })
+      .mockResolvedValueOnce(null);
+    safUriExistsMock.mockResolvedValue(false);
+
+    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBeNull();
+
+    expect(clearPodcastImageCacheEntryMock).toHaveBeenCalledWith(
+      baseUri,
+      getPodcastImageCacheKey(rssFeedUrl),
+    );
+  });
+
+  test('does not hydrate AsyncStorage content URIs when the file no longer exists', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    const memoryCacheKey = `${baseUri}::${getPodcastImageCacheKey(rssFeedUrl)}`;
+    const deadUri =
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-dead.jpg';
+    asyncStorageGetItemMock.mockResolvedValueOnce(
+      JSON.stringify({
+        [memoryCacheKey]: deadUri,
+      }),
+    );
+    safUriExistsMock.mockResolvedValue(false);
+
+    await loadPersistentArtworkUriCache(baseUri);
+
+    expect(peekCachedPodcastArtworkUriFromMemory(baseUri, rssFeedUrl)).toBeNull();
+    expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith(
+      `notebox:artworkUriCache:${baseUri}`,
     );
   });
 });

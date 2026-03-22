@@ -469,6 +469,31 @@ export async function writePodcastImageCacheEntry(
   );
 }
 
+/**
+ * Whether a mock vault URI still points at stored podcast image bytes in AsyncStorage.
+ */
+export async function safUriExists(uri: string): Promise<boolean> {
+  const normalizedUri = uri.trim();
+  if (!normalizedUri) {
+    return false;
+  }
+
+  const prefix = `${DEV_MOCK_VAULT_URI}/.notebox/podcast-images/`;
+  if (!normalizedUri.startsWith(prefix)) {
+    return true;
+  }
+
+  const fileName = normalizedUri.slice(prefix.length);
+  const dotIndex = fileName.lastIndexOf('.');
+  const cacheKey = dotIndex >= 0 ? fileName.slice(0, dotIndex) : fileName;
+  if (!cacheKey) {
+    return false;
+  }
+
+  const raw = await AsyncStorage.getItem(`${devPodcastImageKey(cacheKey)}:file`);
+  return Boolean(raw?.trim());
+}
+
 export async function writePodcastImageFile(
   baseUri: string,
   cacheKey: string,
