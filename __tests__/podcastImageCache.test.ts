@@ -36,9 +36,17 @@ describe('podcastImageCache', () => {
     typeof fetchRssArtworkUrl
   >;
   const globalFetchMock = jest.fn();
+  let testCounter = 0;
 
-  const baseUri = 'content://vault';
-  const rssFeedUrl = 'https://feed.example.com/podcast.xml';
+  function nextBaseUri(): string {
+    testCounter += 1;
+    return `content://vault-${testCounter}`;
+  }
+
+  function nextRssFeedUrl(): string {
+    testCounter += 1;
+    return `https://feed.example.com/podcast-${testCounter}.xml`;
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -47,6 +55,8 @@ describe('podcastImageCache', () => {
   });
 
   test('returns fresh local cache entry without fetching RSS', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
     readCacheMock.mockResolvedValueOnce({
       fetchedAt: new Date(Date.now() - 60_000).toISOString(),
       imageUrl: 'https://cdn.example.com/remote.jpg',
@@ -62,6 +72,9 @@ describe('podcastImageCache', () => {
   });
 
   test('returns only fresh entries in cached-only lookup', async () => {
+    const baseUri = nextBaseUri();
+    const freshRssFeedUrl = nextRssFeedUrl();
+    const staleRssFeedUrl = nextRssFeedUrl();
     readCacheMock
       .mockResolvedValueOnce({
         fetchedAt: new Date(Date.now() - 60_000).toISOString(),
@@ -74,13 +87,16 @@ describe('podcastImageCache', () => {
         localImageUri: 'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-3.jpg',
       });
 
-    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBe(
+    await expect(getCachedPodcastArtworkUri(baseUri, freshRssFeedUrl)).resolves.toBe(
       'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-2.jpg',
     );
-    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBeNull();
+    await expect(getCachedPodcastArtworkUri(baseUri, staleRssFeedUrl)).resolves.toBeNull();
   });
 
   test('expires remote-only fallback cache entries quickly for retry', async () => {
+    const baseUri = nextBaseUri();
+    const freshRemoteFallbackRssFeedUrl = nextRssFeedUrl();
+    const staleRemoteFallbackRssFeedUrl = nextRssFeedUrl();
     readCacheMock
       .mockResolvedValueOnce({
         fetchedAt: new Date(Date.now() - (PODCAST_IMAGE_REMOTE_FALLBACK_TTL_MS - 1_000)).toISOString(),
@@ -91,13 +107,15 @@ describe('podcastImageCache', () => {
         imageUrl: 'https://cdn.example.com/remote-fallback.jpg',
       });
 
-    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBe(
+    await expect(getCachedPodcastArtworkUri(baseUri, freshRemoteFallbackRssFeedUrl)).resolves.toBe(
       'https://cdn.example.com/remote-fallback.jpg',
     );
-    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBeNull();
+    await expect(getCachedPodcastArtworkUri(baseUri, staleRemoteFallbackRssFeedUrl)).resolves.toBeNull();
   });
 
   test('fetches, downloads, and stores local artwork when cache is stale', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
     readCacheMock.mockResolvedValueOnce({
       fetchedAt: new Date(Date.now() - PODCAST_IMAGE_CACHE_TTL_MS - 60_000).toISOString(),
       imageUrl: 'https://cdn.example.com/stale.jpg',
@@ -137,6 +155,8 @@ describe('podcastImageCache', () => {
   });
 
   test('falls back to remote image URL when download fails', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
     readCacheMock.mockResolvedValueOnce(null);
     fetchRssArtworkUrlMock.mockResolvedValueOnce(
       'https://cdn.example.com/fallback.jpg',
@@ -156,5 +176,23 @@ describe('podcastImageCache', () => {
         imageUrl: 'https://cdn.example.com/fallback.jpg',
       }),
     );
+  });
+
+  test('reuses memory cache for cached-only lookups without extra SAF reads', async () => {
+    const baseUri = nextBaseUri();
+    const rssFeedUrl = nextRssFeedUrl();
+    readCacheMock.mockResolvedValueOnce({
+      fetchedAt: new Date(Date.now() - 60_000).toISOString(),
+      imageUrl: 'https://cdn.example.com/remote.jpg',
+      localImageUri: 'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-4.jpg',
+    });
+
+    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBe(
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-4.jpg',
+    );
+    await expect(getCachedPodcastArtworkUri(baseUri, rssFeedUrl)).resolves.toBe(
+      'content://com.android.externalstorage.documents/tree/primary/document/vault/rss-4.jpg',
+    );
+    expect(readCacheMock).toHaveBeenCalledTimes(1);
   });
 });

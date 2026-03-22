@@ -15,7 +15,7 @@ import {
   extractRssPodcastTitle,
   normalizeSeriesKey,
 } from '../src/features/podcasts/services/rssParser';
-import {PlaylistEntry, PodcastEpisode} from '../src/types';
+import {PodcastEpisode} from '../src/types';
 
 jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
@@ -41,6 +41,7 @@ jest.mock('../src/features/podcasts/services/rssParser', () => ({
 }));
 
 type PodcastsHookSnapshot = {
+  firstEpisodeRssFeedUrl: string | undefined;
   isLoading: boolean;
   sectionsCount: number;
 };
@@ -54,10 +55,11 @@ function HookHarness({onResult}: HookHarnessProps) {
 
   useEffect(() => {
     onResult({
+      firstEpisodeRssFeedUrl: result.allEpisodes[0]?.rssFeedUrl,
       isLoading: result.isLoading,
       sectionsCount: result.sections.length,
     });
-  }, [onResult, result.isLoading, result.sections]);
+  }, [onResult, result.allEpisodes, result.isLoading, result.sections]);
 
   return null;
 }
@@ -115,21 +117,21 @@ describe('usePodcasts loading lifecycle', () => {
     typeof normalizeSeriesKey
   >;
 
-  const baseUri = 'content://vault-root';
-  const episode: PodcastEpisode = {
+  let baseUri = 'content://vault-root';
+  const legacyEpisode: PodcastEpisode = {
     date: '2026-03-20',
     id: 'episode-1',
     isListened: false,
     mp3Url: 'https://example.com/a.mp3',
-    rssFeedUrl: 'https://example.com/feed.xml',
     sectionTitle: 'Series A',
     seriesName: 'Series A',
-    sourceFile: '📻 Series A.md',
+    sourceFile: '2026 Series A - podcasts.md',
     title: 'Episode A',
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    baseUri = `content://vault-root-${Date.now()}-${Math.random()}`;
 
     useVaultContextMock.mockReturnValue({
       baseUri,
@@ -140,30 +142,47 @@ describe('usePodcasts loading lifecycle', () => {
       setSettings: jest.fn(),
     });
 
-    listGeneralMarkdownFilesMock.mockResolvedValue([
-      {
-        lastModified: null,
-        name: '📻 Series A.md',
-        uri: `${baseUri}/General/📻 Series A.md`,
-      },
-    ]);
+    readPlaylistMock.mockResolvedValue(null);
+    listGeneralMarkdownFilesMock.mockResolvedValue([]);
     readPodcastFileContentMock.mockResolvedValue('# content');
-    isPodcastFileMock.mockReturnValue(true);
-    parsePodcastFileMock.mockReturnValue([episode]);
+    isPodcastFileMock.mockImplementation(fileName => fileName.includes('- podcasts.md'));
+    parsePodcastFileMock.mockReturnValue([legacyEpisode]);
     groupBySectionMock.mockImplementation(episodes => [
       {
         episodes,
         title: 'Series A',
       },
     ]);
-    extractRssFeedUrlMock.mockReturnValue('https://example.com/feed.xml');
+    extractRssFeedUrlMock.mockImplementation(content => {
+      if (content.includes('rssFeedUrl:')) {
+        return 'https://example.com/feed.xml';
+      }
+      return undefined;
+    });
     extractRssPodcastTitleMock.mockReturnValue('Series A');
     normalizeSeriesKeyMock.mockImplementation(value => value.toLowerCase());
   });
 
-  test('clears loading before playlist housekeeping finishes', async () => {
-    const deferredPlaylist = createDeferred<PlaylistEntry | null>();
-    readPlaylistMock.mockImplementation(() => deferredPlaylist.promise);
+  test('renders from podcast files first and enriches rssFeedUrl in background', async () => {
+    const deferredRssFile = createDeferred<string>();
+    listGeneralMarkdownFilesMock.mockResolvedValue([
+      {
+        lastModified: null,
+        name: '2026 Series A - podcasts.md',
+        uri: `${baseUri}/General/2026 Series A - podcasts.md`,
+      },
+      {
+        lastModified: null,
+        name: '📻 Series A.md',
+        uri: `${baseUri}/General/📻 Series A.md`,
+      },
+    ]);
+    readPodcastFileContentMock.mockImplementation(async fileUri => {
+      if (fileUri.endsWith('/📻 Series A.md')) {
+        return deferredRssFile.promise;
+      }
+      return '# legacy';
+    });
 
     let latestResult: PodcastsHookSnapshot | null = null;
     const handleResult = (result: PodcastsHookSnapshot) => {
@@ -178,15 +197,34 @@ describe('usePodcasts loading lifecycle', () => {
     });
 
     expect(readPlaylistMock).toHaveBeenCalledTimes(1);
-    expect(clearPlaylistMock).not.toHaveBeenCalled();
+    expect(readPodcastFileContentMock).toHaveBeenCalledWith(
+      `${baseUri}/General/2026 Series A - podcasts.md`,
+    );
+    expect(readPodcastFileContentMock).toHaveBeenCalledWith(`${baseUri}/General/📻 Series A.md`);
     expect(latestResult).toEqual({
+      firstEpisodeRssFeedUrl: undefined,
       isLoading: false,
       sectionsCount: 1,
     });
 
     await act(async () => {
-      deferredPlaylist.resolve(null);
+      deferredRssFile.resolve(
+        [
+          '---',
+          'rssFeedUrl: https://example.com/feed.xml',
+          '---',
+          '# Series A',
+          '',
+          'metadata',
+        ].join('\n'),
+      );
       await flushPromises();
+    });
+
+    expect(latestResult).toEqual({
+      firstEpisodeRssFeedUrl: 'https://example.com/feed.xml',
+      isLoading: false,
+      sectionsCount: 1,
     });
 
     await act(async () => {
@@ -215,6 +253,7 @@ describe('usePodcasts loading lifecycle', () => {
     });
 
     expect(latestResult).toEqual({
+      firstEpisodeRssFeedUrl: undefined,
       isLoading: false,
       sectionsCount: 1,
     });

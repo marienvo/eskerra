@@ -10,6 +10,11 @@ export const PODCAST_IMAGE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const PODCAST_IMAGE_REMOTE_FALLBACK_TTL_MS = 60 * 60 * 1000;
 const ARTWORK_DOWNLOAD_TIMEOUT_MS = 10000;
 const inFlightArtworkRequests = new Map<string, Promise<string | null>>();
+const artworkUriMemoryCache = new Map<string, string | null>();
+
+function getArtworkMemoryCacheKey(baseUri: string, rssFeedUrl: string): string {
+  return `${baseUri}::${getPodcastImageCacheKey(rssFeedUrl)}`;
+}
 
 function isRenderableUri(uri: string): boolean {
   if (!uri.startsWith('content://')) {
@@ -161,13 +166,21 @@ export async function getCachedPodcastArtworkUri(
     return null;
   }
 
+  const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
+  if (artworkUriMemoryCache.has(memoryCacheKey)) {
+    return artworkUriMemoryCache.get(memoryCacheKey) ?? null;
+  }
+
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
   const cachedEntry = await readPodcastImageCacheEntry(baseUri, cacheKey);
   if (!cachedEntry || !isEntryFresh(cachedEntry)) {
+    artworkUriMemoryCache.set(memoryCacheKey, null);
     return null;
   }
 
-  return getRenderableArtworkUri(cachedEntry);
+  const renderableUri = getRenderableArtworkUri(cachedEntry);
+  artworkUriMemoryCache.set(memoryCacheKey, renderableUri);
+  return renderableUri;
 }
 
 export async function getPodcastArtworkUri(
@@ -179,6 +192,12 @@ export async function getPodcastArtworkUri(
     return null;
   }
 
+  const memoryCacheKey = getArtworkMemoryCacheKey(baseUri, normalizedRssFeedUrl);
+  const memoryCachedUri = artworkUriMemoryCache.get(memoryCacheKey);
+  if (memoryCachedUri) {
+    return memoryCachedUri;
+  }
+
   const cacheKey = getPodcastImageCacheKey(normalizedRssFeedUrl);
   const activeRequest = inFlightArtworkRequests.get(cacheKey);
   if (activeRequest) {
@@ -188,12 +207,16 @@ export async function getPodcastArtworkUri(
   const request = (async () => {
     const cachedEntry = await readPodcastImageCacheEntry(baseUri, cacheKey);
     if (cachedEntry && isEntryFresh(cachedEntry)) {
-      return getRenderableArtworkUri(cachedEntry);
+      const cachedUri = getRenderableArtworkUri(cachedEntry);
+      artworkUriMemoryCache.set(memoryCacheKey, cachedUri);
+      return cachedUri;
     }
 
     const imageUrl = await fetchRssArtworkUrl(normalizedRssFeedUrl);
     if (!imageUrl) {
-      return getRenderableArtworkUri(cachedEntry);
+      const fallbackUri = getRenderableArtworkUri(cachedEntry);
+      artworkUriMemoryCache.set(memoryCacheKey, fallbackUri);
+      return fallbackUri;
     }
 
     const downloadedImage = await downloadArtwork(imageUrl);
@@ -212,6 +235,7 @@ export async function getPodcastArtworkUri(
         localImageUri,
         mimeType: downloadedImage.mimeType,
       });
+      artworkUriMemoryCache.set(memoryCacheKey, localImageUri);
       return localImageUri;
     }
 
@@ -219,6 +243,7 @@ export async function getPodcastArtworkUri(
       fetchedAt,
       imageUrl,
     });
+    artworkUriMemoryCache.set(memoryCacheKey, imageUrl);
     return imageUrl;
   })();
 
