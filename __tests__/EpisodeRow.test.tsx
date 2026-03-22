@@ -99,4 +99,18 @@ describe('EpisodeRow', () => {
     const images = tree!.root.findAllByType(Image);
     expect(images).toHaveLength(0);
   });
+
+  test('opts in to background artwork fetch', async () => {
+    usePodcastArtworkMock.mockReturnValue(null);
+
+    await act(async () => {
+      renderRow();
+    });
+
+    expect(usePodcastArtworkMock).toHaveBeenCalledWith(
+      'content://notes',
+      episode.rssFeedUrl,
+      expect.objectContaining({allowBackgroundFetch: true}),
+    );
+  });
 });

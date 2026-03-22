@@ -31,7 +31,9 @@ export function EpisodeRow({
   playbackState,
 }: EpisodeRowProps) {
   const {baseUri} = useVaultContext();
-  const artworkUri = usePodcastArtwork(baseUri, episode.rssFeedUrl);
+  const artworkUri = usePodcastArtwork(baseUri, episode.rssFeedUrl, {
+    allowBackgroundFetch: true,
+  });
   const swipeableRef = useRef<Swipeable | null>(null);
   const [isMarkingAsPlayed, setIsMarkingAsPlayed] = useState(false);
   const isActive = activeEpisodeId === episode.id;
