@@ -107,3 +107,13 @@ src/
 - App sandbox storage (AsyncStorage) stores only `notesDirectoryUri`.
 
 This matches your requirement: after setup, app settings/state live inside the selected Notes directory dot folder whenever possible.
+
+## Podcast file conventions
+
+`General/` contains two podcast markdown file types with different responsibilities.
+
+- `YYYY [Label] - podcasts.md` is the source of truth for podcast episodes shown in the app feed.
+- `📻 [Title].md` is a podcast config/cache file. The app reads frontmatter from this file to resolve `rssFeedUrl` for artwork and metadata lookups.
+- The app must not read `📻 [Title].md` body lines as feed episodes. Body content may exist as cache output, but it is not a feed input.
+
+An episode may appear in the feed only when it originates from a `YYYY [Label] - podcasts.md` file.

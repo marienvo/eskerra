@@ -25,6 +25,7 @@ export type PodcastEpisode = {
   id: string;
   isListened: boolean;
   mp3Url: string;
+  rssFeedUrl?: string;
   sectionTitle: string;
   seriesName: string;
   sourceFile: string;
@@ -33,6 +34,7 @@ export type PodcastEpisode = {
 
 export type PodcastSection = {
   episodes: PodcastEpisode[];
+  rssFeedUrl?: string;
   title: string;
 };
 
@@ -41,4 +43,11 @@ export type PlaylistEntry = {
   episodeId: string;
   mp3Url: string;
   positionMs: number;
+};
+
+export type PodcastImageCacheEntry = {
+  fetchedAt: string;
+  imageUrl: string;
+  localImageUri?: string;
+  mimeType?: string;
 };

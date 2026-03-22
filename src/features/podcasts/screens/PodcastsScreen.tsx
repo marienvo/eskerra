@@ -1,5 +1,5 @@
 import {Box, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
-import {SectionList, StyleSheet} from 'react-native';
+import {SectionList, StyleSheet, View} from 'react-native';
 
 import {usePlayerContext} from '../context/PlayerContext';
 import {PodcastEpisode} from '../../../types';
@@ -7,8 +7,22 @@ import {EpisodeRow} from '../components/EpisodeRow';
 
 type PodcastSectionListItem = {
   data: PodcastEpisode[];
+  rssFeedUrl?: string;
   title: string;
 };
+
+type PodcastSectionHeaderProps = {
+  dividerColor: string;
+  title: string;
+};
+
+function PodcastSectionHeader({dividerColor, title}: PodcastSectionHeaderProps) {
+  return (
+    <View style={[styles.sectionHeader, {borderBottomColor: dividerColor}]}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+}
 
 export function PodcastsScreen() {
   const {
@@ -28,6 +42,7 @@ export function PodcastsScreen() {
   const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const sectionData: PodcastSectionListItem[] = sections.map(section => ({
     data: section.episodes,
+    rssFeedUrl: section.rssFeedUrl,
     title: section.title,
   }));
 
@@ -41,28 +56,30 @@ export function PodcastsScreen() {
       <SectionList
         // SectionList expects each section to expose a `data` array.
         contentContainerStyle={styles.listContent}
-        onRefresh={refreshPodcasts}
-        refreshing={podcastsLoading}
+        onRefresh={() => {
+          refreshPodcasts({forceFullScan: true}).catch(() => undefined);
+        }}
+        refreshing={podcastsLoading && sections.length > 0}
         sections={sectionData}
         keyExtractor={item => item.id}
-        renderItem={({item}) => {
-          return (
-            <EpisodeRow
-              activeEpisodeId={activeEpisode?.id ?? null}
-              dividerColor={dividerColor}
-              episode={item}
-              mutedTextColor={mutedTextColor}
-              onMarkAsPlayed={markEpisodeAsPlayed}
-              onPlayEpisode={playEpisode}
-              playbackLoading={playbackLoading}
-              playbackState={playbackState}
-            />
-          );
-        }}
+        renderItem={({item, section}) => (
+          <EpisodeRow
+            activeEpisodeId={activeEpisode?.id ?? null}
+            dividerColor={dividerColor}
+            episode={item}
+            mutedTextColor={mutedTextColor}
+            onMarkAsPlayed={markEpisodeAsPlayed}
+            onPlayEpisode={playEpisode}
+            playbackLoading={playbackLoading}
+            playbackState={playbackState}
+            sectionRssFeedUrl={section.rssFeedUrl}
+          />
+        )}
         renderSectionHeader={({section}) => (
-          <Text style={[styles.sectionTitle, {borderBottomColor: dividerColor}]}>
-            {section.title}
-          </Text>
+          <PodcastSectionHeader
+            dividerColor={dividerColor}
+            title={section.title}
+          />
         )}
         ListEmptyComponent={
           !podcastsLoading ? (
@@ -85,12 +102,16 @@ const styles = StyleSheet.create({
   listContent: {
     paddingBottom: 24,
   },
-  sectionTitle: {
+  sectionHeader: {
+    alignItems: 'center',
     borderBottomWidth: 1,
-    fontSize: 18,
-    fontWeight: '700',
     marginTop: 12,
     paddingBottom: 6,
+  },
+  sectionTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
   },
   spinner: {
     marginVertical: 10,

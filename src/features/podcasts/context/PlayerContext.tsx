@@ -4,7 +4,7 @@ import {PodcastEpisode, PodcastSection} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {usePlayer} from '../hooks/usePlayer';
 import {markEpisodeAsPlayed as markEpisodeAsPlayedInStorage} from '../services/markEpisodeAsPlayed';
-import {usePodcasts} from '../hooks/usePodcasts';
+import {RefreshPodcastsOptions, usePodcasts} from '../hooks/usePodcasts';
 import {PlayerProgress, PlayerState} from '../services/audioPlayer';
 
 type PlayerContextValue = {
@@ -18,7 +18,7 @@ type PlayerContextValue = {
   progress: PlayerProgress;
   podcastError: string | null;
   podcastsLoading: boolean;
-  refreshPodcasts: () => Promise<void>;
+  refreshPodcasts: (options?: RefreshPodcastsOptions) => Promise<void>;
   sections: PodcastSection[];
   seekTo: (positionMs: number) => Promise<void>;
   togglePlayback: () => Promise<void>;

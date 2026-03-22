@@ -1,8 +1,10 @@
 import {Box, Pressable, Text, useColorMode} from '@gluestack-ui/themed';
-import {StyleSheet, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {useVaultContext} from '../../../core/vault/VaultContext';
 import {usePlayerContext} from '../context/PlayerContext';
+import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 
 function formatProgress(positionMs: number, durationMs: number | null): string {
   const safePosition = Math.max(0, Math.floor(positionMs / 1000));
@@ -27,6 +29,7 @@ function formatProgress(positionMs: number, durationMs: number | null): string {
 }
 
 export function MiniPlayer() {
+  const {baseUri} = useVaultContext();
   const {
     activeEpisode,
     playbackLoading,
@@ -35,6 +38,9 @@ export function MiniPlayer() {
     togglePlayback,
   } = usePlayerContext();
   const colorMode = useColorMode();
+  const artworkUri = usePodcastArtwork(baseUri, activeEpisode?.rssFeedUrl, {
+    allowBackgroundFetch: true,
+  });
 
   if (!activeEpisode) {
     return null;
@@ -61,6 +67,13 @@ export function MiniPlayer() {
         },
       ]}>
       <View style={styles.topRow}>
+        {artworkUri ? (
+          <Image source={{uri: artworkUri}} style={styles.artwork} />
+        ) : (
+          <View style={styles.artworkPlaceholder}>
+            <MaterialIcons color="#8f8f8f" name="music-note" size={20} />
+          </View>
+        )}
         <View style={styles.textWrap}>
           <Text numberOfLines={1} style={styles.title}>
             {activeEpisode.title}
@@ -101,6 +114,21 @@ export function MiniPlayer() {
 }
 
 const styles = StyleSheet.create({
+  artwork: {
+    borderRadius: 8,
+    height: 40,
+    marginRight: 10,
+    width: 40,
+  },
+  artworkPlaceholder: {
+    alignItems: 'center',
+    backgroundColor: '#e2e2e2',
+    borderRadius: 8,
+    height: 40,
+    justifyContent: 'center',
+    marginRight: 10,
+    width: 40,
+  },
   container: {
     borderTopWidth: 1,
     paddingHorizontal: 14,

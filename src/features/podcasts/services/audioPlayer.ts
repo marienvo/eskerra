@@ -4,6 +4,7 @@ export type PlayerState = 'ended' | 'error' | 'idle' | 'loading' | 'paused' | 'p
 
 export type AudioTrack = {
   artist: string;
+  artwork?: string;
   id: string;
   title: string;
   url: string;

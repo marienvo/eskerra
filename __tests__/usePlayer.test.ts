@@ -7,6 +7,12 @@ import {useVaultContext} from '../src/core/vault/VaultContext';
 import {getAudioPlayer} from '../src/features/podcasts/services/audioPlayer';
 import {PodcastEpisode} from '../src/types';
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  removeItem: jest.fn(),
+  setItem: jest.fn(),
+}));
+
 jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
   readPlaylist: jest.fn(),
@@ -52,8 +58,8 @@ function HookHarness({episodesById, onResult}: HookHarnessProps) {
 }
 
 function flushPromises(): Promise<void> {
-  return new Promise(resolve => {
-    setTimeout(resolve, 0);
+  return new Promise<void>(resolve => {
+    setTimeout(() => resolve(), 0);
   });
 }
 
@@ -74,6 +80,7 @@ describe('usePlayer restore state', () => {
   const getAudioPlayerMock = getAudioPlayer as jest.MockedFunction<
     typeof getAudioPlayer
   >;
+  let ensureSetupMock: jest.MockedFunction<() => Promise<void>>;
 
   const episode: PodcastEpisode = {
     date: '2026-03-20',
@@ -88,6 +95,7 @@ describe('usePlayer restore state', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    ensureSetupMock = jest.fn(async () => undefined);
 
     useVaultContextMock.mockReturnValue({
       baseUri: 'content://vault-root',
@@ -103,7 +111,7 @@ describe('usePlayer restore state', () => {
       addProgressListener: jest.fn(() => () => undefined),
       addStateListener: jest.fn(() => () => undefined),
       destroy: jest.fn(async () => undefined),
-      ensureSetup: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
       getProgress: jest.fn(async () => ({durationMs: null, positionMs: 0})),
       getState: jest.fn(async () => 'idle'),
       pause: jest.fn(async () => undefined),
@@ -167,5 +175,67 @@ describe('usePlayer restore state', () => {
       positionMs: 123456,
     });
     expect(restoredResult.state).toBe('paused');
+    expect(readPlaylistMock).toHaveBeenCalledTimes(1);
+    expect(ensureSetupMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('reads playlist once even when episodes map updates multiple times', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 123456,
+    });
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+
+    let episodesById = new Map<string, PodcastEpisode>();
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+        }),
+      );
+      await flushPromises();
+    });
+
+    episodesById = new Map([[episode.id, episode]]);
+    await act(async () => {
+      renderer?.update(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+        }),
+      );
+      await flushPromises();
+    });
+
+    const enrichedEpisode: PodcastEpisode = {
+      ...episode,
+      rssFeedUrl: 'https://feed.example.com/rss.xml',
+    };
+    episodesById = new Map([[episode.id, enrichedEpisode]]);
+    await act(async () => {
+      renderer?.update(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(readPlaylistMock).toHaveBeenCalledTimes(1);
+    expect(ensureSetupMock).toHaveBeenCalledTimes(1);
+    expect(expectResult(latestResult).activeEpisode).toEqual(enrichedEpisode);
+    await act(async () => {
+      renderer?.unmount();
+    });
   });
 });

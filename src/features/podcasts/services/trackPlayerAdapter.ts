@@ -69,6 +69,7 @@ export class TrackPlayerAdapter implements AudioPlayer {
     await TrackPlayer.reset();
     await TrackPlayer.add({
       artist: track.artist,
+      artwork: track.artwork,
       id: track.id,
       title: track.title,
       url: track.url,
