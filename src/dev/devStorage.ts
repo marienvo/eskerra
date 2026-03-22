@@ -21,6 +21,7 @@ const DEV_SETTINGS_KEY = `${DEV_STORAGE_PREFIX}:settings`;
 const DEV_NOTES_INDEX_KEY = `${DEV_STORAGE_PREFIX}:notes:index`;
 const DEV_PODCAST_INDEX_KEY = `${DEV_STORAGE_PREFIX}:podcasts:index`;
 const DEV_PLAYLIST_KEY = `${DEV_STORAGE_PREFIX}:playlist`;
+const GENERAL_DIRECTORY_NAME = 'General';
 const INBOX_DIRECTORY_NAME = 'Inbox';
 const MARKDOWN_EXTENSION = '.md';
 
@@ -152,7 +153,7 @@ async function writePodcastIndex(index: PodcastIndex): Promise<void> {
 async function ensureSeeded(): Promise<void> {
   const seeded = await AsyncStorage.getItem(DEV_SEEDED_KEY);
 
-  if (seeded === '1') {
+  if (seeded === '2') {
     return;
   }
 
@@ -177,7 +178,7 @@ async function ensureSeeded(): Promise<void> {
   await writeNotesIndex(notesIndex);
   await writePodcastIndex(podcastIndex);
   await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeSettings(MOCK_SETTINGS));
-  await AsyncStorage.setItem(DEV_SEEDED_KEY, '1');
+  await AsyncStorage.setItem(DEV_SEEDED_KEY, '2');
 }
 
 function assertMockBaseUri(baseUri: string): void {
@@ -285,7 +286,7 @@ export async function readNote(noteUri: string): Promise<NoteDetail> {
   };
 }
 
-export async function listRootMarkdownFiles(
+export async function listGeneralMarkdownFiles(
   baseUri: string,
 ): Promise<RootMarkdownFile[]> {
   assertMockBaseUri(baseUri);
@@ -294,7 +295,11 @@ export async function listRootMarkdownFiles(
   const index = await readPodcastIndex();
 
   return Object.keys(index)
-    .filter(name => name.endsWith(MARKDOWN_EXTENSION))
+    .filter(
+      name =>
+        name.startsWith(`${GENERAL_DIRECTORY_NAME}/`) &&
+        name.endsWith(MARKDOWN_EXTENSION),
+    )
     .map(name => ({
       lastModified: index[name] ?? null,
       name,

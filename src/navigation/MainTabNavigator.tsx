@@ -1,9 +1,11 @@
 import {
   BottomTabBar,
+  BottomTabBarButtonProps,
   BottomTabNavigationOptions,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
 import {createStackNavigator} from '@react-navigation/stack';
+import {Pressable, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {HomeScreen} from '../features/home/screens/HomeScreen';
@@ -44,6 +46,9 @@ const vaultTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) =
 const settingsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="settings" size={size} />
 );
+const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
+  <TabBarButton {...props} />
+);
 
 const renderTabBar = (props: Parameters<typeof BottomTabBar>[0]) => (
   <>
@@ -51,6 +56,37 @@ const renderTabBar = (props: Parameters<typeof BottomTabBar>[0]) => (
     <BottomTabBar {...props} />
   </>
 );
+
+function TabBarButton({
+  accessibilityLabel,
+  accessibilityState,
+  children,
+  onLongPress,
+  onPress,
+  style,
+  testID,
+}: BottomTabBarButtonProps) {
+  const isSelected = accessibilityState?.selected === true;
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
+      android_ripple={{
+        borderless: false,
+        color: 'rgba(255,255,255,0.12)',
+        radius: 32,
+      }}
+      onLongPress={onLongPress}
+      onPress={onPress}
+      style={[style, styles.tabButton]}
+      testID={testID}>
+      <View style={[styles.tabButtonInner, isSelected ? styles.tabButtonActive : null]}>
+        {children}
+      </View>
+    </Pressable>
+  );
+}
 
 function InboxStackScreen() {
   return (
@@ -98,11 +134,19 @@ export function MainTabNavigator() {
     <PlayerProvider>
       <Tabs.Navigator
         initialRouteName="HomeTab"
+        screenOptions={{
+          tabBarActiveTintColor: '#ffffff',
+          tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
+          tabBarLabelStyle: styles.tabBarLabel,
+          tabBarShowLabel: true,
+          tabBarStyle: styles.tabBar,
+        }}
         tabBar={renderTabBar}>
         <Tabs.Screen
           component={InboxStackScreen}
           name="InboxTab"
           options={{
+            tabBarButton,
             tabBarIcon: inboxTabIcon,
             title: 'Inbox',
           }}
@@ -111,6 +155,7 @@ export function MainTabNavigator() {
           component={PodcastsStackScreen}
           name="PodcastsTab"
           options={{
+            tabBarButton,
             tabBarIcon: podcastsTabIcon,
             title: 'Podcasts',
           }}
@@ -119,6 +164,7 @@ export function MainTabNavigator() {
           component={HomeStackScreen}
           name="HomeTab"
           options={{
+            tabBarButton,
             tabBarIcon: homeTabIcon,
             title: 'Home',
           }}
@@ -127,6 +173,7 @@ export function MainTabNavigator() {
           component={VaultStackScreen}
           name="VaultTab"
           options={{
+            tabBarButton,
             tabBarIcon: vaultTabIcon,
             title: 'Vault',
           }}
@@ -135,6 +182,7 @@ export function MainTabNavigator() {
           component={SettingsStackScreen}
           name="SettingsTab"
           options={{
+            tabBarButton,
             tabBarIcon: settingsTabIcon,
             title: 'Settings',
           }}
@@ -143,3 +191,28 @@ export function MainTabNavigator() {
     </PlayerProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: '#1d1d1d',
+    borderTopColor: '#2d2d2d',
+  },
+  tabBarLabel: {
+    fontSize: 11,
+  },
+  tabButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  tabButtonInner: {
+    alignItems: 'center',
+    borderRadius: 18,
+    justifyContent: 'center',
+    minWidth: 64,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+});

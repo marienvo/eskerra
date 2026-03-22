@@ -52,7 +52,7 @@ This is a mock note loaded in emulator builds.
 
 export const MOCK_PODCAST_FILES: MockPodcastFileSeed[] = [
   {
-    name: '2026 Demo - podcasts.md',
+    name: 'General/2026 Demo - podcasts.md',
     content: `# 2026 Demo - podcasts
 
 - [ ] 2026-03-20; #52 - Flitspalen, een gereedschapskist en een bosje tulpen (S10) [▶️](https://podcast.npo.nl/file/de-stemming-van-vullings-en-van-der-wulp/138643/flitspalen-een-gereedschapskist-en-een-bosje-tulpen.mp3?awCollectionid=feed-102-de-stemming-van-vullings-en-van-der-wulp&awEpisodeid=feed-102-de-stemming-van-vullings-en-van-der-wulp_episode-138643-WO_AT_20329055) (De Stemming van Vullings en De Rooy ●)

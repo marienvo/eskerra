@@ -2,7 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 
 import {
   clearPlaylist,
-  listRootMarkdownFiles,
+  listGeneralMarkdownFiles,
   readPlaylist,
   readPodcastFileContent,
 } from '../../../core/storage/noteboxStorage';
@@ -36,7 +36,7 @@ export function usePodcasts(): UsePodcastsResult {
     setIsLoading(true);
 
     try {
-      const files = await listRootMarkdownFiles(baseUri);
+      const files = await listGeneralMarkdownFiles(baseUri);
       const podcastFiles = files.filter(file => isPodcastFile(file.name));
 
       const parsedByFile = await Promise.all(

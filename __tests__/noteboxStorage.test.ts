@@ -13,7 +13,7 @@ import {
 import {
   clearPlaylist,
   createNote,
-  listRootMarkdownFiles,
+  listGeneralMarkdownFiles,
   listNotes,
   readNote,
   readPlaylist,
@@ -141,30 +141,39 @@ describe('noteboxStorage', () => {
     });
   });
 
-  test('listRootMarkdownFiles returns markdown files from vault root', async () => {
+  test('listGeneralMarkdownFiles returns markdown files from General folder', async () => {
+    existsMock.mockResolvedValueOnce(true);
     listFilesMock.mockResolvedValueOnce([
       {
         lastModified: 11,
         name: '2026 Demo - podcasts.md',
         type: 'file',
-        uri: `${baseUri}/2026 Demo - podcasts.md`,
+        uri: `${baseUri}/General/2026 Demo - podcasts.md`,
       },
       {
         lastModified: 22,
         name: 'notes.txt',
         type: 'file',
-        uri: `${baseUri}/notes.txt`,
+        uri: `${baseUri}/General/notes.txt`,
       },
     ] as never);
 
-    await expect(listRootMarkdownFiles(baseUri)).resolves.toEqual([
+    await expect(listGeneralMarkdownFiles(baseUri)).resolves.toEqual([
       {
         lastModified: 11,
         name: '2026 Demo - podcasts.md',
-        uri: `${baseUri}/2026 Demo - podcasts.md`,
+        uri: `${baseUri}/General/2026 Demo - podcasts.md`,
       },
     ]);
-    expect(listFilesMock).toHaveBeenCalledWith(baseUri);
+    expect(existsMock).toHaveBeenCalledWith(`${baseUri}/General`);
+    expect(listFilesMock).toHaveBeenCalledWith(`${baseUri}/General`);
+  });
+
+  test('listGeneralMarkdownFiles returns empty list when General folder does not exist', async () => {
+    existsMock.mockResolvedValueOnce(false);
+
+    await expect(listGeneralMarkdownFiles(baseUri)).resolves.toEqual([]);
+    expect(listFilesMock).not.toHaveBeenCalled();
   });
 
   test('readPodcastFileContent reads markdown by URI', async () => {

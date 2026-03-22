@@ -15,6 +15,7 @@ import {
 } from '../../types';
 
 const NOTEBOX_DIRECTORY_NAME = '.notebox';
+const GENERAL_DIRECTORY_NAME = 'General';
 const INBOX_DIRECTORY_NAME = 'Inbox';
 const PLAYLIST_FILE_NAME = 'playlist.json';
 const SETTINGS_FILE_NAME = 'settings.json';
@@ -46,6 +47,10 @@ function getPlaylistUri(baseUri: string): string {
 
 function getInboxDirectoryUri(baseUri: string): string {
   return `${baseUri}/${INBOX_DIRECTORY_NAME}`;
+}
+
+function getGeneralDirectoryUri(baseUri: string): string {
+  return `${baseUri}/${GENERAL_DIRECTORY_NAME}`;
 }
 
 function normalizeBaseUri(baseUri: string): string {
@@ -226,16 +231,22 @@ export async function listNotes(baseUri: string): Promise<NoteSummary[]> {
     });
 }
 
-export async function listRootMarkdownFiles(
+export async function listGeneralMarkdownFiles(
   baseUri: string,
 ): Promise<RootMarkdownFile[]> {
   if (isDevMockVaultEnabled) {
     const devStorage = getDevStorage();
-    return devStorage.listRootMarkdownFiles(baseUri);
+    return devStorage.listGeneralMarkdownFiles(baseUri);
   }
 
   const normalizedBaseUri = normalizeBaseUri(baseUri);
-  const documents = (await listFiles(normalizedBaseUri)) as SafDocumentFile[];
+  const generalDirectoryUri = getGeneralDirectoryUri(normalizedBaseUri);
+
+  if (!(await exists(generalDirectoryUri))) {
+    return [];
+  }
+
+  const documents = (await listFiles(generalDirectoryUri)) as SafDocumentFile[];
 
   return documents
     .filter(document => {

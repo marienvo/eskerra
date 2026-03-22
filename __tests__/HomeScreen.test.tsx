@@ -88,7 +88,9 @@ describe('SettingsScreen', () => {
       tree = create(<SettingsScreen />);
     });
 
-    const changeDirectoryButton = getButtonByTitle(tree!, 'Change directory');
+    const changeDirectoryButton = tree!.root.findByProps({
+      testID: 'change-directory-link',
+    });
     await act(async () => {
       await changeDirectoryButton.props.onPress();
     });

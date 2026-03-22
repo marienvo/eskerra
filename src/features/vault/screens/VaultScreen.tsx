@@ -33,7 +33,6 @@ export function VaultScreen({navigation}: VaultScreenProps) {
 
   return (
     <Box style={styles.container}>
-      <Text style={styles.title}>Vault</Text>
       <Box style={[styles.folderRow, {borderColor: dividerColor}]}>
         <Text style={[styles.folderLabel, {color: mutedTextColor}]}>Folder</Text>
         <Text style={styles.folderValue}>Inbox</Text>
@@ -115,12 +114,6 @@ const styles = StyleSheet.create({
   },
   status: {
     marginVertical: 10,
-    textAlign: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 8,
     textAlign: 'center',
   },
 });

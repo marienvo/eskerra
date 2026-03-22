@@ -31,7 +31,6 @@ export function PodcastsScreen() {
 
   return (
     <Box style={styles.container}>
-      <Text style={styles.title}>Podcasts</Text>
       {podcastsLoading && sections.length === 0 ? (
         <Spinner style={styles.spinner} />
       ) : null}
@@ -115,12 +114,6 @@ const styles = StyleSheet.create({
   },
   status: {
     marginVertical: 10,
-    textAlign: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 8,
     textAlign: 'center',
   },
 });

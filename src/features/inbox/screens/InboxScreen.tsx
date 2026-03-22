@@ -49,7 +49,6 @@ export function InboxScreen() {
 
   return (
     <Box style={styles.container}>
-      <Text style={styles.title}>Inbox</Text>
       <Text style={styles.description}>Capture an idea and store it as markdown.</Text>
       <Input style={styles.input}>
         <InputField
@@ -106,10 +105,5 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 140,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
   },
 });
