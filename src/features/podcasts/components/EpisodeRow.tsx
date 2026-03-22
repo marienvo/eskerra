@@ -1,6 +1,6 @@
 import {Pressable, Text} from '@gluestack-ui/themed';
 import {useCallback, useRef, useState} from 'react';
-import {StyleSheet, View} from 'react-native';
+import {Image, StyleSheet, View} from 'react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -9,6 +9,7 @@ import {PlayerState} from '../services/audioPlayer';
 
 type EpisodeRowProps = {
   activeEpisodeId: string | null;
+  artworkUri: string | null;
   dividerColor: string;
   episode: PodcastEpisode;
   mutedTextColor: string;
@@ -20,6 +21,7 @@ type EpisodeRowProps = {
 
 export function EpisodeRow({
   activeEpisodeId,
+  artworkUri,
   dividerColor,
   episode,
   mutedTextColor,
@@ -76,21 +78,50 @@ export function EpisodeRow({
           onPlayEpisode(episode).catch(() => undefined);
         }}
         style={[styles.episodeRow, {borderBottomColor: dividerColor}]}>
-        <Text style={styles.episodeTitle}>{episode.title}</Text>
-        <Text style={[styles.meta, {color: mutedTextColor}]}>
-          {episode.seriesName} - {episode.date}
-        </Text>
-        <Text style={[styles.meta, {color: mutedTextColor}]}>
-          {isPlaying ? 'Playing' : isActive ? 'Paused' : 'Tap to play'}
-        </Text>
+        {artworkUri ? (
+          <Image source={{uri: artworkUri}} style={styles.artwork} />
+        ) : (
+          <View style={styles.artworkPlaceholder}>
+            <MaterialIcons color="#8f8f8f" name="music-note" size={20} />
+          </View>
+        )}
+        <View style={styles.episodeContent}>
+          <Text style={styles.episodeTitle}>{episode.title}</Text>
+          <Text style={[styles.meta, {color: mutedTextColor}]}>
+            {episode.seriesName} - {episode.date}
+          </Text>
+          <Text style={[styles.meta, {color: mutedTextColor}]}>
+            {isPlaying ? 'Playing' : isActive ? 'Paused' : 'Tap to play'}
+          </Text>
+        </View>
       </Pressable>
     </Swipeable>
   );
 }
 
 const styles = StyleSheet.create({
+  artwork: {
+    borderRadius: 8,
+    height: 40,
+    marginRight: 10,
+    width: 40,
+  },
+  artworkPlaceholder: {
+    alignItems: 'center',
+    backgroundColor: '#e2e2e2',
+    borderRadius: 8,
+    height: 40,
+    justifyContent: 'center',
+    marginRight: 10,
+    width: 40,
+  },
+  episodeContent: {
+    flex: 1,
+  },
   episodeRow: {
+    alignItems: 'center',
     borderBottomWidth: 1,
+    flexDirection: 'row',
     paddingVertical: 12,
   },
   episodeTitle: {

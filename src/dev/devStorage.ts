@@ -26,6 +26,7 @@ const DEV_PODCAST_IMAGE_PREFIX = `${DEV_STORAGE_PREFIX}:podcast-image`;
 const GENERAL_DIRECTORY_NAME = 'General';
 const INBOX_DIRECTORY_NAME = 'Inbox';
 const MARKDOWN_EXTENSION = '.md';
+const SYNC_CONFLICT_MARKER = 'sync-conflict';
 
 type NotesIndex = Record<string, number>;
 type PodcastIndex = Record<string, number>;
@@ -124,6 +125,10 @@ function noteNameFromUri(noteUri: string): string {
 function normalizeNoteContent(content: string): string {
   const trimmedContent = content.trim();
   return trimmedContent ? `${trimmedContent}\n` : '';
+}
+
+function isSyncConflictFileName(fileName: string): boolean {
+  return fileName.toLowerCase().includes(SYNC_CONFLICT_MARKER);
 }
 
 async function readNotesIndex(): Promise<NotesIndex> {
@@ -259,7 +264,8 @@ export async function listNotes(baseUri: string): Promise<NoteSummary[]> {
     .filter(
       name =>
         name.startsWith(`${INBOX_DIRECTORY_NAME}/`) &&
-        name.endsWith(MARKDOWN_EXTENSION),
+        name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(name),
     )
     .map(name => ({
       lastModified: index[name] ?? null,
@@ -304,7 +310,8 @@ export async function listGeneralMarkdownFiles(
     .filter(
       name =>
         name.startsWith(`${GENERAL_DIRECTORY_NAME}/`) &&
-        name.endsWith(MARKDOWN_EXTENSION),
+        name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(name),
     )
     .map(name => ({
       lastModified: index[name] ?? null,

@@ -111,6 +111,12 @@ describe('noteboxStorage', () => {
         type: 'file',
         uri: `${baseUri}/Inbox/newer.md`,
       },
+      {
+        lastModified: 33,
+        name: 'latest.sync-conflict.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/latest.sync-conflict.md`,
+      },
       {name: 'settings.json', type: 'file', uri: `${baseUri}/Inbox/settings.json`},
       {name: '.notebox', type: 'directory', uri: `${baseUri}/Inbox/.notebox`},
     ] as never);
@@ -157,6 +163,12 @@ describe('noteboxStorage', () => {
         name: 'notes.txt',
         type: 'file',
         uri: `${baseUri}/General/notes.txt`,
+      },
+      {
+        lastModified: 33,
+        name: '2026 Demo - sync-conflict.md',
+        type: 'file',
+        uri: `${baseUri}/General/2026 Demo - sync-conflict.md`,
       },
     ] as never);
 

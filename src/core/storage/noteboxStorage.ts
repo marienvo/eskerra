@@ -22,6 +22,7 @@ const PLAYLIST_FILE_NAME = 'playlist.json';
 const PODCAST_IMAGES_DIRECTORY_NAME = 'podcast-images';
 const SETTINGS_FILE_NAME = 'settings.json';
 const MARKDOWN_EXTENSION = '.md';
+const SYNC_CONFLICT_MARKER = 'sync-conflict';
 
 const defaultSettings: NoteboxSettings = {
   displayName: 'My Notebox',
@@ -117,6 +118,10 @@ function titleFromNoteName(fileName: string): string {
     : fileName;
 
   return baseName.replace(/[-_]+/g, ' ').trim() || 'Untitled note';
+}
+
+function isSyncConflictFileName(fileName: string): boolean {
+  return fileName.toLowerCase().includes(SYNC_CONFLICT_MARKER);
 }
 
 type SafDocumentFile = {
@@ -254,7 +259,8 @@ export async function listNotes(baseUri: string): Promise<NoteSummary[]> {
       return (
         isFile &&
         typeof document.name === 'string' &&
-        document.name.endsWith(MARKDOWN_EXTENSION)
+        document.name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(document.name)
       );
     })
     .map(document => ({
@@ -293,7 +299,8 @@ export async function listGeneralMarkdownFiles(
       return (
         isFile &&
         typeof document.name === 'string' &&
-        document.name.endsWith(MARKDOWN_EXTENSION)
+        document.name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(document.name)
       );
     })
     .map(document => ({
