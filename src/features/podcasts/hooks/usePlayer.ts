@@ -57,6 +57,7 @@ export function usePlayer(
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState<PlayerProgress>(emptyProgress);
+  const [savedPlaylistEntry, setSavedPlaylistEntry] = useState<PlaylistEntry | null>(null);
   const [state, setState] = useState<PlayerState>('idle');
 
   useEffect(() => {
@@ -106,6 +107,7 @@ export function usePlayer(
 
   useEffect(() => {
     if (!baseUri) {
+      setSavedPlaylistEntry(null);
       setActiveEpisode(null);
       setProgress(emptyProgress);
       setState('idle');
@@ -119,25 +121,10 @@ export function usePlayer(
       try {
         await player.ensureSetup();
         const saved = await readPlaylist(baseUri);
-        if (!saved) {
-          return;
-        }
-
-        const matchingEpisode = episodesById.get(saved.episodeId);
-        if (!matchingEpisode) {
-          return;
-        }
-
         if (!isMounted) {
           return;
         }
-
-        setActiveEpisode(matchingEpisode);
-        setProgress({
-          durationMs: saved.durationMs,
-          positionMs: saved.positionMs,
-        });
-        setState('paused');
+        setSavedPlaylistEntry(saved);
       } catch (restoreError) {
         if (!isMounted) {
           return;
@@ -155,7 +142,25 @@ export function usePlayer(
     return () => {
       isMounted = false;
     };
-  }, [baseUri, episodesById, player]);
+  }, [baseUri, player]);
+
+  useEffect(() => {
+    if (!savedPlaylistEntry) {
+      return;
+    }
+
+    const matchingEpisode = episodesById.get(savedPlaylistEntry.episodeId);
+    if (!matchingEpisode) {
+      return;
+    }
+
+    setActiveEpisode(matchingEpisode);
+    setProgress({
+      durationMs: savedPlaylistEntry.durationMs,
+      positionMs: savedPlaylistEntry.positionMs,
+    });
+    setState(previousState => (previousState === 'idle' ? 'paused' : previousState));
+  }, [episodesById, savedPlaylistEntry]);
 
   const playEpisode = useCallback(
     async (episode: PodcastEpisode) => {
