@@ -74,3 +74,17 @@ Mitigation:
 Contingency:
 
 - If track-player alpha becomes unstable on target devices, switch the adapter implementation to a temporary in-app-only backend (for example `react-native-video`) while preserving app-level APIs.
+
+## 7) Android native vault listing (`NoteboxVaultListing`) (Medium)
+
+Risk:
+
+- Custom Kotlin module [`VaultListingModule`](android/app/src/main/java/com/notebox/VaultListingModule.kt) lists `.md` files under a SAF directory URI on a background executor. Wrong URI handling or `DocumentFile` behavior on some OEMs could return empty lists or diverge from the JS/`react-native-saf-x` path.
+
+Mitigation:
+
+- JavaScript falls back to `exists` + `listFiles` + filter in [`noteboxStorage.ts`](src/core/storage/noteboxStorage.ts) when `tryListMarkdownFilesNative` returns `null` (non-Android, missing module, or thrown error from native).
+- If native resolves with an **empty array** but `exists(directoryUri)` is still **true** for the SAF path, the app **does not** trust the empty native result and runs the same JS listing path (native and `react-native-saf-x` can disagree on visibility).
+- Kotlin throws instead of returning an empty array when `DocumentFile` reports the directory missing, so JS can fall back when native cannot open the tree URI reliably.
+- Keep listing rules aligned: markdown suffix, exclude filenames containing `sync-conflict`, sort by `lastModified` descending (see Kotlin `VaultListingModule`).
+- Validate on a physical Android device after changes; iOS is unchanged and always uses the JS path.

@@ -6,6 +6,7 @@ import {
   writeFile,
 } from 'react-native-saf-x';
 
+import {tryListMarkdownFilesNative} from './androidVaultListing';
 import {
   NoteDetail,
   NoteSummary,
@@ -131,6 +132,49 @@ type SafDocumentFile = {
   uri: string;
 };
 
+async function listMarkdownFilesInDirectory(
+  directoryUri: string,
+): Promise<Array<{lastModified: number | null; name: string; uri: string}>> {
+  const fromNative = await tryListMarkdownFilesNative(directoryUri);
+  if (fromNative !== null && fromNative.length > 0) {
+    return fromNative;
+  }
+  if (fromNative !== null && fromNative.length === 0) {
+    if (!(await exists(directoryUri))) {
+      return [];
+    }
+    // Native returned empty but SAF says the directory exists — use JS listing.
+  }
+
+  if (!(await exists(directoryUri))) {
+    return [];
+  }
+
+  const documents = (await listFiles(directoryUri)) as SafDocumentFile[];
+
+  return documents
+    .filter(document => {
+      const isFile = document.type === 'file' || document.type === undefined;
+      return (
+        isFile &&
+        typeof document.name === 'string' &&
+        document.name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(document.name)
+      );
+    })
+    .map(document => ({
+      lastModified:
+        typeof document.lastModified === 'number' ? document.lastModified : null,
+      name: document.name as string,
+      uri: document.uri,
+    }))
+    .sort((a, b) => {
+      const left = a.lastModified ?? 0;
+      const right = b.lastModified ?? 0;
+      return right - left;
+    });
+}
+
 function isValidPlaylistEntry(value: unknown): value is PlaylistEntry {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -247,33 +291,7 @@ export async function listNotes(baseUri: string): Promise<NoteSummary[]> {
   const normalizedBaseUri = normalizeBaseUri(baseUri);
   const inboxDirectoryUri = getInboxDirectoryUri(normalizedBaseUri);
 
-  if (!(await exists(inboxDirectoryUri))) {
-    return [];
-  }
-
-  const documents = (await listFiles(inboxDirectoryUri)) as SafDocumentFile[];
-
-  return documents
-    .filter(document => {
-      const isFile = document.type === 'file' || document.type === undefined;
-      return (
-        isFile &&
-        typeof document.name === 'string' &&
-        document.name.endsWith(MARKDOWN_EXTENSION) &&
-        !isSyncConflictFileName(document.name)
-      );
-    })
-    .map(document => ({
-      lastModified:
-        typeof document.lastModified === 'number' ? document.lastModified : null,
-      name: document.name as string,
-      uri: document.uri,
-    }))
-    .sort((a, b) => {
-      const left = a.lastModified ?? 0;
-      const right = b.lastModified ?? 0;
-      return right - left;
-    });
+  return listMarkdownFilesInDirectory(inboxDirectoryUri);
 }
 
 export async function listGeneralMarkdownFiles(
@@ -287,33 +305,7 @@ export async function listGeneralMarkdownFiles(
   const normalizedBaseUri = normalizeBaseUri(baseUri);
   const generalDirectoryUri = getGeneralDirectoryUri(normalizedBaseUri);
 
-  if (!(await exists(generalDirectoryUri))) {
-    return [];
-  }
-
-  const documents = (await listFiles(generalDirectoryUri)) as SafDocumentFile[];
-
-  return documents
-    .filter(document => {
-      const isFile = document.type === 'file' || document.type === undefined;
-      return (
-        isFile &&
-        typeof document.name === 'string' &&
-        document.name.endsWith(MARKDOWN_EXTENSION) &&
-        !isSyncConflictFileName(document.name)
-      );
-    })
-    .map(document => ({
-      lastModified:
-        typeof document.lastModified === 'number' ? document.lastModified : null,
-      name: document.name as string,
-      uri: document.uri,
-    }))
-    .sort((a, b) => {
-      const left = a.lastModified ?? 0;
-      const right = b.lastModified ?? 0;
-      return right - left;
-    });
+  return listMarkdownFilesInDirectory(generalDirectoryUri);
 }
 
 export async function readNote(noteUri: string): Promise<NoteDetail> {

@@ -10,6 +10,7 @@ import {
   writeFile,
 } from 'react-native-saf-x';
 
+import {tryListMarkdownFilesNative} from '../src/core/storage/androidVaultListing';
 import {
   buildSafDocumentUri,
   clearPlaylist,
@@ -35,16 +36,23 @@ jest.mock('react-native-saf-x', () => ({
   writeFile: jest.fn(),
 }));
 
+jest.mock('../src/core/storage/androidVaultListing', () => ({
+  tryListMarkdownFilesNative: jest.fn(),
+}));
+
 describe('noteboxStorage', () => {
   const existsMock = exists as jest.MockedFunction<typeof exists>;
   const listFilesMock = listFiles as jest.MockedFunction<typeof listFiles>;
   const mkdirMock = mkdir as jest.MockedFunction<typeof mkdir>;
   const readFileMock = readFile as jest.MockedFunction<typeof readFile>;
   const writeFileMock = writeFile as jest.MockedFunction<typeof writeFile>;
+  const tryListMarkdownFilesNativeMock =
+    tryListMarkdownFilesNative as jest.MockedFunction<typeof tryListMarkdownFilesNative>;
   const baseUri = 'content://notes';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    tryListMarkdownFilesNativeMock.mockResolvedValue(null);
   });
 
   test('initNotebox creates .notebox and default settings when missing', async () => {
@@ -96,6 +104,20 @@ describe('noteboxStorage', () => {
     );
   });
 
+  test('listNotes uses native listing when tryListMarkdownFilesNative returns rows', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
+      {lastModified: 22, name: 'newer.md', uri: `${baseUri}/Inbox/newer.md`},
+      {lastModified: 11, name: 'older.md', uri: `${baseUri}/Inbox/older.md`},
+    ]);
+
+    await expect(listNotes(baseUri)).resolves.toEqual([
+      {lastModified: 22, name: 'newer.md', uri: `${baseUri}/Inbox/newer.md`},
+      {lastModified: 11, name: 'older.md', uri: `${baseUri}/Inbox/older.md`},
+    ]);
+    expect(existsMock).not.toHaveBeenCalled();
+    expect(listFilesMock).not.toHaveBeenCalled();
+  });
+
   test('listNotes returns markdown files sorted by lastModified', async () => {
     existsMock.mockResolvedValueOnce(true);
     listFilesMock.mockResolvedValueOnce([
@@ -136,6 +158,33 @@ describe('noteboxStorage', () => {
     expect(listFilesMock).not.toHaveBeenCalled();
   });
 
+  test('listNotes falls back to JS listing when native returns empty but directory exists', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([]);
+    existsMock.mockResolvedValue(true);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 11,
+        name: 'note.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/note.md`,
+      },
+    ] as never);
+
+    await expect(listNotes(baseUri)).resolves.toEqual([
+      {lastModified: 11, name: 'note.md', uri: `${baseUri}/Inbox/note.md`},
+    ]);
+    expect(existsMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
+    expect(listFilesMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
+  });
+
+  test('listNotes returns empty when native returns empty and directory does not exist', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([]);
+    existsMock.mockResolvedValueOnce(false);
+
+    await expect(listNotes(baseUri)).resolves.toEqual([]);
+    expect(listFilesMock).not.toHaveBeenCalled();
+  });
+
   test('readNote reads markdown content by URI', async () => {
     readFileMock.mockResolvedValueOnce('# Hello');
 
@@ -147,6 +196,26 @@ describe('noteboxStorage', () => {
         uri: `${baseUri}/hello.md`,
       },
     });
+  });
+
+  test('listGeneralMarkdownFiles uses native listing when tryListMarkdownFilesNative returns rows', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
+      {
+        lastModified: 11,
+        name: '2026 Demo - podcasts.md',
+        uri: `${baseUri}/General/2026 Demo - podcasts.md`,
+      },
+    ]);
+
+    await expect(listGeneralMarkdownFiles(baseUri)).resolves.toEqual([
+      {
+        lastModified: 11,
+        name: '2026 Demo - podcasts.md',
+        uri: `${baseUri}/General/2026 Demo - podcasts.md`,
+      },
+    ]);
+    expect(existsMock).not.toHaveBeenCalled();
+    expect(listFilesMock).not.toHaveBeenCalled();
   });
 
   test('listGeneralMarkdownFiles returns markdown files from General folder', async () => {
