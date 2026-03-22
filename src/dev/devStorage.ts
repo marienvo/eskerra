@@ -324,6 +324,23 @@ export async function readPodcastFileContent(fileUri: string): Promise<string> {
   return content;
 }
 
+export async function writePodcastFileContent(
+  fileUri: string,
+  content: string,
+): Promise<void> {
+  await ensureSeeded();
+  const fileName = noteNameFromUri(fileUri);
+  const index = await readPodcastIndex();
+
+  if (!Object.prototype.hasOwnProperty.call(index, fileName)) {
+    throw new Error('Podcast file was not found in dev mock vault.');
+  }
+
+  await AsyncStorage.setItem(devPodcastKey(fileName), normalizeNoteContent(content));
+  index[fileName] = Date.now();
+  await writePodcastIndex(index);
+}
+
 export async function createNote(
   baseUri: string,
   title: string,

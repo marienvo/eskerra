@@ -1,8 +1,9 @@
-import {Box, Pressable, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
+import {Box, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {SectionList, StyleSheet} from 'react-native';
 
 import {usePlayerContext} from '../context/PlayerContext';
 import {PodcastEpisode} from '../../../types';
+import {EpisodeRow} from '../components/EpisodeRow';
 
 type PodcastSectionListItem = {
   data: PodcastEpisode[];
@@ -12,6 +13,7 @@ type PodcastSectionListItem = {
 export function PodcastsScreen() {
   const {
     activeEpisode,
+    markEpisodeAsPlayed,
     playbackError,
     playbackLoading,
     playbackState,
@@ -44,24 +46,17 @@ export function PodcastsScreen() {
         sections={sectionData}
         keyExtractor={item => item.id}
         renderItem={({item}) => {
-          const isActive = activeEpisode?.id === item.id;
-          const isPlaying = isActive && playbackState === 'playing';
-
           return (
-            <Pressable
-              disabled={playbackLoading}
-              onPress={() => {
-                playEpisode(item).catch(() => undefined);
-              }}
-              style={[styles.episodeRow, {borderBottomColor: dividerColor}]}>
-              <Text style={styles.episodeTitle}>{item.title}</Text>
-              <Text style={[styles.meta, {color: mutedTextColor}]}>
-                {item.seriesName} - {item.date}
-              </Text>
-              <Text style={[styles.meta, {color: mutedTextColor}]}>
-                {isPlaying ? 'Playing' : isActive ? 'Paused' : 'Tap to play'}
-              </Text>
-            </Pressable>
+            <EpisodeRow
+              activeEpisodeId={activeEpisode?.id ?? null}
+              dividerColor={dividerColor}
+              episode={item}
+              mutedTextColor={mutedTextColor}
+              onMarkAsPlayed={markEpisodeAsPlayed}
+              onPlayEpisode={playEpisode}
+              playbackLoading={playbackLoading}
+              playbackState={playbackState}
+            />
           );
         }}
         renderSectionHeader={({section}) => (
@@ -87,20 +82,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
-  episodeRow: {
-    borderBottomWidth: 1,
-    paddingVertical: 12,
-  },
-  episodeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   listContent: {
     paddingBottom: 24,
-  },
-  meta: {
-    fontSize: 12,
-    marginTop: 4,
   },
   sectionTitle: {
     borderBottomWidth: 1,

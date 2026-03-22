@@ -1,7 +1,9 @@
-import {createContext, ReactNode, useContext, useMemo} from 'react';
+import {createContext, ReactNode, useCallback, useContext, useMemo} from 'react';
 
 import {PodcastEpisode, PodcastSection} from '../../../types';
+import {useVaultContext} from '../../../core/vault/VaultContext';
 import {usePlayer} from '../hooks/usePlayer';
+import {markEpisodeAsPlayed as markEpisodeAsPlayedInStorage} from '../services/markEpisodeAsPlayed';
 import {usePodcasts} from '../hooks/usePodcasts';
 import {PlayerProgress, PlayerState} from '../services/audioPlayer';
 
@@ -11,6 +13,7 @@ type PlayerContextValue = {
   playbackError: string | null;
   playbackLoading: boolean;
   playbackState: PlayerState;
+  markEpisodeAsPlayed: (episode: PodcastEpisode) => Promise<void>;
   playEpisode: (episode: PodcastEpisode) => Promise<void>;
   progress: PlayerProgress;
   podcastError: string | null;
@@ -28,6 +31,7 @@ type PlayerProviderProps = {
 };
 
 export function PlayerProvider({children}: PlayerProviderProps) {
+  const {baseUri} = useVaultContext();
   const {
     allEpisodes,
     error: podcastError,
@@ -41,6 +45,20 @@ export function PlayerProvider({children}: PlayerProviderProps) {
     [allEpisodes],
   );
 
+  const handleMarkEpisodeAsPlayed = useCallback(
+    async (episode: PodcastEpisode) => {
+      if (!baseUri) {
+        return;
+      }
+
+      const wasUpdated = await markEpisodeAsPlayedInStorage(baseUri, episode);
+      if (wasUpdated) {
+        await refreshPodcasts();
+      }
+    },
+    [baseUri, refreshPodcasts],
+  );
+
   const {
     activeEpisode,
     error: playbackError,
@@ -50,7 +68,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
     seekTo,
     state: playbackState,
     togglePlayback,
-  } = usePlayer(episodesById);
+  } = usePlayer(episodesById, {onMarkAsPlayed: handleMarkEpisodeAsPlayed});
 
   const value = useMemo(
     () => ({
@@ -59,6 +77,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       playbackError,
       playbackLoading,
       playbackState,
+      markEpisodeAsPlayed: handleMarkEpisodeAsPlayed,
       playEpisode,
       progress,
       podcastError,
@@ -74,6 +93,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       playbackError,
       playbackLoading,
       playbackState,
+      handleMarkEpisodeAsPlayed,
       playEpisode,
       podcastError,
       podcastsLoading,

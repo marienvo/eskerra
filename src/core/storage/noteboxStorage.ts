@@ -299,6 +299,25 @@ export async function readPodcastFileContent(fileUri: string): Promise<string> {
   return readFile(normalizedFileUri, {encoding: 'utf8'});
 }
 
+export async function writePodcastFileContent(
+  fileUri: string,
+  content: string,
+): Promise<void> {
+  if (isDevMockVaultEnabled) {
+    const devStorage = getDevStorage();
+    await devStorage.writePodcastFileContent(fileUri, content);
+    return;
+  }
+
+  const normalizedFileUri = normalizeNoteUri(fileUri);
+  const fileBody = `${content}\n`;
+
+  await writeFile(normalizedFileUri, fileBody, {
+    encoding: 'utf8',
+    mimeType: 'text/markdown',
+  });
+}
+
 export async function createNote(
   baseUri: string,
   title: string,

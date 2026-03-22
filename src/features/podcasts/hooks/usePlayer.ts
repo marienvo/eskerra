@@ -20,6 +20,10 @@ type UsePlayerResult = {
   togglePlayback: () => Promise<void>;
 };
 
+type UsePlayerOptions = {
+  onMarkAsPlayed: (episode: PodcastEpisode) => Promise<void>;
+};
+
 function toPlaylistEntry(
   episode: PodcastEpisode,
   progress: PlayerProgress,
@@ -37,7 +41,10 @@ const emptyProgress: PlayerProgress = {
   positionMs: 0,
 };
 
-export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerResult {
+export function usePlayer(
+  episodesById: Map<string, PodcastEpisode>,
+  {onMarkAsPlayed}: UsePlayerOptions,
+): UsePlayerResult {
   const {baseUri} = useVaultContext();
   const player = useMemo(() => getAudioPlayer(), []);
   const activeEpisodeRef = useRef<PodcastEpisode | null>(null);
@@ -62,6 +69,15 @@ export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerR
     });
     const removeEndedListener = player.addEndedListener(() => {
       setState('ended');
+      const activeEpisodeAtEnd = activeEpisodeRef.current;
+      if (!activeEpisodeAtEnd) {
+        return;
+      }
+
+      onMarkAsPlayed(activeEpisodeAtEnd).catch(markError => {
+        const fallbackMessage = 'Could not mark episode as played.';
+        setError(markError instanceof Error ? markError.message : fallbackMessage);
+      });
     });
 
     return () => {
@@ -69,11 +85,11 @@ export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerR
       removeStateListener();
       removeEndedListener();
     };
-  }, [player]);
+  }, [onMarkAsPlayed, player]);
 
   const persistCurrentProgress = useCallback(async () => {
     if (!baseUri || !activeEpisodeRef.current) {
-      return;
+      return null;
     }
 
     const latestProgress = await player.getProgress();
@@ -82,6 +98,7 @@ export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerR
       baseUri,
       toPlaylistEntry(activeEpisodeRef.current, latestProgress),
     );
+    return latestProgress;
   }, [baseUri, player]);
 
   useEffect(() => {
@@ -184,7 +201,15 @@ export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerR
     try {
       if (state === 'playing') {
         await player.pause();
-        await persistCurrentProgress();
+        const latestProgress = await persistCurrentProgress();
+        const activeEpisodeForMarking = activeEpisodeRef.current;
+        const playbackRatio =
+          latestProgress?.durationMs && latestProgress.durationMs > 0
+            ? latestProgress.positionMs / latestProgress.durationMs
+            : 0;
+        if (activeEpisodeForMarking && playbackRatio >= 0.8) {
+          await onMarkAsPlayed(activeEpisodeForMarking);
+        }
         setState('paused');
         return;
       }
@@ -204,7 +229,7 @@ export function usePlayer(episodesById: Map<string, PodcastEpisode>): UsePlayerR
     } finally {
       setIsLoading(false);
     }
-  }, [persistCurrentProgress, playEpisode, player, state]);
+  }, [onMarkAsPlayed, persistCurrentProgress, playEpisode, player, state]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {
