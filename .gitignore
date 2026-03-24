@@ -35,6 +35,9 @@ local.properties
 !debug.keystore
 .kotlin/
 
+# Env (local secrets / Sentry DSN — copy from .env.example)
+.env
+
 # node.js
 #
 node_modules/

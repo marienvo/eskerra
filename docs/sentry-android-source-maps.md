@@ -25,8 +25,8 @@ Those uploads are performed by **`sentry-cli`**, invoked from the **Android Grad
 
 | Credential | Where it lives | When it is used | Purpose |
 |------------|----------------|-----------------|--------|
-| **DSN** | In the app (e.g. `src/core/observability/sentryDsn.ts`) | **Runtime** (device) | Send events to Sentry |
-| **`SENTRY_AUTH_TOKEN`** | Environment variable on the machine or CI, **or** `auth.token` in `android/sentry.properties` (local only; do not commit secrets) | **Build time** (`assembleRelease`, CI) | Authorize `sentry-cli` to **upload** source maps and related debug files |
+| **DSN** | Root `.env` as `SENTRY_DSN`, read at bundle time into `src/core/observability/sentryDsn.ts` via `@env` (see `.env.example`) | **Runtime** (device) | Send events to Sentry |
+| **`SENTRY_AUTH_TOKEN`** | Same as any shell env: export before Gradle, set in CI secrets, **or** put it in the repo root **`.env`** (gitignored) and run `scripts/build-apk-release.sh`, which sources `.env` for the Gradle process. Alternatively `auth.token` in `android/sentry.properties` (local only; do not commit secrets) | **Build time** (`assembleRelease`, CI) | Authorize `sentry-cli` to **upload** source maps and related debug files |
 
 - The DSN is **not** sufficient for source map upload.
 - The auth token must **never** be embedded in the app binary.
