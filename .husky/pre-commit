@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)" || exit 0
+[ "$branch" = "main" ] || exit 0
+
+# Allow finishing a merge into main (e.g. local `git merge feature` on main).
+if [ -f "$(git rev-parse --git-path MERGE_HEAD 2>/dev/null)" ]; then
+  exit 0
+fi
+
+echo "husky - Direct commits to 'main' are not allowed. Work on a branch, then merge (for example via PR)."
+exit 1
