@@ -17,11 +17,20 @@ This documents what was shipped in the minimal Sentry + ring buffer slice (see a
 - **Jest:** [`__mocks__/sentry-react-native.ts`](../../__mocks__/sentry-react-native.ts) + [`jest.config.js`](../../jest.config.js) mapper so tests do not load the native SDK.
 - **TypeScript:** [`tsconfig.json`](../../tsconfig.json) `resolveJsonModule` for `package.json` release string.
 
+## Android release builds and Sentry upload
+
+Release builds apply `sentry.gradle`, which registers source map upload tasks. Upload is **skipped** unless:
+
+- `SENTRY_AUTH_TOKEN` is set in the environment (recommended for CI), or  
+- `auth.token=...` is present in `android/sentry.properties` (local only; **never commit** tokens).
+
+Override: `SENTRY_DISABLE_AUTO_UPLOAD=true` forces skip. This is implemented in [`android/app/build.gradle`](../../android/app/build.gradle) by replacing `shouldSentryAutoUploadGeneral` after the Sentry script is applied.
+
 ## Intentionally deferred
 
 - Full **Sentry wizard** pass if native/Metro differs from manual Gradle apply.
 - **`pod install`** on iOS (run locally after pulling): `cd ios && pod install`.
-- **CI** `SENTRY_AUTH_TOKEN` for debug files / source maps on release builds.
+- **CI** `SENTRY_AUTH_TOKEN` for debug files / source maps on release builds (set the env var in CI so uploads run).
 - Podcasts, RSS, audio, markdown screens, Kotlin vault listing, bootstrap breadcrumbs in `App.tsx`.
 
 ## Manual verification

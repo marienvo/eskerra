@@ -5,6 +5,32 @@ apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
 apply from: "../../node_modules/@sentry/react-native/sentry.gradle"
 
 /**
+ * Default Sentry Gradle behavior uploads source maps on every release build and requires
+ * `sentry-cli` auth. Skip upload unless credentials exist (CI sets SENTRY_AUTH_TOKEN), or
+ * add `auth.token` to `android/sentry.properties` locally (do not commit secrets).
+ * Force-disable with: SENTRY_DISABLE_AUTO_UPLOAD=true
+ */
+project.ext.shouldSentryAutoUploadGeneral = { ->
+    if (System.getenv("SENTRY_DISABLE_AUTO_UPLOAD") == "true") {
+        return false
+    }
+    def authEnv = System.getenv("SENTRY_AUTH_TOKEN")
+    if (authEnv != null && !authEnv.trim().isEmpty()) {
+        return true
+    }
+    def propsFile = file("${rootProject.projectDir}/sentry.properties")
+    if (propsFile.exists()) {
+        def p = new Properties()
+        propsFile.withInputStream { stream -> p.load(stream) }
+        def token = p.getProperty("auth.token")
+        if (token != null && !token.trim().isEmpty()) {
+            return true
+        }
+    }
+    return false
+}
+
+/**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
