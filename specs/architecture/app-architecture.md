@@ -108,6 +108,13 @@ src/
 
 This matches your requirement: after setup, app settings/state live inside the selected Notes directory dot folder whenever possible.
 
+## `General/Inbox.md` (machine-generated index)
+
+- The app maintains `General/Inbox.md` as a **generated** file. It is **not** a hand-authored source of truth.
+- The canonical source for which notes exist is always the **current directory listing** of `Inbox/` (markdown files only, same rules as the Vault Inbox list: `.md` only, sync-conflict file names excluded).
+- On each successful refresh of the Vault note list (including pull-to-refresh), after creating a new Inbox note, and whenever the app triggers the same refresh path after saving note content, the app **overwrites** `General/Inbox.md` with a bullet list of wiki-style links (`[[Inbox/<stem>|<stem>]]`, no `.md` in the link path or label).
+- Any manual edits to `General/Inbox.md` are **lost** the next time the app regenerates the file.
+
 ## Podcast file conventions
 
 `General/` contains two podcast markdown file types with different responsibilities.

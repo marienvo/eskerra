@@ -131,6 +131,20 @@ function isSyncConflictFileName(fileName: string): boolean {
   return fileName.toLowerCase().includes(SYNC_CONFLICT_MARKER);
 }
 
+function stemFromMarkdownBasename(basename: string): string {
+  return basename.endsWith(MARKDOWN_EXTENSION)
+    ? basename.slice(0, -MARKDOWN_EXTENSION.length)
+    : basename;
+}
+
+function buildInboxMarkdownIndexBodyFromBasenames(markdownBasenames: string[]): string {
+  const stems = markdownBasenames
+    .map(name => stemFromMarkdownBasename(name))
+    .sort((a, b) => a.localeCompare(b));
+  const lines = ['# Inbox', '', ...stems.map(stem => `- [[Inbox/${stem}|${stem}]]`)];
+  return `${lines.join('\n')}\n`;
+}
+
 async function readNotesIndex(): Promise<NotesIndex> {
   const rawIndex = await AsyncStorage.getItem(DEV_NOTES_INDEX_KEY);
 
@@ -376,12 +390,30 @@ export async function createNote(
   await AsyncStorage.setItem(devNoteKey(fileName), normalizeNoteContent(content));
   index[fileName] = lastModified;
   await writeNotesIndex(index);
+  await refreshInboxMarkdownIndex(baseUri);
 
   return {
     lastModified,
     name: fileName,
     uri: noteUriFromName(fileName),
   };
+}
+
+export async function refreshInboxMarkdownIndex(baseUri: string): Promise<void> {
+  assertMockBaseUri(baseUri);
+  await ensureSeeded();
+
+  const summaries = await listNotes(baseUri);
+  const basenames = summaries.map(summary => {
+    const segments = summary.name.split('/');
+    return segments[segments.length - 1] ?? summary.name;
+  });
+  const body = buildInboxMarkdownIndexBodyFromBasenames(basenames);
+  const indexPath = `${GENERAL_DIRECTORY_NAME}/Inbox.md`;
+  const podcastIndex = await readPodcastIndex();
+  podcastIndex[indexPath] = Date.now();
+  await writePodcastIndex(podcastIndex);
+  await AsyncStorage.setItem(devPodcastKey(indexPath), body);
 }
 
 export async function writeNoteContent(

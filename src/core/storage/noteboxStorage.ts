@@ -22,6 +22,7 @@ const INBOX_DIRECTORY_NAME = 'Inbox';
 const PLAYLIST_FILE_NAME = 'playlist.json';
 const PODCAST_IMAGES_DIRECTORY_NAME = 'podcast-images';
 const SETTINGS_FILE_NAME = 'settings.json';
+const INBOX_INDEX_FILE_NAME = 'Inbox.md';
 const MARKDOWN_EXTENSION = '.md';
 const SYNC_CONFLICT_MARKER = 'sync-conflict';
 
@@ -113,12 +114,25 @@ function sanitizeFileName(rawName: string): string {
   return normalized || `note-${Date.now()}`;
 }
 
-function titleFromNoteName(fileName: string): string {
-  const baseName = fileName.endsWith(MARKDOWN_EXTENSION)
+function stemFromMarkdownFileName(fileName: string): string {
+  return fileName.endsWith(MARKDOWN_EXTENSION)
     ? fileName.slice(0, -MARKDOWN_EXTENSION.length)
     : fileName;
+}
+
+function titleFromNoteName(fileName: string): string {
+  const baseName = stemFromMarkdownFileName(fileName);
 
   return baseName.replace(/[-_]+/g, ' ').trim() || 'Untitled note';
+}
+
+/** Builds the full body for `General/Inbox.md` from Inbox markdown basenames (e.g. `note.md`). */
+export function buildInboxMarkdownIndexContent(markdownBasenames: string[]): string {
+  const stems = markdownBasenames.map(name => stemFromMarkdownFileName(name)).sort((a, b) => {
+    return a.localeCompare(b);
+  });
+  const lines = ['# Inbox', '', ...stems.map(stem => `- [[Inbox/${stem}|${stem}]]`)];
+  return `${lines.join('\n')}\n`;
 }
 
 function isSyncConflictFileName(fileName: string): boolean {
@@ -308,6 +322,38 @@ export async function listGeneralMarkdownFiles(
   return listMarkdownFilesInDirectory(generalDirectoryUri);
 }
 
+export function isNoteUriInInbox(noteUri: string, baseUri: string): boolean {
+  const normalizedBaseUri = normalizeBaseUri(baseUri);
+  const normalizedNoteUri = normalizeNoteUri(noteUri);
+  const inboxDirectoryUri = getInboxDirectoryUri(normalizedBaseUri);
+  return normalizedNoteUri.startsWith(`${inboxDirectoryUri}/`);
+}
+
+export async function refreshInboxMarkdownIndex(baseUri: string): Promise<void> {
+  if (isDevMockVaultEnabled) {
+    const devStorage = getDevStorage();
+    await devStorage.refreshInboxMarkdownIndex(baseUri);
+    return;
+  }
+
+  const normalizedBaseUri = normalizeBaseUri(baseUri);
+  const inboxRows = await listMarkdownFilesInDirectory(
+    getInboxDirectoryUri(normalizedBaseUri),
+  );
+  const body = buildInboxMarkdownIndexContent(inboxRows.map(row => row.name));
+  const generalDirectoryUri = getGeneralDirectoryUri(normalizedBaseUri);
+
+  if (!(await exists(generalDirectoryUri))) {
+    await mkdir(generalDirectoryUri);
+  }
+
+  const inboxIndexUri = `${generalDirectoryUri}/${INBOX_INDEX_FILE_NAME}`;
+  await writeFile(inboxIndexUri, body, {
+    encoding: 'utf8',
+    mimeType: 'text/markdown',
+  });
+}
+
 export async function readNote(noteUri: string): Promise<NoteDetail> {
   if (isDevMockVaultEnabled) {
     const devStorage = getDevStorage();
@@ -382,6 +428,8 @@ export async function createNote(
     encoding: 'utf8',
     mimeType: 'text/markdown',
   });
+
+  await refreshInboxMarkdownIndex(normalizedBaseUri);
 
   return {
     lastModified: Date.now(),

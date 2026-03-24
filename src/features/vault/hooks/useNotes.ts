@@ -4,6 +4,7 @@ import {
   createNote,
   listNotes,
   readNote,
+  refreshInboxMarkdownIndex,
   writeNoteContent,
 } from '../../../core/storage/noteboxStorage';
 import {NoteDetail, NoteSummary} from '../../../types';
@@ -25,6 +26,7 @@ export function useNotes() {
     setIsLoading(true);
     try {
       const nextNotes = await listNotes(baseUri);
+      await refreshInboxMarkdownIndex(baseUri);
       setNotes(nextNotes);
     } catch (loadError) {
       const fallbackMessage = 'Could not load notes from Vault.';
