@@ -16,6 +16,7 @@ import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {resolveInitialRoute} from './src/core/bootstrap/resolveInitialRoute';
+import {reportUnexpectedError} from './src/core/observability/reportUnexpectedError';
 import {VaultProvider} from './src/core/vault/VaultContext';
 import {RootNavigator} from './src/navigation/RootNavigator';
 import {RootStackParamList} from './src/navigation/types';
@@ -36,7 +37,8 @@ function App() {
         if (isActive) {
           setInitialRoute(route);
         }
-      } catch {
+      } catch (error) {
+        reportUnexpectedError(error, {flow: 'app_bootstrap', step: 'resolve_initial_route'});
         await clearUri();
         if (isActive) {
           setInitialRoute('Setup');

@@ -37,7 +37,7 @@ Override: `SENTRY_DISABLE_AUTO_UPLOAD=true` forces skip. This is implemented in 
 
 1. **Release or dev with DSN:** Launch the app, navigate between tabs; confirm Sentry shows breadcrumbs on a manually thrown test (temporarily add `throw new Error('sentry test')` behind a dev-only button, then remove).
 2. **Unhandled rejection:** Temporarily add `Promise.reject(new Error('rej test'))` after mount; confirm one issue in Sentry.
-3. **Vault:** With a valid vault, cold start; confirm `vault.restore.*` and `session.apply.*` breadcrumbs. Revoke SAF permission and reopen to force restore failure path; confirm `vault.restore.fail` breadcrumb (non-fatal only if an unexpected error is thrown from storage).
+3. **Vault:** With a valid vault, cold start; confirm `vault.session.restore.*` and `session.apply.*` breadcrumbs. Revoke SAF permission and reopen to force restore failure path; confirm `vault.session.restore.fail` breadcrumb (non-fatal only if an unexpected error is thrown from storage).
 4. **Ring buffer:** After navigation, force-quit and relaunch; within 4 hours you should **not** get a second `ring_buffer.tail` message (rate limit). Clear `AsyncStorage` key `notebox.observability.ring.lastSentAt` (or wait 4h) to see tail upload again.
 5. **Jest:** `npm test` — no Sentry network calls (mocked).
 

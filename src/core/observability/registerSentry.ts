@@ -60,6 +60,11 @@ function init(): void {
     dsn: SENTRY_DSN,
     environment: __DEV__ ? 'development' : 'production',
     sendDefaultPii: false,
+    /**
+     * Android: attach all threads to logged events for ANR/error triage (e.g. REACT-NATIVE-3)
+     * without enabling performance transactions (Phase 1 keeps tracesSampleRate: 0).
+     */
+    attachThreads: true,
     enableAutoPerformanceTracing: false,
     enableAutoSessionTracking: true,
     tracesSampleRate: 0,

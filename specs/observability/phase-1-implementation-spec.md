@@ -49,6 +49,7 @@ Phase 1 does **not** prove a freeze occurred or measure its duration. It provide
 | **Profiling** | **Off** | Phase 3 |
 | **Session Replay** | **Off** | Heavy; not Phase 1 |
 | **App Hang / ANR** (if exposed as separate toggles in your SDK version) | **Off for Phase 1** unless the team confirms a single stable flag with negligible overhead; otherwise **defer to Phase 2** with heartbeat + spans | Avoid duplicating “freeze” story with two noisy mechanisms in v1 |
+| **Android `attachThreads`** (thread list on **errors**, not performance transactions) | **On** when supported | Enriches ANR/error triage without enabling `tracesSampleRate`; see [anr-triage-react-native-3.md](anr-triage-react-native-3.md) |
 | React Navigation integration (breadcrumbs) | **On** | Primary correlation signal |
 | `console` integration logging every log as breadcrumb | **Off or minimal** | Enable only `error` level if available; avoid spam |
 | `HttpClient` / fetch breadcrumbs with bodies | **Off** | No URLs with tokens; no large payloads |

@@ -1,6 +1,7 @@
 import {createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState} from 'react';
 
 import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../observability';
+import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
 import {getSavedUri} from '../storage/appStorage';
 import {initNotebox, readSettings} from '../storage/noteboxStorage';
 import {NoteboxSettings} from '../../types';
@@ -31,20 +32,10 @@ export function VaultProvider({children}: VaultProviderProps) {
       message: 'session.apply.start',
       data: {},
     });
-    try {
-      await initNotebox(nextUri);
-    } catch (error) {
-      reportUnexpectedError(error, {flow: 'vault_session', step: 'init_notebox'});
-      throw error;
-    }
-    try {
-      const nextSettings = await readSettings(nextUri);
-      setBaseUri(nextUri);
-      setSettings(nextSettings);
-    } catch (error) {
-      reportUnexpectedError(error, {flow: 'vault_session', step: 'read_settings'});
-      throw error;
-    }
+    await initNotebox(nextUri);
+    const nextSettings = await readSettings(nextUri);
+    setBaseUri(nextUri);
+    setSettings(nextSettings);
     appBreadcrumb({
       category: 'vault',
       message: 'session.apply.complete',
@@ -60,34 +51,37 @@ export function VaultProvider({children}: VaultProviderProps) {
         return;
       }
 
-      await applyVaultSessionUri(nextUri);
+      try {
+        await applyVaultSessionUri(nextUri);
+      } catch (error) {
+        reportUnexpectedError(error, {flow: 'vault_session', step: 'apply'});
+        throw error;
+      }
     },
     [applyVaultSessionUri],
   );
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true);
-    appBreadcrumb({
-      category: 'vault',
-      message: 'vault.restore.start',
-      data: {},
-    });
     try {
-      let savedUri: string | null;
-      try {
-        savedUri = await getSavedUri();
-      } catch (error) {
-        reportUnexpectedError(error, {flow: 'vault_restore', step: 'get_saved_uri'});
-        throw error;
-      }
+      const savedUri = await getSavedUri();
+
+      appBreadcrumb({
+        category: 'vault',
+        message: 'vault.session.restore.start',
+        data: {has_saved_uri: Boolean(savedUri)},
+      });
 
       if (!savedUri) {
         setBaseUri(null);
         setSettings(null);
         appBreadcrumb({
           category: 'vault',
-          message: 'vault.restore.complete',
-          data: {has_session: false},
+          message: 'vault.session.restore.complete',
+          data: {
+            has_session: false,
+            elapsed_ms: elapsedMsSinceJsBundleEval(),
+          },
         });
         return;
       }
@@ -95,15 +89,19 @@ export function VaultProvider({children}: VaultProviderProps) {
       await applyVaultSessionUri(savedUri);
       appBreadcrumb({
         category: 'vault',
-        message: 'vault.restore.complete',
-        data: {has_session: true},
+        message: 'vault.session.restore.complete',
+        data: {
+          has_session: true,
+          elapsed_ms: elapsedMsSinceJsBundleEval(),
+        },
       });
-    } catch {
+    } catch (error) {
       setBaseUri(null);
       setSettings(null);
+      reportUnexpectedError(error, {flow: 'vault_restore'});
       appBreadcrumb({
         category: 'vault',
-        message: 'vault.restore.fail',
+        message: 'vault.session.restore.fail',
         level: 'error',
         data: {},
       });

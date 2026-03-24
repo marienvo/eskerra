@@ -3,6 +3,7 @@ import 'react-native-gesture-handler';
  * @format
  */
 
+import './src/core/observability/startupTiming';
 import './src/core/observability/registerSentry';
 
 import { AppRegistry } from 'react-native';
