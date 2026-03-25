@@ -4,7 +4,8 @@ import TestRenderer, {act} from 'react-test-renderer';
 import {resolveInitialRoute} from '../src/core/bootstrap/resolveInitialRoute';
 import {prepareVaultSession} from '../src/core/vault/applyVaultSession';
 import {readPlaylistCoalesced} from '../src/core/storage/noteboxStorage';
-import {loadPersistentRssFeedUrlCache} from '../src/features/podcasts/services/rssFeedUrlCache';
+import {setPodcastBootstrapPayload} from '../src/features/podcasts/services/podcastBootstrapCache';
+import {runPodcastPhase1} from '../src/features/podcasts/services/podcastPhase1';
 import {appBreadcrumb} from '../src/core/observability/appBreadcrumb';
 
 type VaultInitialSessionShape = {
@@ -43,8 +44,12 @@ jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
 }));
 
-jest.mock('../src/features/podcasts/services/rssFeedUrlCache', () => ({
-  loadPersistentRssFeedUrlCache: jest.fn(),
+jest.mock('../src/features/podcasts/services/podcastPhase1', () => ({
+  runPodcastPhase1: jest.fn(),
+}));
+
+jest.mock('../src/features/podcasts/services/podcastBootstrapCache', () => ({
+  setPodcastBootstrapPayload: jest.fn(),
 }));
 
 jest.mock('../src/core/observability/appBreadcrumb', () => ({
@@ -85,8 +90,10 @@ describe('App bootstrap preload', () => {
   const readPlaylistCoalescedMock = readPlaylistCoalesced as jest.MockedFunction<
     typeof readPlaylistCoalesced
   >;
-  const loadPersistentRssFeedUrlCacheMock =
-    loadPersistentRssFeedUrlCache as jest.MockedFunction<typeof loadPersistentRssFeedUrlCache>;
+  const runPodcastPhase1Mock = runPodcastPhase1 as jest.MockedFunction<typeof runPodcastPhase1>;
+  const setPodcastBootstrapPayloadMock = setPodcastBootstrapPayload as jest.MockedFunction<
+    typeof setPodcastBootstrapPayload
+  >;
   const appBreadcrumbMock = appBreadcrumb as jest.MockedFunction<typeof appBreadcrumb>;
 
   beforeEach(() => {
@@ -94,7 +101,7 @@ describe('App bootstrap preload', () => {
     jest.clearAllMocks();
   });
 
-  test('preloads vault session and playlist.json before rendering MainTabs', async () => {
+  test('preloads vault, playlist, and podcast phase-1 before rendering MainTabs', async () => {
     const savedUri = 'content://vault-root';
     resolveInitialRouteMock.mockResolvedValue({
       route: 'MainTabs',
@@ -114,7 +121,14 @@ describe('App bootstrap preload', () => {
       positionMs: 250,
     });
 
-    loadPersistentRssFeedUrlCacheMock.mockResolvedValue();
+    runPodcastPhase1Mock.mockResolvedValue({
+      allEpisodes: [],
+      didFullVaultListingThisRefresh: true,
+      error: null,
+      podcastRelevantFiles: [],
+      rssFeedFiles: [],
+      sections: [],
+    });
 
     await act(async () => {
       TestRenderer.create(<App />);
@@ -123,7 +137,18 @@ describe('App bootstrap preload', () => {
 
     expect(prepareVaultSessionMock).toHaveBeenCalledWith(savedUri);
     expect(readPlaylistCoalescedMock).toHaveBeenCalledWith(savedUri);
-    expect(loadPersistentRssFeedUrlCacheMock).toHaveBeenCalledWith(savedUri);
+    expect(runPodcastPhase1Mock).toHaveBeenCalledWith(savedUri);
+    expect(setPodcastBootstrapPayloadMock).toHaveBeenCalledWith(
+      savedUri,
+      expect.objectContaining({
+        allEpisodes: [],
+        didFullVaultListingThisRefresh: true,
+        error: null,
+        podcastRelevantFiles: [],
+        rssFeedFiles: [],
+        sections: [],
+      }),
+    );
 
     expect(capturedVaultInitialSession).toEqual({
       uri: savedUri,
@@ -135,6 +160,7 @@ describe('App bootstrap preload', () => {
     expect(messages).toContain('bootstrap.vault_preload.start');
     expect(messages).toContain('bootstrap.playlist_prime.complete');
     expect(messages).toContain('bootstrap.vault_preload.complete');
+    expect(messages).toContain('bootstrap.podcast_phase1.start');
+    expect(messages).toContain('bootstrap.podcast_phase1.complete');
   });
 });
-

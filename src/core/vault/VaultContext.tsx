@@ -13,6 +13,7 @@ import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../
 import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
 import {getSavedUri} from '../storage/appStorage';
 import {clearAllPlaylistReadCoalescer} from '../storage/noteboxStorage';
+import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
 import {NoteboxSettings, NoteSummary} from '../../types';
 import {prepareVaultSession} from './applyVaultSession';
 
@@ -77,11 +78,13 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         setBaseUri(null);
         setSettings(null);
         clearAllPlaylistReadCoalescer();
+        clearPodcastBootstrapCache();
         return;
       }
 
       try {
         clearAllPlaylistReadCoalescer();
+        clearPodcastBootstrapCache();
         await applyVaultSessionUri(nextUri);
       } catch (error) {
         reportUnexpectedError(error, {flow: 'vault_session', step: 'apply'});

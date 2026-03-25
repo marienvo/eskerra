@@ -15,6 +15,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 ## Components And Responsibilities
 
 - `usePodcasts`: orchestrates file reads, parse flow, section state, and spinner timing.
+- `runPodcastPhase1` ([`podcastPhase1.ts`](../../src/features/podcasts/services/podcastPhase1.ts)): shared phase-1 vault work (caches, index, listing, legacy markdown parse). The app bootstrap calls it in parallel with vault preload when the route is `MainTabs` and a saved vault URI exists; results are stored in [`podcastBootstrapCache.ts`](../../src/features/podcasts/services/podcastBootstrapCache.ts) and consumed once on the first `usePodcasts` refresh so `PlayerProvider` can mount with episodes already in memory. Background reconcile (full `General/` listing after snapshot) and RSS markdown phase 2 remain driven by the hook after mount.
 - `usePlayer`: restores playlist state once per vault session and matches to episodes as they arrive.
 - `podcastImageCache`: resolves artwork URI through memory cache, persistent caches (`AsyncStorage`), optional network fallback, and app-internal image files (not vault / SAF).
 - `rssFeedUrlCache`: holds RSS feed URL maps per vault and persists them to `AsyncStorage`.
@@ -35,7 +36,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 
 ### Episode File Content Cache
 
-- Location: module-level `fileContentCache` in `usePodcasts`.
+- Location: module-level `fileContentCache` in [`podcastPhase1.ts`](../../src/features/podcasts/services/podcastPhase1.ts) (shared by bootstrap phase-1 and `usePodcasts` after mount).
 - Key: markdown file URI.
 - Value: `{ lastModified, content }`.
 - Lifetime: JS runtime session.

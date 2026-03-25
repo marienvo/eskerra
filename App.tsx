@@ -5,6 +5,7 @@
 import {useEffect, useState} from 'react';
 import {
   ActivityIndicator,
+  Image,
   StatusBar,
   StyleSheet,
   useColorScheme,
@@ -23,7 +24,8 @@ import {RootNavigator} from './src/navigation/RootNavigator';
 import {RootStackParamList} from './src/navigation/types';
 import {clearUri} from './src/core/storage/appStorage';
 import {readPlaylistCoalesced} from './src/core/storage/noteboxStorage';
-import {loadPersistentRssFeedUrlCache} from './src/features/podcasts/services/rssFeedUrlCache';
+import {setPodcastBootstrapPayload} from './src/features/podcasts/services/podcastBootstrapCache';
+import {runPodcastPhase1} from './src/features/podcasts/services/podcastPhase1';
 import {NoteSummary, NoteboxSettings} from './src/types';
 import {appBreadcrumb} from './src/core/observability/appBreadcrumb';
 import {elapsedMsSinceJsBundleEval} from './src/core/observability/startupTiming';
@@ -74,15 +76,52 @@ function App() {
                 reportUnexpectedError(error, {flow: 'app_bootstrap', step: 'playlist_prime'});
                 return null;
               });
-            const rssPrimePromise = loadPersistentRssFeedUrlCache(savedUri).catch(error => {
-              reportUnexpectedError(error, {flow: 'app_bootstrap', step: 'rss_prime'});
-              return;
+            appBreadcrumb({
+              category: 'app',
+              message: 'bootstrap.podcast_phase1.start',
+              data: {
+                elapsed_ms: elapsedMsSinceJsBundleEval(),
+              },
             });
+
+            const podcastPhase1Promise = runPodcastPhase1(savedUri)
+              .then(phase1 => {
+                setPodcastBootstrapPayload(savedUri, {
+                  allEpisodes: phase1.allEpisodes,
+                  didFullVaultListingThisRefresh: phase1.didFullVaultListingThisRefresh,
+                  error: phase1.error,
+                  podcastRelevantFiles: phase1.podcastRelevantFiles,
+                  rssFeedFiles: phase1.rssFeedFiles,
+                  sections: phase1.sections,
+                });
+                appBreadcrumb({
+                  category: 'app',
+                  message: 'bootstrap.podcast_phase1.complete',
+                  data: {
+                    elapsed_ms: elapsedMsSinceJsBundleEval(),
+                    episode_count: phase1.allEpisodes.length,
+                    has_error: Boolean(phase1.error),
+                  },
+                });
+                return phase1;
+              })
+              .catch(error => {
+                reportUnexpectedError(error, {flow: 'app_bootstrap', step: 'podcast_phase1'});
+                setPodcastBootstrapPayload(savedUri, {
+                  allEpisodes: [],
+                  didFullVaultListingThisRefresh: false,
+                  error: 'Could not load podcasts from vault.',
+                  podcastRelevantFiles: [],
+                  rssFeedFiles: [],
+                  sections: [],
+                });
+                return null;
+              });
 
             const [prepared] = await Promise.all([
               vaultPreloadPromise,
               playlistPrimePromise,
-              rssPrimePromise,
+              podcastPhase1Promise,
             ]);
 
             const initial: VaultInitialSession = {
@@ -126,8 +165,19 @@ function App() {
         <SafeAreaProvider>
           <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
           {initialRoute === null ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" />
+            <View
+              style={[
+                styles.loadingContainer,
+                isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
+              ]}>
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel="Notebox"
+                resizeMode="contain"
+                source={require('./src/assets/notebox-logo.png')}
+                style={styles.startupLogo}
+              />
+              <ActivityIndicator color={isDarkMode ? '#ffffff' : '#333333'} style={styles.startupSpinner} />
             </View>
           ) : (
             <VaultProvider initialSession={initialSession}>
@@ -148,6 +198,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
+  },
+  loadingContainerDark: {
+    backgroundColor: '#121212',
+  },
+  loadingContainerLight: {
+    backgroundColor: '#f5f5f5',
+  },
+  startupLogo: {
+    height: 120,
+    width: 120,
+  },
+  startupSpinner: {
+    marginTop: 24,
   },
 });
 
