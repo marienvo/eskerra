@@ -156,21 +156,21 @@ export function MainTabNavigator() {
         }}
         tabBar={renderTabBar}>
         <Tabs.Screen
-          component={InboxStackScreen}
-          name="InboxTab"
-          options={{
-            tabBarButton,
-            tabBarIcon: questionMarkTabIcon,
-            title: 'Slot 1',
-          }}
-        />
-        <Tabs.Screen
           component={PodcastsStackScreen}
           name="PodcastsTab"
           options={{
             tabBarButton,
             tabBarIcon: podcastsTabIcon,
             title: 'Podcasts',
+          }}
+        />
+        <Tabs.Screen
+          component={InboxStackScreen}
+          name="InboxTab"
+          options={{
+            tabBarButton,
+            tabBarIcon: questionMarkTabIcon,
+            title: 'Slot 1',
           }}
         />
         <Tabs.Screen

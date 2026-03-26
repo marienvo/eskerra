@@ -1,8 +1,17 @@
 import {useHeaderHeight} from '@react-navigation/elements';
+import {useFocusEffect} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
-import {useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {Box, Pressable, Text, useColorMode} from '@gluestack-ui/themed';
-import {Keyboard, KeyboardAvoidingView, Platform, StyleSheet, TextInput} from 'react-native';
+import {
+  ActivityIndicator,
+  InteractionManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -14,11 +23,11 @@ type AddNoteScreenProps = StackScreenProps<VaultStackParamList, 'AddNote'>;
 
 export function AddNoteScreen({navigation}: AddNoteScreenProps) {
   const [composeInput, setComposeInput] = useState('');
+  const inputRef = useRef<TextInput>(null);
   const {isSaving, save, setStatusText, statusText} = useSaveInboxMarkdownNote();
   const headerHeight = useHeaderHeight();
   const colorMode = useColorMode();
   const insets = useSafeAreaInsets();
-  const dividerColor = colorMode === 'dark' ? '#4f4f4f' : '#d6d6d6';
   const inputTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const placeholderColor = colorMode === 'dark' ? '#8a8a8a' : '#888888';
 
@@ -86,6 +95,15 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
     };
   }, [navigation]);
 
+  useFocusEffect(
+    useCallback(() => {
+      const task = InteractionManager.runAfterInteractions(() => {
+        inputRef.current?.focus();
+      });
+      return () => task.cancel();
+    }, []),
+  );
+
   const handleSave = async () => {
     Keyboard.dismiss();
     const {bodyAfterBlank, titleLine} = parseComposeInput(composeInput);
@@ -109,6 +127,11 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
     handleSave().catch(() => undefined);
   };
 
+  const onPressCancel = () => {
+    Keyboard.dismiss();
+    navigation.goBack();
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -116,6 +139,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
       style={styles.keyboardAvoiding}>
       <Box style={styles.container}>
         <TextInput
+          ref={inputRef}
           autoCapitalize="sentences"
           autoCorrect
           editable={!isSaving}
@@ -137,23 +161,35 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
           style={[
             styles.actionBar,
             {
-              borderTopColor: dividerColor,
               paddingBottom: Math.max(insets.bottom, 8),
             },
           ]}>
           <Pressable
+            accessibilityLabel="Cancel"
+            accessibilityRole="button"
+            disabled={isSaving}
+            onPress={onPressCancel}
+            style={styles.cancelButton}>
+            <MaterialIcons color={inputTextColor} name="cancel" size={22} />
+            <Text style={[styles.actionLabel, {color: inputTextColor}]}>Cancel</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel={isSaving ? 'Saving note' : 'Save note'}
             accessibilityRole="button"
             disabled={isSaving}
             onPress={onPressSave}
-            style={styles.readyButton}>
-            <Text style={[styles.readyLabel, {color: inputTextColor}]}>Ready</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Save note"
-            disabled={isSaving}
-            onPress={onPressSave}
             style={styles.saveButton}>
-            <MaterialIcons color="#ffffff" name="save-alt" size={24} />
+            {isSaving ? (
+              <>
+                <ActivityIndicator color={inputTextColor} size="small" />
+                <Text style={[styles.actionLabel, {color: inputTextColor}]}>Saving...</Text>
+              </>
+            ) : (
+              <>
+                <MaterialIcons color={inputTextColor} name="save-alt" size={22} />
+                <Text style={[styles.actionLabel, {color: inputTextColor}]}>Save</Text>
+              </>
+            )}
           </Pressable>
         </Box>
       </Box>
@@ -164,7 +200,6 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
 const styles = StyleSheet.create({
   actionBar: {
     alignItems: 'center',
-    borderTopWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -182,21 +217,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
   },
-  readyButton: {
+  actionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  cancelButton: {
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
     justifyContent: 'center',
     minHeight: 40,
     paddingHorizontal: 4,
   },
-  readyLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   saveButton: {
     alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
     justifyContent: 'center',
     minHeight: 40,
     minWidth: 40,
+    paddingHorizontal: 4,
   },
   status: {
     paddingHorizontal: 16,
