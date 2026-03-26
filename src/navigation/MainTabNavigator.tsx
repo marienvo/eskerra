@@ -115,7 +115,13 @@ function HomeStackScreen() {
 
 function VaultStackScreen() {
   return (
-    <VaultStack.Navigator screenOptions={{headerShown: false}}>
+    <VaultStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        headerStyle: styles.tabHeader,
+        headerTintColor: '#ffffff',
+        headerTitleStyle: styles.tabHeaderTitle,
+      }}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
       <VaultStack.Screen component={AddNoteScreen} name="AddNote" options={{headerShown: false}} />
       <VaultStack.Screen
