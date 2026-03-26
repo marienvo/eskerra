@@ -11,6 +11,7 @@ import {InteractionManager} from 'react-native';
 
 import {
   createNote,
+  deleteInboxNotes,
   listInboxNotesAndSyncIndex,
   readNote,
   writeNoteContent,
@@ -24,6 +25,7 @@ type RefreshOptions = {
 
 type NotesContextValue = {
   create: (title: string, content: string) => Promise<NoteSummary>;
+  deleteNotes: (noteUris: string[]) => Promise<void>;
   error: string | null;
   isLoading: boolean;
   notes: NoteSummary[];
@@ -38,6 +40,28 @@ function sortByLastModifiedDesc(left: NoteSummary, right: NoteSummary): number {
   const leftLastModified = left.lastModified ?? 0;
   const rightLastModified = right.lastModified ?? 0;
   return rightLastModified - leftLastModified;
+}
+
+function getUriFileName(uri: string): string {
+  return uri.split('/').pop() ?? uri;
+}
+
+function resolveCanonicalDeleteNote(
+  inputUri: string,
+  availableNotes: readonly NoteSummary[],
+): NoteSummary | null {
+  const exactMatch = availableNotes.find(note => note.uri === inputUri);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const inputFileName = getUriFileName(inputUri);
+  const sameNameMatches = availableNotes.filter(note => note.name === inputFileName);
+  if (sameNameMatches.length === 1) {
+    return sameNameMatches[0];
+  }
+
+  return null;
 }
 
 export function mergeInboxNoteOptimistic(
@@ -122,6 +146,43 @@ export function NotesProvider({children}: NotesProviderProps) {
     return readNote(noteUri);
   }, []);
 
+  const deleteNotes = useCallback(
+    async (noteUris: string[]) => {
+      if (!baseUri) {
+        throw new Error('No notes directory selected.');
+      }
+
+      if (noteUris.length === 0) {
+        return;
+      }
+
+      const canonicalNotes = noteUris
+        .map(noteUri => resolveCanonicalDeleteNote(noteUri, notes))
+        .filter((note): note is NoteSummary => note !== null);
+
+      if (canonicalNotes.length !== noteUris.length) {
+        throw new Error(
+          'Could not delete selected notes because one or more notes are no longer available. Refresh Vault and try again.',
+        );
+      }
+
+      const normalizedBaseUri = baseUri.trim().replace(/\/+$/, '');
+      const canonicalDeleteUris = canonicalNotes.map(
+        note => `${normalizedBaseUri}/Inbox/${note.name}`,
+      );
+
+      await deleteInboxNotes(baseUri, canonicalDeleteUris);
+      const removedUris = new Set(canonicalNotes.map(note => note.uri));
+      setNotes(previousNotes =>
+        previousNotes.filter(note => !removedUris.has(note.uri)),
+      );
+      InteractionManager.runAfterInteractions(() => {
+        refresh({silent: true}).catch(() => undefined);
+      });
+    },
+    [baseUri, notes, refresh],
+  );
+
   const write = useCallback(
     async (noteUri: string, content: string) => {
       await writeNoteContent(noteUri, content);
@@ -133,6 +194,7 @@ export function NotesProvider({children}: NotesProviderProps) {
   const value = useMemo(
     () => ({
       create,
+      deleteNotes,
       error,
       isLoading,
       notes,
@@ -140,7 +202,7 @@ export function NotesProvider({children}: NotesProviderProps) {
       refresh,
       write,
     }),
-    [create, error, isLoading, notes, read, refresh, write],
+    [create, deleteNotes, error, isLoading, notes, read, refresh, write],
   );
 
   return <NotesContext.Provider value={value}>{children}</NotesContext.Provider>;

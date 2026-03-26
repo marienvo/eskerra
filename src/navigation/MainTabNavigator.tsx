@@ -116,7 +116,11 @@ function VaultStackScreen() {
   return (
     <VaultStack.Navigator screenOptions={{headerShown: false}}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
-      <VaultStack.Screen component={NoteDetailScreen} name="NoteDetail" />
+      <VaultStack.Screen
+        component={NoteDetailScreen}
+        name="NoteDetail"
+        options={{headerShown: false}}
+      />
     </VaultStack.Navigator>
   );
 }
@@ -135,6 +139,10 @@ export function MainTabNavigator() {
       <Tabs.Navigator
         initialRouteName="HomeTab"
         screenOptions={{
+          headerShown: true,
+          headerStyle: styles.tabHeader,
+          headerTintColor: '#ffffff',
+          headerTitleStyle: styles.tabHeaderTitle,
           tabBarActiveTintColor: '#ffffff',
           tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
           tabBarLabelStyle: styles.tabBarLabel,
@@ -196,6 +204,13 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#1d1d1d',
     borderTopColor: '#2d2d2d',
+  },
+  tabHeader: {
+    backgroundColor: '#1d1d1d',
+  },
+  tabHeaderTitle: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
   tabBarLabel: {
     fontSize: 11,

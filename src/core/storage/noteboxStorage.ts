@@ -3,6 +3,7 @@ import {
   listFiles,
   mkdir,
   readFile,
+  unlink,
   writeFile,
 } from 'react-native-saf-x';
 
@@ -370,7 +371,19 @@ export function isNoteUriInInbox(noteUri: string, baseUri: string): boolean {
   const normalizedBaseUri = normalizeBaseUri(baseUri);
   const normalizedNoteUri = normalizeNoteUri(noteUri);
   const inboxDirectoryUri = getInboxDirectoryUri(normalizedBaseUri);
-  return normalizedNoteUri.startsWith(`${inboxDirectoryUri}/`);
+  if (normalizedNoteUri.startsWith(`${inboxDirectoryUri}/`)) {
+    return true;
+  }
+
+  // Some SAF providers return canonical document URIs (`.../document/<docId>`) where the
+  // Inbox path is embedded in `<docId>` instead of a plain `<base>/Inbox/<file>` prefix.
+  // Decode and check for an Inbox segment to avoid false negatives on valid Inbox notes.
+  try {
+    const decoded = decodeURIComponent(normalizedNoteUri);
+    return /(?:^|[/:])Inbox\//.test(decoded);
+  } catch {
+    return false;
+  }
 }
 
 async function writeInboxMarkdownIndexFromMarkdownFileNames(
@@ -528,6 +541,28 @@ export async function writeNoteContent(
     encoding: 'utf8',
     mimeType: 'text/markdown',
   });
+}
+
+export async function deleteInboxNotes(
+  baseUri: string,
+  noteUris: readonly string[],
+): Promise<void> {
+  if (isDevMockVaultBaseUri(baseUri)) {
+    const devStorage = getDevStorage();
+    await devStorage.deleteInboxNotes(baseUri, noteUris);
+    return;
+  }
+
+  const normalizedBaseUri = normalizeBaseUri(baseUri);
+  for (const noteUri of noteUris) {
+    const normalizedNoteUri = normalizeNoteUri(noteUri);
+    if (!isNoteUriInInbox(normalizedNoteUri, normalizedBaseUri)) {
+      throw new Error('Could not verify that the selected note belongs to Inbox.');
+    }
+    await unlink(normalizedNoteUri);
+  }
+
+  await refreshInboxMarkdownIndex(normalizedBaseUri);
 }
 
 export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | null> {

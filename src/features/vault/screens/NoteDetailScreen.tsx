@@ -9,7 +9,7 @@ import {useNotes} from '../hooks/useNotes';
 
 type NoteDetailScreenProps = StackScreenProps<VaultStackParamList, 'NoteDetail'>;
 
-export function NoteDetailScreen({route}: NoteDetailScreenProps) {
+export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
   const {read} = useNotes();
   const colorMode = useColorMode();
   const [content, setContent] = useState('');
@@ -17,6 +17,69 @@ export function NoteDetailScreen({route}: NoteDetailScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+
+  useEffect(() => {
+    const tabNavigation = navigation.getParent();
+    if (!tabNavigation) {
+      return;
+    }
+
+    const showVaultTabHeader = () => {
+      tabNavigation.setOptions({
+        headerShown: true,
+        headerLeft: undefined,
+        headerTitle: 'Vault',
+      });
+    };
+
+    const hideVaultTabHeader = () => {
+      tabNavigation.setOptions({
+        headerShown: false,
+      });
+    };
+
+    const showNoteStackHeader = () => {
+      navigation.setOptions({
+        headerShown: true,
+        title: route.params.noteTitle,
+      });
+    };
+
+    const hideNoteStackHeader = () => {
+      navigation.setOptions({
+        headerShown: false,
+      });
+    };
+
+    const unsubscribeTransitionEnd = navigation.addListener('transitionEnd', event => {
+      if (event.data.closing) {
+        return;
+      }
+      hideVaultTabHeader();
+      showNoteStackHeader();
+    });
+
+    const unsubscribeTransitionStart = navigation.addListener('transitionStart', event => {
+      if (!event.data.closing) {
+        return;
+      }
+      hideNoteStackHeader();
+      showVaultTabHeader();
+    });
+
+    const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', () => {
+      hideNoteStackHeader();
+      showVaultTabHeader();
+    });
+
+    return () => {
+      unsubscribeTransitionEnd();
+      unsubscribeTransitionStart();
+      unsubscribeBeforeRemove();
+      hideNoteStackHeader();
+      showVaultTabHeader();
+    };
+  }, [navigation, route.params.noteTitle]);
 
   useEffect(() => {
     let isActive = true;
@@ -55,7 +118,6 @@ export function NoteDetailScreen({route}: NoteDetailScreenProps) {
 
   return (
     <Box style={styles.container}>
-      <Text style={styles.title}>{route.params.noteTitle}</Text>
       {isLoading ? <Spinner style={styles.spinner} /> : null}
       {error ? <Text style={styles.status}>{error}</Text> : null}
       {!isLoading && !error ? (
@@ -91,12 +153,6 @@ const styles = StyleSheet.create({
   },
   status: {
     marginVertical: 10,
-    textAlign: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 6,
     textAlign: 'center',
   },
 });

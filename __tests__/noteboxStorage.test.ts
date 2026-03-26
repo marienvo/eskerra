@@ -7,6 +7,7 @@ import {
   listFiles,
   mkdir,
   readFile,
+  unlink,
   writeFile,
 } from 'react-native-saf-x';
 
@@ -14,8 +15,8 @@ import {tryListMarkdownFilesNative} from '../src/core/storage/androidVaultListin
 import {
   buildInboxMarkdownIndexContent,
   clearPlaylist,
-  readPlaylistCoalesced,
   createNote,
+  deleteInboxNotes,
   pickNextInboxMarkdownFileName,
   isNoteUriInInbox,
   listGeneralMarkdownFiles,
@@ -25,6 +26,7 @@ import {
   readNote,
   readPlaylist,
   readPodcastFileContent,
+  readPlaylistCoalesced,
   initNotebox,
   readSettings,
   refreshInboxMarkdownIndex,
@@ -39,6 +41,7 @@ jest.mock('react-native-saf-x', () => ({
   listFiles: jest.fn(),
   mkdir: jest.fn(),
   readFile: jest.fn(),
+  unlink: jest.fn(),
   writeFile: jest.fn(),
 }));
 
@@ -51,6 +54,7 @@ describe('noteboxStorage', () => {
   const listFilesMock = listFiles as jest.MockedFunction<typeof listFiles>;
   const mkdirMock = mkdir as jest.MockedFunction<typeof mkdir>;
   const readFileMock = readFile as jest.MockedFunction<typeof readFile>;
+  const unlinkMock = unlink as jest.MockedFunction<typeof unlink>;
   const writeFileMock = writeFile as jest.MockedFunction<typeof writeFile>;
   const tryListMarkdownFilesNativeMock =
     tryListMarkdownFilesNative as jest.MockedFunction<typeof tryListMarkdownFilesNative>;
@@ -63,6 +67,7 @@ describe('noteboxStorage', () => {
     listFilesMock.mockReset();
     mkdirMock.mockReset();
     readFileMock.mockReset();
+    unlinkMock.mockReset();
     writeFileMock.mockReset();
     tryListMarkdownFilesNativeMock.mockReset();
     tryListMarkdownFilesNativeMock.mockResolvedValue(null);
@@ -552,6 +557,34 @@ describe('noteboxStorage', () => {
     });
   });
 
+  test('deleteInboxNotes unlinks inbox files and refreshes General/Inbox.md', async () => {
+    unlinkMock.mockResolvedValue(true);
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
+      {lastModified: 1, name: 'left.md', uri: `${baseUri}/Inbox/left.md`},
+    ]);
+    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+
+    await deleteInboxNotes(baseUri, [
+      `${baseUri}/Inbox/to-delete.md`,
+      `${baseUri}/Inbox/another-delete.md`,
+    ]);
+
+    expect(unlinkMock).toHaveBeenNthCalledWith(1, `${baseUri}/Inbox/to-delete.md`);
+    expect(unlinkMock).toHaveBeenNthCalledWith(2, `${baseUri}/Inbox/another-delete.md`);
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/General/Inbox.md`,
+      '# Inbox\n\n- [[Inbox/left|left]]\n',
+      {encoding: 'utf8', mimeType: 'text/markdown'},
+    );
+  });
+
+  test('deleteInboxNotes rejects URIs outside Inbox', async () => {
+    await expect(
+      deleteInboxNotes(baseUri, [`${baseUri}/General/not-allowed.md`]),
+    ).rejects.toThrow('Could not verify that the selected note belongs to Inbox.');
+    expect(unlinkMock).not.toHaveBeenCalled();
+  });
+
   test('buildInboxMarkdownIndexContent sorts stems alphabetically', () => {
     expect(buildInboxMarkdownIndexContent(['z.md', 'a.md', 'm.md'])).toBe(
       '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/m|m]]\n- [[Inbox/z|z]]\n',
@@ -561,6 +594,12 @@ describe('noteboxStorage', () => {
   test('isNoteUriInInbox returns true when note URI is under Inbox', () => {
     expect(isNoteUriInInbox(`${baseUri}/Inbox/foo.md`, baseUri)).toBe(true);
     expect(isNoteUriInInbox(`${baseUri}/General/foo.md`, baseUri)).toBe(false);
+  });
+
+  test('isNoteUriInInbox accepts encoded document URIs for Inbox notes', () => {
+    const noteUri =
+      'content://com.android.externalstorage.documents/tree/primary%3ANotebox/document/primary%3ANotebox%2FInbox%2Ffoo.md';
+    expect(isNoteUriInInbox(noteUri, baseUri)).toBe(true);
   });
 
   test('refreshInboxMarkdownIndex writes empty index when Inbox is missing', async () => {

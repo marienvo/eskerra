@@ -444,6 +444,27 @@ export async function writeNoteContent(
   await writeNotesIndex(index);
 }
 
+export async function deleteInboxNotes(
+  baseUri: string,
+  noteUris: readonly string[],
+): Promise<void> {
+  assertMockBaseUri(baseUri);
+  await ensureSeeded();
+
+  const index = await readNotesIndex();
+  for (const noteUri of noteUris) {
+    const fileName = noteNameFromUri(noteUri);
+    if (!fileName.startsWith(`${INBOX_DIRECTORY_NAME}/`)) {
+      throw new Error('Only Inbox notes can be deleted.');
+    }
+    delete index[fileName];
+    await AsyncStorage.removeItem(devNoteKey(fileName));
+  }
+
+  await writeNotesIndex(index);
+  await refreshInboxMarkdownIndex(baseUri);
+}
+
 export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | null> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
