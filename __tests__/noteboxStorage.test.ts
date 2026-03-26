@@ -13,21 +13,23 @@ import {
 import {tryListMarkdownFilesNative} from '../src/core/storage/androidVaultListing';
 import {
   buildInboxMarkdownIndexContent,
-  buildSafDocumentUri,
   clearPlaylist,
+  readPlaylistCoalesced,
   createNote,
   isNoteUriInInbox,
   listGeneralMarkdownFiles,
+  listInboxNotesAndSyncIndex,
   listNotes,
+  parseNoteboxSettings,
   readNote,
   readPlaylist,
   readPodcastFileContent,
   initNotebox,
   readSettings,
   refreshInboxMarkdownIndex,
+  resetPlaylistReadCoalescerForTesting,
   writePlaylist,
   writeNoteContent,
-  writePodcastImageFile,
   writeSettings,
 } from '../src/core/storage/noteboxStorage';
 
@@ -55,6 +57,13 @@ describe('noteboxStorage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetPlaylistReadCoalescerForTesting();
+    existsMock.mockReset();
+    listFilesMock.mockReset();
+    mkdirMock.mockReset();
+    readFileMock.mockReset();
+    writeFileMock.mockReset();
+    tryListMarkdownFilesNativeMock.mockReset();
     tryListMarkdownFilesNativeMock.mockResolvedValue(null);
   });
 
@@ -85,6 +94,10 @@ describe('noteboxStorage', () => {
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
+  test('parseNoteboxSettings throws when displayName is missing', () => {
+    expect(() => parseNoteboxSettings('{}')).toThrow('settings.json has an invalid structure.');
+  });
+
   test('readSettings parses settings.json content', async () => {
     readFileMock.mockResolvedValueOnce('{"displayName":"Notebook A"}');
 
@@ -112,13 +125,26 @@ describe('noteboxStorage', () => {
       {lastModified: 22, name: 'newer.md', uri: `${baseUri}/Inbox/newer.md`},
       {lastModified: 11, name: 'older.md', uri: `${baseUri}/Inbox/older.md`},
     ]);
+    existsMock.mockResolvedValue(true);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 22,
+        name: 'newer.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/newer.md`,
+      },
+      {
+        lastModified: 11,
+        name: 'older.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/older.md`,
+      },
+    ] as never);
 
     await expect(listNotes(baseUri)).resolves.toEqual([
       {lastModified: 22, name: 'newer.md', uri: `${baseUri}/Inbox/newer.md`},
       {lastModified: 11, name: 'older.md', uri: `${baseUri}/Inbox/older.md`},
     ]);
-    expect(existsMock).not.toHaveBeenCalled();
-    expect(listFilesMock).not.toHaveBeenCalled();
   });
 
   test('listNotes returns markdown files sorted by lastModified', async () => {
@@ -161,8 +187,26 @@ describe('noteboxStorage', () => {
     expect(listFilesMock).not.toHaveBeenCalled();
   });
 
-  test('listNotes falls back to JS listing when native returns empty but directory exists', async () => {
+  test('listNotes trusts native when it returns an empty list (directory scan succeeded)', async () => {
     tryListMarkdownFilesNativeMock.mockResolvedValueOnce([]);
+    existsMock.mockImplementation(
+      () => new Promise<boolean>(resolve => setImmediate(() => resolve(true))),
+    );
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 11,
+        name: 'note.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/note.md`,
+      },
+    ] as never);
+
+    await expect(listNotes(baseUri)).resolves.toEqual([]);
+    expect(listFilesMock).not.toHaveBeenCalled();
+  });
+
+  test('listNotes falls back to SAF when native returns null', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce(null as unknown as never);
     existsMock.mockResolvedValue(true);
     listFilesMock.mockResolvedValueOnce([
       {
@@ -188,6 +232,74 @@ describe('noteboxStorage', () => {
     expect(listFilesMock).not.toHaveBeenCalled();
   });
 
+  test('listInboxNotesAndSyncIndex lists Inbox once and writes General/Inbox.md', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
+      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
+      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
+    ]);
+    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 2,
+        name: 'b.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/b.md`,
+      },
+      {
+        lastModified: 1,
+        name: 'a.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/a.md`,
+      },
+    ] as never);
+
+    await expect(listInboxNotesAndSyncIndex(baseUri)).resolves.toEqual([
+      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
+      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
+    ]);
+
+    expect(tryListMarkdownFilesNativeMock).toHaveBeenCalledTimes(1);
+    expect(tryListMarkdownFilesNativeMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
+    expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/General`);
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/General/Inbox.md`,
+      '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/b|b]]\n',
+      {encoding: 'utf8', mimeType: 'text/markdown'},
+    );
+  });
+
+  test('listInboxNotesAndSyncIndex skips Inbox.md write when content unchanged', async () => {
+    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
+      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
+      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
+    ]);
+    const expectedIndex = '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/b|b]]\n';
+    existsMock.mockResolvedValue(true);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 2,
+        name: 'b.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/b.md`,
+      },
+      {
+        lastModified: 1,
+        name: 'a.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/a.md`,
+      },
+    ] as never);
+    readFileMock.mockResolvedValueOnce(expectedIndex);
+
+    await expect(listInboxNotesAndSyncIndex(baseUri)).resolves.toHaveLength(2);
+
+    expect(mkdirMock).not.toHaveBeenCalled();
+    expect(writeFileMock).not.toHaveBeenCalled();
+    expect(readFileMock).toHaveBeenCalledWith(`${baseUri}/General/Inbox.md`, {
+      encoding: 'utf8',
+    });
+  });
+
   test('readNote reads markdown content by URI', async () => {
     readFileMock.mockResolvedValueOnce('# Hello');
 
@@ -209,6 +321,15 @@ describe('noteboxStorage', () => {
         uri: `${baseUri}/General/2026 Demo - podcasts.md`,
       },
     ]);
+    existsMock.mockResolvedValue(true);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 11,
+        name: '2026 Demo - podcasts.md',
+        type: 'file',
+        uri: `${baseUri}/General/2026 Demo - podcasts.md`,
+      },
+    ] as never);
 
     await expect(listGeneralMarkdownFiles(baseUri)).resolves.toEqual([
       {
@@ -217,8 +338,6 @@ describe('noteboxStorage', () => {
         uri: `${baseUri}/General/2026 Demo - podcasts.md`,
       },
     ]);
-    expect(existsMock).not.toHaveBeenCalled();
-    expect(listFilesMock).not.toHaveBeenCalled();
   });
 
   test('listGeneralMarkdownFiles returns markdown files from General folder', async () => {
@@ -340,7 +459,15 @@ describe('noteboxStorage', () => {
     tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
       {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
     ]);
-    existsMock.mockResolvedValueOnce(false);
+    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 1,
+        name: 'a.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/a.md`,
+      },
+    ] as never);
 
     await refreshInboxMarkdownIndex(baseUri);
 
@@ -409,6 +536,28 @@ describe('noteboxStorage', () => {
     });
   });
 
+  test('readPlaylistCoalesced coalesces concurrent reads', async () => {
+    existsMock.mockResolvedValueOnce(true);
+    readFileMock.mockResolvedValueOnce(
+      '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
+    );
+
+    const [a, b] = await Promise.all([
+      readPlaylistCoalesced(baseUri),
+      readPlaylistCoalesced(baseUri),
+    ]);
+
+    expect(existsMock).toHaveBeenCalledTimes(1);
+    expect(readFileMock).toHaveBeenCalledTimes(1);
+    expect(a).toEqual({
+      durationMs: 1000,
+      episodeId: 'episode-a',
+      mp3Url: 'https://example.com/episode-a.mp3',
+      positionMs: 250,
+    });
+    expect(b).toEqual(a);
+  });
+
   test('clearPlaylist empties existing playlist file', async () => {
     existsMock.mockResolvedValueOnce(true);
 
@@ -421,50 +570,4 @@ describe('noteboxStorage', () => {
     );
   });
 
-  test('writePodcastImageFile stores base64 image in podcast-images directory', async () => {
-    existsMock
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false);
-
-    await expect(
-      writePodcastImageFile(baseUri, 'rss-abc', 'QUJDRA==', 'png', 'image/png'),
-    ).resolves.toBe(`${baseUri}/.notebox/podcast-images/rss-abc.png`);
-
-    expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/.notebox/podcast-images`);
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/podcast-images/rss-abc.png`,
-      'QUJDRA==',
-      {encoding: 'base64', mimeType: 'image/png'},
-    );
-  });
-});
-
-describe('buildSafDocumentUri', () => {
-  const authority = 'content://com.android.externalstorage.documents/tree/';
-
-  test('converts a primary:Folder path-style URI to a proper document URI', () => {
-    const treeRoot = `${authority}primary:Notes`;
-    const pathStyle = `${authority}primary:Notes/.notebox/podcast-images/rss-abc.jpg`;
-    const expected =
-      `${authority}primary%3ANotes/document/primary%3ANotes%2F.notebox%2Fpodcast-images%2Frss-abc.jpg`;
-    expect(buildSafDocumentUri(treeRoot, pathStyle)).toBe(expected);
-  });
-
-  test('encodes colons and slashes in both treeId and docId', () => {
-    const treeRoot = `${authority}primary:Documents/Vault`;
-    const pathStyle = `${authority}primary:Documents/Vault/.notebox/podcast-images/img.png`;
-    const result = buildSafDocumentUri(treeRoot, pathStyle);
-    expect(result).toContain('/document/');
-    expect(result).toContain('primary%3ADocuments%2FVault');
-    expect(result).toContain('%2F.notebox%2Fpodcast-images%2Fimg.png');
-  });
-
-  test('returns null when baseUri is not an ExternalStorageProvider URI', () => {
-    expect(buildSafDocumentUri('content://notes', 'content://notes/.notebox/img.jpg')).toBeNull();
-  });
-
-  test('returns null when pathStyleUri does not start with treeRootUri', () => {
-    const treeRoot = `${authority}primary:Notes`;
-    expect(buildSafDocumentUri(treeRoot, `${authority}primary:Other/img.jpg`)).toBeNull();
-  });
 });

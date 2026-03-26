@@ -2,6 +2,13 @@ import {NativeModules, Platform} from 'react-native';
 
 type NativePodcastArtworkCacheModule = {
   ensureLocalArtworkFile: (contentUri: string) => Promise<string>;
+  writeArtworkFile: (
+    baseUri: string,
+    cacheKey: string,
+    extension: string,
+    base64Payload: string,
+  ) => Promise<string>;
+  fileUriExists: (fileUri: string) => Promise<boolean>;
 };
 
 const resolvedFileUriByContentUri = new Map<string, string>();
@@ -15,7 +22,10 @@ function isRenderableVaultContentArtworkUri(uri: string): boolean {
   return uri.includes('/document/');
 }
 
-function getNativeModule(): NativePodcastArtworkCacheModule | null {
+function getNativeDisplayModule(): Pick<
+  NativePodcastArtworkCacheModule,
+  'ensureLocalArtworkFile'
+> | null {
   if (Platform.OS !== 'android') {
     return null;
   }
@@ -26,6 +36,46 @@ function getNativeModule(): NativePodcastArtworkCacheModule | null {
     return null;
   }
   return mod;
+}
+
+function getNativeStorageModule(): NativePodcastArtworkCacheModule | null {
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+  const mod = NativeModules.NoteboxPodcastArtworkCache as
+    | NativePodcastArtworkCacheModule
+    | undefined;
+  if (mod?.writeArtworkFile == null || mod?.fileUriExists == null) {
+    return null;
+  }
+  return mod;
+}
+
+/**
+ * Writes decoded base64 image bytes into app-internal storage (Android filesDir). Returns file:// URI.
+ */
+export async function writePodcastArtworkFileNative(
+  baseUri: string,
+  cacheKey: string,
+  extension: string,
+  base64Payload: string,
+): Promise<string> {
+  const mod = getNativeStorageModule();
+  if (mod == null) {
+    throw new Error('Native podcast artwork storage is unavailable.');
+  }
+  return mod.writeArtworkFile(baseUri.trim(), cacheKey.trim(), extension.trim(), base64Payload.trim());
+}
+
+/**
+ * Whether a file:// URI points at a non-empty file under the app's internal artwork directory.
+ */
+export async function podcastArtworkFileUriExistsNative(fileUri: string): Promise<boolean> {
+  const mod = getNativeStorageModule();
+  if (mod == null) {
+    return false;
+  }
+  return mod.fileUriExists(fileUri.trim());
 }
 
 /**
@@ -41,7 +91,7 @@ export async function ensureLocalArtworkFileForDisplay(uri: string): Promise<str
     return trimmed;
   }
 
-  const native = getNativeModule();
+  const native = getNativeDisplayModule();
   if (native == null) {
     return trimmed;
   }

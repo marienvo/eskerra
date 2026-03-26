@@ -93,6 +93,7 @@ Contingency:
 - If native resolves with an **empty array** but `exists(directoryUri)` is still **true** for the SAF path, the app **does not** trust the empty native result and runs the same JS listing path (native and `react-native-saf-x` can disagree on visibility).
 - Kotlin throws instead of returning an empty array when `DocumentFile` reports the directory missing, so JS can fall back when native cannot open the tree URI reliably.
 - Keep listing rules aligned: markdown suffix, exclude filenames containing `sync-conflict`, sort by `lastModified` descending (see Kotlin `VaultListingModule`).
+- Session prepare avoids `DocumentFile.findFile` for `General/Inbox.md` when a **composed child URI** (same string pattern as JS: parent General URI + `/Inbox.md`) resolves to the file, because `findFile` on a very large `General/` directory can enumerate thousands of entries. A **slow fallback** to `findFile` remains for providers where the composed URI does not work.
 - Validate on a physical Android device after changes; iOS is unchanged and always uses the JS path.
 
 ## 8) Podcast artwork `content://` and main-thread ANRs (Medium — mitigated)
@@ -103,4 +104,4 @@ Contingency:
 
 ### Mitigation
 
-- On Android, copy renderable `content://` artwork to app cache on a **background native thread** via [`PodcastArtworkCacheModule`](../../android/app/src/main/java/com/notebox/PodcastArtworkCacheModule.kt) (`NoteboxPodcastArtworkCache.ensureLocalArtworkFile`), then display using a **`file://`** path (see [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts) and [`usePodcastArtworkDisplayUri.ts`](../../src/features/podcasts/hooks/usePodcastArtworkDisplayUri.ts)).
+- New downloads store artwork under app-internal `filesDir` as **`file://`** (`writeArtworkFile` in [`PodcastArtworkCacheModule`](../../android/app/src/main/java/com/notebox/PodcastArtworkCacheModule.kt)); **`Image` uses those URIs directly.** Legacy cached vault **`content://`** artwork is still copied to app cache on a **background native thread** via `ensureLocalArtworkFile` before display (see [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts) and [`usePodcastArtworkDisplayUri.ts`](../../src/features/podcasts/hooks/usePodcastArtworkDisplayUri.ts)).

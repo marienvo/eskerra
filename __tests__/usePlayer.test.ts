@@ -2,20 +2,17 @@ import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import {usePlayer} from '../src/features/podcasts/hooks/usePlayer';
-import {clearPlaylist, readPlaylist} from '../src/core/storage/noteboxStorage';
+import {
+  clearPlaylist,
+  readPlaylistCoalesced,
+} from '../src/core/storage/noteboxStorage';
 import {useVaultContext} from '../src/core/vault/VaultContext';
 import {getAudioPlayer} from '../src/features/podcasts/services/audioPlayer';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  removeItem: jest.fn(),
-  setItem: jest.fn(),
-}));
-
 jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
-  readPlaylist: jest.fn(),
+  readPlaylistCoalesced: jest.fn(),
   writePlaylist: jest.fn(),
 }));
 
@@ -72,7 +69,9 @@ function expectResult(result: PlayerHookSnapshot | null): PlayerHookSnapshot {
 }
 
 describe('usePlayer restore state', () => {
-  const readPlaylistMock = readPlaylist as jest.MockedFunction<typeof readPlaylist>;
+  const readPlaylistMock = readPlaylistCoalesced as jest.MockedFunction<
+    typeof readPlaylistCoalesced
+  >;
   const clearPlaylistMock = clearPlaylist as jest.MockedFunction<typeof clearPlaylist>;
   const useVaultContextMock = useVaultContext as jest.MockedFunction<
     typeof useVaultContext
@@ -99,6 +98,7 @@ describe('usePlayer restore state', () => {
 
     useVaultContextMock.mockReturnValue({
       baseUri: 'content://vault-root',
+      consumeInboxPrefetch: jest.fn(() => null),
       isLoading: false,
       refreshSession: jest.fn(async () => undefined),
       settings: null,

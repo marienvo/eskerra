@@ -2,16 +2,15 @@ import {useCallback, useEffect, useState} from 'react';
 
 import {
   createNote,
-  listNotes,
+  listInboxNotesAndSyncIndex,
   readNote,
-  refreshInboxMarkdownIndex,
   writeNoteContent,
 } from '../../../core/storage/noteboxStorage';
 import {NoteDetail, NoteSummary} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 
 export function useNotes() {
-  const {baseUri} = useVaultContext();
+  const {baseUri, consumeInboxPrefetch} = useVaultContext();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notes, setNotes] = useState<NoteSummary[]>([]);
@@ -25,8 +24,12 @@ export function useNotes() {
     setError(null);
     setIsLoading(true);
     try {
-      const nextNotes = await listNotes(baseUri);
-      await refreshInboxMarkdownIndex(baseUri);
+      const prefetched = consumeInboxPrefetch(baseUri);
+      if (prefetched !== null) {
+        setNotes(prefetched);
+        return;
+      }
+      const nextNotes = await listInboxNotesAndSyncIndex(baseUri);
       setNotes(nextNotes);
     } catch (loadError) {
       const fallbackMessage = 'Could not load notes from Vault.';
@@ -34,7 +37,7 @@ export function useNotes() {
     } finally {
       setIsLoading(false);
     }
-  }, [baseUri]);
+  }, [baseUri, consumeInboxPrefetch]);
 
   useEffect(() => {
     refresh().catch(() => undefined);

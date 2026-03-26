@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {
-  readPlaylist,
+  readPlaylistCoalesced,
   writePlaylist,
 } from '../../../core/storage/noteboxStorage';
 import {PlaylistEntry, PodcastEpisode} from '../../../types';
@@ -120,7 +120,7 @@ export function usePlayer(
     const restorePlayerState = async () => {
       try {
         await player.ensureSetup();
-        const saved = await readPlaylist(baseUri);
+        const saved = await readPlaylistCoalesced(baseUri);
         if (!isMounted) {
           return;
         }
@@ -170,7 +170,7 @@ export function usePlayer(
         let startPositionMs = 0;
         let artwork: string | undefined;
         if (baseUri) {
-          const saved = await readPlaylist(baseUri);
+          const saved = await readPlaylistCoalesced(baseUri);
           if (saved && saved.episodeId === episode.id) {
             startPositionMs = saved.positionMs;
           }

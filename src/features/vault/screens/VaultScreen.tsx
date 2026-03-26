@@ -46,7 +46,10 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         data={notes}
         keyExtractor={item => item.uri}
         refreshControl={
-          <RefreshControl onRefresh={refresh} refreshing={isLoading} />
+          <RefreshControl
+            onRefresh={refresh}
+            refreshing={isLoading && notes.length > 0}
+          />
         }
         renderItem={({item}) => (
           <Pressable

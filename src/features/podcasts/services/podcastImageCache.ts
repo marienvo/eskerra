@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {safUriExists} from '../../../core/storage/noteboxStorage';
 import {
   clearPodcastImageCacheEntry,
+  podcastArtworkFileUriExists,
   readPodcastImageCacheEntry,
-  safUriExists,
+  writePodcastArtworkImageFile,
   writePodcastImageCacheEntry,
-  writePodcastImageFile,
-} from '../../../core/storage/noteboxStorage';
+} from '../../../core/storage/podcastArtworkInternalStorage';
 import {PodcastImageCacheEntry} from '../../../types';
 import {fetchRssArtworkUrl} from './rssArtwork';
 
@@ -114,7 +115,7 @@ async function isVaultArtworkUriStillReadable(uri: string): Promise<boolean> {
     return safUriExists(trimmed);
   }
   if (trimmed.startsWith('file://')) {
-    return safUriExists(trimmed);
+    return podcastArtworkFileUriExists(trimmed);
   }
   return true;
 }
@@ -151,6 +152,13 @@ async function resolveRenderableUriAfterDiskHit(
     await repairPodcastImageCacheEntryWhenLocalMissing(baseUri, cacheKey, cachedEntry);
     const reRead = await readPodcastImageCacheEntry(baseUri, cacheKey);
     renderableUri = getRenderableArtworkUri(reRead);
+  } else if (
+    renderableUri?.startsWith('file://') &&
+    !(await isVaultArtworkUriStillReadable(renderableUri))
+  ) {
+    await repairPodcastImageCacheEntryWhenLocalMissing(baseUri, cacheKey, cachedEntry);
+    const reRead = await readPodcastImageCacheEntry(baseUri, cacheKey);
+    renderableUri = getRenderableArtworkUri(reRead);
   }
   return renderableUri?.trim() || null;
 }
@@ -167,8 +175,7 @@ function isEntryFresh(entry: PodcastImageCacheEntry): boolean {
   }
 
   // Entries whose localImageUri uses the old path-style SAF tree URI (no /document/)
-  // are treated as stale so they get re-downloaded and stored with the correct
-  // document URI format returned by stat() in writePodcastImageFile.
+  // are treated as stale so they get re-downloaded and stored as internal file:// artwork.
   if (!isRenderableUri(localImageUri)) {
     return false;
   }
@@ -398,7 +405,7 @@ export async function getPodcastArtworkUri(
     const downloadedImage = await downloadArtwork(imageUrl);
     const fetchedAt = new Date().toISOString();
     if (downloadedImage) {
-      const localImageUri = await writePodcastImageFile(
+      const localImageUri = await writePodcastArtworkImageFile(
         baseUri,
         cacheKey,
         downloadedImage.base64Data,
@@ -467,6 +474,11 @@ export async function loadPersistentArtworkUriCache(baseUri: string): Promise<vo
     }
     if (normalizedValue.startsWith('content://')) {
       if (!isRenderableUri(normalizedValue) || !(await isVaultArtworkUriStillReadable(normalizedValue))) {
+        continue;
+      }
+    }
+    if (normalizedValue.startsWith('file://')) {
+      if (!(await podcastArtworkFileUriExists(normalizedValue))) {
         continue;
       }
     }

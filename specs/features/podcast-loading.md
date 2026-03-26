@@ -15,8 +15,9 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 ## Components And Responsibilities
 
 - `usePodcasts`: orchestrates file reads, parse flow, section state, and spinner timing.
+- `runPodcastPhase1` ([`podcastPhase1.ts`](../../src/features/podcasts/services/podcastPhase1.ts)): shared phase-1 vault work (caches, index, listing, legacy markdown parse). The app bootstrap calls it in parallel with vault preload when the route is `MainTabs` and a saved vault URI exists; results are stored in [`podcastBootstrapCache.ts`](../../src/features/podcasts/services/podcastBootstrapCache.ts) and consumed once on the first `usePodcasts` refresh so `PlayerProvider` can mount with episodes already in memory. Background reconcile (full `General/` listing after snapshot) and RSS markdown phase 2 remain driven by the hook after mount.
 - `usePlayer`: restores playlist state once per vault session and matches to episodes as they arrive.
-- `podcastImageCache`: resolves artwork URI through memory cache, persistent cache, SAF metadata, and optional network fallback.
+- `podcastImageCache`: resolves artwork URI through memory cache, persistent caches (`AsyncStorage`), optional network fallback, and app-internal image files (not vault / SAF).
 - `rssFeedUrlCache`: holds RSS feed URL maps per vault and persists them to `AsyncStorage`.
 - `generalPodcastMarkdownIndexCache`: persists a **small** snapshot of podcast-relevant files under `General` (legacy `*- podcasts.md` and `📻 … .md` only) so cold starts avoid `listFiles` over tens of thousands of unrelated markdown files.
 - **Android:** `listGeneralMarkdownFiles` (and Inbox `listNotes`) may call `NoteboxVaultListing` so **SAF directory listing and markdown filtering run off the JS thread** when `DocumentFile` accepts the same directory URIs as `react-native-saf-x`. If native fails, returns empty while SAF says the folder exists, or is skipped, listing uses the existing JS path (`exists`, `listFiles`, filters in [`noteboxStorage.ts`](../../src/core/storage/noteboxStorage.ts)). **Rationale:** reduce cold-start jank from large `listFiles` results being processed on the single JS thread alongside podcast load; see [architecture / known-risks](../architecture/known-risks.md) section 7.
@@ -35,7 +36,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 
 ### Episode File Content Cache
 
-- Location: module-level `fileContentCache` in `usePodcasts`.
+- Location: module-level `fileContentCache` in [`podcastPhase1.ts`](../../src/features/podcasts/services/podcastPhase1.ts) (shared by bootstrap phase-1 and `usePodcasts` after mount).
 - Key: markdown file URI.
 - Value: `{ lastModified, content }`.
 - Lifetime: JS runtime session.
@@ -65,7 +66,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - Key: `baseUri::rss-hash`.
 - Value: renderable URI (`content://.../document/...`, `file://`, or remote fallback URL). **Null is not a durable negative cache:** misses do not store `null` in a way that blocks later hydration from disk or `AsyncStorage`.
 - Lifetime: JS runtime session.
-- Purpose: avoid repeated SAF reads during row renders.
+- Purpose: avoid repeated artwork resolution work during row renders.
 - `peekCachedPodcastArtworkUriFromMemory` allows list rows to show a known URI on the **first paint** when the in-memory map was warmed by `loadPersistentArtworkUriCache` or earlier resolution (see `usePodcastArtwork`).
 
 ### Persistent Artwork URI Cache
@@ -74,14 +75,21 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - Key: `notebox:artworkUriCache:${baseUri}`.
 - Value: serialized map of non-empty artwork URIs keyed by memory cache key.
 - Lifetime: across app restarts for the same app install.
-- Purpose: hydrate memory cache early so warm restarts can render artwork without per-series SAF checks.
-- **Local file validation:** Cached `content://` document URIs are checked with `safUriExists` (SAF `exists`). If the user deletes files under `.notebox/podcast-images`, stale pointers are removed from memory and this `AsyncStorage` map is rewritten on load; disk JSON entries drop `localImageUri` (keeping `imageUrl` when present) or are cleared so `getPodcastArtworkUri` can fall back to remote URLs or re-download.
+- Purpose: hydrate memory cache early so warm restarts can render artwork without reading vault artwork files.
+- **Local file validation:** Cached `content://` document URIs (legacy installs) are checked with `safUriExists`. Cached `file://` internal artwork URIs are checked with `NoteboxPodcastArtworkCache.fileUriExists`. Stale pointers are removed from memory and this map rewritten on load when validation fails.
+
+### Podcast image metadata (app-internal)
+
+- Location: `AsyncStorage`.
+- Key: `notebox:podcastImageMeta:${baseUri}` (dev mock uses `@notebox_dev:podcastImageMeta:${baseUri}`).
+- Value: JSON `{ v: 1, byKey: Record<cacheKey, PodcastImageCacheEntry> }` (TTL, remote URL, optional `localImageUri`, `mimeType`).
+- Image bytes: Android `context.filesDir/podcast-artwork-files/{sha256(baseUri)}/{cacheKey}.{ext}` via native `writeArtworkFile` (see [`podcastArtworkInternalStorage.ts`](../../src/core/storage/podcastArtworkInternalStorage.ts)). Not written under `.notebox/` in the vault.
 
 ## Loading Phases
 
 ### Phase 1 (Spinner-Blocking)
 
-`refresh()` performs rendering-critical work. It begins with `AsyncStorage` hydration (no `listFiles` on `General` yet; artwork hydration may run one `exists` check per persisted `content://` artwork URI, no artwork network):
+`refresh()` performs rendering-critical work. It begins with `AsyncStorage` hydration (no `listFiles` on `General` yet; artwork hydration may validate persisted URIs: SAF `exists` per legacy `content://` artwork URI, native `fileUriExists` per `file://` internal artwork URI, no artwork network):
 
 1. `await Promise.all([loadPersistentArtworkUriCache(baseUri), loadPersistentRssFeedUrlCache(baseUri)])`.
 2. Resolve podcast-relevant file list: either `loadPersistedPodcastMarkdownIndex(baseUri)` when not forcing a full scan, or `listGeneralMarkdownFiles(baseUri)` when there is no snapshot or `forceFullScan` is true; then `filterPodcastRelevantGeneralMarkdownFiles` and persist the snapshot when a full listing ran.
@@ -89,7 +97,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 4. Read and parse legacy podcast markdown bodies (SAF `readFile` per file).
 5. Enrich episodes with RSS URLs from `rssFeedUrlCache` (including entries restored from persistent storage), using `seriesName` then `sectionTitle` as lookup keys.
 6. Build sections and commit state.
-7. Fire-and-forget `primeArtworkCacheFromDisk` for every RSS URL found on episodes or sections (so SAF metadata can populate memory **without** waiting for phase 2 `📻` reads when there are no RSS files or phase 2 is slow).
+7. Fire-and-forget `primeArtworkCacheFromDisk` for every RSS URL found on episodes or sections (so `AsyncStorage` metadata can populate memory **without** waiting for phase 2 `📻` reads when there are no RSS files or phase 2 is slow).
 8. Set `isLoading=false` in `finally`.
 
 Spinner target: disappears after steps 1–6 complete (step 7 does not block the spinner). When a persisted podcast markdown index exists, step 2 avoids a full `listFiles` on `General` on the critical path; a full listing may still run afterward in the background.
@@ -108,7 +116,7 @@ After phase 1 state is rendered:
 4. Re-enrich episodes and sections if new URLs changed visible data.
 5. Prime artwork cache via `primeArtworkCacheFromDisk(baseUri, rssFeedUrls)`.
 
-`primeArtworkCacheFromDisk` only performs cached SAF metadata lookups via `getCachedPodcastArtworkUri`. It does not trigger network fetches.
+`primeArtworkCacheFromDisk` only performs cached metadata lookups via `getCachedPodcastArtworkUri`. It does not trigger network fetches.
 
 ### Player Restore (Concurrent With Podcast Load)
 
@@ -122,19 +130,19 @@ After phase 1 state is rendered:
 
 ### Artwork display (Android ANR mitigation)
 
-- Resolved artwork URIs may point at vault files as SAF **`content://…/document/…`** strings (see `writePodcastImageFile` / `buildSafDocumentUri` in [`noteboxStorage.ts`](../../src/core/storage/noteboxStorage.ts)).
-- **Do not pass those `content://` URIs directly to React Native `Image`.** Fresco can trigger synchronous `ContentResolver` work on the UI thread during layout, which risks **ANRs** on some devices.
-- Instead, `PodcastArtworkImage` uses `usePodcastArtworkDisplayUri`, which calls the Android native module **`NoteboxPodcastArtworkCache`** (`ensureLocalArtworkFile`) to copy the bytes to **`context.cacheDir/podcast-artwork/`** on a **background thread** and passes a **`file://`** URI to `Image`. Remote `http(s)` URIs are unchanged.
-- In-memory deduplication lives in [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts) so list rows do not repeat copies for the same content URI.
+- New artwork resolves to **`file://`** URIs under app-internal storage; **`http(s)`** pass through unchanged. Legacy vault artwork may still appear as SAF **`content://…/document/…`** until TTL refresh re-downloads.
+- **Do not pass vault `content://` URIs directly to React Native `Image`.** Fresco can trigger synchronous `ContentResolver` work on the UI thread during layout, which risks **ANRs** on some devices.
+- `PodcastArtworkImage` uses `usePodcastArtworkDisplayUri`: internal **`file://`** and remote URLs are used as-is on first paint. For legacy **`content://`** artwork only, it calls **`NoteboxPodcastArtworkCache.ensureLocalArtworkFile`** to copy bytes to **`context.cacheDir/podcast-artwork/`** on a background thread and passes the resulting **`file://`** URI to `Image`.
+- In-memory deduplication for that legacy copy path lives in [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts).
 
 ## Artwork Resolution Rules
 
 Given `baseUri` and `rssFeedUrl`:
 
 1. Check artwork memory cache (including synchronous peek for first paint in `usePodcastArtwork`).
-2. If miss, check SAF metadata entry (`readPodcastImageCacheEntry`) for fresh cached URI.
+2. If miss, check persistent metadata entry (`readPodcastImageCacheEntry` in [`podcastArtworkInternalStorage.ts`](../../src/core/storage/podcastArtworkInternalStorage.ts)) for fresh cached URI.
 3. If stale or missing and caller allows full resolution (`getPodcastArtworkUri`), fetch RSS artwork URL and attempt download.
-4. On successful local download, write image file + metadata and update memory cache.
+4. On successful local download, write image bytes via native `writeArtworkFile`, update metadata blob, and update memory cache.
 5. On download failure, store remote URL fallback metadata and cache fallback URI.
 6. Every memory-cache update schedules AsyncStorage write-through for that `baseUri`.
 
@@ -150,7 +158,7 @@ Given `baseUri` and `rssFeedUrl`:
 
 - Phase 1 hydrates artwork memory cache and RSS maps from `AsyncStorage` before listing vault files.
 - Episode rows can resolve `rssFeedUrl` and artwork immediately when both persistent layers hit.
-- Phase 2 still runs to reconcile `📻` markdown changes and to `primeArtworkCacheFromDisk` for SAF metadata refresh.
+- Phase 2 still runs to reconcile `📻` markdown changes and to `primeArtworkCacheFromDisk` for metadata refresh.
 
 ## SAF Call Budget (Warm Restart, Cached Content)
 

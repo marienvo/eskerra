@@ -1,9 +1,21 @@
 import {NativeModules, Platform} from 'react-native';
 
+import {DEV_MOCK_VAULT_URI} from '../../dev/mockVaultData';
+import {NoteSummary} from '../../types';
+
 type NativeVaultListingModule = {
   listMarkdownFiles: (
     directoryUri: string,
   ) => Promise<Array<{lastModified?: number | null; name: string; uri: string}>>;
+  prepareNoteboxSession?: (
+    baseUri: string,
+  ) => Promise<
+    | string
+    | {
+        inboxNotes?: Array<{lastModified?: number | null; name: string; uri: string}>;
+        settings: string;
+      }
+  >;
 };
 
 export type MarkdownFileRow = {
@@ -11,6 +23,23 @@ export type MarkdownFileRow = {
   name: string;
   uri: string;
 };
+
+export type PreparedNoteboxSessionNative = {
+  inboxPrefetch: NoteSummary[] | null;
+  settingsJson: string;
+};
+
+function mapNativeInboxRow(row: {
+  lastModified?: number | null;
+  name: string;
+  uri: string;
+}): NoteSummary {
+  return {
+    lastModified: typeof row.lastModified === 'number' ? row.lastModified : null,
+    name: row.name,
+    uri: row.uri,
+  };
+}
 
 /**
  * Lists markdown files under a SAF directory on a background native thread when the Android
@@ -35,6 +64,60 @@ export async function tryListMarkdownFilesNative(
       name: row.name,
       lastModified: typeof row.lastModified === 'number' ? row.lastModified : null,
     }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensures `.notebox/settings.json` and (on current Android native) Inbox listing + General/Inbox.md
+ * in one call. Returns `inboxPrefetch` when the native map includes `inboxNotes` so the first Vault
+ * load can skip duplicate listing/index SAF work. Legacy native that returns only a string yields
+ * `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android, or
+ * native prepare fails (caller should fall back to initNotebox + readSettings).
+ */
+export async function tryPrepareNoteboxSessionNative(
+  baseUri: string,
+): Promise<PreparedNoteboxSessionNative | null> {
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+
+  // Dev mock vault lives in AsyncStorage, not SAF. Native prepare can return an empty inbox
+  // prefetch; `useNotes` treats `[]` as a hit and skips `listInboxNotesAndSyncIndex`, hiding notes.
+  if (baseUri.trim() === DEV_MOCK_VAULT_URI) {
+    return null;
+  }
+
+  const mod = NativeModules.NoteboxVaultListing as NativeVaultListingModule | undefined;
+  if (mod?.prepareNoteboxSession == null) {
+    return null;
+  }
+
+  try {
+    const raw = await mod.prepareNoteboxSession(baseUri);
+    if (typeof raw === 'string') {
+      return {settingsJson: raw, inboxPrefetch: null};
+    }
+    if (
+      raw == null ||
+      typeof raw !== 'object' ||
+      typeof (raw as {settings?: unknown}).settings !== 'string'
+    ) {
+      return null;
+    }
+    const structured = raw as {
+      inboxNotes?: Array<{lastModified?: number | null; name: string; uri: string}>;
+      settings: string;
+    };
+    const inboxNotes = structured.inboxNotes;
+    const inboxPrefetch = Array.isArray(inboxNotes)
+      ? inboxNotes.map(mapNativeInboxRow)
+      : null;
+    return {
+      settingsJson: structured.settings,
+      inboxPrefetch,
+    };
   } catch {
     return null;
   }

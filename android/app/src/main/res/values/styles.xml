@@ -6,4 +6,10 @@
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     </style>
 
+    <!-- Match JS/RN loading background; windowBackground only avoids resource linker errors on
+         API 31+ attrs (postSplashScreenTheme, etc.) in this toolchain. -->
+    <style name="LaunchTheme" parent="AppTheme">
+        <item name="android:windowBackground">@color/launch_screen_background</item>
+    </style>
+
 </resources>

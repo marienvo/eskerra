@@ -1,5 +1,7 @@
 module.exports = {
   preset: 'react-native',
+  setupFiles: ['<rootDir>/jest.setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/jest.setupAfterEnv.js'],
   moduleNameMapper: {
     '^@gluestack-ui/themed$': '<rootDir>/__mocks__/gluestackThemed.tsx',
     '^@sentry/react-native$': '<rootDir>/__mocks__/sentry-react-native.ts',

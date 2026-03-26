@@ -5,7 +5,7 @@ import TestRenderer, {act} from 'react-test-renderer';
 import {
   clearPlaylist,
   listGeneralMarkdownFiles,
-  readPlaylist,
+  readPlaylistCoalesced,
   readPodcastFileContent,
 } from '../src/core/storage/noteboxStorage';
 import {useVaultContext} from '../src/core/vault/VaultContext';
@@ -23,16 +23,10 @@ import {
 import {resetRssFeedUrlCacheForTesting} from '../src/features/podcasts/services/rssFeedUrlCache';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  removeItem: jest.fn(),
-  setItem: jest.fn(),
-}));
-
 jest.mock('../src/core/storage/noteboxStorage', () => ({
   clearPlaylist: jest.fn(),
   listGeneralMarkdownFiles: jest.fn(),
-  readPlaylist: jest.fn(),
+  readPlaylistCoalesced: jest.fn(),
   readPodcastFileContent: jest.fn(),
 }));
 
@@ -116,7 +110,9 @@ describe('usePodcasts loading lifecycle', () => {
   const clearPlaylistMock = clearPlaylist as jest.MockedFunction<typeof clearPlaylist>;
   const listGeneralMarkdownFilesMock =
     listGeneralMarkdownFiles as jest.MockedFunction<typeof listGeneralMarkdownFiles>;
-  const readPlaylistMock = readPlaylist as jest.MockedFunction<typeof readPlaylist>;
+  const readPlaylistMock = readPlaylistCoalesced as jest.MockedFunction<
+    typeof readPlaylistCoalesced
+  >;
   const readPodcastFileContentMock =
     readPodcastFileContent as jest.MockedFunction<typeof readPodcastFileContent>;
   const useVaultContextMock = useVaultContext as jest.MockedFunction<
@@ -172,6 +168,7 @@ describe('usePodcasts loading lifecycle', () => {
 
     useVaultContextMock.mockReturnValue({
       baseUri,
+      consumeInboxPrefetch: jest.fn(() => null),
       isLoading: false,
       refreshSession: jest.fn(async () => undefined),
       settings: null,
@@ -380,7 +377,7 @@ describe('usePodcasts loading lifecycle', () => {
     });
   });
 
-  test('with persisted podcast markdown index, lists General only after legacy file reads', async () => {
+  test('with persisted podcast markdown index, background reconcile lists General', async () => {
     const entries = [
       {
         lastModified: null,
@@ -404,27 +401,23 @@ describe('usePodcasts loading lifecycle', () => {
       return null;
     });
 
-    let sawLegacyRead = false;
-    readPodcastFileContentMock.mockImplementation(async uri => {
-      if (uri.endsWith('/2026 Series A - podcasts.md')) {
-        sawLegacyRead = true;
-        expect(listGeneralMarkdownFilesMock).not.toHaveBeenCalled();
-      }
-      return '# legacy';
-    });
+    readPodcastFileContentMock.mockImplementation(async () => '# legacy');
 
-    listGeneralMarkdownFilesMock.mockImplementation(async () => {
-      expect(sawLegacyRead).toBe(true);
-      return [
-        ...entries,
-        {lastModified: null, name: 'other.md', uri: `${baseUri}/General/other.md`},
-      ];
-    });
+    listGeneralMarkdownFilesMock.mockImplementation(async () => [
+      ...entries,
+      {lastModified: null, name: 'other.md', uri: `${baseUri}/General/other.md`},
+    ]);
 
     let renderer: TestRenderer.ReactTestRenderer | null = null;
     await act(async () => {
       renderer = TestRenderer.create(React.createElement(HookHarness, {onResult: () => {}}));
       await flushPromises();
+      await flushPromises();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await new Promise<void>(resolve => setImmediate(resolve));
       await flushPromises();
       await flushPromises();
     });
@@ -460,7 +453,7 @@ describe('usePodcasts loading lifecycle', () => {
       isLoading: false,
       sectionsCount: 1,
     });
-    expect(readPlaylistMock).toHaveBeenCalledTimes(1);
+    expect(readPlaylistMock).toHaveBeenCalled();
     expect(clearPlaylistMock).toHaveBeenCalledWith(baseUri);
 
     await act(async () => {

@@ -19,8 +19,9 @@ function synchronousDisplayUri(artworkUri: string | null): string | null {
 }
 
 /**
- * Resolves podcast artwork for React Native Image: on Android, copies vault `content://` URIs to
- * a `file://` cache path off the UI thread before display to avoid ANRs from ContentResolver.
+ * Resolves podcast artwork for React Native Image: internal `file://` and remote URLs are used
+ * as-is. Legacy vault `content://` URIs are copied to a `file://` cache path off the UI thread
+ * on Android to avoid ANRs from ContentResolver.
  */
 export function usePodcastArtworkDisplayUri(
   artworkUri: string | null,

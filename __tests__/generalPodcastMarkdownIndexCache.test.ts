@@ -10,12 +10,6 @@ import {
 } from '../src/features/podcasts/services/generalPodcastMarkdownIndexCache';
 import {RootMarkdownFile} from '../src/types';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  removeItem: jest.fn(),
-  setItem: jest.fn(),
-}));
-
 describe('generalPodcastMarkdownIndexCache', () => {
   const asyncStorageGetItemMock = AsyncStorage.getItem as jest.MockedFunction<
     typeof AsyncStorage.getItem

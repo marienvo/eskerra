@@ -9,11 +9,6 @@ import {hasPermission} from 'react-native-saf-x';
 import {resolveInitialRoute} from '../src/core/bootstrap/resolveInitialRoute';
 import {NOTES_DIRECTORY_URI_KEY} from '../src/core/storage/keys';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  removeItem: jest.fn(),
-}));
-
 jest.mock('react-native-saf-x', () => ({
   hasPermission: jest.fn(),
 }));
@@ -47,7 +42,10 @@ describe('resolveInitialRoute', () => {
   test('returns Setup when no URI is saved', async () => {
     asyncStorageMock.getItem.mockResolvedValueOnce(null);
 
-    await expect(resolveInitialRoute()).resolves.toBe('Setup');
+    await expect(resolveInitialRoute()).resolves.toEqual({
+      route: 'Setup',
+      savedUri: null,
+    });
     expect(hasPermissionMock).not.toHaveBeenCalled();
   });
 
@@ -55,7 +53,10 @@ describe('resolveInitialRoute', () => {
     asyncStorageMock.getItem.mockResolvedValueOnce('content://test-uri');
     hasPermissionMock.mockResolvedValueOnce(true);
 
-    await expect(resolveInitialRoute()).resolves.toBe('MainTabs');
+    await expect(resolveInitialRoute()).resolves.toEqual({
+      route: 'MainTabs',
+      savedUri: 'content://test-uri',
+    });
     expect(hasPermissionMock).toHaveBeenCalledWith('content://test-uri');
     expect(asyncStorageMock.removeItem).not.toHaveBeenCalled();
   });
@@ -64,7 +65,10 @@ describe('resolveInitialRoute', () => {
     asyncStorageMock.getItem.mockResolvedValueOnce('content://test-uri');
     hasPermissionMock.mockResolvedValueOnce(false);
 
-    await expect(resolveInitialRoute()).resolves.toBe('Setup');
+    await expect(resolveInitialRoute()).resolves.toEqual({
+      route: 'Setup',
+      savedUri: null,
+    });
     expect(hasPermissionMock).toHaveBeenCalledWith('content://test-uri');
     expect(asyncStorageMock.removeItem).toHaveBeenCalledWith(
       NOTES_DIRECTORY_URI_KEY,

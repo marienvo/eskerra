@@ -6,6 +6,10 @@ import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
 import {clearUri, getSavedUri} from '../storage/appStorage';
 
 export type InitialRoute = 'MainTabs' | 'Setup';
+export type ResolvedInitialRoute = {
+  route: InitialRoute;
+  savedUri: string | null;
+};
 const isDevMockVaultEnabled =
   __DEV__ &&
   !(globalThis as {process?: {env?: Record<string, string | undefined>}}).process
@@ -23,14 +27,15 @@ function bootstrapComplete(route: InitialRoute): InitialRoute {
   return route;
 }
 
-export async function resolveInitialRoute(): Promise<InitialRoute> {
+export async function resolveInitialRoute(): Promise<ResolvedInitialRoute> {
   if (isDevMockVaultEnabled) {
+    const savedUri = await getSavedUri();
     appBreadcrumb({
       category: 'app',
       message: 'app.bootstrap.start',
       data: {mock: true},
     });
-    return bootstrapComplete('MainTabs');
+    return {route: bootstrapComplete('MainTabs'), savedUri};
   }
 
   appBreadcrumb({
@@ -43,21 +48,21 @@ export async function resolveInitialRoute(): Promise<InitialRoute> {
     const savedUri = await getSavedUri();
 
     if (!savedUri) {
-      return bootstrapComplete('Setup');
+      return {route: bootstrapComplete('Setup'), savedUri: null};
     }
 
     if (Platform.OS !== 'android') {
-      return bootstrapComplete('MainTabs');
+      return {route: bootstrapComplete('MainTabs'), savedUri};
     }
 
     const permissionGranted = await hasPermission(savedUri);
 
     if (!permissionGranted) {
       await clearUri();
-      return bootstrapComplete('Setup');
+      return {route: bootstrapComplete('Setup'), savedUri: null};
     }
 
-    return bootstrapComplete('MainTabs');
+    return {route: bootstrapComplete('MainTabs'), savedUri};
   } catch (error) {
     appBreadcrumb({
       category: 'app',

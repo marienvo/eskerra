@@ -35,6 +35,19 @@ describe('usePodcastArtworkDisplayUri', () => {
     );
   });
 
+  test('returns internal file URI on first paint without calling native copy', () => {
+    let tree: ReturnType<typeof create>;
+    act(() => {
+      tree = create(
+        <HookProbe uri="file:///data/user/0/app/files/podcast-artwork-files/a/x.jpg" />,
+      );
+    });
+    expect(tree!.root.findByType(Text).props.children).toBe(
+      'file:///data/user/0/app/files/podcast-artwork-files/a/x.jpg',
+    );
+    expect(mockEnsureLocalArtworkFileForDisplay).not.toHaveBeenCalled();
+  });
+
   test('resolves content URI via async copy helper', async () => {
     const doc =
       'content://com.android.externalstorage.documents/tree/primary/document/vault/x.jpg';

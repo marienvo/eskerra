@@ -7,12 +7,6 @@ import {
   resolveCachedRssFeedUrl,
 } from '../src/features/podcasts/services/rssFeedUrlCache';
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  removeItem: jest.fn(),
-  setItem: jest.fn(),
-}));
-
 jest.mock('../src/features/podcasts/services/rssParser', () => ({
   normalizeSeriesKey: jest.fn((value: string) => value.toLowerCase()),
 }));
