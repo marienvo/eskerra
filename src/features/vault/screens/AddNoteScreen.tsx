@@ -1,8 +1,9 @@
 import {useHeaderHeight} from '@react-navigation/elements';
 import {useFocusEffect} from '@react-navigation/native';
+import type {StackNavigationProp} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {Box, Pressable, Text, useColorMode} from '@gluestack-ui/themed';
+import {Box, Pressable, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {
   ActivityIndicator,
   InteractionManager,
@@ -15,21 +16,79 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {buildInboxMarkdownFromCompose, parseComposeInput} from '../../../core/vault/vaultComposeNote';
+import {
+  buildInboxMarkdownFromCompose,
+  inboxMarkdownFileToComposeInput,
+  parseComposeInput,
+} from '../../../core/vault/vaultComposeNote';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
+import {useNotes} from '../hooks/useNotes';
 
 type AddNoteScreenProps = StackScreenProps<VaultStackParamList, 'AddNote'>;
 
-export function AddNoteScreen({navigation}: AddNoteScreenProps) {
+/** True when the screen under AddNote in the stack is Vault (back goes to the inbox list). */
+function isPoppingFromAddNoteToVault(
+  stackNavigation: StackNavigationProp<VaultStackParamList, 'AddNote'>,
+): boolean {
+  const state = stackNavigation.getState();
+  const idx = state.index;
+  if (idx < 1) {
+    return false;
+  }
+  return state.routes[idx - 1]?.name === 'Vault';
+}
+
+/** After AddNote unmounts, the stack focus is already the screen we popped to. */
+function isVaultStackFocusedOnVaultList(
+  stackNavigation: StackNavigationProp<VaultStackParamList, 'AddNote'>,
+): boolean {
+  const state = stackNavigation.getState();
+  return state.routes[state.index]?.name === 'Vault';
+}
+
+export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
+  const editParams = route.params;
+  const isEdit = Boolean(editParams?.noteUri);
   const [composeInput, setComposeInput] = useState('');
+  const [isLoadingEdit, setIsLoadingEdit] = useState(isEdit);
   const inputRef = useRef<TextInput>(null);
   const {isSaving, save, setStatusText, statusText} = useSaveInboxMarkdownNote();
+  const {read} = useNotes();
   const headerHeight = useHeaderHeight();
   const colorMode = useColorMode();
   const insets = useSafeAreaInsets();
   const inputTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const placeholderColor = colorMode === 'dark' ? '#8a8a8a' : '#888888';
+
+  useEffect(() => {
+    if (!editParams?.noteUri) {
+      return;
+    }
+
+    let isActive = true;
+    setIsLoadingEdit(true);
+
+    read(editParams.noteUri)
+      .then(note => {
+        if (!isActive) {
+          return;
+        }
+        setComposeInput(inboxMarkdownFileToComposeInput(note.content));
+        setIsLoadingEdit(false);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+        setStatusText('Could not load this note.');
+        setIsLoadingEdit(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [editParams?.noteUri, read, setStatusText]);
 
   useEffect(() => {
     const tabNavigation = navigation.getParent();
@@ -53,7 +112,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
     const showComposeStackHeader = () => {
       navigation.setOptions({
         headerShown: true,
-        title: 'New note',
+        title: isEdit ? 'Edit note' : 'New note',
       });
     };
 
@@ -76,12 +135,20 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
         return;
       }
       hideComposeStackHeader();
-      showVaultTabHeader();
+      if (isPoppingFromAddNoteToVault(navigation)) {
+        showVaultTabHeader();
+      } else {
+        hideVaultTabHeader();
+      }
     });
 
     const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', () => {
       hideComposeStackHeader();
-      showVaultTabHeader();
+      if (isPoppingFromAddNoteToVault(navigation)) {
+        showVaultTabHeader();
+      } else {
+        hideVaultTabHeader();
+      }
     });
 
     return () => {
@@ -89,12 +156,18 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
       unsubscribeTransitionStart();
       unsubscribeBeforeRemove();
       hideComposeStackHeader();
-      showVaultTabHeader();
+      if (isVaultStackFocusedOnVaultList(navigation)) {
+        showVaultTabHeader();
+      }
     };
-  }, [navigation]);
+  }, [isEdit, navigation]);
 
   useFocusEffect(
     useCallback(() => {
+      if (isLoadingEdit) {
+        return undefined;
+      }
+
       let cancelled = false;
       const focusInput = () => {
         if (!cancelled) {
@@ -121,7 +194,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
         cancelled = true;
         task.cancel();
       };
-    }, []),
+    }, [isLoadingEdit]),
   );
 
   const handleSave = async () => {
@@ -134,6 +207,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
 
     const markdownBody = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     const didSave = await save(titleLine, markdownBody, {
+      noteUri: editParams?.noteUri,
       onSaved: () => {
         navigation.goBack();
       },
@@ -159,61 +233,69 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
       keyboardVerticalOffset={headerHeight}
       style={styles.keyboardAvoiding}>
       <Box style={styles.container}>
-        <TextInput
-          ref={inputRef}
-          autoCapitalize="sentences"
-          autoCorrect
-          editable={!isSaving}
-          multiline
-          showSoftInputOnFocus
-          onChangeText={nextValue => {
-            setComposeInput(nextValue);
-            if (statusText) {
-              setStatusText(null);
-            }
-          }}
-          placeholder="First line is title (H1)..."
-          placeholderTextColor={placeholderColor}
-          style={[styles.input, {color: inputTextColor}]}
-          textAlignVertical="top"
-          value={composeInput}
-        />
-        {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
-        <Box
-          style={[
-            styles.actionBar,
-            {
-              paddingBottom: Math.max(insets.bottom, 8),
-            },
-          ]}>
-          <Pressable
-            accessibilityLabel="Cancel"
-            accessibilityRole="button"
-            disabled={isSaving}
-            onPress={onPressCancel}
-            style={styles.cancelButton}>
-            <MaterialIcons color={inputTextColor} name="cancel" size={22} />
-            <Text style={[styles.actionLabel, {color: inputTextColor}]}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel={isSaving ? 'Saving note' : 'Save note'}
-            accessibilityRole="button"
-            disabled={isSaving}
-            onPress={onPressSave}
-            style={styles.saveButton}>
-            {isSaving ? (
-              <>
-                <ActivityIndicator color={inputTextColor} size="small" />
-                <Text style={[styles.actionLabel, {color: inputTextColor}]}>Saving...</Text>
-              </>
-            ) : (
-              <>
-                <MaterialIcons color={inputTextColor} name="save-alt" size={22} />
-                <Text style={[styles.actionLabel, {color: inputTextColor}]}>Save</Text>
-              </>
-            )}
-          </Pressable>
-        </Box>
+        {isLoadingEdit ? (
+          <Box alignItems="center" flex={1} justifyContent="center">
+            <Spinner style={styles.editLoadSpinner} />
+          </Box>
+        ) : (
+          <>
+            <TextInput
+              ref={inputRef}
+              autoCapitalize="sentences"
+              autoCorrect
+              editable={!isSaving}
+              multiline
+              showSoftInputOnFocus
+              onChangeText={nextValue => {
+                setComposeInput(nextValue);
+                if (statusText) {
+                  setStatusText(null);
+                }
+              }}
+              placeholder="First line is title (H1)..."
+              placeholderTextColor={placeholderColor}
+              style={[styles.input, {color: inputTextColor}]}
+              textAlignVertical="top"
+              value={composeInput}
+            />
+            {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+            <Box
+              style={[
+                styles.actionBar,
+                {
+                  paddingBottom: Math.max(insets.bottom, 8),
+                },
+              ]}>
+              <Pressable
+                accessibilityLabel="Cancel"
+                accessibilityRole="button"
+                disabled={isSaving}
+                onPress={onPressCancel}
+                style={styles.cancelButton}>
+                <MaterialIcons color={inputTextColor} name="cancel" size={22} />
+                <Text style={[styles.actionLabel, {color: inputTextColor}]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={isSaving ? 'Saving note' : 'Save note'}
+                accessibilityRole="button"
+                disabled={isSaving}
+                onPress={onPressSave}
+                style={styles.saveButton}>
+                {isSaving ? (
+                  <>
+                    <ActivityIndicator color={inputTextColor} size="small" />
+                    <Text style={[styles.actionLabel, {color: inputTextColor}]}>Saving...</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons color={inputTextColor} name="save-alt" size={22} />
+                    <Text style={[styles.actionLabel, {color: inputTextColor}]}>Save</Text>
+                  </>
+                )}
+              </Pressable>
+            </Box>
+          </>
+        )}
       </Box>
     </KeyboardAvoidingView>
   );
@@ -264,5 +346,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     textAlign: 'left',
+  },
+  editLoadSpinner: {
+    marginVertical: 24,
   },
 });

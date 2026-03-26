@@ -3,11 +3,12 @@ import {useCallback, useState} from 'react';
 import {useNotes} from '../../vault/hooks/useNotes';
 
 type SaveOptions = {
+  noteUri?: string;
   onSaved?: () => void;
 };
 
 export function useSaveInboxMarkdownNote() {
-  const {create} = useNotes();
+  const {create, write} = useNotes();
   const [isSaving, setIsSaving] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
 
@@ -29,7 +30,11 @@ export function useSaveInboxMarkdownNote() {
       setStatusText(null);
       setIsSaving(true);
       try {
-        await create(trimmedTitle, trimmedContent);
+        if (options?.noteUri) {
+          await write(options.noteUri, trimmedContent);
+        } else {
+          await create(trimmedTitle, trimmedContent);
+        }
         options?.onSaved?.();
         return true;
       } catch (error) {
@@ -40,7 +45,7 @@ export function useSaveInboxMarkdownNote() {
         setIsSaving(false);
       }
     },
-    [create],
+    [create, write],
   );
 
   return {

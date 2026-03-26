@@ -1,5 +1,6 @@
 import {
   buildInboxMarkdownFromCompose,
+  inboxMarkdownFileToComposeInput,
   parseComposeInput,
 } from '../src/core/vault/vaultComposeNote';
 
@@ -32,5 +33,23 @@ describe('vaultComposeNote', () => {
     expect(buildInboxMarkdownFromCompose('Sprint #12: done?!', 'Body')).toBe(
       '# Sprint #12: done?!\n\nBody',
     );
+  });
+
+  test('inboxMarkdownFileToComposeInput inverts buildInboxMarkdownFromCompose', () => {
+    const compose = 'Meeting notes\n\nLine 2\nLine 3';
+    const file = buildInboxMarkdownFromCompose('Meeting notes', 'Line 2\nLine 3');
+    expect(inboxMarkdownFileToComposeInput(file)).toBe(compose);
+  });
+
+  test('inboxMarkdownFileToComposeInput handles title-only H1 file', () => {
+    expect(inboxMarkdownFileToComposeInput('# Meeting notes\n')).toBe('Meeting notes');
+  });
+
+  test('inboxMarkdownFileToComposeInput strips blank lines after H1', () => {
+    expect(inboxMarkdownFileToComposeInput('# Title\n\n\nBody')).toBe('Title\n\nBody');
+  });
+
+  test('inboxMarkdownFileToComposeInput falls back when no H1', () => {
+    expect(inboxMarkdownFileToComposeInput('Plain first\nSecond')).toBe('Plain first\n\nSecond');
   });
 });
