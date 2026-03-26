@@ -2,6 +2,20 @@
 /** Set before any test file so app code can skip long deferred timers without relying on inlined env. */
 global.__NOTEBOX_JEST__ = true;
 
+jest.mock('react-native-reanimated', () => {
+  const Reanimated = require('react-native-reanimated/mock');
+  return Reanimated;
+});
+
+jest.mock('react-native-keyboard-controller', () => {
+  const {View} = require('react-native');
+  return {
+    KeyboardProvider: ({children}) => children,
+    KeyboardAvoidingView: View,
+    KeyboardStickyView: View,
+  };
+});
+
 /**
  * Single AsyncStorage mock for the whole Jest run. Per-file jest.mock factories race for "first
  * registration" across workers; an incomplete mock breaks hooks that need setItem (for example

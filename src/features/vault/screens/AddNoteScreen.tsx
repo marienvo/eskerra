@@ -1,4 +1,3 @@
-import {useHeaderHeight} from '@react-navigation/elements';
 import {useFocusEffect} from '@react-navigation/native';
 import type {StackNavigationProp} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
@@ -8,11 +7,11 @@ import {
   ActivityIndicator,
   InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   TextInput,
 } from 'react-native';
+import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -55,7 +54,6 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
   const inputRef = useRef<TextInput>(null);
   const {isSaving, save, setStatusText, statusText} = useSaveInboxMarkdownNote();
   const {read} = useNotes();
-  const headerHeight = useHeaderHeight();
   const colorMode = useColorMode();
   const insets = useSafeAreaInsets();
   const inputTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
@@ -227,38 +225,35 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      enabled
-      keyboardVerticalOffset={headerHeight}
-      style={styles.keyboardAvoiding}>
-      <Box style={styles.container}>
-        {isLoadingEdit ? (
-          <Box alignItems="center" flex={1} justifyContent="center">
-            <Spinner style={styles.editLoadSpinner} />
-          </Box>
-        ) : (
-          <>
-            <TextInput
-              ref={inputRef}
-              autoCapitalize="sentences"
-              autoCorrect
-              editable={!isSaving}
-              multiline
-              showSoftInputOnFocus
-              onChangeText={nextValue => {
-                setComposeInput(nextValue);
-                if (statusText) {
-                  setStatusText(null);
-                }
-              }}
-              placeholder="First line is title (H1)..."
-              placeholderTextColor={placeholderColor}
-              style={[styles.input, {color: inputTextColor}]}
-              textAlignVertical="top"
-              value={composeInput}
-            />
-            {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+    <Box style={styles.screenRoot}>
+      {isLoadingEdit ? (
+        <Box alignItems="center" flex={1} justifyContent="center">
+          <Spinner style={styles.editLoadSpinner} />
+        </Box>
+      ) : (
+        <>
+          <TextInput
+            ref={inputRef}
+            autoCapitalize="sentences"
+            autoCorrect
+            editable={!isSaving}
+            multiline
+            showSoftInputOnFocus
+            onChangeText={nextValue => {
+              setComposeInput(nextValue);
+              if (statusText) {
+                setStatusText(null);
+              }
+            }}
+            placeholder="First line is title (H1)..."
+            placeholderTextColor={placeholderColor}
+            style={[styles.input, {color: inputTextColor}]}
+            textAlignVertical="top"
+            value={composeInput}
+          />
+          {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+          {/* Pins the action row to the keyboard; optional offset={{ closed, opened }} if a device needs a px tweak. */}
+          <KeyboardStickyView style={styles.stickyFooter}>
             <Box
               style={[
                 styles.actionBar,
@@ -294,10 +289,10 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
                 )}
               </Pressable>
             </Box>
-          </>
-        )}
-      </Box>
-    </KeyboardAvoidingView>
+          </KeyboardStickyView>
+        </>
+      )}
+    </Box>
   );
 }
 
@@ -309,11 +304,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  container: {
+  screenRoot: {
     flex: 1,
   },
-  keyboardAvoiding: {
-    flex: 1,
+  stickyFooter: {
+    alignSelf: 'stretch',
   },
   input: {
     flex: 1,
