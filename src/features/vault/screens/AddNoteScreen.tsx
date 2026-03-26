@@ -40,8 +40,6 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
     const showVaultTabHeader = () => {
       tabNavigation.setOptions({
         headerShown: true,
-        headerLeft: undefined,
-        headerRight: undefined,
         headerTitle: 'Inbox',
       });
     };
@@ -97,10 +95,32 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      const task = InteractionManager.runAfterInteractions(() => {
-        inputRef.current?.focus();
-      });
-      return () => task.cancel();
+      let cancelled = false;
+      const focusInput = () => {
+        if (!cancelled) {
+          inputRef.current?.focus();
+        }
+      };
+
+      if (Platform.OS === 'android') {
+        let delayedFocusId: ReturnType<typeof setTimeout> | undefined;
+        const task = InteractionManager.runAfterInteractions(() => {
+          delayedFocusId = setTimeout(focusInput, 250);
+        });
+        return () => {
+          cancelled = true;
+          task.cancel();
+          if (delayedFocusId !== undefined) {
+            clearTimeout(delayedFocusId);
+          }
+        };
+      }
+
+      const task = InteractionManager.runAfterInteractions(focusInput);
+      return () => {
+        cancelled = true;
+        task.cancel();
+      };
     }, []),
   );
 
@@ -134,7 +154,8 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
+      enabled
       keyboardVerticalOffset={headerHeight}
       style={styles.keyboardAvoiding}>
       <Box style={styles.container}>
@@ -144,6 +165,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
           autoCorrect
           editable={!isSaving}
           multiline
+          showSoftInputOnFocus
           onChangeText={nextValue => {
             setComposeInput(nextValue);
             if (statusText) {

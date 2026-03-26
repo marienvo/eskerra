@@ -121,20 +121,28 @@ export function VaultScreen({navigation}: VaultScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isVaultTopRoute()) {
-        return;
-      }
       const tabNavigation = navigation.getParent();
       if (!tabNavigation) {
         return;
       }
 
-      tabNavigation.setOptions({
-        headerShown: true,
-        headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
-        headerRight: hasSelection ? undefined : renderAddHeaderRight,
-        headerTitle: hasSelection ? `${selectedCount} selected` : 'Inbox',
+      const applyHeader = () => {
+        if (!isVaultTopRoute()) {
+          return;
+        }
+        tabNavigation.setOptions({
+          headerShown: true,
+          headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
+          headerRight: hasSelection ? undefined : renderAddHeaderRight,
+          headerTitle: hasSelection ? `${selectedCount} selected` : 'Inbox',
+        });
+      };
+
+      applyHeader();
+      const frameId = requestAnimationFrame(() => {
+        applyHeader();
       });
+      return () => cancelAnimationFrame(frameId);
     }, [
       hasSelection,
       isVaultTopRoute,
