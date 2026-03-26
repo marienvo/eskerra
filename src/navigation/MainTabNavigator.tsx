@@ -32,7 +32,7 @@ const PodcastsStack = createStackNavigator<PodcastsStackParamList>();
 const HomeStack = createStackNavigator<HomeStackParamList>();
 const VaultStack = createStackNavigator<VaultStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
-const slot1TabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
+const questionMarkTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="question-mark" size={size} />
 );
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
@@ -40,9 +40,6 @@ const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) =
 );
 const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="headphones" size={size} />
-);
-const homeTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="home" size={size} />
 );
 const settingsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="settings" size={size} />
@@ -145,7 +142,7 @@ export function MainTabNavigator() {
   return (
     <PlayerProvider>
       <Tabs.Navigator
-        initialRouteName="HomeTab"
+        initialRouteName="VaultTab"
         screenOptions={{
           headerShown: true,
           headerStyle: styles.tabHeader,
@@ -163,7 +160,7 @@ export function MainTabNavigator() {
           name="InboxTab"
           options={{
             tabBarButton,
-            tabBarIcon: slot1TabIcon,
+            tabBarIcon: questionMarkTabIcon,
             title: 'Slot 1',
           }}
         />
@@ -190,8 +187,8 @@ export function MainTabNavigator() {
           name="HomeTab"
           options={{
             tabBarButton,
-            tabBarIcon: homeTabIcon,
-            title: 'Home',
+            tabBarIcon: questionMarkTabIcon,
+            title: 'Slot 2',
           }}
         />
         <Tabs.Screen
