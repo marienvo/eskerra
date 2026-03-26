@@ -26,6 +26,7 @@ export type HomeStackParamList = {
 };
 
 export type VaultStackParamList = {
+  AddNote: undefined;
   NoteDetail: {noteTitle: string; noteUri: string};
   Vault: undefined;
 };

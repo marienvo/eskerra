@@ -14,6 +14,7 @@ import {MiniPlayer} from '../features/podcasts/components/MiniPlayer';
 import {PlayerProvider} from '../features/podcasts/context/PlayerContext';
 import {PodcastsScreen} from '../features/podcasts/screens/PodcastsScreen';
 import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
+import {AddNoteScreen} from '../features/vault/screens/AddNoteScreen';
 import {NoteDetailScreen} from '../features/vault/screens/NoteDetailScreen';
 import {VaultScreen} from '../features/vault/screens/VaultScreen';
 import {
@@ -116,6 +117,7 @@ function VaultStackScreen() {
   return (
     <VaultStack.Navigator screenOptions={{headerShown: false}}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
+      <VaultStack.Screen component={AddNoteScreen} name="AddNote" options={{headerShown: false}} />
       <VaultStack.Screen
         component={NoteDetailScreen}
         name="NoteDetail"

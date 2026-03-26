@@ -65,6 +65,20 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [],
   );
 
+  const renderAddHeaderRight = useCallback(
+    () => (
+      <TouchableOpacity
+        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+        onPress={() => {
+          navigation.navigate('AddNote');
+        }}
+        style={styles.headerAddButton}>
+        <MaterialIcons color="#ffffff" name="add-box" size={24} />
+      </TouchableOpacity>
+    ),
+    [navigation],
+  );
+
   useLayoutEffect(() => {
     if (!isVaultTopRoute()) {
       return;
@@ -77,6 +91,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     if (!hasSelection) {
       tabNavigation.setOptions({
         headerLeft: undefined,
+        headerRight: renderAddHeaderRight,
         headerTitle: 'Vault',
       });
       return;
@@ -84,16 +99,25 @@ export function VaultScreen({navigation}: VaultScreenProps) {
 
     tabNavigation.setOptions({
       headerLeft: renderSelectionHeaderLeft,
+      headerRight: undefined,
       headerTitle: `${selectedCount} selected`,
     });
 
     return () => {
       tabNavigation.setOptions({
         headerLeft: undefined,
+        headerRight: undefined,
         headerTitle: 'Vault',
       });
     };
-  }, [hasSelection, isVaultTopRoute, navigation, renderSelectionHeaderLeft, selectedCount]);
+  }, [
+    hasSelection,
+    isVaultTopRoute,
+    navigation,
+    renderAddHeaderRight,
+    renderSelectionHeaderLeft,
+    selectedCount,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -108,9 +132,17 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       tabNavigation.setOptions({
         headerShown: true,
         headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
+        headerRight: hasSelection ? undefined : renderAddHeaderRight,
         headerTitle: hasSelection ? `${selectedCount} selected` : 'Vault',
       });
-    }, [hasSelection, isVaultTopRoute, navigation, renderSelectionHeaderLeft, selectedCount]),
+    }, [
+      hasSelection,
+      isVaultTopRoute,
+      navigation,
+      renderAddHeaderRight,
+      renderSelectionHeaderLeft,
+      selectedCount,
+    ]),
   );
 
   const toggleNoteSelection = useCallback((noteUri: string) => {
@@ -286,6 +318,9 @@ const styles = StyleSheet.create({
   },
   headerBackButton: {
     marginLeft: 12,
+  },
+  headerAddButton: {
+    marginRight: 12,
   },
   spinner: {
     marginVertical: 10,

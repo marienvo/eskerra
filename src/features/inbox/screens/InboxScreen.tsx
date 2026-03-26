@@ -9,42 +9,23 @@ import {
 } from '@gluestack-ui/themed';
 import {Keyboard, StyleSheet} from 'react-native';
 
-import {useNotes} from '../../vault/hooks/useNotes';
+import {useSaveInboxMarkdownNote} from '../hooks/useSaveInboxMarkdownNote';
 
 export function InboxScreen() {
-  const {create} = useNotes();
   const [content, setContent] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [statusText, setStatusText] = useState<string | null>(null);
   const [title, setTitle] = useState('');
+  const {isSaving, save, statusText} = useSaveInboxMarkdownNote();
 
   const handleSave = async () => {
-    const trimmedTitle = title.trim();
-    const trimmedContent = content.trim();
-
-    if (!trimmedTitle) {
-      setStatusText('Title is required.');
-      return;
-    }
-
-    if (!trimmedContent) {
-      setStatusText('Note content is required.');
-      return;
-    }
-
-    setStatusText(null);
     Keyboard.dismiss();
-    setIsSaving(true);
-    try {
-      await create(trimmedTitle, trimmedContent);
-      setTitle('');
-      setContent('');
-      setStatusText('Saved to Vault.');
-    } catch (error) {
-      const fallbackMessage = 'Could not save this note.';
-      setStatusText(error instanceof Error ? error.message : fallbackMessage);
-    } finally {
-      setIsSaving(false);
+    const didSave = await save(title, content, {
+      onSaved: () => {
+        setTitle('');
+        setContent('');
+      },
+    });
+    if (!didSave) {
+      return;
     }
   };
 
