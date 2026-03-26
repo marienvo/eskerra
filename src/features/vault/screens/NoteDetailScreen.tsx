@@ -28,7 +28,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       tabNavigation.setOptions({
         headerShown: true,
         headerLeft: undefined,
-        headerTitle: 'Vault',
+        headerTitle: 'Inbox',
       });
     };
 

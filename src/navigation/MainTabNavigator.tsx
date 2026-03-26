@@ -32,6 +32,9 @@ const PodcastsStack = createStackNavigator<PodcastsStackParamList>();
 const HomeStack = createStackNavigator<HomeStackParamList>();
 const VaultStack = createStackNavigator<VaultStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
+const slot1TabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
+  <MaterialIcons color={color} name="question-mark" size={size} />
+);
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="move-to-inbox" size={size} />
 );
@@ -40,9 +43,6 @@ const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}
 );
 const homeTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="home" size={size} />
-);
-const vaultTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="library-books" size={size} />
 );
 const settingsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="settings" size={size} />
@@ -163,8 +163,8 @@ export function MainTabNavigator() {
           name="InboxTab"
           options={{
             tabBarButton,
-            tabBarIcon: inboxTabIcon,
-            title: 'Inbox',
+            tabBarIcon: slot1TabIcon,
+            title: 'Slot 1',
           }}
         />
         <Tabs.Screen
@@ -177,21 +177,21 @@ export function MainTabNavigator() {
           }}
         />
         <Tabs.Screen
+          component={VaultStackScreen}
+          name="VaultTab"
+          options={{
+            tabBarButton,
+            tabBarIcon: inboxTabIcon,
+            title: 'Inbox',
+          }}
+        />
+        <Tabs.Screen
           component={HomeStackScreen}
           name="HomeTab"
           options={{
             tabBarButton,
             tabBarIcon: homeTabIcon,
             title: 'Home',
-          }}
-        />
-        <Tabs.Screen
-          component={VaultStackScreen}
-          name="VaultTab"
-          options={{
-            tabBarButton,
-            tabBarIcon: vaultTabIcon,
-            title: 'Vault',
           }}
         />
         <Tabs.Screen

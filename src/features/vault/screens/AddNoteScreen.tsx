@@ -1,7 +1,8 @@
+import {useHeaderHeight} from '@react-navigation/elements';
 import {StackScreenProps} from '@react-navigation/stack';
 import {useEffect, useState} from 'react';
 import {Box, Pressable, Text, useColorMode} from '@gluestack-ui/themed';
-import {Keyboard, StyleSheet, TextInput} from 'react-native';
+import {Keyboard, KeyboardAvoidingView, Platform, StyleSheet, TextInput} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -14,6 +15,7 @@ type AddNoteScreenProps = StackScreenProps<VaultStackParamList, 'AddNote'>;
 export function AddNoteScreen({navigation}: AddNoteScreenProps) {
   const [composeInput, setComposeInput] = useState('');
   const {isSaving, save, setStatusText, statusText} = useSaveInboxMarkdownNote();
+  const headerHeight = useHeaderHeight();
   const colorMode = useColorMode();
   const insets = useSafeAreaInsets();
   const dividerColor = colorMode === 'dark' ? '#4f4f4f' : '#d6d6d6';
@@ -31,7 +33,7 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
         headerShown: true,
         headerLeft: undefined,
         headerRight: undefined,
-        headerTitle: 'Vault',
+        headerTitle: 'Inbox',
       });
     };
 
@@ -103,44 +105,59 @@ export function AddNoteScreen({navigation}: AddNoteScreenProps) {
     }
   };
 
+  const onPressSave = () => {
+    handleSave().catch(() => undefined);
+  };
+
   return (
-    <Box style={styles.container}>
-      <TextInput
-        autoCapitalize="sentences"
-        autoCorrect
-        editable={!isSaving}
-        multiline
-        onChangeText={nextValue => {
-          setComposeInput(nextValue);
-          if (statusText) {
-            setStatusText(null);
-          }
-        }}
-        placeholder="First line is title (H1)..."
-        placeholderTextColor={placeholderColor}
-        style={[styles.input, {color: inputTextColor}]}
-        textAlignVertical="top"
-        value={composeInput}
-      />
-      {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
-      <Box
-        style={[
-          styles.actionBar,
-          {
-            borderTopColor: dividerColor,
-            paddingBottom: Math.max(insets.bottom, 8),
-          },
-        ]}>
-        <Pressable
-          disabled={isSaving}
-          onPress={() => {
-            handleSave().catch(() => undefined);
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={headerHeight}
+      style={styles.keyboardAvoiding}>
+      <Box style={styles.container}>
+        <TextInput
+          autoCapitalize="sentences"
+          autoCorrect
+          editable={!isSaving}
+          multiline
+          onChangeText={nextValue => {
+            setComposeInput(nextValue);
+            if (statusText) {
+              setStatusText(null);
+            }
           }}
-          style={styles.saveButton}>
-          <MaterialIcons color="#ffffff" name="save-alt" size={24} />
-        </Pressable>
+          placeholder="First line is title (H1)..."
+          placeholderTextColor={placeholderColor}
+          style={[styles.input, {color: inputTextColor}]}
+          textAlignVertical="top"
+          value={composeInput}
+        />
+        {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+        <Box
+          style={[
+            styles.actionBar,
+            {
+              borderTopColor: dividerColor,
+              paddingBottom: Math.max(insets.bottom, 8),
+            },
+          ]}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSaving}
+            onPress={onPressSave}
+            style={styles.readyButton}>
+            <Text style={[styles.readyLabel, {color: inputTextColor}]}>Ready</Text>
+          </Pressable>
+          <Pressable
+            accessibilityLabel="Save note"
+            disabled={isSaving}
+            onPress={onPressSave}
+            style={styles.saveButton}>
+            <MaterialIcons color="#ffffff" name="save-alt" size={24} />
+          </Pressable>
+        </Box>
       </Box>
-    </Box>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -149,11 +166,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
   },
   container: {
+    flex: 1,
+  },
+  keyboardAvoiding: {
     flex: 1,
   },
   input: {
@@ -161,6 +181,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     paddingHorizontal: 16,
     paddingTop: 16,
+  },
+  readyButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 4,
+  },
+  readyLabel: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   saveButton: {
     alignItems: 'center',

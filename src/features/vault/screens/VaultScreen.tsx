@@ -92,7 +92,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       tabNavigation.setOptions({
         headerLeft: undefined,
         headerRight: renderAddHeaderRight,
-        headerTitle: 'Vault',
+        headerTitle: 'Inbox',
       });
       return;
     }
@@ -107,7 +107,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       tabNavigation.setOptions({
         headerLeft: undefined,
         headerRight: undefined,
-        headerTitle: 'Vault',
+        headerTitle: 'Inbox',
       });
     };
   }, [
@@ -133,7 +133,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         headerShown: true,
         headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
         headerRight: hasSelection ? undefined : renderAddHeaderRight,
-        headerTitle: hasSelection ? `${selectedCount} selected` : 'Vault',
+        headerTitle: hasSelection ? `${selectedCount} selected` : 'Inbox',
       });
     }, [
       hasSelection,
