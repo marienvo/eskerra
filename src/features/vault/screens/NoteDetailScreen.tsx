@@ -7,6 +7,7 @@ import {Pressable, StyleSheet} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {isNavigateToAddNoteAction} from '../../../navigation/navigationActionGuards';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useNotes} from '../hooks/useNotes';
 
@@ -129,8 +130,11 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       showVaultTabHeader();
     });
 
-    const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', () => {
+    const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', e => {
       hideNoteStackHeader();
+      if (isNavigateToAddNoteAction(e.data.action)) {
+        return;
+      }
       showVaultTabHeader();
     });
 

@@ -1,8 +1,8 @@
 import {useBottomTabBarHeight} from '@react-navigation/bottom-tabs';
-import {useFocusEffect} from '@react-navigation/native';
+import {CommonActions, useFocusEffect} from '@react-navigation/native';
 import type {StackNavigationProp} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Box, Pressable, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {
   ActivityIndicator,
@@ -16,12 +16,14 @@ import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {getNoteTitle} from '../../../core/storage/noteboxStorage';
 import {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
 } from '../../../core/vault/vaultComposeNote';
 import {AddNoteStackParamList, VaultStackParamList} from '../../../navigation/types';
+import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
 import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/MiniPlayer';
 import {usePlayerContext} from '../../podcasts/context/PlayerContext';
@@ -55,6 +57,38 @@ function leaveComposeScreen(navigation: AddNoteNavigation) {
     return;
   }
   navigation.getParent()?.navigate('VaultTab');
+}
+
+function navigateToNewNoteDetail(stackNavigation: AddNoteNavigation, created: NoteSummary) {
+  const noteTitle = getNoteTitle(created.name);
+  const params = {noteUri: created.uri, noteTitle};
+  if (isVaultComposeStack(stackNavigation)) {
+    stackNavigation.replace('NoteDetail', params);
+    return;
+  }
+  const tabNavigation = stackNavigation.getParent();
+  tabNavigation?.navigate('VaultTab', {
+    screen: 'NoteDetail',
+    params,
+  });
+  stackNavigation.dispatch(
+    CommonActions.reset({
+      index: 0,
+      routes: [{name: 'AddNote', params: undefined}],
+    }),
+  );
+}
+
+function applyVaultComposeHeaders(stackNavigation: AddNoteNavigation, editMode: boolean) {
+  const tabNavigation = stackNavigation.getParent();
+  if (!tabNavigation) {
+    return;
+  }
+  tabNavigation.setOptions({headerShown: false});
+  stackNavigation.setOptions({
+    headerShown: true,
+    title: editMode ? 'Edit note' : 'New note',
+  });
 }
 
 export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
@@ -104,6 +138,13 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     };
   }, [editParams?.noteUri, read, setStatusText]);
 
+  useLayoutEffect(() => {
+    if (!isVaultComposeStack(stackNavigation)) {
+      return;
+    }
+    applyVaultComposeHeaders(stackNavigation, isEdit);
+  }, [isEdit, stackNavigation]);
+
   useEffect(() => {
     const tabNavigation = stackNavigation.getParent();
     if (!tabNavigation) {
@@ -147,26 +188,11 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
       });
     };
 
-    const showComposeStackHeader = () => {
-      stackNavigation.setOptions({
-        headerShown: true,
-        title: isEdit ? 'Edit note' : 'New note',
-      });
-    };
-
     const hideComposeStackHeader = () => {
       stackNavigation.setOptions({
         headerShown: false,
       });
     };
-
-    const unsubscribeTransitionEnd = stackNavigation.addListener('transitionEnd', event => {
-      if (event.data.closing) {
-        return;
-      }
-      hideVaultTabHeader();
-      showComposeStackHeader();
-    });
 
     const unsubscribeTransitionStart = stackNavigation.addListener('transitionStart', event => {
       if (!event.data.closing) {
@@ -190,7 +216,6 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     });
 
     return () => {
-      unsubscribeTransitionEnd();
       unsubscribeTransitionStart();
       unsubscribeBeforeRemove();
       hideComposeStackHeader();
@@ -256,7 +281,11 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     const markdownBody = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     const didSave = await save(titleLine, markdownBody, {
       noteUri: editParams?.noteUri,
-      onSaved: () => {
+      onSaved: created => {
+        if (created) {
+          navigateToNewNoteDetail(stackNavigation, created);
+          return;
+        }
         leaveComposeScreen(stackNavigation);
       },
     });

@@ -122,7 +122,17 @@ function VaultStackScreen() {
         headerTitleStyle: styles.tabHeaderTitle,
       }}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
-      <VaultStack.Screen component={AddNoteScreen} name="AddNote" options={{headerShown: false}} />
+      <VaultStack.Screen
+        component={AddNoteScreen}
+        name="AddNote"
+        options={({route}) => ({
+          headerShown: true,
+          headerStyle: styles.tabHeader,
+          headerTintColor: '#ffffff',
+          headerTitleStyle: styles.tabHeaderTitle,
+          title: route.params?.noteUri ? 'Edit note' : 'New note',
+        })}
+      />
       <VaultStack.Screen
         component={NoteDetailScreen}
         name="NoteDetail"

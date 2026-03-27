@@ -1,6 +1,6 @@
 import {StackScreenProps} from '@react-navigation/stack';
 import {useFocusEffect} from '@react-navigation/native';
-import {useCallback, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useLayoutEffect, useRef, useState} from 'react';
 import {
   Box,
   Pressable,
@@ -27,13 +27,8 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   const colorMode = useColorMode();
   const dividerColor = colorMode === 'dark' ? '#4f4f4f' : '#d6d6d6';
   const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
-  const actionBarBackgroundColor = colorMode === 'dark' ? '#1f1f1f' : '#ffffff';
   const selectedCount = selectedNoteUris.size;
   const hasSelection = selectedCount > 0;
-  const listContentStyle = useMemo(
-    () => [styles.listContent, hasSelection ? styles.listContentWithActionBar : null],
-    [hasSelection],
-  );
   const isVaultTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
     const activeRoute = state.routes[state.index];
@@ -79,80 +74,6 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [navigation],
   );
 
-  useLayoutEffect(() => {
-    if (!isVaultTopRoute()) {
-      return;
-    }
-    const tabNavigation = navigation.getParent();
-    if (!tabNavigation) {
-      return;
-    }
-
-    if (!hasSelection) {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: renderAddHeaderRight,
-        headerTitle: 'Inbox',
-      });
-      return;
-    }
-
-    tabNavigation.setOptions({
-      headerLeft: renderSelectionHeaderLeft,
-      headerRight: undefined,
-      headerTitle: `${selectedCount} selected`,
-    });
-
-    return () => {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: undefined,
-        headerTitle: 'Inbox',
-      });
-    };
-  }, [
-    hasSelection,
-    isVaultTopRoute,
-    navigation,
-    renderAddHeaderRight,
-    renderSelectionHeaderLeft,
-    selectedCount,
-  ]);
-
-  useFocusEffect(
-    useCallback(() => {
-      const tabNavigation = navigation.getParent();
-      if (!tabNavigation) {
-        return;
-      }
-
-      const applyHeader = () => {
-        if (!isVaultTopRoute()) {
-          return;
-        }
-        tabNavigation.setOptions({
-          headerShown: true,
-          headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
-          headerRight: hasSelection ? undefined : renderAddHeaderRight,
-          headerTitle: hasSelection ? `${selectedCount} selected` : 'Inbox',
-        });
-      };
-
-      applyHeader();
-      const frameId = requestAnimationFrame(() => {
-        applyHeader();
-      });
-      return () => cancelAnimationFrame(frameId);
-    }, [
-      hasSelection,
-      isVaultTopRoute,
-      navigation,
-      renderAddHeaderRight,
-      renderSelectionHeaderLeft,
-      selectedCount,
-    ]),
-  );
-
   const toggleNoteSelection = useCallback((noteUri: string) => {
     setDeleteError(null);
     setSelectedNoteUris(previousSelected => {
@@ -194,6 +115,101 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     }
   }, [deleteNotes, isDeleting, notes, selectedNoteUris]);
 
+  const renderSelectionHeaderRight = useCallback(
+    () => (
+      <TouchableOpacity
+        disabled={isDeleting}
+        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+        onPress={() => {
+          handleDeleteSelected().catch(() => undefined);
+        }}
+        style={styles.headerAddButton}>
+        {isDeleting ? (
+          <Spinner size="small" />
+        ) : (
+          <MaterialIcons color="#ffffff" name="delete-outline" size={24} />
+        )}
+      </TouchableOpacity>
+    ),
+    [handleDeleteSelected, isDeleting],
+  );
+
+  useLayoutEffect(() => {
+    if (!isVaultTopRoute()) {
+      return;
+    }
+    const tabNavigation = navigation.getParent();
+    if (!tabNavigation) {
+      return;
+    }
+
+    if (!hasSelection) {
+      tabNavigation.setOptions({
+        headerLeft: undefined,
+        headerRight: renderAddHeaderRight,
+        headerTitle: 'Inbox',
+      });
+      return;
+    }
+
+    tabNavigation.setOptions({
+      headerLeft: renderSelectionHeaderLeft,
+      headerRight: renderSelectionHeaderRight,
+      headerTitle: `${selectedCount} selected`,
+    });
+
+    return () => {
+      tabNavigation.setOptions({
+        headerLeft: undefined,
+        headerRight: undefined,
+        headerTitle: 'Inbox',
+      });
+    };
+  }, [
+    hasSelection,
+    isVaultTopRoute,
+    navigation,
+    renderAddHeaderRight,
+    renderSelectionHeaderLeft,
+    renderSelectionHeaderRight,
+    selectedCount,
+  ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const tabNavigation = navigation.getParent();
+      if (!tabNavigation) {
+        return;
+      }
+
+      const applyHeader = () => {
+        if (!isVaultTopRoute()) {
+          return;
+        }
+        tabNavigation.setOptions({
+          headerShown: true,
+          headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
+          headerRight: hasSelection ? renderSelectionHeaderRight : renderAddHeaderRight,
+          headerTitle: hasSelection ? `${selectedCount} selected` : 'Inbox',
+        });
+      };
+
+      applyHeader();
+      const frameId = requestAnimationFrame(() => {
+        applyHeader();
+      });
+      return () => cancelAnimationFrame(frameId);
+    }, [
+      hasSelection,
+      isVaultTopRoute,
+      navigation,
+      renderAddHeaderRight,
+      renderSelectionHeaderLeft,
+      renderSelectionHeaderRight,
+      selectedCount,
+    ]),
+  );
+
   return (
     <Box style={styles.container}>
       {isLoading && notes.length === 0 ? (
@@ -202,7 +218,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       {deleteError ? <Text style={styles.status}>{deleteError}</Text> : null}
       {error ? <Text style={styles.status}>{error}</Text> : null}
       <FlatList
-        contentContainerStyle={listContentStyle}
+        contentContainerStyle={styles.listContent}
         data={notes}
         keyExtractor={item => item.uri}
         refreshControl={
@@ -243,29 +259,6 @@ export function VaultScreen({navigation}: VaultScreenProps) {
           ) : null
         }
       />
-      {hasSelection ? (
-        <Box
-          style={[
-            styles.selectionActionBar,
-            {
-              backgroundColor: actionBarBackgroundColor,
-              borderColor: dividerColor,
-            },
-          ]}>
-          <Pressable
-            disabled={isDeleting}
-            onPress={() => {
-              handleDeleteSelected().catch(() => undefined);
-            }}
-            style={styles.actionIconButton}>
-            {isDeleting ? (
-              <Spinner size="small" />
-            ) : (
-              <MaterialIcons color="#ffffff" name="delete-outline" size={24} />
-            )}
-          </Pressable>
-        </Box>
-      ) : null}
     </Box>
   );
 }
@@ -278,9 +271,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
-  },
-  listContentWithActionBar: {
-    paddingBottom: 88,
   },
   noteMeta: {
     fontSize: 12,
@@ -306,26 +296,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
     width: 40,
-  },
-  selectionActionBar: {
-    alignItems: 'center',
-    borderTopWidth: 1,
-    bottom: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    left: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    position: 'absolute',
-    right: 0,
-    zIndex: 2,
-    elevation: 2,
-  },
-  actionIconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 36,
-    minWidth: 36,
   },
   headerBackButton: {
     marginLeft: 12,
