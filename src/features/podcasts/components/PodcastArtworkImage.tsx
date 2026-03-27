@@ -24,5 +24,7 @@ export function PodcastArtworkImage({
     );
   }
 
-  return <Image source={{uri: displayUri}} style={imageStyle} />;
+  return (
+    <Image source={{uri: displayUri}} style={imageStyle} />
+  );
 }

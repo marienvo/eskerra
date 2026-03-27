@@ -53,8 +53,9 @@ export function EpisodeRow({
   const [isMarkingAsPlayed, setIsMarkingAsPlayed] = useState(false);
   const isActive = activeEpisodeId === episode.id;
   const isPlaying = isActive && playbackState === 'playing';
+  /** Strong gray tint; artwork is also blurred via Image.blurRadius when selected. */
   const overlayBackgroundColor =
-    colorMode === 'dark' ? 'rgba(100,100,100,0.55)' : 'rgba(160,160,160,0.5)';
+    colorMode === 'dark' ? 'rgba(174,174,174,0.5)' : 'rgba(186,186,186,0.5)';
 
   const renderSwipeAction = useCallback(
     () => (
