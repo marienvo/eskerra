@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {InteractionManager} from 'react-native';
 
+import {tryPrepareNoteboxSessionNative} from '../storage/androidVaultListing';
 import {
   createNote,
   deleteInboxNotes,
@@ -86,6 +87,7 @@ export function NotesProvider({children}: NotesProviderProps) {
     consumeInboxPrefetch,
     getInboxNoteContentFromCache,
     pruneInboxNoteContentFromCache,
+    replaceInboxContentFromSession,
     setInboxNoteContentInCache,
   } = useVaultContext();
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,14 @@ export function NotesProvider({children}: NotesProviderProps) {
           setNotes(prefetched);
           return;
         }
+
+        const prepared = await tryPrepareNoteboxSessionNative(baseUri);
+        if (prepared !== null && prepared.inboxPrefetch !== null) {
+          setNotes(prepared.inboxPrefetch);
+          replaceInboxContentFromSession(prepared.inboxContentByUri);
+          return;
+        }
+
         clearInboxContentCache();
         const nextNotes = await listInboxNotesAndSyncIndex(baseUri);
         setNotes(nextNotes);
@@ -122,7 +132,7 @@ export function NotesProvider({children}: NotesProviderProps) {
         }
       }
     },
-    [baseUri, clearInboxContentCache, consumeInboxPrefetch],
+    [baseUri, clearInboxContentCache, consumeInboxPrefetch, replaceInboxContentFromSession],
   );
 
   useEffect(() => {

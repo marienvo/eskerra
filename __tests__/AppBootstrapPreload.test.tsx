@@ -66,6 +66,7 @@ const mockVaultContextValue = {
   isLoading: false,
   pruneInboxNoteContentFromCache: jest.fn(),
   refreshSession: jest.fn(),
+  replaceInboxContentFromSession: jest.fn(),
   setInboxNoteContentInCache: jest.fn(),
   setSessionUri: jest.fn(),
   settings: null,

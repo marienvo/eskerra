@@ -31,6 +31,9 @@ type VaultContextValue = {
   isLoading: boolean;
   pruneInboxNoteContentFromCache: (noteUris: readonly string[]) => void;
   refreshSession: () => Promise<void>;
+  replaceInboxContentFromSession: (
+    inboxContentByUri: Record<string, string> | null | undefined,
+  ) => void;
   setInboxNoteContentInCache: (noteUri: string, content: string) => void;
   setSessionUri: (nextUri: string | null) => Promise<void>;
   settings: NoteboxSettings | null;
@@ -96,6 +99,19 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const clearInboxContentCache = useCallback(() => {
     inboxContentCacheRef.current = null;
   }, []);
+
+  const replaceInboxContentFromSession = useCallback(
+    (inboxContentByUri: Record<string, string> | null | undefined) => {
+      if (baseUri == null) {
+        return;
+      }
+      inboxContentCacheRef.current = recordToInboxContentCache(
+        baseUri,
+        inboxContentByUri,
+      );
+    },
+    [baseUri],
+  );
 
   const getInboxNoteContentFromCache = useCallback(
     (noteUri: string): string | undefined => {
@@ -281,6 +297,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       isLoading,
       pruneInboxNoteContentFromCache,
       refreshSession,
+      replaceInboxContentFromSession,
       setInboxNoteContentInCache,
       setSessionUri,
       settings,
@@ -294,6 +311,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       isLoading,
       pruneInboxNoteContentFromCache,
       refreshSession,
+      replaceInboxContentFromSession,
       setInboxNoteContentInCache,
       setSessionUri,
       settings,
