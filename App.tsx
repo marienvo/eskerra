@@ -15,6 +15,7 @@ import {
 import {GluestackUIProvider} from '@gluestack-ui/themed';
 import {config} from '@gluestack-ui/config';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import {KeyboardProvider} from 'react-native-keyboard-controller';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {resolveInitialRoute} from './src/core/bootstrap/resolveInitialRoute';
@@ -201,45 +202,47 @@ function App() {
   return (
     <GluestackUIProvider colorMode={isDarkMode ? 'dark' : 'light'} config={config}>
       <GestureHandlerRootView style={styles.container}>
-        <SafeAreaProvider>
-          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-          {initialRoute === null ? (
-            <View
-              style={[
-                styles.loadingContainer,
-                isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
-              ]}>
-              <View style={styles.startupLogoVerticalBalance} />
-              <Animated.Image
-                accessibilityIgnoresInvertColors
-                accessibilityLabel="Notebox"
-                resizeMode="contain"
-                source={require('./src/assets/notebox-logo.png')}
+        <KeyboardProvider>
+          <SafeAreaProvider>
+            <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+            {initialRoute === null ? (
+              <View
                 style={[
-                  styles.startupLogo,
-                  {
-                    opacity: startupLogoOpacity,
-                    transform: [{translateY: startupLogoTranslateY}],
-                  },
-                ]}
-              />
-              <View style={styles.startupSpinnerSlot}>
-                <Animated.View style={{opacity: startupSpinnerOpacity}}>
-                  <ActivityIndicator
-                    color={isDarkMode ? '#ffffff' : '#333333'}
-                    style={styles.startupSpinner}
-                  />
-                </Animated.View>
+                  styles.loadingContainer,
+                  isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
+                ]}>
+                <View style={styles.startupLogoVerticalBalance} />
+                <Animated.Image
+                  accessibilityIgnoresInvertColors
+                  accessibilityLabel="Notebox"
+                  resizeMode="contain"
+                  source={require('./src/assets/notebox-logo.png')}
+                  style={[
+                    styles.startupLogo,
+                    {
+                      opacity: startupLogoOpacity,
+                      transform: [{translateY: startupLogoTranslateY}],
+                    },
+                  ]}
+                />
+                <View style={styles.startupSpinnerSlot}>
+                  <Animated.View style={{opacity: startupSpinnerOpacity}}>
+                    <ActivityIndicator
+                      color={isDarkMode ? '#ffffff' : '#333333'}
+                      style={styles.startupSpinner}
+                    />
+                  </Animated.View>
+                </View>
               </View>
-            </View>
-          ) : (
-            <VaultProvider initialSession={initialSession}>
-              <NotesProvider>
-                <RootNavigator initialRouteName={initialRoute} />
-              </NotesProvider>
-            </VaultProvider>
-          )}
-        </SafeAreaProvider>
+            ) : (
+              <VaultProvider initialSession={initialSession}>
+                <NotesProvider>
+                  <RootNavigator initialRouteName={initialRoute} />
+                </NotesProvider>
+              </VaultProvider>
+            )}
+          </SafeAreaProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </GluestackUIProvider>
   );

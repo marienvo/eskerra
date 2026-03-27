@@ -6,23 +6,23 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
-  HomeTab: NavigatorScreenParams<HomeStackParamList> | undefined;
-  InboxTab: NavigatorScreenParams<InboxStackParamList> | undefined;
+  AddNoteTab: NavigatorScreenParams<AddNoteStackParamList> | undefined;
+  PlaylistTab: NavigatorScreenParams<PlaylistStackParamList> | undefined;
   PodcastsTab: NavigatorScreenParams<PodcastsStackParamList> | undefined;
   SettingsTab: NavigatorScreenParams<SettingsStackParamList> | undefined;
   VaultTab: NavigatorScreenParams<VaultStackParamList> | undefined;
 };
 
-export type InboxStackParamList = {
-  Inbox: undefined;
+export type AddNoteStackParamList = {
+  AddNote: {noteTitle: string; noteUri: string} | undefined;
+};
+
+export type PlaylistStackParamList = {
+  Playlist: undefined;
 };
 
 export type PodcastsStackParamList = {
   Podcasts: undefined;
-};
-
-export type HomeStackParamList = {
-  Home: undefined;
 };
 
 export type VaultStackParamList = {

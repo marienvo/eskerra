@@ -8,8 +8,7 @@ import {createStackNavigator} from '@react-navigation/stack';
 import {Pressable, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {HomeScreen} from '../features/home/screens/HomeScreen';
-import {InboxScreen} from '../features/inbox/screens/InboxScreen';
+import {PlaylistScreen} from '../features/inbox/screens/PlaylistScreen';
 import {MiniPlayer} from '../features/podcasts/components/MiniPlayer';
 import {PlayerProvider} from '../features/podcasts/context/PlayerContext';
 import {PodcastsScreen} from '../features/podcasts/screens/PodcastsScreen';
@@ -18,22 +17,25 @@ import {AddNoteScreen} from '../features/vault/screens/AddNoteScreen';
 import {NoteDetailScreen} from '../features/vault/screens/NoteDetailScreen';
 import {VaultScreen} from '../features/vault/screens/VaultScreen';
 import {
-  HomeStackParamList,
-  InboxStackParamList,
+  AddNoteStackParamList,
   MainTabParamList,
+  PlaylistStackParamList,
   PodcastsStackParamList,
   SettingsStackParamList,
   VaultStackParamList,
 } from './types';
 
 const Tabs = createBottomTabNavigator<MainTabParamList>();
-const InboxStack = createStackNavigator<InboxStackParamList>();
+const PlaylistStack = createStackNavigator<PlaylistStackParamList>();
 const PodcastsStack = createStackNavigator<PodcastsStackParamList>();
-const HomeStack = createStackNavigator<HomeStackParamList>();
+const AddNoteStack = createStackNavigator<AddNoteStackParamList>();
 const VaultStack = createStackNavigator<VaultStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
-const questionMarkTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="question-mark" size={size} />
+const playlistTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
+  <MaterialIcons color={color} name="playlist-play" size={size} />
+);
+const newNoteTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
+  <MaterialIcons color={color} name="add-box" size={size} />
 );
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="move-to-inbox" size={size} />
@@ -86,11 +88,11 @@ function TabBarButton({
   );
 }
 
-function InboxStackScreen() {
+function PlaylistStackScreen() {
   return (
-    <InboxStack.Navigator screenOptions={{headerShown: false}}>
-      <InboxStack.Screen component={InboxScreen} name="Inbox" />
-    </InboxStack.Navigator>
+    <PlaylistStack.Navigator screenOptions={{headerShown: false}}>
+      <PlaylistStack.Screen component={PlaylistScreen} name="Playlist" />
+    </PlaylistStack.Navigator>
   );
 }
 
@@ -102,11 +104,11 @@ function PodcastsStackScreen() {
   );
 }
 
-function HomeStackScreen() {
+function AddNoteStackScreen() {
   return (
-    <HomeStack.Navigator screenOptions={{headerShown: false}}>
-      <HomeStack.Screen component={HomeScreen} name="Home" />
-    </HomeStack.Navigator>
+    <AddNoteStack.Navigator initialRouteName="AddNote" screenOptions={{headerShown: false}}>
+      <AddNoteStack.Screen component={AddNoteScreen} name="AddNote" />
+    </AddNoteStack.Navigator>
   );
 }
 
@@ -120,7 +122,17 @@ function VaultStackScreen() {
         headerTitleStyle: styles.tabHeaderTitle,
       }}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
-      <VaultStack.Screen component={AddNoteScreen} name="AddNote" options={{headerShown: false}} />
+      <VaultStack.Screen
+        component={AddNoteScreen}
+        name="AddNote"
+        options={({route}) => ({
+          headerShown: true,
+          headerStyle: styles.tabHeader,
+          headerTintColor: '#ffffff',
+          headerTitleStyle: styles.tabHeaderTitle,
+          title: route.params?.noteUri ? 'Edit note' : 'New note',
+        })}
+      />
       <VaultStack.Screen
         component={NoteDetailScreen}
         name="NoteDetail"
@@ -165,12 +177,12 @@ export function MainTabNavigator() {
           }}
         />
         <Tabs.Screen
-          component={InboxStackScreen}
-          name="InboxTab"
+          component={PlaylistStackScreen}
+          name="PlaylistTab"
           options={{
             tabBarButton,
-            tabBarIcon: questionMarkTabIcon,
-            title: 'Slot 1',
+            tabBarIcon: playlistTabIcon,
+            title: 'Playlist',
           }}
         />
         <Tabs.Screen
@@ -183,12 +195,12 @@ export function MainTabNavigator() {
           }}
         />
         <Tabs.Screen
-          component={HomeStackScreen}
-          name="HomeTab"
+          component={AddNoteStackScreen}
+          name="AddNoteTab"
           options={{
             tabBarButton,
-            tabBarIcon: questionMarkTabIcon,
-            title: 'Slot 2',
+            tabBarIcon: newNoteTabIcon,
+            title: 'Note',
           }}
         />
         <Tabs.Screen

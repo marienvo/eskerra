@@ -7,6 +7,13 @@ import {usePlayerContext} from '../context/PlayerContext';
 import {PodcastArtworkImage} from './PodcastArtworkImage';
 import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 
+/**
+ * Approximate total height when MiniPlayer is visible. Used for keyboard footer offset;
+ * update if container padding, artwork row, or progress block changes.
+ */
+export const MINI_PLAYER_LAYOUT_HEIGHT =
+  1 + 10 + 40 + 8 + 4 + 6 + 16 + 10;
+
 function formatProgress(positionMs: number, durationMs: number | null): string {
   const safePosition = Math.max(0, Math.floor(positionMs / 1000));
   const safeDuration =

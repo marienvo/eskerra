@@ -1,10 +1,11 @@
 import {useCallback, useState} from 'react';
 
+import type {NoteSummary} from '../../../types';
 import {useNotes} from '../../vault/hooks/useNotes';
 
 type SaveOptions = {
   noteUri?: string;
-  onSaved?: () => void;
+  onSaved?: (created?: NoteSummary) => void;
 };
 
 export function useSaveInboxMarkdownNote() {
@@ -32,10 +33,11 @@ export function useSaveInboxMarkdownNote() {
       try {
         if (options?.noteUri) {
           await write(options.noteUri, trimmedContent);
+          options?.onSaved?.();
         } else {
-          await create(trimmedTitle, trimmedContent);
+          const created = await create(trimmedTitle, trimmedContent);
+          options?.onSaved?.(created);
         }
-        options?.onSaved?.();
         return true;
       } catch (error) {
         const fallbackMessage = 'Could not save this note.';

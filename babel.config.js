@@ -13,6 +13,7 @@ module.exports = function (api) {
           blocklist: ['SENTRY_AUTH_TOKEN'],
         },
       ],
+      'react-native-worklets/plugin',
     ],
   };
 };

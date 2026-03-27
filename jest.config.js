@@ -8,6 +8,6 @@ module.exports = {
     '^@env$': '<rootDir>/__mocks__/env.ts',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native|@react-navigation|@gluestack-ui/.*|@gluestack-style/.*|@legendapp/.*))',
+    'node_modules/(?!((jest-)?react-native|@react-native|@react-navigation|react-native-reanimated|react-native-keyboard-controller|@gluestack-ui/.*|@gluestack-style/.*|@legendapp/.*))',
   ],
 };

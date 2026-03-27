@@ -6,7 +6,7 @@ Keep architecture intentionally small and explicit:
 
 - `App.tsx` bootstraps initial route resolution and renders the root navigator.
 - `RootStack` gates onboarding (`Setup`) vs. app shell (`MainTabs`).
-- `MainTabs` hosts five feature stacks: Inbox, Podcasts, Home, Vault, Settings.
+- `MainTabs` hosts five feature stacks: Podcasts, Playlist, Vault, Note (`AddNoteTab`), Settings.
 - `VaultProvider` stores selected SAF URI and current settings for all features.
 - `NotesProvider` stores shared Inbox note list state for Inbox and Vault.
 - `core/storage/noteboxStorage.ts` owns all SAF note and settings operations.
@@ -31,12 +31,12 @@ SetupScreen
   -> save URI in AsyncStorage
   -> init .notebox/settings.json
   -> set VaultProvider session
-  -> navigate MainTabs (Home tab)
+  -> navigate MainTabs (Vault tab)
 ```
 
 ```text
-InboxScreen
-  -> capture title + content
+AddNoteScreen (Vault + button or Note tab)
+  -> compose markdown note
   -> create .md note through core/storage
   -> create note in selected directory's /Inbox folder
   -> auto-create /Inbox when missing
@@ -48,6 +48,7 @@ InboxScreen
 VaultScreen
   -> show one folder context (hardcoded: Inbox)
   -> list markdown files in selected SAF directory's /Inbox folder
+  -> each row shows title and a relative last-modified label (not the raw file URI)
   -> open NoteDetailScreen to render markdown
 ```
 
@@ -63,9 +64,9 @@ SettingsScreen
 RootStack
 ├── Setup
 └── MainTabs
-    ├── InboxStack -> Inbox
+    ├── PlaylistStack -> Playlist
     ├── PodcastsStack -> Podcasts
-    ├── HomeStack -> Home
+    ├── AddNoteStack -> AddNote
     ├── VaultStack -> Vault, NoteDetail
     └── SettingsStack -> Settings
 ```
@@ -83,8 +84,7 @@ src/
 │   └── vault/{VaultContext,NotesContext}.tsx
 ├── features/
 │   ├── setup/screens/SetupScreen.tsx
-│   ├── home/screens/HomeScreen.tsx
-│   ├── inbox/screens/InboxScreen.tsx
+│   ├── inbox/screens/PlaylistScreen.tsx
 │   ├── podcasts/
 │   │   ├── screens/PodcastsScreen.tsx
 │   │   └── services/playbackService.ts

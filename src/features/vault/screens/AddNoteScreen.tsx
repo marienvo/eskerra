@@ -1,36 +1,48 @@
-import {useHeaderHeight} from '@react-navigation/elements';
-import {useFocusEffect} from '@react-navigation/native';
+import {useBottomTabBarHeight} from '@react-navigation/bottom-tabs';
+import {CommonActions, useFocusEffect} from '@react-navigation/native';
 import type {StackNavigationProp} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Box, Pressable, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {
   ActivityIndicator,
   InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   TextInput,
 } from 'react-native';
+import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {getNoteTitle} from '../../../core/storage/noteboxStorage';
 import {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
 } from '../../../core/vault/vaultComposeNote';
-import {VaultStackParamList} from '../../../navigation/types';
+import {AddNoteStackParamList, VaultStackParamList} from '../../../navigation/types';
+import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
+import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/MiniPlayer';
+import {usePlayerContext} from '../../podcasts/context/PlayerContext';
 import {useNotes} from '../hooks/useNotes';
 
-type AddNoteScreenProps = StackScreenProps<VaultStackParamList, 'AddNote'>;
+type AddNoteScreenProps =
+  | StackScreenProps<VaultStackParamList, 'AddNote'>
+  | StackScreenProps<AddNoteStackParamList, 'AddNote'>;
+
+type AddNoteNavigation = StackNavigationProp<VaultStackParamList, 'AddNote'> &
+  StackNavigationProp<AddNoteStackParamList, 'AddNote'>;
+
+/** Home stack only registers AddNote; Vault stack includes Vault and NoteDetail. */
+function isVaultComposeStack(navigation: Pick<AddNoteNavigation, 'getState'>): boolean {
+  return navigation.getState().routeNames.includes('Vault');
+}
 
 /** True when the screen under AddNote in the stack is Vault (back goes to the inbox list). */
-function isPoppingFromAddNoteToVault(
-  stackNavigation: StackNavigationProp<VaultStackParamList, 'AddNote'>,
-): boolean {
+function isPoppingFromAddNoteToVault(stackNavigation: AddNoteNavigation): boolean {
   const state = stackNavigation.getState();
   const idx = state.index;
   if (idx < 1) {
@@ -39,15 +51,48 @@ function isPoppingFromAddNoteToVault(
   return state.routes[idx - 1]?.name === 'Vault';
 }
 
-/** After AddNote unmounts, the stack focus is already the screen we popped to. */
-function isVaultStackFocusedOnVaultList(
-  stackNavigation: StackNavigationProp<VaultStackParamList, 'AddNote'>,
-): boolean {
-  const state = stackNavigation.getState();
-  return state.routes[state.index]?.name === 'Vault';
+function leaveComposeScreen(navigation: AddNoteNavigation) {
+  if (isVaultComposeStack(navigation)) {
+    navigation.goBack();
+    return;
+  }
+  navigation.getParent()?.navigate('VaultTab');
+}
+
+function navigateToNewNoteDetail(stackNavigation: AddNoteNavigation, created: NoteSummary) {
+  const noteTitle = getNoteTitle(created.name);
+  const params = {noteUri: created.uri, noteTitle};
+  if (isVaultComposeStack(stackNavigation)) {
+    stackNavigation.replace('NoteDetail', params);
+    return;
+  }
+  const tabNavigation = stackNavigation.getParent();
+  tabNavigation?.navigate('VaultTab', {
+    screen: 'NoteDetail',
+    params,
+  });
+  stackNavigation.dispatch(
+    CommonActions.reset({
+      index: 0,
+      routes: [{name: 'AddNote', params: undefined}],
+    }),
+  );
+}
+
+function applyVaultComposeHeaders(stackNavigation: AddNoteNavigation, editMode: boolean) {
+  const tabNavigation = stackNavigation.getParent();
+  if (!tabNavigation) {
+    return;
+  }
+  tabNavigation.setOptions({headerShown: false});
+  stackNavigation.setOptions({
+    headerShown: true,
+    title: editMode ? 'Edit note' : 'New note',
+  });
 }
 
 export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
+  const stackNavigation = navigation as AddNoteNavigation;
   const editParams = route.params;
   const isEdit = Boolean(editParams?.noteUri);
   const [composeInput, setComposeInput] = useState('');
@@ -55,9 +100,12 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
   const inputRef = useRef<TextInput>(null);
   const {isSaving, save, setStatusText, statusText} = useSaveInboxMarkdownNote();
   const {read} = useNotes();
-  const headerHeight = useHeaderHeight();
   const colorMode = useColorMode();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
+  const {activeEpisode} = usePlayerContext();
+  const bottomChromeKeyboardOffset =
+    tabBarHeight + (activeEpisode ? MINI_PLAYER_LAYOUT_HEIGHT : 0);
   const inputTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const placeholderColor = colorMode === 'dark' ? '#8a8a8a' : '#888888';
 
@@ -90,10 +138,41 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     };
   }, [editParams?.noteUri, read, setStatusText]);
 
+  useLayoutEffect(() => {
+    if (!isVaultComposeStack(stackNavigation)) {
+      return;
+    }
+    applyVaultComposeHeaders(stackNavigation, isEdit);
+  }, [isEdit, stackNavigation]);
+
   useEffect(() => {
-    const tabNavigation = navigation.getParent();
+    const tabNavigation = stackNavigation.getParent();
     if (!tabNavigation) {
       return;
+    }
+
+    if (!isVaultComposeStack(stackNavigation)) {
+      stackNavigation.setOptions({headerShown: false});
+
+      const showAddNoteTabHeader = () => {
+        tabNavigation.setOptions({
+          headerBackVisible: false,
+          headerLeft: () => null,
+          headerShown: true,
+          headerTitle: isEdit ? 'Edit note' : 'Note',
+        });
+      };
+
+      showAddNoteTabHeader();
+
+      return () => {
+        tabNavigation.setOptions({
+          headerBackVisible: undefined,
+          headerLeft: undefined,
+          headerShown: true,
+          headerTitle: 'Note',
+        });
+      };
     }
 
     const showVaultTabHeader = () => {
@@ -109,42 +188,27 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
       });
     };
 
-    const showComposeStackHeader = () => {
-      navigation.setOptions({
-        headerShown: true,
-        title: isEdit ? 'Edit note' : 'New note',
-      });
-    };
-
     const hideComposeStackHeader = () => {
-      navigation.setOptions({
+      stackNavigation.setOptions({
         headerShown: false,
       });
     };
 
-    const unsubscribeTransitionEnd = navigation.addListener('transitionEnd', event => {
-      if (event.data.closing) {
-        return;
-      }
-      hideVaultTabHeader();
-      showComposeStackHeader();
-    });
-
-    const unsubscribeTransitionStart = navigation.addListener('transitionStart', event => {
+    const unsubscribeTransitionStart = stackNavigation.addListener('transitionStart', event => {
       if (!event.data.closing) {
         return;
       }
       hideComposeStackHeader();
-      if (isPoppingFromAddNoteToVault(navigation)) {
+      if (isPoppingFromAddNoteToVault(stackNavigation)) {
         showVaultTabHeader();
       } else {
         hideVaultTabHeader();
       }
     });
 
-    const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', () => {
+    const unsubscribeBeforeRemove = stackNavigation.addListener('beforeRemove', () => {
       hideComposeStackHeader();
-      if (isPoppingFromAddNoteToVault(navigation)) {
+      if (isPoppingFromAddNoteToVault(stackNavigation)) {
         showVaultTabHeader();
       } else {
         hideVaultTabHeader();
@@ -152,18 +216,27 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     });
 
     return () => {
-      unsubscribeTransitionEnd();
       unsubscribeTransitionStart();
       unsubscribeBeforeRemove();
       hideComposeStackHeader();
-      if (isVaultStackFocusedOnVaultList(navigation)) {
-        showVaultTabHeader();
-      }
     };
-  }, [isEdit, navigation]);
+  }, [isEdit, stackNavigation]);
 
   useFocusEffect(
     useCallback(() => {
+      if (!isVaultComposeStack(stackNavigation)) {
+        const tabNavigation = stackNavigation.getParent();
+        if (tabNavigation) {
+          stackNavigation.setOptions({headerShown: false});
+          tabNavigation.setOptions({
+            headerBackVisible: false,
+            headerLeft: () => null,
+            headerShown: true,
+            headerTitle: isEdit ? 'Edit note' : 'Note',
+          });
+        }
+      }
+
       if (isLoadingEdit) {
         return undefined;
       }
@@ -194,7 +267,7 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
         cancelled = true;
         task.cancel();
       };
-    }, [isLoadingEdit]),
+    }, [isEdit, isLoadingEdit, stackNavigation]),
   );
 
   const handleSave = async () => {
@@ -208,8 +281,12 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     const markdownBody = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     const didSave = await save(titleLine, markdownBody, {
       noteUri: editParams?.noteUri,
-      onSaved: () => {
-        navigation.goBack();
+      onSaved: created => {
+        if (created) {
+          navigateToNewNoteDetail(stackNavigation, created);
+          return;
+        }
+        leaveComposeScreen(stackNavigation);
       },
     });
     if (!didSave) {
@@ -223,42 +300,41 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
 
   const onPressCancel = () => {
     Keyboard.dismiss();
-    navigation.goBack();
+    leaveComposeScreen(stackNavigation);
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      enabled
-      keyboardVerticalOffset={headerHeight}
-      style={styles.keyboardAvoiding}>
-      <Box style={styles.container}>
-        {isLoadingEdit ? (
-          <Box alignItems="center" flex={1} justifyContent="center">
-            <Spinner style={styles.editLoadSpinner} />
-          </Box>
-        ) : (
-          <>
-            <TextInput
-              ref={inputRef}
-              autoCapitalize="sentences"
-              autoCorrect
-              editable={!isSaving}
-              multiline
-              showSoftInputOnFocus
-              onChangeText={nextValue => {
-                setComposeInput(nextValue);
-                if (statusText) {
-                  setStatusText(null);
-                }
-              }}
-              placeholder="First line is title (H1)..."
-              placeholderTextColor={placeholderColor}
-              style={[styles.input, {color: inputTextColor}]}
-              textAlignVertical="top"
-              value={composeInput}
-            />
-            {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+    <Box style={styles.screenRoot}>
+      {isLoadingEdit ? (
+        <Box alignItems="center" flex={1} justifyContent="center">
+          <Spinner style={styles.editLoadSpinner} />
+        </Box>
+      ) : (
+        <>
+          <TextInput
+            ref={inputRef}
+            autoCapitalize="sentences"
+            autoCorrect
+            editable={!isSaving}
+            multiline
+            showSoftInputOnFocus
+            onChangeText={nextValue => {
+              setComposeInput(nextValue);
+              if (statusText) {
+                setStatusText(null);
+              }
+            }}
+            placeholder="First line is title (H1)..."
+            placeholderTextColor={placeholderColor}
+            style={[styles.input, {color: inputTextColor}]}
+            textAlignVertical="top"
+            value={composeInput}
+          />
+          {statusText ? <Text style={styles.status}>{statusText}</Text> : null}
+          {/* Positive opened offset: footer sits above tab bar + mini player; keyboard animation is window-scoped. */}
+          <KeyboardStickyView
+            offset={{closed: 0, opened: bottomChromeKeyboardOffset}}
+            style={styles.stickyFooter}>
             <Box
               style={[
                 styles.actionBar,
@@ -294,10 +370,10 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
                 )}
               </Pressable>
             </Box>
-          </>
-        )}
-      </Box>
-    </KeyboardAvoidingView>
+          </KeyboardStickyView>
+        </>
+      )}
+    </Box>
   );
 }
 
@@ -309,11 +385,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
   },
-  container: {
+  screenRoot: {
     flex: 1,
   },
-  keyboardAvoiding: {
-    flex: 1,
+  stickyFooter: {
+    alignSelf: 'stretch',
   },
   input: {
     flex: 1,
