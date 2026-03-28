@@ -229,8 +229,8 @@ export function MainTabNavigator() {
             tabBarAccessibilityLabel: 'Record',
             tabBarButton,
             tabBarIcon: recordTabIcon,
-            tabBarLabel: () => null,
-            title: '',
+            tabBarLabel: 'Record',
+            title: 'Record',
           }}
         />
         <Tabs.Screen
@@ -238,6 +238,7 @@ export function MainTabNavigator() {
           name="SettingsTab"
           options={{
             tabBarButton: () => null,
+            tabBarItemStyle: {display: 'none'},
             title: 'Settings',
           }}
         />
