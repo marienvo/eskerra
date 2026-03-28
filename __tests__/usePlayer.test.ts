@@ -467,6 +467,9 @@ describe('usePlayer restore state', () => {
       await controls!.playEpisode(episode);
     });
 
+    clearPlaylistMock.mockClear();
+    writePlaylistMock.mockClear();
+
     await act(async () => {
       await controls!.togglePlayback();
       await flushPromises();
@@ -474,6 +477,41 @@ describe('usePlayer restore state', () => {
 
     expect(onMarkAsPlayed).toHaveBeenCalledTimes(1);
     expect(onMarkAsPlayed).toHaveBeenCalledWith(episode, {dismissNowPlaying: false});
+    expect(clearPlaylistMock).toHaveBeenCalledWith('content://vault-root');
+    expect(writePlaylistMock).not.toHaveBeenCalled();
+  });
+
+  test('clears disk-backed playlist when saved episode is listened but still in catalog', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 1000,
+    });
+
+    const listenedEpisode = {...episode, isListened: true};
+    const episodesById = new Map([[episode.id, listenedEpisode]]);
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(clearPlaylistMock).toHaveBeenCalled();
+    expect(stopMock).toHaveBeenCalled();
+    expect(expectResult(latestResult).activeEpisode).toBeNull();
   });
 
   test('seekTo does not persist to playlist.json', async () => {

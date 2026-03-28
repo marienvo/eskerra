@@ -183,6 +183,14 @@ export function usePodcasts(): UsePodcastsResult {
 
         if (!knownEpisodeIds!.has(playlistEntry.episodeId)) {
           await clearPlaylist(baseUri);
+          return;
+        }
+
+        const catalogEpisode = renderedEpisodes!.find(
+          episode => episode.id === playlistEntry.episodeId,
+        );
+        if (catalogEpisode?.isListened) {
+          await clearPlaylist(baseUri);
         }
       };
 

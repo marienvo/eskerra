@@ -465,4 +465,28 @@ describe('usePodcasts loading lifecycle', () => {
       renderer?.unmount();
     });
   });
+
+  test('clears playlist in background when saved episode is listened in catalog', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: null,
+      episodeId: legacyEpisode.id,
+      mp3Url: legacyEpisode.mp3Url,
+      positionMs: 1234,
+    });
+    parsePodcastFileMock.mockReturnValue([{...legacyEpisode, isListened: true}]);
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(HookHarness, {onResult: () => {}}));
+      await flushPromises();
+      await flushPromises();
+    });
+
+    expect(readPlaylistMock).toHaveBeenCalled();
+    expect(clearPlaylistMock).toHaveBeenCalledWith(baseUri);
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
 });
