@@ -43,10 +43,10 @@ const newNoteTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size})
   <MaterialIcons color={color} name="add-box" size={size} />
 );
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="move-to-inbox" size={size} />
+  <MaterialIcons color={color} name="notes" size={size} />
 );
 const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="headphones" size={size} />
+  <MaterialIcons color={color} name="radio" size={size} />
 );
 const RECORD_TAB_ICON_COLOR = '#e53935';
 const recordTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({size}) => (
@@ -172,7 +172,7 @@ export function MainTabNavigator() {
   return (
     <PlayerProvider>
       <Tabs.Navigator
-        initialRouteName="VaultTab"
+        initialRouteName="PodcastsTab"
         screenOptions={{
           headerShown: true,
           headerStyle: styles.tabHeader,

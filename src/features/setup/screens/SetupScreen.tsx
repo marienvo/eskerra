@@ -45,7 +45,7 @@ export function SetupScreen() {
       await saveUri(selectedDirectory.uri);
       await initNotebox(selectedDirectory.uri);
       await setSessionUri(selectedDirectory.uri);
-      navigation.replace('MainTabs', {screen: 'VaultTab'});
+      navigation.replace('MainTabs', {screen: 'PodcastsTab'});
     } catch (error) {
       const fallbackMessage =
         'Could not save this directory. Please try again.';
