@@ -37,6 +37,16 @@ function isDevMockVaultBaseUri(baseUri: string): boolean {
   return baseUri.trim() === DEV_MOCK_VAULT_URI;
 }
 
+/** True when [baseUri] is the in-app mock vault (no SAF / no native RSS sync). */
+export function isNoteboxDevMockVaultBaseUri(baseUri: string): boolean {
+  return isDevMockVaultBaseUri(baseUri);
+}
+
+/** `${normalizedBaseUri}/General` for vault tree or mock roots. */
+export function getVaultGeneralDirectoryUri(baseUri: string): string {
+  return getGeneralDirectoryUri(normalizeBaseUri(baseUri));
+}
+
 function isDevMockVaultScopedUri(uri: string): boolean {
   const normalized = uri.trim();
   return (

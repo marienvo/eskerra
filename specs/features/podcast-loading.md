@@ -22,6 +22,16 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - `generalPodcastMarkdownIndexCache`: persists a **small** snapshot of podcast-relevant files under `General` (legacy `*- podcasts.md` and `📻 … .md` only) so cold starts avoid `listFiles` over tens of thousands of unrelated markdown files.
 - **Android:** `listGeneralMarkdownFiles` (and Inbox `listNotes`) may call `NoteboxVaultListing` so **SAF directory listing and markdown filtering run off the JS thread** when `DocumentFile` accepts the same directory URIs as `react-native-saf-x`. If native fails, returns empty while SAF says the folder exists, or is skipped, listing uses the existing JS path (`exists`, `listFiles`, filters in [`noteboxStorage.ts`](../../src/core/storage/noteboxStorage.ts)). **Rationale:** reduce cold-start jank from large `listFiles` results being processed on the single JS thread alongside podcast load; see [architecture / known-risks](../architecture/known-risks.md) section 7.
 
+## Native RSS vault sync (Android)
+
+Optional **user-triggered** job (not on the startup path): Kotlin module `NoteboxPodcastRssSync` batch-reads and writes `General/` via SAF on a background thread. Pull-to-refresh on the **Podcasts** tab runs this when supported (Android, real SAF vault, native module linked); Inbox / vault listing refresh does **not** invoke it. The TypeScript entry `runSerializedPodcastVaultRefresh` in [`podcastRssVaultSync.ts`](../../src/features/podcasts/services/podcastRssVaultSync.ts) **serializes** the full chain (optional native sync, cache clear, `refreshPodcasts`) so overlapping pull refreshes or a future scheduled job share one in-flight run instead of stacking parallel work. Pull-to-refresh shows a list refresh indicator for the **entire** native plus JS reload (including when the episode list is empty).
+
+- **Discovery:** For each `YYYY Section - podcasts.md` matching `isPodcastFile` for the current or next calendar year, the companion hub is `YYYY Section.md` in the same folder.
+- **📻 refresh:** From the hub, every unchecked task line `- [ ] [[…]]` that resolves to an existing `📻 … .md` file triggers an RSS refresh for that file. Frontmatter may list multiple `rssFeedUrl` values (scalar or YAML list); feeds are merged and sorted by publication time into day sections. Body content older than `daysAgo` (default 7, local calendar) is omitted. Only frontmatter field updated by the sync is `rssFetchedAt` (ISO-8601 UTC with `Z`).
+- **Aggregate `*- podcasts.md`:** For each hub, **all** task-linked `📻 … .md` files (including `[x]` subscriptions) are read and merged into the section’s `*- podcasts.md` using date and played-state rules (today/yesterday vs older-than-yesterday vs seven-day cutoff) documented in code ([`PodcastsMdMerge.kt`](../../android/app/src/main/java/com/notebox/podcast/rss/PodcastsMdMerge.kt)).
+- **Progress:** Native emits `NoteboxPodcastRssSyncProgress` on the RN device event bus with `{ jobId, percent, phase, detail? }`. Percent reaches 99 after the last 📻 file in the deduped refresh set, then 100 with `phase: "complete"` after aggregation.
+- **TypeScript:** [`androidPodcastRssSync.ts`](../../src/core/storage/androidPodcastRssSync.ts) wraps the native call and listener; [`podcastRssVaultSync.ts`](../../src/features/podcasts/services/podcastRssVaultSync.ts) clears [`clearPodcastMarkdownFileContentCache`](../../src/features/podcasts/services/podcastPhase1.ts) and runs `refreshPodcasts({ forceFullScan: true })` afterward. Not available for the dev mock vault (no SAF).
+
 ## Cache Layers
 
 ### Persistent podcast markdown index (General)
@@ -41,6 +51,7 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - Value: `{ lastModified, content }`.
 - Lifetime: JS runtime session.
 - Invalidation: file `lastModified` mismatch or app restart.
+- Clear: `clearPodcastMarkdownFileContentCache()` after native RSS vault sync so refreshed markdown is re-read.
 
 ### RSS Feed URL Caches
 
