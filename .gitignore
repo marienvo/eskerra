@@ -82,3 +82,5 @@ yarn-error.log
 
 # logs
 *.log
+
+.tmp/
