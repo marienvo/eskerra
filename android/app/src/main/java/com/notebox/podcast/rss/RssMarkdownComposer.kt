@@ -33,13 +33,14 @@ object RssMarkdownComposer {
       lines.add("")
       val eps = byDay[day]!!.sortedByDescending { it.pubInstant }
       for (e in eps) {
+        val mp3 = PodcastMarkdownLinks.sanitizeUrl(e.mp3Url)
         val art =
           if (e.articleUrl.isNullOrEmpty()) {
             ""
           } else {
-            "[🌐](${e.articleUrl}) "
+            "[🌐](${PodcastMarkdownLinks.sanitizeUrl(e.articleUrl)}) "
           }
-        lines.add("- $art${e.title} [▶️](${e.mp3Url})")
+        lines.add("- $art${e.title} [▶️]($mp3)")
       }
     }
     if (lines.size == 1) {
