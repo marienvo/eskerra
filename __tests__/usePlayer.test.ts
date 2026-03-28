@@ -157,6 +157,39 @@ function SeekHarness({episodesById, onSeekTo}: SeekHarnessProps) {
   return null;
 }
 
+type PlayToggleHarnessProps = {
+  episodesById: Map<string, PodcastEpisode>;
+  onMarkAsPlayed: (
+    episode: PodcastEpisode,
+    options?: {dismissNowPlaying?: boolean},
+  ) => Promise<void>;
+  onReady: (controls: {
+    playEpisode: (e: PodcastEpisode) => Promise<void>;
+    togglePlayback: () => Promise<void>;
+  }) => void;
+};
+
+function PlayToggleHarness({
+  episodesById,
+  onMarkAsPlayed,
+  onReady,
+}: PlayToggleHarnessProps) {
+  const result = usePlayer(episodesById, {
+    onMarkAsPlayed,
+    podcastsCatalogReady: true,
+    podcastsLoading: false,
+  });
+
+  useEffect(() => {
+    onReady({
+      playEpisode: result.playEpisode,
+      togglePlayback: result.togglePlayback,
+    });
+  }, [onReady, result.playEpisode, result.togglePlayback]);
+
+  return null;
+}
+
 function flushPromises(): Promise<void> {
   return new Promise<void>(resolve => {
     setTimeout(() => resolve(), 0);
@@ -386,6 +419,61 @@ describe('usePlayer restore state', () => {
     expect(clearPlaylistMock).toHaveBeenCalled();
     expect(stopMock).toHaveBeenCalled();
     expect(expectResult(latestResult).activeEpisode).toBeNull();
+  });
+
+  test('pause past 80% marks played without dismiss flag so UI can keep player', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 120_000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 60_000,
+    });
+
+    const episodesById = new Map([[episode.id, episode]]);
+    const onMarkAsPlayed = jest.fn(async () => undefined);
+    let controls: {
+      playEpisode: (e: PodcastEpisode) => Promise<void>;
+      togglePlayback: () => Promise<void>;
+    } | null = null;
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(PlayToggleHarness, {
+          episodesById,
+          onMarkAsPlayed,
+          onReady: c => {
+            controls = c;
+          },
+        }),
+      );
+      await flushPromises();
+    });
+
+    if (!controls) {
+      throw new Error('controls not ready.');
+    }
+
+    const audioPlayer = getAudioPlayerMock.mock.results[0]?.value as {
+      getProgress: jest.MockedFunction<
+        () => Promise<{durationMs: number; positionMs: number}>
+      >;
+    };
+    audioPlayer.getProgress.mockResolvedValue({
+      durationMs: 120_000,
+      positionMs: 100_000,
+    });
+
+    await act(async () => {
+      await controls!.playEpisode(episode);
+    });
+
+    await act(async () => {
+      await controls!.togglePlayback();
+      await flushPromises();
+    });
+
+    expect(onMarkAsPlayed).toHaveBeenCalledTimes(1);
+    expect(onMarkAsPlayed).toHaveBeenCalledWith(episode, {dismissNowPlaying: false});
   });
 
   test('seekTo does not persist to playlist.json', async () => {

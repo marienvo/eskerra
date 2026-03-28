@@ -28,8 +28,16 @@ type UsePlayerResult = {
   togglePlayback: () => Promise<void>;
 };
 
+export type MarkEpisodeAsPlayedOptions = {
+  /** When false, vault/files still update but the mini player stays open (e.g. pause past 80%). */
+  dismissNowPlaying?: boolean;
+};
+
 type UsePlayerOptions = {
-  onMarkAsPlayed: (episode: PodcastEpisode) => Promise<void>;
+  onMarkAsPlayed: (
+    episode: PodcastEpisode,
+    options?: MarkEpisodeAsPlayedOptions,
+  ) => Promise<void>;
   podcastsCatalogReady: boolean;
   podcastsLoading: boolean;
 };
@@ -102,7 +110,7 @@ export function usePlayer(
           if (uri) {
             await clearPlaylist(uri);
           }
-          await onMarkAsPlayed(activeEpisodeAtEnd);
+          await onMarkAsPlayed(activeEpisodeAtEnd, {dismissNowPlaying: true});
         } catch (markError) {
           const fallbackMessage = 'Could not mark episode as played.';
           setError(markError instanceof Error ? markError.message : fallbackMessage);
@@ -283,7 +291,9 @@ export function usePlayer(
               latestProgress.positionMs >= MIN_PERSIST_POSITION_MS &&
               activeEpisodeForMarking
             ) {
-              await onMarkAsPlayed(activeEpisodeForMarking);
+              await onMarkAsPlayed(activeEpisodeForMarking, {
+                dismissNowPlaying: false,
+              });
             }
           } catch (persistError) {
             const fallbackMessage = 'Could not save playback position.';

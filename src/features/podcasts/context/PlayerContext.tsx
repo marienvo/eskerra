@@ -11,7 +11,10 @@ import {
 
 import {PodcastEpisode, PodcastSection} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {usePlayer} from '../hooks/usePlayer';
+import {
+  MarkEpisodeAsPlayedOptions,
+  usePlayer,
+} from '../hooks/usePlayer';
 import {
   prepareMarkEpisodeAsPlayed,
   writePreparedMarkEpisodeAsPlayed,
@@ -28,7 +31,10 @@ type PlayerContextValue = {
   activeEpisode: PodcastEpisode | null;
   allEpisodes: PodcastEpisode[];
   clearMiniPlayerArtworkSelection: () => void;
-  markEpisodeAsPlayed: (episode: PodcastEpisode) => Promise<void>;
+  markEpisodeAsPlayed: (
+    episode: PodcastEpisode,
+    options?: MarkEpisodeAsPlayedOptions,
+  ) => Promise<void>;
   miniPlayerArtworkSelected: boolean;
   playEpisode: (episode: PodcastEpisode) => Promise<void>;
   playbackError: string | null;
@@ -55,9 +61,9 @@ type PlayerProviderProps = {
 
 export function PlayerProvider({children}: PlayerProviderProps) {
   const {baseUri} = useVaultContext();
-  const onMarkAsPlayedRef = useRef<(episode: PodcastEpisode) => Promise<void>>(
-    async () => {},
-  );
+  const onMarkAsPlayedRef = useRef<
+    (episode: PodcastEpisode, options?: MarkEpisodeAsPlayedOptions) => Promise<void>
+  >(async () => {});
   const [miniPlayerArtworkSelected, setMiniPlayerArtworkSelected] = useState(false);
   const [podcastsVaultRefreshVisible, setPodcastsVaultRefreshVisible] = useState(false);
   const [podcastsVaultRefreshPercent, setPodcastsVaultRefreshPercent] = useState<
@@ -76,9 +82,12 @@ export function PlayerProvider({children}: PlayerProviderProps) {
     }
   }, []);
 
-  const stableOnMarkAsPlayed = useCallback(async (episode: PodcastEpisode) => {
-    await onMarkAsPlayedRef.current(episode);
-  }, []);
+  const stableOnMarkAsPlayed = useCallback(
+    async (episode: PodcastEpisode, options?: MarkEpisodeAsPlayedOptions) => {
+      await onMarkAsPlayedRef.current(episode, options);
+    },
+    [],
+  );
 
   const {
     allEpisodes,
@@ -113,7 +122,10 @@ export function PlayerProvider({children}: PlayerProviderProps) {
   });
 
   const handleMarkEpisodeAsPlayed = useCallback(
-    async (episode: PodcastEpisode) => {
+    async (
+      episode: PodcastEpisode,
+      options: MarkEpisodeAsPlayedOptions = {},
+    ) => {
       if (!baseUri) {
         return;
       }
@@ -123,8 +135,12 @@ export function PlayerProvider({children}: PlayerProviderProps) {
         return;
       }
 
+      const dismissNowPlaying = options.dismissNowPlaying !== false;
+
       applyOptimisticEpisodePlayed(episode.id);
-      await clearNowPlayingIfMatchesEpisode(episode.id);
+      if (dismissNowPlaying) {
+        await clearNowPlayingIfMatchesEpisode(episode.id);
+      }
 
       try {
         await writePreparedMarkEpisodeAsPlayed(prepared.fileUri, prepared.nextContent);
