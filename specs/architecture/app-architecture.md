@@ -71,6 +71,10 @@ RootStack
     └── SettingsStack -> Settings
 ```
 
+## Visual design
+
+- **Accent color** for UI highlights and progress (including the Podcasts header refresh strip): `#4FAFE6`. See [accent colors](../design/accent-colors.md).
+
 ## Source layout (feature-first)
 
 ```text

@@ -1,6 +1,7 @@
 import {
   BottomTabBar,
   BottomTabBarButtonProps,
+  BottomTabHeaderProps,
   BottomTabNavigationOptions,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
@@ -10,6 +11,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {PlaylistScreen} from '../features/inbox/screens/PlaylistScreen';
 import {MiniPlayer} from '../features/podcasts/components/MiniPlayer';
+import {PodcastsTabHeader} from '../features/podcasts/components/PodcastsTabHeader';
 import {PlayerProvider} from '../features/podcasts/context/PlayerContext';
 import {PodcastsScreen} from '../features/podcasts/screens/PodcastsScreen';
 import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
@@ -56,6 +58,10 @@ const renderTabBar = (props: Parameters<typeof BottomTabBar>[0]) => (
     <BottomTabBar {...props} />
   </>
 );
+
+function renderPodcastsTabHeader(props: BottomTabHeaderProps) {
+  return <PodcastsTabHeader {...props} />;
+}
 
 function TabBarButton({
   accessibilityLabel,
@@ -171,6 +177,7 @@ export function MainTabNavigator() {
           component={PodcastsStackScreen}
           name="PodcastsTab"
           options={{
+            header: renderPodcastsTabHeader,
             tabBarButton,
             tabBarIcon: podcastsTabIcon,
             title: 'Podcasts',

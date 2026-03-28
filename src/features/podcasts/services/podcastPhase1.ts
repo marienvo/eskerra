@@ -32,6 +32,11 @@ export type RefreshPodcastsOptions = {
 type FileContentCacheEntry = {lastModified: number; content: string};
 const fileContentCache = new Map<string, FileContentCacheEntry>();
 
+/** Clears in-memory podcast markdown bodies so the next refresh re-reads from vault after native sync. */
+export function clearPodcastMarkdownFileContentCache(): void {
+  fileContentCache.clear();
+}
+
 type FileWithContent = {
   content: string;
   file: {

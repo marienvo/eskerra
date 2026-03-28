@@ -1,4 +1,11 @@
-import {createContext, ReactNode, useCallback, useContext, useMemo} from 'react';
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from 'react';
 
 import {PodcastEpisode, PodcastSection} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
@@ -6,6 +13,11 @@ import {usePlayer} from '../hooks/usePlayer';
 import {markEpisodeAsPlayed as markEpisodeAsPlayedInStorage} from '../services/markEpisodeAsPlayed';
 import {RefreshPodcastsOptions, usePodcasts} from '../hooks/usePodcasts';
 import {PlayerProgress, PlayerState} from '../services/audioPlayer';
+
+export type PodcastsVaultRefreshUiPatch = {
+  visible?: boolean;
+  percent?: number | null;
+};
 
 type PlayerContextValue = {
   activeEpisode: PodcastEpisode | null;
@@ -18,9 +30,12 @@ type PlayerContextValue = {
   progress: PlayerProgress;
   podcastError: string | null;
   podcastsLoading: boolean;
+  podcastsVaultRefreshPercent: number | null;
+  podcastsVaultRefreshVisible: boolean;
   refreshPodcasts: (options?: RefreshPodcastsOptions) => Promise<void>;
   sections: PodcastSection[];
   seekTo: (positionMs: number) => Promise<void>;
+  setPodcastsVaultRefreshUi: (patch: PodcastsVaultRefreshUiPatch) => void;
   togglePlayback: () => Promise<void>;
 };
 
@@ -32,6 +47,23 @@ type PlayerProviderProps = {
 
 export function PlayerProvider({children}: PlayerProviderProps) {
   const {baseUri} = useVaultContext();
+  const [podcastsVaultRefreshVisible, setPodcastsVaultRefreshVisible] = useState(false);
+  const [podcastsVaultRefreshPercent, setPodcastsVaultRefreshPercent] = useState<
+    number | null
+  >(null);
+
+  const setPodcastsVaultRefreshUi = useCallback((patch: PodcastsVaultRefreshUiPatch) => {
+    if (patch.visible !== undefined) {
+      setPodcastsVaultRefreshVisible(patch.visible);
+    }
+    if (patch.percent !== undefined) {
+      setPodcastsVaultRefreshPercent(patch.percent);
+    }
+    if (patch.visible === false) {
+      setPodcastsVaultRefreshPercent(null);
+    }
+  }, []);
+
   const {
     allEpisodes,
     error: podcastError,
@@ -82,9 +114,12 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       progress,
       podcastError,
       podcastsLoading,
+      podcastsVaultRefreshPercent,
+      podcastsVaultRefreshVisible,
       refreshPodcasts,
       sections,
       seekTo,
+      setPodcastsVaultRefreshUi,
       togglePlayback,
     }),
     [
@@ -97,10 +132,13 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       playEpisode,
       podcastError,
       podcastsLoading,
+      podcastsVaultRefreshPercent,
+      podcastsVaultRefreshVisible,
       progress,
       refreshPodcasts,
       sections,
       seekTo,
+      setPodcastsVaultRefreshUi,
       togglePlayback,
     ],
   );

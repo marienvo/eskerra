@@ -3,6 +3,7 @@ import {StackScreenProps} from '@react-navigation/stack';
 import {useFocusEffect} from '@react-navigation/native';
 import {useCallback, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {
+  RefreshControl,
   SectionList,
   StyleSheet,
   Text as RNText,
@@ -22,6 +23,7 @@ import {PodcastEpisode} from '../../../types';
 import {EpisodeRow} from '../components/EpisodeRow';
 import {usePlayerContext} from '../context/PlayerContext';
 import {markEpisodeAsPlayed as markEpisodeAsPlayedInStorage} from '../services/markEpisodeAsPlayed';
+import {runSerializedPodcastVaultRefresh} from '../services/podcastRssVaultSync';
 
 type PodcastsScreenProps = StackScreenProps<PodcastsStackParamList, 'Podcasts'>;
 
@@ -69,7 +71,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
   const {
     activeEpisode,
     allEpisodes,
-    markEpisodeAsPlayed,
     playbackError,
     playbackLoading,
     playbackState,
@@ -78,8 +79,11 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
     podcastsLoading,
     refreshPodcasts,
     sections,
+    setPodcastsVaultRefreshUi,
   } = usePlayerContext();
   const [markError, setMarkError] = useState<string | null>(null);
+  const [pullRefreshInProgress, setPullRefreshInProgress] = useState(false);
+  const [refreshPullError, setRefreshPullError] = useState<string | null>(null);
   const [isMarkingBatch, setIsMarkingBatch] = useState(false);
   const [selectedEpisodeIds, setSelectedEpisodeIds] = useState<Set<string>>(new Set());
   const markInFlightRef = useRef(false);
@@ -95,6 +99,35 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
     () => new Map(allEpisodes.map(episode => [episode.id, episode])),
     [allEpisodes],
   );
+
+  const handlePodcastsPullRefresh = useCallback(async () => {
+    if (!baseUri) {
+      return;
+    }
+    setRefreshPullError(null);
+    setPullRefreshInProgress(true);
+    setPodcastsVaultRefreshUi({visible: true, percent: null});
+    try {
+      await runSerializedPodcastVaultRefresh(baseUri, refreshPodcasts, {
+        onProgress: payload => {
+          const n = payload.percent;
+          if (typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100) {
+            setPodcastsVaultRefreshUi({percent: n});
+          }
+        },
+      });
+    } catch (refreshError) {
+      const message =
+        refreshError instanceof Error ? refreshError.message : 'Could not refresh podcasts.';
+      setRefreshPullError(message);
+      if (__DEV__) {
+        console.warn('[Podcasts] pull refresh failed', refreshError);
+      }
+    } finally {
+      setPodcastsVaultRefreshUi({visible: false});
+      setPullRefreshInProgress(false);
+    }
+  }, [baseUri, refreshPodcasts, setPodcastsVaultRefreshUi]);
 
   const isPodcastsTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
@@ -281,12 +314,19 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
       {podcastError ? <Text style={styles.status}>{podcastError}</Text> : null}
       {playbackError ? <Text style={styles.status}>{playbackError}</Text> : null}
       {markError ? <Text style={styles.status}>{markError}</Text> : null}
+      {refreshPullError ? <Text style={styles.status}>{refreshPullError}</Text> : null}
       <SectionList
         contentContainerStyle={styles.listContent}
-        onRefresh={() => {
-          refreshPodcasts({forceFullScan: true}).catch(() => undefined);
-        }}
-        refreshing={podcastsLoading && sections.length > 0}
+        refreshControl={
+          <RefreshControl
+            onRefresh={() => {
+              handlePodcastsPullRefresh().catch(() => undefined);
+            }}
+            // Keep false while work runs: pull affordance matches Inbox (default colors); after
+            // release, header strip carries progress so the list needs no floating spinner.
+            refreshing={false}
+          />
+        }
         sections={sectionData}
         keyExtractor={item => item.id}
         renderItem={({index, item, section}) => {
@@ -303,7 +343,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
               isLastRow={isLastRow}
               isSelected={selectedEpisodeIds.has(item.id)}
               mutedTextColor={mutedTextColor}
-              onMarkAsPlayed={markEpisodeAsPlayed}
               onPlayEpisode={playEpisode}
               onToggleSelect={() => {
                 toggleEpisodeSelection(item.id);
@@ -311,7 +350,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
               playbackLoading={playbackLoading}
               playbackState={playbackState}
               sectionRssFeedUrl={section.rssFeedUrl}
-              selectionActive={hasSelection}
             />
           );
         }}
@@ -324,7 +362,7 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
           />
         )}
         ListEmptyComponent={
-          !podcastsLoading ? (
+          !podcastsLoading && !pullRefreshInProgress ? (
             <Text style={styles.status}>
               No unplayed podcast episodes found in vault root.
             </Text>
