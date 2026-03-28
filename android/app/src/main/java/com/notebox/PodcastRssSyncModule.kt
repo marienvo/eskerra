@@ -25,6 +25,10 @@ import java.util.concurrent.Executors
 /**
  * Batch RSS refresh for 📻 markdown under `General/`, then aggregates into `*- podcasts.md`.
  * Progress events: [EVENT_PROGRESS] with jobId, percent, phase, optional detail.
+ *
+ * Hub task lines (`YYYY Section.md`): `- [ ]` includes a `📻 … .md` feed in RSS refresh and
+ * aggregate merge; `- [x]` excludes it. Episode lines inside `*- podcasts.md` use `[ ]`/`[x]`
+ * for played state only; that semantics is unchanged here (see [com.notebox.podcast.rss.PodcastsMdMerge]).
  */
 class PodcastRssSyncModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
@@ -127,7 +131,7 @@ class PodcastRssSyncModule(private val reactContext: ReactApplicationContext) :
         continue
       }
       val aggregateFiles =
-        PodcastHubLinks.allTaskLinkedMarkdownFiles(hubText) { candidate ->
+        PodcastHubLinks.uncheckedLinkedMarkdownFiles(hubText) { candidate ->
           byName.containsKey(candidate) && PodcastMarkdownNaming.isRssEmojiMarkdownFile(candidate)
         }
       val pieContents = ArrayList<Pair<String, String>>()
