@@ -2,16 +2,8 @@
  * @format
  */
 
-import {useEffect, useRef, useState} from 'react';
-import {
-  ActivityIndicator,
-  Animated,
-  Easing,
-  StatusBar,
-  StyleSheet,
-  useColorScheme,
-  View,
-} from 'react-native';
+import {useEffect, useState} from 'react';
+import {StatusBar, StyleSheet, useColorScheme, View} from 'react-native';
 import {GluestackUIProvider} from '@gluestack-ui/themed';
 import {config} from '@gluestack-ui/config';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
@@ -43,28 +35,10 @@ type VaultInitialSession = {
   inboxPrefetch: NoteSummary[] | null;
 };
 
-const STARTUP_SPINNER_FADE_MS = 400;
-const STARTUP_SPINNER_DELAY_MS = 90;
-
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
   const [initialRoute, setInitialRoute] = useState<InitialRoute | null>(null);
   const [initialSession, setInitialSession] = useState<VaultInitialSession | null>(null);
-
-  const startupSpinnerOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const easing = Easing.out(Easing.cubic);
-    Animated.sequence([
-      Animated.delay(STARTUP_SPINNER_DELAY_MS),
-      Animated.timing(startupSpinnerOpacity, {
-        toValue: 1,
-        duration: STARTUP_SPINNER_FADE_MS,
-        easing,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [startupSpinnerOpacity]);
 
   useEffect(() => {
     let isActive = true;
@@ -196,16 +170,7 @@ function App() {
                   styles.loadingContainer,
                   isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
                 ]}>
-                <View style={styles.startupLogoVerticalBalance} />
                 <StartupSplashContent isDarkMode={isDarkMode} />
-                <View style={styles.startupSpinnerSlot}>
-                  <Animated.View style={{opacity: startupSpinnerOpacity}}>
-                    <ActivityIndicator
-                      color={isDarkMode ? '#ffffff' : '#333333'}
-                      style={styles.startupSpinner}
-                    />
-                  </Animated.View>
-                </View>
               </View>
             ) : (
               <VaultProvider initialSession={initialSession}>
@@ -226,20 +191,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingContainer: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     flex: 1,
-  },
-  /** Equal flex regions so the logo sits on the vertical midline; spinner lives below without shifting the logo. */
-  startupLogoVerticalBalance: {
-    paddingTop: 10,
-    flex: 1,
-  },
-  startupSpinnerSlot: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 24,
-    width: '100%',
+    justifyContent: 'center',
   },
   loadingContainerDark: {
     backgroundColor: '#121212',
@@ -247,7 +201,6 @@ const styles = StyleSheet.create({
   loadingContainerLight: {
     backgroundColor: '#f5f5f5',
   },
-  startupSpinner: {},
 });
 
 export default App;
