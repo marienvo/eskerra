@@ -14,15 +14,6 @@ import {
 import {usePodcastArtwork} from '../src/features/podcasts/hooks/usePodcastArtwork';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('react-native-gesture-handler/Swipeable', () => {
-  const React = require('react');
-  const {View} = require('react-native');
-
-  return function SwipeableMock({children}: {children: React.ReactNode}) {
-    return <View>{children}</View>;
-  };
-});
-
 jest.mock('react-native-vector-icons/MaterialIcons', () => {
   const React = require('react');
   const {Text} = require('react-native');
@@ -71,7 +62,6 @@ describe('EpisodeRow', () => {
         dividerColor="#cccccc"
         episode={episode}
         mutedTextColor="#666666"
-        onMarkAsPlayed={jest.fn().mockResolvedValue(undefined)}
         onPlayEpisode={jest.fn().mockResolvedValue(undefined)}
         onToggleSelect={jest.fn()}
         playbackLoading={false}

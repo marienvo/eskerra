@@ -71,7 +71,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
   const {
     activeEpisode,
     allEpisodes,
-    markEpisodeAsPlayed,
     playbackError,
     playbackLoading,
     playbackState,
@@ -344,7 +343,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
               isLastRow={isLastRow}
               isSelected={selectedEpisodeIds.has(item.id)}
               mutedTextColor={mutedTextColor}
-              onMarkAsPlayed={markEpisodeAsPlayed}
               onPlayEpisode={playEpisode}
               onToggleSelect={() => {
                 toggleEpisodeSelection(item.id);
@@ -352,7 +350,6 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
               playbackLoading={playbackLoading}
               playbackState={playbackState}
               sectionRssFeedUrl={section.rssFeedUrl}
-              selectionActive={hasSelection}
             />
           );
         }}

@@ -1,7 +1,5 @@
 import {Pressable, Text, useColorMode} from '@gluestack-ui/themed';
-import {useCallback, useRef, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
@@ -22,13 +20,11 @@ type EpisodeRowProps = {
   isBatchMarking?: boolean;
   isSelected?: boolean;
   mutedTextColor: string;
-  onMarkAsPlayed: (episode: PodcastEpisode) => Promise<void>;
   onPlayEpisode: (episode: PodcastEpisode) => Promise<void>;
   onToggleSelect: () => void;
   playbackLoading: boolean;
   playbackState: PlayerState;
   sectionRssFeedUrl?: string;
-  selectionActive?: boolean;
   isLastRow?: boolean;
 };
 
@@ -39,13 +35,11 @@ export function EpisodeRow({
   isBatchMarking = false,
   isSelected = false,
   mutedTextColor,
-  onMarkAsPlayed,
   onPlayEpisode,
   onToggleSelect,
   playbackLoading,
   playbackState,
   sectionRssFeedUrl,
-  selectionActive = false,
   isLastRow = false,
 }: EpisodeRowProps) {
   const colorMode = useColorMode();
@@ -55,68 +49,22 @@ export function EpisodeRow({
   const artworkUri = usePodcastArtwork(baseUri, rssFeedUrlForArtwork, {
     allowBackgroundFetch: true,
   });
-  const swipeableRef = useRef<Swipeable | null>(null);
-  const [isMarkingAsPlayed, setIsMarkingAsPlayed] = useState(false);
   const isActive = activeEpisodeId === episode.id;
   const isPlaying = isActive && playbackState === 'playing';
   /** Strong gray tint; artwork is also blurred via Image.blurRadius when selected. */
   const overlayBackgroundColor =
     colorMode === 'dark' ? 'rgba(174,174,174,0.5)' : 'rgba(186,186,186,0.5)';
 
-  const renderSwipeAction = useCallback(
-    () => (
-      <View
-        style={[
-          styles.swipeAction,
-          {borderBottomColor: dividerColor},
-          isLastRow ? styles.swipeActionLast : null,
-        ]}>
-        <MaterialIcons color="#2e7d32" name="check-circle" size={28} />
-      </View>
-    ),
-    [dividerColor, isLastRow],
-  );
-
-  const markAsPlayed = useCallback(async () => {
-    if (isMarkingAsPlayed) {
-      return;
-    }
-
-    setIsMarkingAsPlayed(true);
-    try {
-      await onMarkAsPlayed(episode);
-      swipeableRef.current?.close();
-    } finally {
-      setIsMarkingAsPlayed(false);
-    }
-  }, [episode, isMarkingAsPlayed, onMarkAsPlayed]);
-
-  const rowDisabled =
-    playbackLoading || isMarkingAsPlayed || isBatchMarking;
-  const swipeEnabled =
-    !rowDisabled && !selectionActive;
+  const rowDisabled = playbackLoading || isBatchMarking;
 
   return (
-    <Swipeable
-      ref={swipeableRef}
-      enabled={swipeEnabled}
-      friction={2}
-      leftThreshold={56}
-      onSwipeableOpen={() => {
-        markAsPlayed().catch(() => undefined);
-      }}
-      overshootLeft={false}
-      overshootRight={false}
-      renderLeftActions={renderSwipeAction}
-      renderRightActions={renderSwipeAction}
-      rightThreshold={56}>
-      <View
-        style={[
-          styles.episodeRowOuter,
-          {borderBottomColor: dividerColor},
-          isLastRow ? styles.episodeRowOuterLast : null,
-        ]}>
-        <View style={styles.episodeRowInner}>
+    <View
+      style={[
+        styles.episodeRowOuter,
+        {borderBottomColor: dividerColor},
+        isLastRow ? styles.episodeRowOuterLast : null,
+      ]}>
+      <View style={styles.episodeRowInner}>
         <Pressable
           accessibilityLabel={
             isSelected ? 'Deselect episode' : 'Select episode'
@@ -158,9 +106,8 @@ export function EpisodeRow({
             {isPlaying ? 'Playing' : isActive ? 'Paused' : 'Tap to play'}
           </Text>
         </Pressable>
-        </View>
       </View>
-    </Swipeable>
+    </View>
   );
 }
 
@@ -218,16 +165,5 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 12,
     marginTop: 4,
-  },
-  swipeAction: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    justifyContent: 'center',
-    minHeight: 64,
-    width: 72,
-  },
-  swipeActionLast: {
-    borderBottomWidth: 0,
   },
 });
