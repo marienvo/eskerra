@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent} from 'react';
 
 type MenuId = 'file' | 'edit' | 'view' | 'help';
 
@@ -6,11 +6,26 @@ type DemoMenuBarProps = {
   onOpenSettings: () => void;
 };
 
+/**
+ * Menu bar behavior: first top-level open is click-only; while any menu is open ("menu mode"),
+ * other top-level items switch on mouse hover. Nested submenus are not used yet; when added,
+ * use sibling hover + optional delay while the parent panel is open, or adopt @radix-ui/react-menubar.
+ */
 export function DemoMenuBar({onOpenSettings}: DemoMenuBarProps) {
   const [open, setOpen] = useState<MenuId | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setOpen(null), []);
+
+  const onTriggerPointerEnter = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>, id: MenuId) => {
+      if (open === null || e.pointerType !== 'mouse') {
+        return;
+      }
+      setOpen(id);
+    },
+    [open],
+  );
 
   useEffect(() => {
     if (open === null) {
@@ -48,6 +63,7 @@ export function DemoMenuBar({onOpenSettings}: DemoMenuBarProps) {
           aria-expanded={open === 'file'}
           aria-haspopup="true"
           onClick={() => toggle('file')}
+          onPointerEnter={e => onTriggerPointerEnter(e, 'file')}
         >
           File
         </button>
@@ -88,6 +104,7 @@ export function DemoMenuBar({onOpenSettings}: DemoMenuBarProps) {
           aria-expanded={open === 'edit'}
           aria-haspopup="true"
           onClick={() => toggle('edit')}
+          onPointerEnter={e => onTriggerPointerEnter(e, 'edit')}
         >
           Edit
         </button>
@@ -114,6 +131,7 @@ export function DemoMenuBar({onOpenSettings}: DemoMenuBarProps) {
           aria-expanded={open === 'view'}
           aria-haspopup="true"
           onClick={() => toggle('view')}
+          onPointerEnter={e => onTriggerPointerEnter(e, 'view')}
         >
           View
         </button>
@@ -135,6 +153,7 @@ export function DemoMenuBar({onOpenSettings}: DemoMenuBarProps) {
           aria-expanded={open === 'help'}
           aria-haspopup="true"
           onClick={() => toggle('help')}
+          onPointerEnter={e => onTriggerPointerEnter(e, 'help')}
         >
           Help
         </button>
