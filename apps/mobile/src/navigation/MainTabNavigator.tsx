@@ -43,7 +43,7 @@ const newNoteTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size})
   <MaterialIcons color={color} name="add" size={size} />
 );
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="notes" size={size} />
+  <MaterialIcons color={color} name="edit-note" size={size} />
 );
 const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="radio" size={size} />
