@@ -1,5 +1,8 @@
+import {useMemo} from 'react';
 import {Group, Panel, Separator} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
+
+import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -28,6 +31,18 @@ export function InboxTab({
   onSaveNote,
   busy,
 }: InboxTabProps) {
+  const editorPaneTitle = useMemo(() => {
+    if (!selectedUri) {
+      return 'Editor';
+    }
+    const row = notes.find(n => n.uri === selectedUri);
+    if (row) {
+      return row.name;
+    }
+    const tail = selectedUri.split(/[/\\]/).pop()?.trim();
+    return tail || 'Editor';
+  }, [notes, selectedUri]);
+
   return (
     <div className="inbox-root" data-app-surface="capture">
       <Group
@@ -38,8 +53,18 @@ export function InboxTab({
       >
         <Panel id="files" className="panel-surface" minSize={10} defaultSize="30%">
           <div className="pane-header">
-            <button type="button" className="primary" onClick={onAddEntry} disabled={busy}>
-              Add entry
+            <span className="pane-title">Log</span>
+            <button
+              type="button"
+              className="pane-header-add-btn icon-btn-ghost"
+              onClick={onAddEntry}
+              disabled={busy}
+              aria-label="Add entry"
+              title="Add entry"
+            >
+              <span className="pane-header-add-btn__glyph" aria-hidden>
+                <MaterialIcon name="add" size={12} />
+              </span>
             </button>
           </div>
           <ul className="note-list">
@@ -58,6 +83,11 @@ export function InboxTab({
         </Panel>
         <Separator className="resize-sep" />
         <Panel id="editor" className="panel-surface" minSize={18} defaultSize="70%">
+          <div className="pane-header">
+            <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
+              {editorPaneTitle}
+            </span>
+          </div>
           {selectedUri ? (
             <>
               <textarea
