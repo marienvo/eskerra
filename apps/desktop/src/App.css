@@ -227,8 +227,8 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
-  /* Tighter seam toward main stage: less inline-end padding than inline-start */
-  padding: 0.4rem 0.16rem 0.4rem 0.32rem;
+  /* Breathing room before main stage; inline-start keeps tabs off the window edge */
+  padding: 0.4rem 0.18rem 0.22rem 0.34rem;
   background: transparent;
 }
 
@@ -238,8 +238,8 @@ a:focus:not(:focus-visible) {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 1.65rem;
+  height: 1.65rem;
   padding: 0;
   border: none;
   border-radius: 6px;
@@ -363,8 +363,8 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   padding-block: var(--panel-grid-padding);
   padding-inline-end: var(--panel-grid-padding);
-  /* Half grid padding next to the rail so the first pane sits closer to nav */
-  padding-inline-start: calc(var(--panel-grid-padding) / 2);
+  /* Between half and full grid at the rail — balance vs. tab strip */
+  padding-inline-start: calc(var(--panel-grid-padding) * 0.75);
 }
 
 /* Horizontal splits: no flex gap — resize separator supplies half-gutter each side so the center track matches other gaps */

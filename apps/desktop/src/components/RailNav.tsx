@@ -17,7 +17,7 @@ export function RailNav({active, onSelect}: RailNavProps) {
         data-tooltip="Podcasts"
         onClick={() => onSelect('podcasts')}
       >
-        <MaterialIcon name="radio" size={24} aria-hidden />
+        <MaterialIcon name="radio" size={12} aria-hidden />
       </button>
       <button
         type="button"
@@ -26,7 +26,7 @@ export function RailNav({active, onSelect}: RailNavProps) {
         data-tooltip="Inbox"
         onClick={() => onSelect('inbox')}
       >
-        <MaterialIcon name="notes" size={24} aria-hidden />
+        <MaterialIcon name="edit_note" size={12} aria-hidden />
       </button>
     </nav>
   );
