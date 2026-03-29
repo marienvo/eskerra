@@ -13,8 +13,8 @@ export function RailNav({active, onSelect}: RailNavProps) {
       <button
         type="button"
         className={`rail-tab ${active === 'podcasts' ? 'active' : ''}`}
-        aria-label="Podcasts"
-        data-tooltip="Podcasts"
+        aria-label="Episodes"
+        data-tooltip="Episodes"
         onClick={() => onSelect('podcasts')}
       >
         <MaterialIcon name="radio" size={12} aria-hidden />
@@ -22,8 +22,8 @@ export function RailNav({active, onSelect}: RailNavProps) {
       <button
         type="button"
         className={`rail-tab ${active === 'inbox' ? 'active' : ''}`}
-        aria-label="Inbox"
-        data-tooltip="Inbox"
+        aria-label="Log"
+        data-tooltip="Log"
         onClick={() => onSelect('inbox')}
       >
         <MaterialIcon name="edit_note" size={12} aria-hidden />
