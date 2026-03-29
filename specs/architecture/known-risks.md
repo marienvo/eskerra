@@ -80,8 +80,8 @@ Contingency:
 ### Why this exists (rationale)
 
 - React Native handles interaction and React updates on a **single JavaScript thread**. Listing a large SAF folder via `react-native-saf-x` is async at the native I/O layer, but when results arrive the bridge still delivers a large payload to JS, where **filtering, sorting, and building state** run synchronously and can stack with other startup work (for example podcast refresh). That showed up as **jank or short freezes** when switching to Vault or Podcasts soon after cold boot.
-- The Kotlin module [`VaultListingModule`](android/app/src/main/java/com/notebox/VaultListingModule.kt) was added to move **directory enumeration plus markdown filtering and sorting** onto a **background executor** and return a **small, already-filtered** list to JS when the Android `DocumentFile` APIs cooperate with our directory URIs. The goal is to **reduce long synchronous bursts on the JS thread** after listing, not to replace SAF or duplicate all app logic in native.
-- **Important:** `androidx.documentfile.provider.DocumentFile` and `react-native-saf-x` do not always agree on the same URI strings (tree vs document URIs, OEM quirks). So native listing is **best-effort**; correctness for listing always remains available through the existing JS path (`exists`, `listFiles`, same filters as in [`noteboxStorage.ts`](src/core/storage/noteboxStorage.ts)).
+- The Kotlin module [`VaultListingModule`](../../apps/mobile/android/app/src/main/java/com/notebox/VaultListingModule.kt) was added to move **directory enumeration plus markdown filtering and sorting** onto a **background executor** and return a **small, already-filtered** list to JS when the Android `DocumentFile` APIs cooperate with our directory URIs. The goal is to **reduce long synchronous bursts on the JS thread** after listing, not to replace SAF or duplicate all app logic in native.
+- **Important:** `androidx.documentfile.provider.DocumentFile` and `react-native-saf-x` do not always agree on the same URI strings (tree vs document URIs, OEM quirks). So native listing is **best-effort**; correctness for listing always remains available through the existing JS path (`exists`, `listFiles`, same filters as in [`noteboxStorage.ts`](../../apps/mobile/src/core/storage/noteboxStorage.ts)).
 
 ### Risk
 
@@ -89,7 +89,7 @@ Contingency:
 
 ### Mitigation
 
-- JavaScript falls back to `exists` + `listFiles` + filter in [`noteboxStorage.ts`](src/core/storage/noteboxStorage.ts) when `tryListMarkdownFilesNative` returns `null` (non-Android, missing module, or thrown error from native).
+- JavaScript falls back to `exists` + `listFiles` + filter in [`noteboxStorage.ts`](../../apps/mobile/src/core/storage/noteboxStorage.ts) when `tryListMarkdownFilesNative` returns `null` (non-Android, missing module, or thrown error from native).
 - If native resolves with an **empty array** but `exists(directoryUri)` is still **true** for the SAF path, the app **does not** trust the empty native result and runs the same JS listing path (native and `react-native-saf-x` can disagree on visibility).
 - Kotlin throws instead of returning an empty array when `DocumentFile` reports the directory missing, so JS can fall back when native cannot open the tree URI reliably.
 - Keep listing rules aligned: markdown suffix, exclude filenames containing `sync-conflict`, sort by `lastModified` descending (see Kotlin `VaultListingModule`).
@@ -104,4 +104,4 @@ Contingency:
 
 ### Mitigation
 
-- New downloads store artwork under app-internal `filesDir` as **`file://`** (`writeArtworkFile` in [`PodcastArtworkCacheModule`](../../android/app/src/main/java/com/notebox/PodcastArtworkCacheModule.kt)); **`Image` uses those URIs directly.** Legacy cached vault **`content://`** artwork is still copied to app cache on a **background native thread** via `ensureLocalArtworkFile` before display (see [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts) and [`usePodcastArtworkDisplayUri.ts`](../../src/features/podcasts/hooks/usePodcastArtworkDisplayUri.ts)).
+- New downloads store artwork under app-internal `filesDir` as **`file://`** (`writeArtworkFile` in [`PodcastArtworkCacheModule`](../../apps/mobile/android/app/src/main/java/com/notebox/PodcastArtworkCacheModule.kt)); **`Image` uses those URIs directly.** Legacy cached vault **`content://`** artwork is still copied to app cache on a **background native thread** via `ensureLocalArtworkFile` before display (see [`androidPodcastArtworkCache.ts`](../../apps/mobile/src/core/storage/androidPodcastArtworkCache.ts) and [`usePodcastArtworkDisplayUri.ts`](../../apps/mobile/src/features/podcasts/hooks/usePodcastArtworkDisplayUri.ts)).

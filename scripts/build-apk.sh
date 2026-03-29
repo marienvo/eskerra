@@ -27,8 +27,8 @@ if [[ -n "$_jdk" ]]; then
 fi
 unset _jdk _pick_java_home
 
-cd "$ROOT/android"
+cd "$ROOT/apps/mobile/android"
 ./gradlew assembleDebug
 
-APK="$ROOT/android/app/build/outputs/apk/debug/app-debug.apk"
+APK="$ROOT/apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk"
 echo "APK ready: $APK"

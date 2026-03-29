@@ -29,16 +29,21 @@ if [[ -n "$_jdk" ]]; then
 fi
 unset _jdk _pick_java_home
 
-# Export vars from repo root `.env` so Gradle / sentry-cli see SENTRY_AUTH_TOKEN (and similar).
-if [[ -f "$ROOT/.env" ]]; then
+# Export vars from `.env` so Gradle / sentry-cli see SENTRY_AUTH_TOKEN (and similar).
+_ENV_FILE="$ROOT/apps/mobile/.env"
+if [[ ! -f "$_ENV_FILE" && -f "$ROOT/.env" ]]; then
+  _ENV_FILE="$ROOT/.env"
+fi
+if [[ -f "$_ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1091
-  source "$ROOT/.env"
+  source "$_ENV_FILE"
   set +a
 fi
+unset _ENV_FILE
 
-cd "$ROOT/android"
+cd "$ROOT/apps/mobile/android"
 ./gradlew assembleRelease
 
-APK="$ROOT/android/app/build/outputs/apk/release/app-release.apk"
+APK="$ROOT/apps/mobile/android/app/build/outputs/apk/release/app-release.apk"
 echo "APK ready: $APK"

@@ -1,0 +1,189 @@
+import {
+  buildInboxMarkdownIndexContent,
+  getGeneralDirectoryUri,
+  getInboxDirectoryUri,
+  getInboxIndexUri,
+  getNoteboxDirectoryUri,
+  getPlaylistUri,
+  getSettingsUri,
+  initNoteboxVault,
+  isSyncConflictFileName,
+  isValidPlaylistEntry,
+  MARKDOWN_EXTENSION,
+  normalizeVaultBaseUri,
+  parseNoteboxSettings,
+  pickNextInboxMarkdownFileName,
+  sanitizeFileName,
+  type NoteboxSettings,
+  type PlaylistEntry,
+  type VaultFilesystem,
+} from '@notebox/core';
+
+export async function bootstrapVaultLayout(
+  root: string,
+  fs: VaultFilesystem,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  await initNoteboxVault(base, fs);
+  const inbox = getInboxDirectoryUri(base);
+  const general = getGeneralDirectoryUri(base);
+  if (!(await fs.exists(inbox))) {
+    await fs.mkdir(inbox);
+  }
+  if (!(await fs.exists(general))) {
+    await fs.mkdir(general);
+  }
+}
+
+export async function syncInboxMarkdownIndex(
+  root: string,
+  fs: VaultFilesystem,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  if (!(await fs.exists(inbox))) {
+    return;
+  }
+  const rows = await fs.listFiles(inbox);
+  const names = rows
+    .filter(
+      r =>
+        (r.type === 'file' || r.type === undefined) &&
+        r.name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(r.name),
+    )
+    .map(r => r.name)
+    .sort((a, b) => a.localeCompare(b));
+  const body = buildInboxMarkdownIndexContent(names);
+  const indexUri = getInboxIndexUri(base);
+  try {
+    const existing = await fs.readFile(indexUri, {encoding: 'utf8'});
+    if (existing === body) {
+      return;
+    }
+  } catch {
+    // write fresh
+  }
+  await fs.writeFile(indexUri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
+}
+
+export async function readVaultSettings(
+  root: string,
+  fs: VaultFilesystem,
+): Promise<NoteboxSettings> {
+  const base = normalizeVaultBaseUri(root);
+  const raw = await fs.readFile(getSettingsUri(base), {encoding: 'utf8'});
+  return parseNoteboxSettings(raw);
+}
+
+export async function writeVaultSettings(
+  root: string,
+  fs: VaultFilesystem,
+  settings: NoteboxSettings,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const settingsUri = getSettingsUri(base);
+  const body = `${JSON.stringify(settings, null, 2)}\n`;
+  await fs.writeFile(settingsUri, body, {
+    encoding: 'utf8',
+    mimeType: 'application/json',
+  });
+}
+
+export async function listInboxNotes(root: string, fs: VaultFilesystem) {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  if (!(await fs.exists(inbox))) {
+    return [];
+  }
+  const rows = await fs.listFiles(inbox);
+  return rows
+    .filter(
+      r =>
+        (r.type === 'file' || r.type === undefined) &&
+        r.name.endsWith(MARKDOWN_EXTENSION) &&
+        !isSyncConflictFileName(r.name),
+    )
+    .map(r => ({
+      lastModified: r.lastModified,
+      name: r.name,
+      uri: r.uri,
+    }))
+    .sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0));
+}
+
+export async function readPlaylistEntry(
+  root: string,
+  fs: VaultFilesystem,
+): Promise<PlaylistEntry | null> {
+  const base = normalizeVaultBaseUri(root);
+  const uri = getPlaylistUri(base);
+  if (!(await fs.exists(uri))) {
+    return null;
+  }
+  const raw = await fs.readFile(uri, {encoding: 'utf8'});
+  if (!raw.trim()) {
+    return null;
+  }
+  const parsed: unknown = JSON.parse(raw);
+  if (!isValidPlaylistEntry(parsed)) {
+    throw new Error('playlist.json has an invalid structure.');
+  }
+  return parsed;
+}
+
+export async function writePlaylistEntry(
+  root: string,
+  fs: VaultFilesystem,
+  entry: PlaylistEntry,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const uri = getPlaylistUri(base);
+  const noteboxDir = getNoteboxDirectoryUri(base);
+  if (!(await fs.exists(noteboxDir))) {
+    await fs.mkdir(noteboxDir);
+  }
+  const body = `${JSON.stringify(entry, null, 2)}\n`;
+  await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'application/json'});
+}
+
+export async function createInboxMarkdownNote(
+  root: string,
+  fs: VaultFilesystem,
+  title: string,
+  markdownBody: string,
+): Promise<{lastModified: number; name: string; uri: string}> {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  if (!(await fs.exists(inbox))) {
+    await fs.mkdir(inbox);
+  }
+  const rows = await fs.listFiles(inbox);
+  const occupied = new Set(
+    rows
+      .filter(
+        r =>
+          (r.type === 'file' || r.type === undefined) &&
+          r.name.endsWith(MARKDOWN_EXTENSION),
+      )
+      .map(r => r.name),
+  );
+  const stem = sanitizeFileName(title);
+  const fileName = pickNextInboxMarkdownFileName(stem, occupied);
+  const uri = `${inbox}/${fileName}`;
+  const trimmed = markdownBody.trim();
+  const body = trimmed ? `${trimmed}\n` : '';
+  await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
+  await syncInboxMarkdownIndex(root, fs);
+  return {lastModified: Date.now(), name: fileName, uri};
+}
+
+export async function saveNoteMarkdown(
+  noteUri: string,
+  fs: VaultFilesystem,
+  markdownBody: string,
+): Promise<void> {
+  const trimmed = markdownBody.trim();
+  const body = trimmed ? `${trimmed}\n` : '';
+  await fs.writeFile(noteUri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
+}

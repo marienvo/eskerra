@@ -1,126 +1,179 @@
-# Notebox (Android MVP)
+# Notebox
 
-Notebox is an Android-first React Native MVP that lets you pick a Notes directory, then stores app settings in a hidden `/.notebox/settings.json` file inside that directory by using the Android Storage Access Framework (SAF).
+Notebox is a **notes + podcast** companion with two apps in one repo:
 
-## What this MVP does
+| App | Location | Stack |
+| --- | --- | --- |
+| **Mobile** | [`apps/mobile/`](apps/mobile/) | React Native (**Android only**) |
+| **Desktop** | [`apps/desktop/`](apps/desktop/) | Tauri 2 + Vite + React (Linux-first; Fedora / GNOME is the reference) |
+| **Shared logic** | [`packages/notebox-core/`](packages/notebox-core/) | TypeScript (vault paths, settings, `VaultFilesystem`, audio types) |
 
-- Lets you select a Notes directory with the Android folder picker.
-- Persists the selected directory URI in AsyncStorage.
-- Creates and updates `/.notebox/settings.json`.
-- Exposes one demo setting: `displayName`.
-- Supports a one-command debug APK build/install flow.
+Both apps use the same **vault layout** on disk: user-chosen root folder, then `Inbox/`, `General/`, and `/.notebox/settings.json` (see [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)).
 
-## Prerequisites
+---
 
-- Node.js `>= 22.11.0`
-- npm (bundled with Node)
+## Prerequisites (all developers)
+
+- **Node.js** `>= 22.11.0` and **npm**
+- From the **repository root**, run **`npm install`** once (workspaces hoist dependencies).
+
+---
+
+## Quick commands (run from repo root)
+
+| Command | What it does |
+| --- | --- |
+| `npm run mobile` | Start Metro for the Android app |
+| `npm run mobile:android` | Build/run the Android app on a device or emulator |
+| `npm run desktop` | **Desktop:** `tauri dev` (Vite + native window) |
+| `npm run desktop:build` | **Desktop:** production web build + `tauri build` |
+| `npm test` | `@notebox/core` (Vitest) + mobile (Jest) + release helper tests |
+| `npm run lint` | ESLint for mobile + desktop |
+
+Workspace-scoped scripts (same as above, explicit):
+
+```bash
+npm run start -w @notebox/mobile
+npm run desktop:dev -w @notebox/desktop
+```
+
+---
+
+## Mobile (Android)
+
+### What the mobile app does
+
+- Select a Notes directory with the Android folder picker (SAF).
+- Persist the selected tree URI in AsyncStorage.
+- Create/update `/.notebox/settings.json` (for example `displayName`).
+- Debug APK build/install scripts live under [`scripts/`](scripts/) and call Gradle in [`apps/mobile/android/`](apps/mobile/android/).
+
+### Extra prerequisites (Android only)
+
 - Java 17
 - Android Studio (SDK + emulator tools)
-- `adb` available on `PATH`
-- `ANDROID_HOME` configured
+- `adb` on `PATH`, `ANDROID_HOME` set
 
-For physical device installs via `adb`:
+For installs on a physical device: enable Developer Options and USB debugging.
 
-- Android phone with Developer Options enabled
-- USB debugging enabled and authorized for this machine
+### Local development (emulator + Fast Refresh)
 
-## Install dependencies
+1. Start an Android emulator (AVD Manager).
+2. Terminal 1 — Metro:
 
-```bash
-npm install
-```
+   ```bash
+   npm run mobile
+   ```
 
-## Local development (emulator + Fast Refresh)
+3. Terminal 2 — run the app:
 
-React Native provides Fast Refresh out of the box (HMR-like behavior). Most code edits appear in the running emulator immediately after save.
+   ```bash
+   npm run mobile:android
+   ```
 
-1. Start an Android emulator from Android Studio (AVD Manager).
-2. In terminal 1, start Metro:
+Press `r` in the Metro terminal for a full reload if Fast Refresh gets stuck.
 
-```bash
-npm run start
-```
+### Build APK and install on a phone
 
-3. In terminal 2, install and run the debug app on the emulator:
+**Debug** (expects Metro in dev; for quick installs):
 
 ```bash
-npm run android
+npm run build:apk -w @notebox/mobile
+npm run install:apk -w @notebox/mobile
+# or both:
+npm run apk -w @notebox/mobile
 ```
 
-After this, save changes in `*.ts`/`*.tsx` files to see Fast Refresh updates. If the app gets out of sync, press `r` in the Metro terminal for a full reload.
+APK output: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 
-## Build APK and install on phone
-
-### Debug build (development)
-
-Build debug APK:
+**Release** (JS bundled into the APK; no Metro on the device):
 
 ```bash
-npm run build:apk
+npm run build:apk-release -w @notebox/mobile
+npm run install:apk-release -w @notebox/mobile
+npm run apk-release -w @notebox/mobile
 ```
 
-Install APK to a connected Android device via `adb`:
+APK output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
+
+The release flow runs [`scripts/bump-release-version.mjs`](scripts/bump-release-version.mjs) first (see script comments). Debug APK builds do **not** bump versions.
+
+Release signing defaults to the **debug keystore** in [`apps/mobile/android/app/build.gradle`](apps/mobile/android/app/build.gradle) — fine for local testing, not for Play Store.
+
+### First-launch check (mobile)
+
+1. Open the app, tap **Choose Notes Directory**, pick a folder.
+2. Confirm `/.notebox/settings.json` exists.
+3. Change `displayName`, save, force-close and reopen to verify persistence.
+
+If Android revokes SAF access, the app should clear the saved URI and send you back to setup.
+
+---
+
+## Desktop (Tauri)
+
+The desktop app is optional for mobile-only work. To run it you need:
+
+1. **Rust** (e.g. [rustup](https://rustup.rs/) `stable`) — Tauri builds the native shell with Cargo.
+2. **Linux system libraries** for WebKitGTK and GTK (Tauri’s webview and GUI stack). Follow the official list: [Tauri: Linux prerequisites](https://v2.tauri.app/start/prerequisites/#linux).
+
+### Fedora (common reference)
+
+Install the dependencies Tauri documents for Fedora, then the **C development** group:
 
 ```bash
-npm run install:apk
+sudo dnf check-update
+sudo dnf install webkit2gtk4.1-devel \
+  openssl-devel \
+  curl wget file \
+  libappindicator-gtk3-devel \
+  librsvg2-devel \
+  libxdo-devel
+sudo dnf group install "c-development"
 ```
 
-Build + install in one command:
+If `cargo` / `tauri dev` fails with **`gdk-sys` / `pango-sys` not found** (missing `gdk-3.0.pc` / `pango.pc`), install GTK/Pango development packages explicitly:
 
 ```bash
-npm run apk
+sudo dnf install gtk3-devel pango-devel
 ```
 
-Expected APK path: `android/app/build/outputs/apk/debug/app-debug.apk`
-
-### Release build (standalone, no Metro required)
-
-A release build bundles the JavaScript into the APK itself. The app works without a Metro server running on your computer.
-
-Build release APK (takes some time):
+Then from the **repo root**:
 
 ```bash
-npm run build:apk-release
+npm run desktop
 ```
 
-The release script runs [`scripts/bump-release-version.mjs`](scripts/bump-release-version.mjs) first: the **first** release build on this machine records the current Git branch and commit under `.local/build-version-state.json` (gitignored) without changing the version. Later release builds **bump** `package.json` and Android `versionName` / `versionCode`: **minor** (`0.x.0`) the first time you release on a branch name that was not seen before, otherwise **patch** (`0.0.x`) when the commit SHA was not built before. Debug builds (`npm run build:apk`) do not bump. Building `assembleRelease` only from Android Studio skips the bump; use `npm run build:apk-release` for the full flow.
+This runs `desktop:dev` in [`apps/desktop`](apps/desktop/) (`tauri dev`: starts Vite and the native window).
 
-Install release APK to a connected Android device via `adb`:
+Production-style build:
 
 ```bash
-npm run install:apk-release
+npm run desktop:build
 ```
 
-Build + install in one command:
+Vault selection, `.notebox` settings, inbox notes, MP3 streaming, and Linux **MPRIS** (play/pause from GNOME) are described in [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md).
+
+---
+
+## Tests and lint
 
 ```bash
-npm run apk-release
+npm test
+npm run lint
 ```
 
-Expected APK path: `android/app/build/outputs/apk/release/app-release.apk`
-
-> **Note:** The release build is signed with the debug keystore by default (see `android/app/build.gradle`). This is fine for local testing but not for publishing to the Play Store.
-
-## First-launch verification flow
-
-1. Open the app.
-2. Tap **Choose Notes Directory**.
-3. Select an existing Notes folder in the Android picker.
-4. App initializes `/.notebox/settings.json`.
-5. Update `displayName` and tap **Save**.
-6. Force-close and relaunch the app to verify persisted URI and setting.
-
-## Permission recovery behavior
-
-If Android revokes folder permission, the app detects invalid access during bootstrap, clears the saved URI, and routes back to setup so you can choose a directory again.
-
-## Notes on hidden folders
-
-Some file managers hide dot-directories by default. If you do not see `/.notebox`, check your file manager hidden-files setting. In-app save/read behavior is the source of truth.
+---
 
 ## Known limitations
 
-- Android-only MVP.
-- Single settings file and one demo field (`displayName`).
-- No sync, backend, authentication, or multi-device coordination.
-- SAF behavior can vary slightly between OEM Android picker implementations.
+- **Mobile:** Android only (see [`specs/architecture/platform-targets.md`](specs/architecture/platform-targets.md)).
+- **Desktop:** developed and tested primarily on **Linux**; other OS targets are best-effort upstream behavior.
+- No sync service, backend, or multi-device coordination beyond sharing the same folder (for example via Syncthing) and the shared vault files.
+
+---
+
+## More documentation
+
+- Architecture: [`specs/architecture/`](specs/architecture/)
+- Desktop vs mobile contract: [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)
