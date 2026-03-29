@@ -1,6 +1,6 @@
 {
   "name": "@notebox/mobile",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -30,8 +30,8 @@
     "@react-navigation/stack": "^7.8.6",
     "@sentry/react-native": "^6.22.0",
     "fast-xml-parser": "^5.5.8",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.84.1",
     "react-native-gesture-handler": "^2.30.0",
     "react-native-keyboard-controller": "^1.21.2",

@@ -56,34 +56,39 @@ function init(): void {
     return;
   }
 
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: __DEV__ ? 'development' : 'production',
-    sendDefaultPii: false,
-    /**
-     * Android: attach all threads to logged events for ANR/error triage (e.g. REACT-NATIVE-3)
-     * without enabling performance transactions (Phase 1 keeps tracesSampleRate: 0).
-     */
-    attachThreads: true,
-    enableAutoPerformanceTracing: false,
-    enableAutoSessionTracking: true,
-    tracesSampleRate: 0,
-    profilesSampleRate: 0,
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 0,
-    enableAppHangTracking: false,
-    attachScreenshot: false,
-    attachViewHierarchy: false,
-    enableCaptureFailedRequests: false,
-    patchGlobalPromise: true,
-    release: `notebox@${packageJson.version}`,
-    beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
-      return scrubEvent(event as unknown as Event) as ErrorEvent;
-    },
-    beforeBreadcrumb(crumb: Breadcrumb) {
-      return scrubBreadcrumb(crumb);
-    },
-  });
+  try {
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: __DEV__ ? 'development' : 'production',
+      sendDefaultPii: false,
+      /**
+       * Android: attach all threads to logged events for ANR/error triage (e.g. REACT-NATIVE-3)
+       * without enabling performance transactions (Phase 1 keeps tracesSampleRate: 0).
+       */
+      attachThreads: true,
+      enableAutoPerformanceTracing: false,
+      enableAutoSessionTracking: true,
+      tracesSampleRate: 0,
+      profilesSampleRate: 0,
+      replaysSessionSampleRate: 0,
+      replaysOnErrorSampleRate: 0,
+      enableAppHangTracking: false,
+      attachScreenshot: false,
+      attachViewHierarchy: false,
+      enableCaptureFailedRequests: false,
+      patchGlobalPromise: true,
+      release: `notebox@${packageJson.version}`,
+      beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
+        return scrubEvent(event as unknown as Event) as ErrorEvent;
+      },
+      beforeBreadcrumb(crumb: Breadcrumb) {
+        return scrubBreadcrumb(crumb);
+      },
+    });
+  } catch (error) {
+    console.error('[notebox:Sentry] init failed', error);
+    return;
+  }
 
   attachRingBufferTailOnce().catch(() => undefined);
 }

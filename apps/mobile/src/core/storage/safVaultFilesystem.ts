@@ -1,10 +1,15 @@
-import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
+import type {
+  VaultDirEntry,
+  VaultFilesystem,
+  VaultReadOptions,
+  VaultWriteOptions,
+} from '@notebox/core';
 import {
   exists,
   listFiles,
-  mkdir,
+  mkdir as safMkdir,
   readFile,
-  unlink,
+  unlink as safUnlink,
   writeFile,
 } from 'react-native-saf-x';
 
@@ -20,16 +25,23 @@ type SafDocumentFile = {
  */
 
 export const safVaultFilesystem: VaultFilesystem = {
-  exists,
-  mkdir,
-  async readFile(uri, options) {
-    return readFile(uri, options);
+  exists: (uri: string) => exists(uri),
+  mkdir: async (uri: string): Promise<void> => {
+    await safMkdir(uri);
   },
-  async writeFile(uri, content, options) {
-    return writeFile(uri, content, options);
+  readFile: async (uri: string, options: VaultReadOptions): Promise<string> =>
+    readFile(uri, options),
+  writeFile: async (
+    uri: string,
+    content: string,
+    options: VaultWriteOptions,
+  ): Promise<void> => {
+    await writeFile(uri, content, options);
   },
-  unlink,
-  async listFiles(directoryUri): Promise<VaultDirEntry[]> {
+  unlink: async (uri: string): Promise<void> => {
+    await safUnlink(uri);
+  },
+  listFiles: async (directoryUri: string): Promise<VaultDirEntry[]> => {
     const documents = (await listFiles(directoryUri)) as SafDocumentFile[];
     return documents.map(document => ({
       lastModified:

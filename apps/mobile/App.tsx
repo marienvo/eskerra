@@ -157,30 +157,33 @@ function App() {
     };
   }, []);
 
+  // KeyboardProvider mounts only after bootstrap so its native view does not share the
+  // first commit with StartupSplashContent (Reanimated), which crashed some cold starts.
+
   return (
     <GluestackUIProvider colorMode={isDarkMode ? 'dark' : 'light'} config={config}>
       <GestureHandlerRootView style={styles.container}>
-        <KeyboardProvider>
-          <SafeAreaProvider>
-            <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-            {initialRoute === null ? (
-              <View
-                accessibilityLabel="Loading"
-                style={[
-                  styles.loadingContainer,
-                  isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
-                ]}>
-                <StartupSplashContent isDarkMode={isDarkMode} />
-              </View>
-            ) : (
+        <SafeAreaProvider>
+          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+          {initialRoute === null ? (
+            <View
+              accessibilityLabel="Loading"
+              style={[
+                styles.loadingContainer,
+                isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
+              ]}>
+              <StartupSplashContent isDarkMode={isDarkMode} />
+            </View>
+          ) : (
+            <KeyboardProvider>
               <VaultProvider initialSession={initialSession}>
                 <NotesProvider>
                   <RootNavigator initialRouteName={initialRoute} />
                 </NotesProvider>
               </VaultProvider>
-            )}
-          </SafeAreaProvider>
-        </KeyboardProvider>
+            </KeyboardProvider>
+          )}
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </GluestackUIProvider>
   );
