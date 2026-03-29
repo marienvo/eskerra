@@ -43,6 +43,10 @@ The following are **identical on disk** once a vault root is chosen:
 - **Desktop** uses direct filesystem access; still avoid full vault scans on startup unless the first screen requires it (same product instinct as mobile). Heavy work should stay off the first paint path.
 - **Measurement:** when changing startup or indexing behavior on either app, add simple timing logs per `.cursor/rules/performance.mdc`.
 
+## Roadmap
+
+Phased work to reach **feature parity** with the current Android app (inbox, podcasts from vault, RSS refresh, played state, shell polish) lives in [`specs/plans/desktop-feature-parity-phased.md`](../plans/desktop-feature-parity-phased.md). Use it to schedule **layout and QA passes between phases**.
+
 ## Testing notes
 
 - **TypeScript:** `npm test` at the repo root runs `@notebox/core` (Vitest), `apps/mobile` (Jest), and release helper Node tests.
