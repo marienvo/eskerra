@@ -6,6 +6,7 @@
     "packages/*"
   ],
   "scripts": {
+    "apk-release": "npm run apk-release -w @notebox/mobile",
     "mobile": "npm run start -w @notebox/mobile",
     "mobile:android": "npm run android -w @notebox/mobile",
     "mobile:ios": "npm run ios -w @notebox/mobile",
