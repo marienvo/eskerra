@@ -270,6 +270,43 @@
   font-size: 0.85rem;
 }
 
+/* Episodes list: matches mobile PodcastsTabHeader vault-refresh strip (indeterminate). */
+.episodes-refresh-strip {
+  flex-shrink: 0;
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid transparent;
+  background-color: transparent;
+}
+
+.episodes-refresh-strip--active {
+  background-color: rgba(79, 175, 230, 0.12);
+  border-bottom-color: rgba(79, 175, 230, 0.35);
+}
+
+.episodes-refresh-strip__segment {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 38%;
+  background-color: #4fafe6;
+  animation: episodes-refresh-strip-sweep 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes episodes-refresh-strip-sweep {
+  from {
+    left: 0;
+  }
+
+  to {
+    left: 62%;
+  }
+}
+
 .pane-footer {
   flex-shrink: 0;
   padding: 0.5rem 0.6rem;

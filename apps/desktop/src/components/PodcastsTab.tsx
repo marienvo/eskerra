@@ -8,6 +8,7 @@ import {getDesktopAudioPlayer} from '../lib/htmlAudioPlayer';
 import {runPodcastPhase1Desktop} from '../lib/podcasts/podcastPhase1Desktop';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
 import {readPlaylistEntry, writePlaylistEntry} from '../lib/vaultBootstrap';
+import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
 
 type PodcastsTabProps = {
   vaultRoot: string;
@@ -48,6 +49,8 @@ export function PodcastsTab({
   const [playerLabel, setPlayerLabel] = useState<'idle' | 'paused' | 'playing' | 'loading'>('idle');
 
   const playbackRef = useRef<{episodeId: string; mp3Url: string} | null>(null);
+
+  const episodesRefreshVisible = useDeferredLoadingIndicator(loading, 100);
 
   const loadPlaylistSnapshot = useCallback(async () => {
     try {
@@ -221,7 +224,14 @@ export function PodcastsTab({
       <Panel id="episodes" className="panel-surface" minSize={20} defaultSize="38%">
         <div className="pane-header">
           <span className="pane-title">Episodes</span>
-          {loading ? <span className="muted small">Loading…</span> : null}
+        </div>
+        <div
+          className={
+            episodesRefreshVisible ? 'episodes-refresh-strip episodes-refresh-strip--active' : 'episodes-refresh-strip'
+          }
+          aria-hidden
+        >
+          {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
         </div>
         <div className="episode-scroll">
           {sections.map(section => (
