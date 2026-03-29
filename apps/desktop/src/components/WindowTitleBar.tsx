@@ -82,7 +82,14 @@ export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
   return (
     <header className="window-title-bar">
       <div className="window-title-bar-leading">
-        <img className="window-title-bar-icon" src={logoEskerraUrl} alt="" width={29} height={29} />
+        <img
+          className="window-title-bar-icon"
+          src={logoEskerraUrl}
+          alt=""
+          width={29}
+          height={29}
+          {...(tauri ? {'data-tauri-drag-region': true} : {})}
+        />
         <DemoMenuBar onOpenSettings={onOpenSettings} />
       </div>
       <div className="window-title-bar-drag" data-tauri-drag-region />
