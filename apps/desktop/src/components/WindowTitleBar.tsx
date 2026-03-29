@@ -98,9 +98,11 @@ export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
           <div className="window-title-bar-controls" role="group" aria-label="Window">
             <button
               type="button"
-              className="window-ctrl window-ctrl-minimize"
+              className="window-ctrl app-tooltip-trigger window-ctrl-minimize"
+              aria-label="Minimize"
+              data-tooltip="Minimize"
+              data-tooltip-placement="inline-start"
               onClick={onMinimize}
-              title="Minimize"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
                 <rect x="3" y="7.5" width="10" height="1.5" rx="0.5" fill="currentColor" />
@@ -108,9 +110,11 @@ export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
             </button>
             <button
               type="button"
-              className="window-ctrl window-ctrl-maximize"
+              className="window-ctrl app-tooltip-trigger window-ctrl-maximize"
+              aria-label={maximized ? 'Restore' : 'Maximize'}
+              data-tooltip={maximized ? 'Restore' : 'Maximize'}
+              data-tooltip-placement="inline-start"
               onClick={onToggleMaximize}
-              title={maximized ? 'Restore' : 'Maximize'}
             >
               {maximized ? (
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
@@ -123,7 +127,14 @@ export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
                 </svg>
               )}
             </button>
-            <button type="button" className="window-ctrl window-ctrl-close" onClick={onClose} title="Close">
+            <button
+              type="button"
+              className="window-ctrl app-tooltip-trigger window-ctrl-close"
+              aria-label="Close"
+              data-tooltip="Close"
+              data-tooltip-placement="inline-start"
+              onClick={onClose}
+            >
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
                 <path
                   fill="currentColor"

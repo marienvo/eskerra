@@ -223,6 +223,76 @@ a:focus:not(:focus-visible) {
   background: var(--color-bg);
 }
 
+/*
+ * Desktop shell tooltips: styled via data-tooltip + .app-tooltip-trigger (see specs/design/desktop-tooltips.md).
+ * Do not use the native title attribute for icon-only actions; reserve title for edge cases like truncated text.
+ */
+.app-tooltip-trigger[data-tooltip] {
+  position: relative;
+}
+
+/* Tooltip: only after a short dwell — quick passes/clicks stay clean (aria-label for AT). */
+.app-tooltip-trigger[data-tooltip]::after {
+  position: absolute;
+  top: 50%;
+  z-index: 60;
+  padding: 0.22rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-brand-surface-bright, var(--color-surface));
+  box-shadow: none;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  content: attr(data-tooltip);
+  opacity: 0;
+  /* Hide as soon as hover/focus ends; no delay on exit */
+  transition:
+    opacity 0.12s ease 0s,
+    transform 0.12s ease 0s;
+}
+
+.app-tooltip-trigger[data-tooltip-placement='inline-end']::after,
+.app-tooltip-trigger[data-tooltip]:not([data-tooltip-placement])::after {
+  left: calc(100% + 0.35rem);
+  right: auto;
+  transform: translate(0.12rem, -50%);
+}
+
+.app-tooltip-trigger[data-tooltip-placement='inline-start']::after {
+  right: calc(100% + 0.35rem);
+  left: auto;
+  transform: translate(-0.12rem, -50%);
+}
+
+.app-tooltip-trigger[data-tooltip]:hover::after,
+.app-tooltip-trigger[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition:
+    opacity 0.14s ease 0.55s,
+    transform 0.14s ease 0.55s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tooltip-trigger[data-tooltip]::after {
+    transition:
+      opacity 0.08s ease 0s,
+      transform 0.08s ease 0s;
+  }
+
+  .app-tooltip-trigger[data-tooltip]:hover::after,
+  .app-tooltip-trigger[data-tooltip]:focus-visible::after {
+    /* No dwell delay when reduced motion is requested */
+    transition:
+      opacity 0.08s ease 0s,
+      transform 0.08s ease 0s;
+  }
+}
+
 .rail {
   flex: 0 0 auto;
   display: flex;
@@ -272,57 +342,6 @@ a:focus:not(:focus-visible) {
 .rail-tab.active:focus-visible {
   background: color-mix(in srgb, var(--color-accent) 88%, #000000);
   color: #ffffff;
-}
-
-/* Tooltip: only after a short dwell — quick passes/clicks stay clean (aria-label for AT). */
-.rail-tab::after {
-  position: absolute;
-  left: calc(100% + 0.35rem);
-  top: 50%;
-  z-index: 60;
-  padding: 0.22rem 0.45rem;
-  border-radius: 6px;
-  border: 1px solid var(--color-border-soft, var(--color-border));
-  background: var(--color-brand-surface-bright, var(--color-surface));
-  box-shadow: none;
-  color: var(--color-text);
-  font-size: 0.8rem;
-  font-weight: 500;
-  line-height: 1.2;
-  white-space: nowrap;
-  pointer-events: none;
-  content: attr(data-tooltip);
-  opacity: 0;
-  transform: translate(0.12rem, -50%);
-  /* Hide as soon as hover/focus ends; no delay on exit */
-  transition:
-    opacity 0.12s ease 0s,
-    transform 0.12s ease 0s;
-}
-
-.rail-tab:hover::after,
-.rail-tab:focus-visible::after {
-  opacity: 1;
-  transform: translate(0, -50%);
-  transition:
-    opacity 0.14s ease 0.55s,
-    transform 0.14s ease 0.55s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rail-tab::after {
-    transition:
-      opacity 0.08s ease 0s,
-      transform 0.08s ease 0s;
-  }
-
-  .rail-tab:hover::after,
-  .rail-tab:focus-visible::after {
-    /* No dwell delay when reduced motion is requested */
-    transition:
-      opacity 0.08s ease 0s,
-      transform 0.08s ease 0s;
-  }
 }
 
 .main-stage {

@@ -1,3 +1,9 @@
+# Notebox desktop (`@notebox/desktop`)
+
+Shell UX conventions for this app (including hover tooltips for icon actions) are documented in [`specs/design/desktop-tooltips.md`](../../specs/design/desktop-tooltips.md). Implementation details live in `src/App.css`.
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

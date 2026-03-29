@@ -56,11 +56,12 @@ export function InboxTab({
             <span className="pane-title">Log</span>
             <button
               type="button"
-              className="pane-header-add-btn icon-btn-ghost"
+              className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
               onClick={onAddEntry}
               disabled={busy}
               aria-label="Add entry"
-              title="Add entry"
+              data-tooltip="Add entry"
+              data-tooltip-placement="inline-start"
             >
               <span className="pane-header-add-btn__glyph" aria-hidden>
                 <MaterialIcon name="add" size={12} />
