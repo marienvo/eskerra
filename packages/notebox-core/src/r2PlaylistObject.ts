@@ -67,13 +67,23 @@ async function signedRequest(
   return exec(signed);
 }
 
+/** Signed GET/PUT/DELETE for an object key in the configured bucket (used by playlist helpers). */
+export async function r2SignedObjectRequest(
+  config: NoteboxR2Config,
+  objectKey: string,
+  init: RequestInit | undefined,
+  transport?: R2SignedRequestTransport,
+): Promise<Response> {
+  const url = buildR2ObjectUrl(config, objectKey);
+  const client = createR2Client(config);
+  return signedRequest(client, url, init, transport);
+}
+
 export async function getR2PlaylistObject(
   config: NoteboxR2Config,
   options?: R2PlaylistObjectOptions,
 ): Promise<PlaylistEntry | null> {
-  const url = buildR2ObjectUrl(config, PLAYLIST_FILE_NAME);
-  const client = createR2Client(config);
-  const res = await signedRequest(client, url, {method: 'GET'}, options?.transport);
+  const res = await r2SignedObjectRequest(config, PLAYLIST_FILE_NAME, {method: 'GET'}, options?.transport);
   if (res.status === 404) {
     return null;
   }
@@ -103,12 +113,10 @@ export async function putR2PlaylistObject(
   entry: PlaylistEntry,
   options?: R2PlaylistObjectOptions,
 ): Promise<void> {
-  const url = buildR2ObjectUrl(config, PLAYLIST_FILE_NAME);
-  const client = createR2Client(config);
   const body = serializePlaylistEntry(entry);
-  const res = await signedRequest(
-    client,
-    url,
+  const res = await r2SignedObjectRequest(
+    config,
+    PLAYLIST_FILE_NAME,
     {
       method: 'PUT',
       body,
@@ -131,9 +139,7 @@ export async function deleteR2PlaylistObject(
   config: NoteboxR2Config,
   options?: R2PlaylistObjectOptions,
 ): Promise<void> {
-  const url = buildR2ObjectUrl(config, PLAYLIST_FILE_NAME);
-  const client = createR2Client(config);
-  const res = await signedRequest(client, url, {method: 'DELETE'}, options?.transport);
+  const res = await r2SignedObjectRequest(config, PLAYLIST_FILE_NAME, {method: 'DELETE'}, options?.transport);
   if (res.status === 404) {
     return;
   }

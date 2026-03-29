@@ -41,12 +41,24 @@ export {
   type PlaylistWriteResult,
   serializePlaylistEntry,
 } from './playlist';
+export type {
+  FetchR2PlaylistConditionalOptions,
+  R2PlaylistConditionalResult,
+} from './r2PlaylistConditional';
+export {fetchR2PlaylistConditional} from './r2PlaylistConditional';
+export type {
+  CreatePlaylistEtagPollerOptions,
+  PlaylistEtagPoller,
+  PlaylistEtagPollerFetch,
+} from './playlistEtagPoller';
+export {createPlaylistEtagPoller} from './playlistEtagPoller';
 export type {R2PlaylistObjectOptions, R2SignedRequestTransport} from './r2PlaylistObject';
 export {
   buildR2ObjectUrl,
   deleteR2PlaylistObject,
   getR2PlaylistObject,
   putR2PlaylistObject,
+  r2SignedObjectRequest,
 } from './r2PlaylistObject';
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';

@@ -7,6 +7,9 @@ use serde::Serialize;
 pub struct R2SignedFetchResult {
     pub status: u16,
     pub body: String,
+    /// S3 / R2 `ETag` when present (e.g. conditional GET `200` or `304`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
 }
 
 /// Executes a pre-signed S3 request from the JS side (aws4fetch). WebView fetch to R2 fails with CORS.
@@ -40,7 +43,16 @@ pub async fn r2_signed_fetch(
 
     let res = req.send().await.map_err(|e| e.to_string())?;
     let status = res.status().as_u16();
+    let etag = res
+        .headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
     let body = res.text().await.map_err(|e| e.to_string())?;
 
-    Ok(R2SignedFetchResult { status, body })
+    Ok(R2SignedFetchResult {
+        status,
+        body,
+        etag,
+    })
 }

@@ -9,6 +9,7 @@ import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
 import {RailNav} from './components/RailNav';
 import {WindowTitleBar} from './components/WindowTitleBar';
+import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {openSettingsWindow} from './lib/openSettingsWindow';
@@ -34,7 +35,7 @@ import {
   setVaultSession,
   startVaultWatch,
 } from './lib/tauriVault';
-import {buildInboxMarkdownFromCompose, parseComposeInput} from '@notebox/core';
+import {buildInboxMarkdownFromCompose, parseComposeInput, type NoteboxSettings} from '@notebox/core';
 
 import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
 
@@ -51,6 +52,7 @@ export default function App() {
   const appRootClassName = maximized ? 'app-root app-root--maximized' : 'app-root';
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
+  const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
   const [settingsName, setSettingsName] = useState('Notebox');
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [selectedUri, setSelectedUri] = useState<string | null>(null);
@@ -98,6 +100,12 @@ export default function App() {
     vaultRoot,
   });
 
+  useDesktopPlaylistR2EtagPollingForMainWindow({
+    onRemotePlaylistChanged: bumpPlaylistRevision,
+    vaultRoot,
+    vaultSettings,
+  });
+
   const refreshNotes = useCallback(
     async (root: string) => {
       const list = await listInboxNotes(root, fs);
@@ -111,11 +119,13 @@ export default function App() {
     async (root: string) => {
       setBusy(true);
       setErr(null);
+      setVaultSettings(null);
       try {
         await setVaultSession(root);
         await bootstrapVaultLayout(root, fs);
         await syncInboxMarkdownIndex(root, fs);
-        await readVaultSettings(root, fs);
+        const shared = await readVaultSettings(root, fs);
+        setVaultSettings(shared);
         const local = await readVaultLocalSettings(root, fs);
         const label = local.displayName.trim();
         setSettingsName(label !== '' ? label : 'Notebox');
@@ -211,6 +221,14 @@ export default function App() {
     void listen('vault-files-changed', () => {
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
+      void (async () => {
+        try {
+          const next = await readVaultSettings(vaultRoot, fs);
+          setVaultSettings(next);
+        } catch {
+          // ignore: transient FS race
+        }
+      })();
     })
       .then(fn => {
         if (cancelled) {
@@ -224,7 +242,7 @@ export default function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, [vaultRoot, refreshNotes]);
+  }, [vaultRoot, refreshNotes, fs]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {

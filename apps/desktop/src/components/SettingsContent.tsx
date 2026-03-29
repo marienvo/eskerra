@@ -47,11 +47,20 @@ export function SettingsContent({
 
   useEffect(() => {
     const r2 = vaultSettings.r2;
-    setR2Endpoint(r2?.endpoint ?? '');
-    setR2Bucket(r2?.bucket ?? '');
-    setR2AccessKeyId(r2?.accessKeyId ?? '');
-    setR2SecretAccessKey(r2?.secretAccessKey ?? '');
-    setR2Jurisdiction(r2?.jurisdiction ?? 'default');
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setR2Endpoint(r2?.endpoint ?? '');
+      setR2Bucket(r2?.bucket ?? '');
+      setR2AccessKeyId(r2?.accessKeyId ?? '');
+      setR2SecretAccessKey(r2?.secretAccessKey ?? '');
+      setR2Jurisdiction(r2?.jurisdiction ?? 'default');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [vaultSettings.r2]);
 
   const handleSave = async () => {

@@ -23,14 +23,26 @@ export const desktopR2SignedTransport: R2SignedRequestTransport = async (
         headers.push(['content-type', ct]);
       }
     }
+    if (m === 'GET') {
+      const ifNoneMatch = signedRequest.headers.get('If-None-Match');
+      if (ifNoneMatch) {
+        headers.push(['if-none-match', ifNoneMatch]);
+      }
+    }
   } else {
-    signedRequest.headers.forEach((v, k) => headers.push([k, v]));
+    for (const [k, v] of signedRequest.headers.entries()) {
+      headers.push([k, v]);
+    }
   }
-  const result = await invoke<{status: number; body: string}>('r2_signed_fetch', {
+  const result = await invoke<{status: number; body: string; etag?: string | null}>('r2_signed_fetch', {
     method: signedRequest.method,
     url: signedRequest.url,
     headers,
     body,
   });
-  return new Response(result.body, {status: result.status});
+  const responseHeaders = new Headers();
+  if (typeof result.etag === 'string' && result.etag.length > 0) {
+    responseHeaders.set('etag', result.etag);
+  }
+  return new Response(result.body, {status: result.status, headers: responseHeaders});
 };
