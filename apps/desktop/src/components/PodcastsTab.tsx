@@ -31,6 +31,11 @@ function formatMs(ms: number | null): string {
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
 
+/** Strip markdown bold markers from list labels (feeds sometimes include `**…**`, which looks like uneven bolding). */
+function episodeListLabel(text: string): string {
+  return text.replaceAll('**', '').trim();
+}
+
 export function PodcastsTab({
   vaultRoot,
   fs,
@@ -239,8 +244,8 @@ export function PodcastsTab({
                     <li key={ep.id}>
                       <button type="button" className="episode-row" onClick={() => void playEpisode(ep)}>
                         <span className="ep-date">{ep.date}</span>
-                        <span className="ep-title">{ep.title}</span>
-                        <span className="ep-series muted small">{ep.seriesName}</span>
+                        <span className="ep-title">{episodeListLabel(ep.title)}</span>
+                        <span className="ep-series muted small">{episodeListLabel(ep.seriesName)}</span>
                       </button>
                     </li>
                   ))}

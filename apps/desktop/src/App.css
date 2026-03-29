@@ -339,6 +339,7 @@ a:focus:not(:focus-visible) {
   margin: 0;
   overflow: auto;
   flex: 1;
+  text-rendering: auto;
 }
 
 .note-list li {
@@ -355,6 +356,12 @@ a:focus:not(:focus-visible) {
   cursor: pointer;
   color: var(--color-text);
   font: inherit;
+  font-synthesis: none;
+}
+
+/* Capture / Inbox: opaque row matches pane — see specs/design/desktop-text-rendering.md */
+[data-app-surface='capture'] .note-list button {
+  background: var(--color-capture-panel);
 }
 
 .note-list button,
@@ -381,6 +388,7 @@ a:focus:not(:focus-visible) {
   resize: none;
   background: var(--color-editor-bg);
   color: var(--color-editor-text);
+  text-rendering: optimizeLegibility;
 }
 
 .panel-surface .editor {
@@ -457,16 +465,22 @@ button:disabled {
   overflow: auto;
   flex: 1;
   padding: 0.35rem 0.5rem 0.75rem;
+  /* Crisper list text than :root optimizeLegibility (avoids fuzzy synthetic “500” look on Linux). */
+  text-rendering: auto;
 }
 
 .episode-section {
   margin-bottom: 0.75rem;
 }
 
+/* Small caps: see specs/design/desktop-text-rendering.md — avoid 700 + tiny size on WebKit. */
 .section-heading {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-synthesis: none;
+  letter-spacing: 0.04em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
   color: var(--color-muted);
   margin: 0.5rem 0 0.35rem;
   text-transform: uppercase;
@@ -488,18 +502,17 @@ button:disabled {
   padding: 0.45rem 0.4rem;
   border: none;
   border-radius: 6px;
-  background: transparent;
+  /* Opaque layer matching the pane (not transparent) so WebKit text AA matches hover. */
+  background: var(--color-consume-surface);
   cursor: pointer;
   font: inherit;
+  font-weight: 400;
+  font-synthesis: none;
   color: var(--color-text);
 }
 
 .episode-row:hover {
   background: var(--color-row-hover);
-}
-
-.episode-row:hover .ep-title {
-  font-weight: 500;
 }
 
 .ep-date {
@@ -510,8 +523,9 @@ button:disabled {
 }
 
 .ep-title {
-  font-weight: 500;
+  font-weight: 400;
   font-size: 0.88rem;
+  font-synthesis: none;
 }
 
 .ep-series {
@@ -535,6 +549,8 @@ button:disabled {
   padding: 0.5rem 0.6rem 0.75rem;
   overflow: auto;
   flex: 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
 }
 
 .playlist-dl {
