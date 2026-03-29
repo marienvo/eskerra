@@ -14,6 +14,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
     alias: {
       '@notebox/core': path.resolve(__dirname, '../../packages/notebox-core/src'),
+      '@notebox/brand': path.resolve(__dirname, '../../assets/brand'),
     },
   },
 });

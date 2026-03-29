@@ -79,5 +79,6 @@ Reserved for when dark mode is explicitly supported—**do not** wire `prefers-c
 ## Related
 
 - Accent shortcut: [accent-colors.md](accent-colors.md)
+- Desktop brand (shell-first): [brand-tokens-desktop.md](brand-tokens-desktop.md)
 - Desktop WebKit text typography: [desktop-text-rendering.md](desktop-text-rendering.md)
 - Mobile constant: `apps/mobile/src/core/ui/accentColor.ts` should stay aligned with `accent`.

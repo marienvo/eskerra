@@ -39,28 +39,31 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   min-height: 44px;
   height: 44px;
-  padding: 0.15rem 0.35rem 0.15rem 0.65rem;
+  padding: 0.15rem 0.35rem 0.15rem 0.5rem;
   box-sizing: border-box;
   border-bottom: 1px solid var(--color-titlebar-border);
   background: var(--color-titlebar-bg);
   user-select: none;
 }
 
-.window-title-bar-drag {
-  flex: 1;
+.window-title-bar-leading {
   display: flex;
   align-items: center;
-  min-width: 0;
-  padding: 0.2rem 0.5rem 0.2rem 0.2rem;
-  cursor: default;
+  flex-shrink: 0;
+  gap: 0.35rem;
 }
 
-.window-title-bar-title {
-  font-weight: 600;
-  font-size: 1.05rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.window-title-bar-icon {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.window-title-bar-drag {
+  flex: 1;
+  min-width: 2rem;
+  cursor: default;
 }
 
 .window-title-bar-trailing {
@@ -70,23 +73,80 @@ a:focus:not(:focus-visible) {
   gap: 0.15rem;
 }
 
-.window-title-bar-app-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--color-titlebar-border);
-  background: var(--color-titlebar-bg);
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: 1.1rem;
+/* Demo menu (title bar) */
+.demo-menu-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.05rem;
 }
 
-.window-title-bar-app-button:hover {
+.demo-menu-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.demo-menu-trigger {
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--color-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.demo-menu-trigger:hover,
+.demo-menu-trigger[aria-expanded='true'] {
   background: var(--color-titlebar-hover);
+}
+
+.demo-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 200;
+  min-width: 11rem;
+  margin: 0.15rem 0 0;
+  padding: 0.35rem 0.4rem;
+  list-style: none;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-brand-surface-bright, var(--color-surface));
+  box-shadow: 0 8px 24px rgba(15, 20, 24, 0.1);
+}
+
+.demo-menu-row {
+  display: block;
+  width: 100%;
+  padding: 0.28rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: var(--color-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.demo-menu-row:hover:not(:disabled) {
+  background: var(--color-row-hover);
+}
+
+.demo-menu-row:disabled {
+  color: var(--color-muted);
+  cursor: default;
+}
+
+.demo-menu-sep {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--color-border-soft, var(--color-border));
+  list-style: none;
+  padding: 0;
 }
 
 .window-title-bar-controls {
@@ -152,17 +212,17 @@ a:focus:not(:focus-visible) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--color-bg);
 }
 
 .rail {
-  flex: 0 0 4.5rem;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: center;
   gap: 0.35rem;
-  padding: 0.5rem 0.35rem;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-rail);
+  padding: 0.5rem 0.45rem;
+  background: transparent;
 }
 
 .rail-tab {
@@ -170,6 +230,7 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   align-items: center;
   gap: 0.2rem;
+  min-width: 3.25rem;
   padding: 0.45rem 0.25rem;
   border: none;
   border-radius: 8px;
@@ -183,7 +244,7 @@ a:focus:not(:focus-visible) {
 }
 
 .rail-tab:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--color-titlebar-hover);
   color: var(--color-text);
   font-weight: 600;
 }
@@ -193,9 +254,9 @@ a:focus:not(:focus-visible) {
 }
 
 .rail-tab.active {
-  background: var(--color-surface);
+  background: var(--color-brand-surface-bright);
   color: var(--color-text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
 }
 
 .rail-icon {
@@ -245,13 +306,28 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
 }
 
+.panel-group.fill,
+.panel-group.fill-vertical {
+  box-sizing: border-box;
+  padding: var(--panel-grid-padding);
+}
+
+/* Horizontal splits: no flex gap — resize separator supplies half-gutter each side so the center track matches other gaps */
+.panel-group.fill {
+  gap: 0;
+}
+
+.panel-group.fill-vertical {
+  gap: var(--panel-grid-gap);
+}
+
 .panel-surface {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: var(--color-surface);
-  border-radius: 0;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -265,13 +341,55 @@ a:focus:not(:focus-visible) {
 }
 
 .resize-sep {
-  flex: 0 0 6px;
-  background: var(--color-border);
+  flex: 0 0 5px;
+  position: relative;
+  box-sizing: border-box;
+  margin-inline: calc(var(--panel-grid-gap) / 2);
   cursor: col-resize;
+  background: transparent;
+}
+
+.resize-sep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 55%,
+    transparent 100%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 5%, transparent);
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.resize-sep:hover::after {
+  opacity: 1;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 55%,
+    transparent 100%
+  );
 }
 
 .panel-group.fill-vertical .resize-sep {
   cursor: row-resize;
+  margin-inline: 0;
+}
+
+.panel-group.fill-vertical .resize-sep::after {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 55%,
+    transparent 100%
+  );
 }
 
 .pane-header {
@@ -281,7 +399,7 @@ a:focus:not(:focus-visible) {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.45rem 0.6rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-soft, var(--color-border));
   background: var(--color-editor-bg);
 }
 
@@ -330,7 +448,7 @@ a:focus:not(:focus-visible) {
 .pane-footer {
   flex-shrink: 0;
   padding: 0.5rem 0.6rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-soft, var(--color-border));
 }
 
 .note-list {
@@ -697,6 +815,7 @@ button:disabled {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: var(--panel-grid-gap);
   overflow: hidden;
 }
 
@@ -710,7 +829,6 @@ button:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-top: 1px solid var(--color-border);
 }
 
 .podcasts-playlist .playlist-body {
@@ -723,4 +841,24 @@ input::placeholder,
 textarea::placeholder {
   color: var(--color-muted);
   opacity: 1;
+}
+
+/* Native-framed settings webview (no custom title bar) */
+.settings-window-root {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 1rem 1.1rem 1.25rem;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.settings-window-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 24rem;
+}
+
+.settings-content {
+  max-width: 28rem;
 }

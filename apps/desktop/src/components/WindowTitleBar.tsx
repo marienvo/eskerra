@@ -2,12 +2,15 @@ import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 import {useCallback, useEffect, useState} from 'react';
 
+import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
+
+import {DemoMenuBar} from './DemoMenuBar';
+
 type WindowTitleBarProps = {
-  title: string;
-  onSettingsClick?: () => void;
+  onOpenSettings: () => void;
 };
 
-export function WindowTitleBar({title, onSettingsClick}: WindowTitleBarProps) {
+export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
   const [maximized, setMaximized] = useState(false);
   const tauri = isTauri();
 
@@ -78,20 +81,12 @@ export function WindowTitleBar({title, onSettingsClick}: WindowTitleBarProps) {
 
   return (
     <header className="window-title-bar">
-      <div className="window-title-bar-drag" data-tauri-drag-region>
-        <span className="window-title-bar-title">{title}</span>
+      <div className="window-title-bar-leading">
+        <img className="window-title-bar-icon" src={logoEskerraUrl} alt="" width={22} height={22} />
+        <DemoMenuBar onOpenSettings={onOpenSettings} />
       </div>
+      <div className="window-title-bar-drag" data-tauri-drag-region />
       <div className="window-title-bar-trailing">
-        {onSettingsClick ? (
-          <button
-            type="button"
-            className="window-title-bar-app-button"
-            onClick={onSettingsClick}
-            title="Settings"
-          >
-            <span aria-hidden>⚙</span>
-          </button>
-        ) : null}
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">
             <button

@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "@notebox/core": ["../../packages/notebox-core/src/index.ts"],
-      "@notebox/core/*": ["../../packages/notebox-core/src/*"]
+      "@notebox/core/*": ["../../packages/notebox-core/src/*"],
+      "@notebox/brand/*": ["../../assets/brand/*"]
     },
 
     /* Linting */

@@ -8,8 +8,8 @@ import {AddNoteModal} from './components/AddNoteModal';
 import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
 import {RailNav} from './components/RailNav';
-import {SettingsModal} from './components/SettingsModal';
 import {WindowTitleBar} from './components/WindowTitleBar';
+import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {
   DEFAULT_LAYOUTS,
@@ -24,7 +24,6 @@ import {
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
-  writeVaultSettings,
 } from './lib/vaultBootstrap';
 import {
   createTauriVaultFilesystem,
@@ -52,7 +51,6 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null);
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [layoutsReady, setLayoutsReady] = useState(false);
@@ -215,21 +213,6 @@ export default function App() {
     await hydrateVault(dir);
   };
 
-  const saveDisplayName = async () => {
-    if (!vaultRoot) {
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      await writeVaultSettings(vaultRoot, fs, {displayName: settingsName});
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const addNote = async (title: string, body: string) => {
     if (!vaultRoot) {
       return;
@@ -265,20 +248,6 @@ export default function App() {
     }
   };
 
-  const refreshFromDisk = async () => {
-    if (!vaultRoot) {
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      await refreshNotes(vaultRoot);
-      setFsRefreshNonce(n => n + 1);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const persistInboxLayout = useCallback((layout: Layout) => {
     setLayouts(prev => {
       const next = {...prev, inbox: layout};
@@ -298,7 +267,7 @@ export default function App() {
   if (!vaultRoot) {
     return (
       <div className="app-root">
-        <WindowTitleBar title={settingsName} />
+        <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
           <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
@@ -314,7 +283,7 @@ export default function App() {
   if (!layoutsReady) {
     return (
       <div className="app-root">
-        <WindowTitleBar title={settingsName} />
+        <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
         </div>
@@ -324,7 +293,7 @@ export default function App() {
 
   return (
     <div className="app-root">
-      <WindowTitleBar title={settingsName} onSettingsClick={() => setSettingsOpen(true)} />
+      <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
 
       {err ? (
         <div className="error-banner" role="alert">
@@ -365,17 +334,6 @@ export default function App() {
           ) : null}
         </main>
       </div>
-
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        displayName={settingsName}
-        onDisplayNameChange={setSettingsName}
-        onSaveDisplayName={() => void saveDisplayName()}
-        onChangeFolder={() => void pickFolder()}
-        onRefreshVault={() => void refreshFromDisk()}
-        busy={busy}
-      />
 
       <AddNoteModal
         open={addNoteOpen}
