@@ -34,6 +34,9 @@ html {
   --color-editor-bg: #ffffff;
   --color-editor-text: #111418;
 
+  /* Window chrome (frameless webview edge) */
+  --color-window-border: #1a1c1e;
+
   /* Chrome (rail strip uses shell background — no separate rail fill) */
   --color-rail: var(--color-brand-bg);
   --color-titlebar-bg: #e0e0e2;
