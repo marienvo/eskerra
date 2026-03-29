@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 
 import {
+  isPlaylistR2PollEchoFromOwnDevice,
   isValidPlaylistEntry,
   normalizePlaylistEntryForSync,
   pickNewerPlaylistEntry,
@@ -57,5 +58,16 @@ describe('playlist', () => {
   it('serializePlaylistEntry includes updatedAt', () => {
     const entry = {...legacy, controlRevision: 0, playbackOwnerId: '', updatedAt: 99};
     expect(JSON.parse(serializePlaylistEntry(entry))).toEqual(entry);
+  });
+
+  it('isPlaylistR2PollEchoFromOwnDevice true only when owner matches non-empty device id', () => {
+    const entry = {...legacy, controlRevision: 1, playbackOwnerId: 'device-a', updatedAt: 1};
+    expect(isPlaylistR2PollEchoFromOwnDevice(entry, 'device-a')).toBe(true);
+    expect(isPlaylistR2PollEchoFromOwnDevice(entry, 'device-b')).toBe(false);
+    expect(
+      isPlaylistR2PollEchoFromOwnDevice({...entry, playbackOwnerId: ''}, 'device-a'),
+    ).toBe(false);
+    expect(isPlaylistR2PollEchoFromOwnDevice(entry, '')).toBe(false);
+    expect(isPlaylistR2PollEchoFromOwnDevice(entry, '  device-a  ')).toBe(true);
   });
 });

@@ -145,6 +145,21 @@ export function pickNewerPlaylistEntry(
 
 export type PlaylistWriteMode = 'progress' | 'control';
 
+/**
+ * True when an R2 `playlist.json` row was last updated by this install (`playbackOwnerId` matches
+ * `deviceInstanceId`). ETag polls that only reflect our own PUTs can be ignored so we do not
+ * re-merge and stomp local playback.
+ */
+export function isPlaylistR2PollEchoFromOwnDevice(
+  entry: PlaylistEntry,
+  deviceInstanceId: string,
+): boolean {
+  const ours = deviceInstanceId.trim();
+  const owner =
+    typeof entry.playbackOwnerId === 'string' ? entry.playbackOwnerId.trim() : '';
+  return ours !== '' && owner !== '' && owner === ours;
+}
+
 /** Remote is newer than what this device last merged (`known` from local settings). */
 export function isRemotePlaylistNewerThanKnown(
   remote: PlaylistEntry,

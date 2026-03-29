@@ -38,6 +38,7 @@ export {
   buildPlaylistEntryForWrite,
   MIN_PLAYLIST_PERSIST_POSITION_MS,
   isRemotePlaylistNewerThanKnown,
+  isPlaylistR2PollEchoFromOwnDevice,
   isValidPlaylistEntry,
   normalizePlaylistEntryForSync,
   parsePlaylistEntryOrThrow,

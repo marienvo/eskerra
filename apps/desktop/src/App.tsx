@@ -110,6 +110,7 @@ export default function App() {
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: desktopPlayback.playerLabel !== 'playing',
+    deviceInstanceId,
     onRemotePlaylistChanged: bumpPlaylistRevision,
     vaultRoot,
     vaultSettings,

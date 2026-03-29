@@ -1,8 +1,10 @@
 import {
   createPlaylistEtagPoller,
   fetchR2PlaylistConditional,
+  isPlaylistR2PollEchoFromOwnDevice,
   isVaultR2PlaylistConfigured,
   type NoteboxSettings,
+  type PlaylistEntry,
 } from '@notebox/core';
 import {useEffect, useLayoutEffect, useRef} from 'react';
 
@@ -13,6 +15,11 @@ import {useTauriMainWindowPollActive} from './useTauriMainWindowPollActive';
 type UseDesktopPlaylistR2EtagPollingParams = {
   vaultRoot: string | null;
   vaultSettings: NoteboxSettings | null;
+  /**
+   * Used to ignore R2 ETag refreshes that only echo this device's own control writes.
+   * Other devices use a different `deviceInstanceId` as `playbackOwnerId`.
+   */
+  deviceInstanceId: string;
   mainWindowActive: boolean;
   onRemotePlaylistChanged: () => void;
   /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
@@ -25,12 +32,14 @@ type UseDesktopPlaylistR2EtagPollingParams = {
 export function useDesktopPlaylistR2EtagPolling({
   vaultRoot,
   vaultSettings,
+  deviceInstanceId,
   mainWindowActive,
   onRemotePlaylistChanged,
   allowPolling = true,
 }: UseDesktopPlaylistR2EtagPollingParams): void {
   const onRemoteRef = useRef(onRemotePlaylistChanged);
   const settingsRef = useRef(vaultSettings);
+  const deviceIdRef = useRef(deviceInstanceId);
 
   useLayoutEffect(() => {
     onRemoteRef.current = onRemotePlaylistChanged;
@@ -39,6 +48,10 @@ export function useDesktopPlaylistR2EtagPolling({
   useLayoutEffect(() => {
     settingsRef.current = vaultSettings;
   }, [vaultSettings]);
+
+  useLayoutEffect(() => {
+    deviceIdRef.current = deviceInstanceId;
+  }, [deviceInstanceId]);
 
   const pollerRef = useRef<ReturnType<typeof createPlaylistEtagPoller> | null>(null);
 
@@ -62,7 +75,10 @@ export function useDesktopPlaylistR2EtagPolling({
           transport: desktopR2SignedTransport,
         });
       },
-      onDataChanged: () => {
+      onDataChanged: (entry: PlaylistEntry) => {
+        if (isPlaylistR2PollEchoFromOwnDevice(entry, deviceIdRef.current)) {
+          return;
+        }
         onRemoteRef.current();
       },
     });
@@ -91,6 +107,7 @@ export function useDesktopPlaylistR2EtagPolling({
 export function useDesktopPlaylistR2EtagPollingForMainWindow(params: {
   vaultRoot: string | null;
   vaultSettings: NoteboxSettings | null;
+  deviceInstanceId: string;
   onRemotePlaylistChanged: () => void;
   allowPolling?: boolean;
 }): void {

@@ -5,7 +5,7 @@ import {
   type PlaylistEntry,
   type VaultFilesystem,
 } from '@notebox/core';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 
 import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
 import type {PodcastEpisode} from '../lib/podcasts/podcastTypes';
@@ -15,7 +15,13 @@ import {
   writePlaylistEntry,
 } from '../lib/vaultBootstrap';
 
-export type DesktopPlayerLabel = 'idle' | 'paused' | 'playing' | 'loading';
+export type DesktopPlayerLabel =
+  | 'ended'
+  | 'error'
+  | 'idle'
+  | 'paused'
+  | 'playing'
+  | 'loading';
 
 export type UseDesktopPodcastPlaybackOptions = {
   vaultRoot: string | null;
@@ -66,6 +72,19 @@ export function useDesktopPodcastPlayback({
   const diskPlaylistRef = useRef<PlaylistEntry | null>(null);
   const prevPlayerStateRef = useRef<PlayerState | null>(null);
   const lastPrimedPlaylistKeyRef = useRef<string | null>(null);
+  /** Catalog list identity changes every parent render; priming only needs latest rows for lookup. */
+  const consumeEpisodesRef = useRef(consumeEpisodes);
+  useLayoutEffect(() => {
+    consumeEpisodesRef.current = consumeEpisodes;
+  });
+
+  const activeEpisodeRef = useRef<PodcastEpisode | null>(null);
+  useLayoutEffect(() => {
+    activeEpisodeRef.current = activeEpisode;
+  });
+
+  /** Skip vault priming while `playEpisode` / `resumeFromVault` owns the HTML audio element. */
+  const userPlaybackDepthRef = useRef(0);
 
   useEffect(() => {
     diskPlaylistRef.current = diskPlaylist;
@@ -114,6 +133,9 @@ export function useDesktopPodcastPlayback({
     const unsub = player.addStateListener(s => {
       const prev = prevPlayerStateRef.current;
       prevPlayerStateRef.current = s;
+      if (s === 'error') {
+        lastPrimedPlaylistKeyRef.current = null;
+      }
       if (prev !== 'playing' && s === 'playing') {
         onAutoShowPlayerDock?.();
       }
@@ -123,6 +145,10 @@ export function useDesktopPodcastPlayback({
         setPlayerLabel('paused');
       } else if (s === 'loading') {
         setPlayerLabel('loading');
+      } else if (s === 'ended') {
+        setPlayerLabel('ended');
+      } else if (s === 'error') {
+        setPlayerLabel('error');
       } else {
         setPlayerLabel('idle');
       }
@@ -180,8 +206,11 @@ export function useDesktopPodcastPlayback({
     let cancelled = false;
 
     void (async () => {
+      if (userPlaybackDepthRef.current > 0) {
+        return;
+      }
       const pl = diskPlaylist;
-      const byId = new Map(consumeEpisodes.map(e => [e.id, e]));
+      const byId = new Map(consumeEpisodesRef.current.map(e => [e.id, e]));
       const catalogEp = byId.get(pl.episodeId);
       const missing = !catalogEp;
       const listened = Boolean(catalogEp?.isListened);
@@ -229,8 +258,38 @@ export function useDesktopPodcastPlayback({
         await player.stop();
         st = await player.getState();
       } else if (st === 'loading') {
-        await player.stop();
-        st = await player.getState();
+        const loadingEpisodeId = player.getCurrentTrackEpisodeId();
+        if (loadingEpisodeId === pl.episodeId) {
+          lastPrimedPlaylistKeyRef.current = key;
+          return;
+        }
+        if (loadingEpisodeId != null && loadingEpisodeId !== pl.episodeId) {
+          await player.stop();
+          st = await player.getState();
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      if (st === 'paused' || st === 'ended') {
+        const currentId = player.getCurrentTrackEpisodeId();
+        const loaded = player.getLoadedTrack();
+        if (
+          currentId === pl.episodeId &&
+          loaded != null &&
+          loaded.url === trackUrl
+        ) {
+          await player.seekTo(pl.positionMs);
+          if (cancelled) {
+            return;
+          }
+          lastPrimedPlaylistKeyRef.current = key;
+          setActiveEpisode(catalogEp);
+          playbackRef.current = {episodeId: catalogEp.id, mp3Url: trackUrl};
+          return;
+        }
       }
 
       if (cancelled) {
@@ -276,7 +335,6 @@ export function useDesktopPodcastPlayback({
     vaultRoot,
     fs,
     diskPlaylist,
-    consumeEpisodes,
     consumeCatalogReady,
     onPlaylistDiskUpdated,
     onError,
@@ -287,13 +345,34 @@ export function useDesktopPodcastPlayback({
       if (!vaultRoot || !deviceInstanceId) {
         return;
       }
-      const st = await getDesktopAudioPlayer().getState();
-      if (st === 'playing') {
+      userPlaybackDepthRef.current += 1;
+      try {
+      const switchingFromAnother =
+        activeEpisodeRef.current != null &&
+        activeEpisodeRef.current.id !== ep.id;
+
+      const player = getDesktopAudioPlayer();
+      const st = await player.getState();
+      const loadedId = player.getCurrentTrackEpisodeId();
+      const loadedTrack = player.getLoadedTrack();
+      const sameLoadedEp =
+        loadedId === ep.id &&
+        loadedTrack != null &&
+        loadedTrack.url === ep.mp3Url;
+
+      if (st === 'playing' && sameLoadedEp) {
         return;
       }
+
+      if (!sameLoadedEp) {
+        await player.stop();
+      }
+
       lastPrimedPlaylistKeyRef.current = null;
       onAutoShowPlayerDock?.();
       onError(null);
+      setPositionMs(0);
+      setDurationMs(null);
       setActiveEpisode(ep);
       playbackRef.current = {episodeId: ep.id, mp3Url: ep.mp3Url};
       let startPositionMs = 0;
@@ -305,6 +384,9 @@ export function useDesktopPodcastPlayback({
         }
       } catch {
         /* same as missing playlist */
+      }
+      if (switchingFromAnother) {
+        startPositionMs = 0;
       }
       try {
         const base: PlaylistEntry =
@@ -345,13 +427,16 @@ export function useDesktopPodcastPlayback({
             title: ep.title,
             url: ep.mp3Url,
           },
-          startPositionMs > 0 ? startPositionMs : undefined,
+          startPositionMs,
         );
       } catch (e) {
         if (isAbortError(e)) {
           return;
         }
         onError(e instanceof Error ? e.message : String(e));
+      }
+      } finally {
+        userPlaybackDepthRef.current -= 1;
       }
     },
     [vaultRoot, deviceInstanceId, fs, onAutoShowPlayerDock, onError, onPlaylistDiskUpdated],
@@ -365,6 +450,8 @@ export function useDesktopPodcastPlayback({
       onError('Podcast catalog is still loading.');
       return;
     }
+    userPlaybackDepthRef.current += 1;
+    try {
     lastPrimedPlaylistKeyRef.current = null;
     onAutoShowPlayerDock?.();
     onError(null);
@@ -430,6 +517,9 @@ export function useDesktopPodcastPlayback({
         return;
       }
       onError(e instanceof Error ? e.message : String(e));
+    }
+    } finally {
+      userPlaybackDepthRef.current -= 1;
     }
   }, [
     vaultRoot,
@@ -517,7 +607,14 @@ export function useDesktopPodcastPlayback({
           e instanceof Error ? e.message : 'Could not save playback position.',
         );
       }
-    } else if (st === 'paused' || st === 'ended') {
+    } else if (
+      st === 'paused' ||
+      st === 'ended' ||
+      st === 'loading' ||
+      st === 'error'
+    ) {
+      // HTML5 audio reports `loading` until `readyState >= HAVE_FUTURE_DATA`; the dock only
+      // calls this handler, so omitting `loading` left Play inert during long buffers.
       await p.resume();
       const resumeProgress = await p.getProgress();
       setPositionMs(resumeProgress.positionMs);

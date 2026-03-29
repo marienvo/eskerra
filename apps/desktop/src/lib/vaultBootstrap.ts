@@ -339,6 +339,7 @@ export async function writePlaylistEntry(
     const nextTs = Math.max(Date.now(), remote?.updatedAt ?? 0, knownUpdated, entry.updatedAt);
     const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
     await putR2PlaylistObject(settings.r2, saved, DESKTOP_R2_HTTP);
+    await writeLocalPlaylistOnlyDesktop(root, fs, saved);
     await persistPlaylistKnownDesktop(root, fs, saved.updatedAt, saved.controlRevision);
     return {kind: 'saved', entry: saved};
   } catch {

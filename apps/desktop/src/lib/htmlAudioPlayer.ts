@@ -189,6 +189,11 @@ export class HtmlAudioPlayer implements AudioPlayer {
     return this.currentTrack?.id ?? null;
   }
 
+  /** Track metadata if a URL is loaded (used to avoid redundant `src` reloads when only position changed). */
+  getLoadedTrack(): AudioTrack | null {
+    return this.currentTrack;
+  }
+
   async pause(): Promise<void> {
     this.audio.pause();
     this.emitState();
@@ -203,10 +208,27 @@ export class HtmlAudioPlayer implements AudioPlayer {
 
   async play(track: AudioTrack, positionMs?: number): Promise<void> {
     this.endedFlag = false;
+    const sameResource =
+      this.currentTrack != null &&
+      this.currentTrack.id === track.id &&
+      this.currentTrack.url === track.url &&
+      Boolean(this.audio.src) &&
+      !this.audio.error;
+
     this.currentTrack = track;
+
+    if (sameResource) {
+      if (positionMs !== undefined) {
+        this.audio.currentTime = Math.max(0, positionMs) / 1000;
+      }
+      await playIgnoringSuperseded(this.audio);
+      this.emitState();
+      return;
+    }
+
     this.audio.src = track.url;
-    if (positionMs !== undefined && positionMs > 0) {
-      this.audio.currentTime = positionMs / 1000;
+    if (positionMs !== undefined) {
+      this.audio.currentTime = Math.max(0, positionMs) / 1000;
     }
     await playIgnoringSuperseded(this.audio);
     this.emitState();
@@ -293,6 +315,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
   }
 
   async seekTo(positionMs: number): Promise<void> {
+    this.endedFlag = false;
     this.audio.currentTime = positionMs / 1000;
     this.emitState();
   }
