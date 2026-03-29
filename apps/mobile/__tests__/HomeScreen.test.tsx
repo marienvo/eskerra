@@ -40,7 +40,13 @@ describe('SettingsScreen', () => {
       baseUri: 'content://notes',
       clearDirectory: clearDirectoryMock,
       isSaving: false,
-      localSettings: {deviceName: '', displayName: 'My Notebox', playlistKnownUpdatedAtMs: null},
+      localSettings: {
+        deviceInstanceId: 'test-device',
+        deviceName: '',
+        displayName: 'My Notebox',
+        playlistKnownControlRevision: null,
+        playlistKnownUpdatedAtMs: null,
+      },
       saveLocalSettings: saveLocalSettingsMock,
       saveSettings: saveSettingsMock,
       settings: {},
@@ -77,8 +83,10 @@ describe('SettingsScreen', () => {
 
     expect(saveSettingsMock).toHaveBeenCalledWith({});
     expect(saveLocalSettingsMock).toHaveBeenCalledWith({
+      deviceInstanceId: 'test-device',
       deviceName: '',
       displayName: 'Team Notes',
+      playlistKnownControlRevision: null,
       playlistKnownUpdatedAtMs: null,
     });
   });

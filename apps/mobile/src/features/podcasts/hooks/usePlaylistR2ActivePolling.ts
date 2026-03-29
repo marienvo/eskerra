@@ -4,7 +4,6 @@ import {
   isVaultR2PlaylistConfigured,
   type NoteboxSettings,
 } from '@notebox/core';
-import {useIsFocused} from '@react-navigation/native';
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {AppState} from 'react-native';
 
@@ -12,17 +11,20 @@ type UsePlaylistR2ActivePollingParams = {
   baseUri: string | null;
   settings: NoteboxSettings | null;
   onRemotePlaylistUpdated: () => void;
+  /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
+  allowPolling?: boolean;
 };
 
 /**
- * Polls R2 `playlist.json` about once per second while the app is foregrounded and this screen is focused.
+ * Polls R2 `playlist.json` about once per second while the app is foregrounded, R2 is configured,
+ * and `allowPolling` is true (callers typically pause while audio is playing).
  */
 export function usePlaylistR2ActivePolling({
   baseUri,
   settings,
   onRemotePlaylistUpdated,
+  allowPolling = true,
 }: UsePlaylistR2ActivePollingParams): void {
-  const isFocused = useIsFocused();
   const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
 
   useEffect(() => {
@@ -82,6 +84,6 @@ export function usePlaylistR2ActivePolling({
     }
     const s = settings;
     const r2Ok = s != null && isVaultR2PlaylistConfigured(s);
-    poller.setActive(r2Ok && appActive && isFocused);
-  }, [baseUri, settings, appActive, isFocused]);
+    poller.setActive(r2Ok && appActive && allowPolling);
+  }, [baseUri, settings, appActive, allowPolling]);
 }

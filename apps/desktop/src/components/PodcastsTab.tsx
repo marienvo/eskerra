@@ -22,6 +22,8 @@ type PodcastsTabProps = {
   resumeFromVault: () => Promise<void>;
   /** Incremented when vault playlist file is updated from playback (not every progress tick). */
   playlistRevision: number;
+  /** When true, episode rows do not start or switch playback (an episode is already playing). */
+  episodeSelectLocked?: boolean;
 };
 
 function formatMs(ms: number | null): string {
@@ -50,6 +52,7 @@ export function PodcastsTab({
   playEpisode,
   playlistRevision,
   resumeFromVault,
+  episodeSelectLocked = false,
 }: PodcastsTabProps) {
   const [sections, setSections] = useState<PodcastSection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,7 +146,11 @@ export function PodcastsTab({
                 <ul className="episode-list">
                   {section.episodes.map(ep => (
                     <li key={ep.id}>
-                      <button type="button" className="episode-row" onClick={() => void playEpisode(ep)}>
+                      <button
+                        type="button"
+                        className="episode-row"
+                        disabled={episodeSelectLocked}
+                        onClick={() => void playEpisode(ep)}>
                         <span className="ep-date">{ep.date}</span>
                         <span className="ep-title">{episodeListLabel(ep.title)}</span>
                         <span className="ep-series muted small">{episodeListLabel(ep.seriesName)}</span>

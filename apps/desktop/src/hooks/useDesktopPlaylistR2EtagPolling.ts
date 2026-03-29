@@ -15,6 +15,8 @@ type UseDesktopPlaylistR2EtagPollingParams = {
   vaultSettings: NoteboxSettings | null;
   mainWindowActive: boolean;
   onRemotePlaylistChanged: () => void;
+  /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
+  allowPolling?: boolean;
 };
 
 /**
@@ -25,6 +27,7 @@ export function useDesktopPlaylistR2EtagPolling({
   vaultSettings,
   mainWindowActive,
   onRemotePlaylistChanged,
+  allowPolling = true,
 }: UseDesktopPlaylistR2EtagPollingParams): void {
   const onRemoteRef = useRef(onRemotePlaylistChanged);
   const settingsRef = useRef(vaultSettings);
@@ -80,8 +83,8 @@ export function useDesktopPlaylistR2EtagPolling({
     }
     const s = vaultSettings;
     const r2Ok = s != null && isVaultR2PlaylistConfigured(s);
-    poller.setActive(r2Ok && mainWindowActive);
-  }, [vaultRoot, vaultSettings, mainWindowActive]);
+    poller.setActive(r2Ok && mainWindowActive && allowPolling);
+  }, [vaultRoot, vaultSettings, mainWindowActive, allowPolling]);
 }
 
 /** Composes window focus/visibility with R2 polling for the main app window. */
@@ -89,6 +92,7 @@ export function useDesktopPlaylistR2EtagPollingForMainWindow(params: {
   vaultRoot: string | null;
   vaultSettings: NoteboxSettings | null;
   onRemotePlaylistChanged: () => void;
+  allowPolling?: boolean;
 }): void {
   const mainWindowActive = useTauriMainWindowPollActive();
   useDesktopPlaylistR2EtagPolling({

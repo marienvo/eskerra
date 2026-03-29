@@ -23,7 +23,9 @@ export const MOCK_SETTINGS: NoteboxSettings = {
 
 export const MOCK_LOCAL_SETTINGS: NoteboxLocalSettings = {
   deviceName: '',
+  deviceInstanceId: '00000000-0000-4000-8000-000000000001',
   displayName: 'Dev Notebox',
+  playlistKnownControlRevision: null,
   playlistKnownUpdatedAtMs: null,
 };
 

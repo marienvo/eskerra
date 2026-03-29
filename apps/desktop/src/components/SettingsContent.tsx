@@ -80,7 +80,9 @@ export function SettingsContent({
     try {
       const nextLocal: NoteboxLocalSettings = {
         deviceName: deviceName.trimEnd(),
+        deviceInstanceId: localSettings.deviceInstanceId,
         displayName: displayName.trim(),
+        playlistKnownControlRevision: localSettings.playlistKnownControlRevision,
         playlistKnownUpdatedAtMs: localSettings.playlistKnownUpdatedAtMs,
       };
       await onSave(shared.settings, nextLocal);

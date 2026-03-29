@@ -77,9 +77,11 @@ describe('getR2PlaylistObject', () => {
     );
     r2FetchMock.mockResolvedValue(new Response(body, {status: 200}));
     await expect(getR2PlaylistObject(config)).resolves.toEqual({
+      controlRevision: 0,
       durationMs: 1,
       episodeId: 'e',
       mp3Url: 'u',
+      playbackOwnerId: '',
       positionMs: 2,
       updatedAt: 10,
     });

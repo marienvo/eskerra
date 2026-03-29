@@ -28,9 +28,11 @@ describe('createPlaylistEtagPoller', () => {
 
   it('calls onDataChanged on updated and stores etag', async () => {
     const entry = {
+      controlRevision: 0,
       durationMs: 0,
       episodeId: 'e',
       mp3Url: 'u',
+      playbackOwnerId: '',
       positionMs: 0,
       updatedAt: 1,
     };
@@ -105,9 +107,11 @@ describe('createPlaylistEtagPoller', () => {
 
   it('clears etag on missing', async () => {
     const entry = {
+      controlRevision: 0,
       durationMs: 0,
       episodeId: 'e',
       mp3Url: 'u',
+      playbackOwnerId: '',
       positionMs: 0,
       updatedAt: 1,
     };

@@ -111,6 +111,27 @@ describe('EpisodeRow', () => {
     );
   });
 
+  test('does not show tap-to-play hint while another episode is playing', async () => {
+    let tree: ReactTestRenderer;
+    usePodcastArtworkMock.mockReturnValue(null);
+
+    await act(async () => {
+      tree = renderRow({
+        activeEpisodeId: 'other-episode',
+        playbackState: 'playing',
+      });
+    });
+
+    const textContent = tree!
+      .root.findAllByType(RNText)
+      .flatMap(node => {
+        const ch = node.props.children;
+        return typeof ch === 'string' ? [ch] : [];
+      })
+      .join('\n');
+    expect(textContent.includes('Tap to play')).toBe(false);
+  });
+
   test('shows check icon when selected', async () => {
     let tree: ReactTestRenderer;
     usePodcastArtworkMock.mockReturnValue('https://example.com/artwork.png');

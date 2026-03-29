@@ -79,7 +79,13 @@ describe('NotesContext refresh', () => {
             inboxContentByUri: null,
             inboxPrefetch: null,
             settings: {},
-            localSettings: {deviceName: '', displayName: 'Vault', playlistKnownUpdatedAtMs: null},
+            localSettings: {
+              deviceInstanceId: 'test',
+              deviceName: '',
+              displayName: 'Vault',
+              playlistKnownControlRevision: null,
+              playlistKnownUpdatedAtMs: null,
+            },
             uri: vaultUri,
           }}>
           <NotesProvider>
@@ -116,7 +122,13 @@ describe('NotesContext refresh', () => {
             inboxContentByUri: null,
             inboxPrefetch: null,
             settings: {},
-            localSettings: {deviceName: '', displayName: 'Vault', playlistKnownUpdatedAtMs: null},
+            localSettings: {
+              deviceInstanceId: 'test',
+              deviceName: '',
+              displayName: 'Vault',
+              playlistKnownControlRevision: null,
+              playlistKnownUpdatedAtMs: null,
+            },
             uri: vaultUri,
           }}>
           <NotesProvider>

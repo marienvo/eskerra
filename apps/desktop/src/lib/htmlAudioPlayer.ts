@@ -184,6 +184,11 @@ export class HtmlAudioPlayer implements AudioPlayer {
     return mapAudioPaused(this.audio, this.endedFlag);
   }
 
+  /** Episode id of the loaded track, for playlist priming / reconciliation. */
+  getCurrentTrackEpisodeId(): string | null {
+    return this.currentTrack?.id ?? null;
+  }
+
   async pause(): Promise<void> {
     this.audio.pause();
     this.emitState();

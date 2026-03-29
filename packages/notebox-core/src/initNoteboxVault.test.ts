@@ -43,6 +43,9 @@ describe('initNoteboxVault', () => {
     const localCreated = JSON.parse(localRaw);
     expect(localCreated.deviceName).toBe('');
     expect(localCreated.displayName).toBe('');
+    expect(typeof localCreated.deviceInstanceId).toBe('string');
+    expect(localCreated.deviceInstanceId.length).toBeGreaterThan(0);
+    expect(localCreated.playlistKnownControlRevision).toBeNull();
     expect(localCreated.playlistKnownUpdatedAtMs).toBeNull();
   });
 
@@ -64,6 +67,9 @@ describe('initNoteboxVault', () => {
     const local = JSON.parse(localRaw);
     expect(local.deviceName).toBe('');
     expect(local.displayName).toBe('');
+    expect(typeof local.deviceInstanceId).toBe('string');
+    expect(local.deviceInstanceId.length).toBeGreaterThan(0);
+    expect(local.playlistKnownControlRevision).toBeNull();
     expect(local.playlistKnownUpdatedAtMs).toBeNull();
   });
 });

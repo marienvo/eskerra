@@ -190,6 +190,25 @@ function PlayToggleHarness({
   return null;
 }
 
+type PlayEpisodeOnlyHarnessProps = {
+  episodesById: Map<string, PodcastEpisode>;
+  onReady: (playEpisode: (e: PodcastEpisode) => Promise<void>) => void;
+};
+
+function PlayEpisodeOnlyHarness({episodesById, onReady}: PlayEpisodeOnlyHarnessProps) {
+  const result = usePlayer(episodesById, {
+    onMarkAsPlayed: async () => undefined,
+    podcastsCatalogReady: true,
+    podcastsLoading: false,
+  });
+
+  useEffect(() => {
+    onReady(result.playEpisode);
+  }, [onReady, result.playEpisode]);
+
+  return null;
+}
+
 function flushPromises(): Promise<void> {
   return new Promise<void>(resolve => {
     setTimeout(() => resolve(), 0);
@@ -245,7 +264,13 @@ describe('usePlayer restore state', () => {
       refreshSession: jest.fn(async () => undefined),
       replaceInboxContentFromSession: jest.fn(),
       setInboxNoteContentInCache: jest.fn(),
-      localSettings: null,
+      localSettings: {
+        deviceInstanceId: 'test-device-instance',
+        deviceName: '',
+        displayName: '',
+        playlistKnownControlRevision: null,
+        playlistKnownUpdatedAtMs: null,
+      },
       setLocalSettings: jest.fn(),
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
@@ -433,6 +458,54 @@ describe('usePlayer restore state', () => {
     expect(expectResult(latestResult).activeEpisode).toBeNull();
   });
 
+  test('playEpisode does not call player.play when audio is already playing', async () => {
+    const playMock = jest.fn(async () => undefined);
+    const getStateMock = jest.fn(async () => 'playing' as const);
+
+    getAudioPlayerMock.mockReturnValue({
+      addEndedListener: jest.fn(() => () => undefined),
+      addProgressListener: jest.fn(() => () => undefined),
+      addStateListener: jest.fn(() => () => undefined),
+      destroy: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
+      getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 30_000})),
+      getState: getStateMock,
+      pause: jest.fn(async () => undefined),
+      play: playMock,
+      resume: jest.fn(async () => undefined),
+      seekTo: jest.fn(async () => undefined),
+      stop: stopMock,
+    });
+
+    readPlaylistMock.mockResolvedValue(null);
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let playEpisodeRef: ((e: PodcastEpisode) => Promise<void>) | null = null;
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(PlayEpisodeOnlyHarness, {
+          episodesById,
+          onReady: fn => {
+            playEpisodeRef = fn;
+          },
+        }),
+      );
+      await flushPromises();
+    });
+
+    if (!playEpisodeRef) {
+      throw new Error('playEpisode not wired.');
+    }
+
+    await act(async () => {
+      await playEpisodeRef!(episode);
+    });
+
+    expect(getStateMock).toHaveBeenCalled();
+    expect(playMock).not.toHaveBeenCalled();
+  });
+
   test('pause past 80% marks played without dismiss flag so UI can keep player', async () => {
     readPlaylistMock.mockResolvedValue({
       durationMs: 120_000,
@@ -477,6 +550,7 @@ describe('usePlayer restore state', () => {
 
     await act(async () => {
       await controls!.playEpisode(episode);
+      await flushPromises();
     });
 
     clearPlaylistMock.mockClear();

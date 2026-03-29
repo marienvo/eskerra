@@ -1,6 +1,7 @@
 import {
   buildInboxMarkdownIndexContent,
   deleteR2PlaylistObject,
+  ensureDeviceInstanceId,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,
@@ -9,6 +10,7 @@ import {
   getPlaylistUri,
   getR2PlaylistObject,
   getSharedSettingsUri,
+  isRemotePlaylistNewerThanKnown,
   isSyncConflictFileName,
   isVaultR2PlaylistConfigured,
   MARKDOWN_EXTENSION,
@@ -29,6 +31,7 @@ import {
   type NoteboxLocalSettings,
   type NoteboxSettings,
   type PlaylistEntry,
+  type PlaylistWriteMode,
   type PlaylistWriteResult,
 } from '@notebox/core';
 
@@ -542,15 +545,23 @@ async function readLocalPlaylistFileOnly(baseUri: string): Promise<PlaylistEntry
   return entry;
 }
 
-async function persistPlaylistKnownTimestamp(
+async function persistPlaylistKnownSync(
   baseUri: string,
-  nextKnown: number | null,
+  nextUpdatedAtMs: number | null,
+  nextControlRevision: number | null,
 ): Promise<void> {
   const local = await readLocalSettings(baseUri);
-  if (local.playlistKnownUpdatedAtMs === nextKnown) {
+  if (
+    local.playlistKnownUpdatedAtMs === nextUpdatedAtMs &&
+    local.playlistKnownControlRevision === nextControlRevision
+  ) {
     return;
   }
-  await writeLocalSettings(baseUri, {...local, playlistKnownUpdatedAtMs: nextKnown});
+  await writeLocalSettings(baseUri, {
+    ...local,
+    playlistKnownUpdatedAtMs: nextUpdatedAtMs,
+    playlistKnownControlRevision: nextControlRevision,
+  });
 }
 
 export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | null> {
@@ -564,8 +575,11 @@ export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | nul
 
   if (!isVaultR2PlaylistConfigured(settings)) {
     const winner = diskEntry;
-    const nextKnown = winner?.updatedAt ?? null;
-    await persistPlaylistKnownTimestamp(baseUri, nextKnown);
+    await persistPlaylistKnownSync(
+      baseUri,
+      winner?.updatedAt ?? null,
+      winner?.controlRevision ?? null,
+    );
     return winner;
   }
 
@@ -580,14 +594,20 @@ export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | nul
 
   if (!r2Ok) {
     const winner = diskEntry;
-    const nextKnown = winner?.updatedAt ?? null;
-    await persistPlaylistKnownTimestamp(baseUri, nextKnown);
+    await persistPlaylistKnownSync(
+      baseUri,
+      winner?.updatedAt ?? null,
+      winner?.controlRevision ?? null,
+    );
     return winner;
   }
 
   const winner = pickNewerPlaylistEntry(diskEntry, r2Entry);
-  const nextKnown = winner?.updatedAt ?? null;
-  await persistPlaylistKnownTimestamp(baseUri, nextKnown);
+  await persistPlaylistKnownSync(
+    baseUri,
+    winner?.updatedAt ?? null,
+    winner?.controlRevision ?? null,
+  );
   return winner;
 }
 
@@ -664,6 +684,9 @@ async function writeLocalPlaylistOnly(
 export async function writePlaylist(
   baseUri: string,
   entry: PlaylistEntry,
+  // Retained for API parity (`{mode: 'progress' | 'control'}`); merge path does not branch on mode.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see above
+  options?: {mode?: PlaylistWriteMode},
 ): Promise<PlaylistWriteResult> {
   if (isDevMockVaultBaseUri(baseUri)) {
     const devStorage = getDevStorage();
@@ -672,18 +695,26 @@ export async function writePlaylist(
     return {kind: 'saved', entry: saved};
   }
 
+  let localMeta = await readLocalSettings(baseUri);
+  const ensured = ensureDeviceInstanceId(localMeta);
+  if (ensured.changed) {
+    localMeta = ensured.settings;
+    await writeLocalSettings(baseUri, localMeta);
+  }
+
+  const knownUpdated = localMeta.playlistKnownUpdatedAtMs ?? 0;
+  const knownRev = localMeta.playlistKnownControlRevision ?? 0;
+
   const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
   const cacheKey = normalizedBaseUri.trim();
   const settings = await readSettings(baseUri);
-  const localMeta = await readLocalSettings(baseUri);
-  const known = localMeta.playlistKnownUpdatedAtMs ?? 0;
 
   const hasR2 = isVaultR2PlaylistConfigured(settings);
 
   if (!hasR2) {
-    const nextTs = Math.max(Date.now(), entry.updatedAt, known);
+    const nextTs = Math.max(Date.now(), entry.updatedAt, knownUpdated);
     const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
-    await persistPlaylistKnownTimestamp(baseUri, nextTs);
+    await persistPlaylistKnownSync(baseUri, saved.updatedAt, saved.controlRevision);
     const persisted = await writeLocalPlaylistOnly(baseUri, saved);
     playlistReadCoalescer.set(cacheKey, Promise.resolve(persisted));
     return {kind: 'saved', entry: persisted};
@@ -691,22 +722,22 @@ export async function writePlaylist(
 
   try {
     const remote = await getR2PlaylistObject(settings.r2);
-    if (remote != null && remote.updatedAt > known) {
-      await persistPlaylistKnownTimestamp(baseUri, remote.updatedAt);
+    if (remote != null && isRemotePlaylistNewerThanKnown(remote, knownUpdated, knownRev)) {
+      await persistPlaylistKnownSync(baseUri, remote.updatedAt, remote.controlRevision);
       playlistReadCoalescer.set(cacheKey, Promise.resolve(remote));
       return {kind: 'superseded', entry: remote};
     }
 
-    const nextTs = Math.max(Date.now(), remote?.updatedAt ?? 0, known, entry.updatedAt);
+    const nextTs = Math.max(Date.now(), remote?.updatedAt ?? 0, knownUpdated, entry.updatedAt);
     const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
     await putR2PlaylistObject(settings.r2, saved);
-    await persistPlaylistKnownTimestamp(baseUri, nextTs);
+    await persistPlaylistKnownSync(baseUri, saved.updatedAt, saved.controlRevision);
     playlistReadCoalescer.set(cacheKey, Promise.resolve(saved));
     return {kind: 'saved', entry: saved};
   } catch {
-    const nextTs = Math.max(Date.now(), entry.updatedAt, known);
+    const nextTs = Math.max(Date.now(), entry.updatedAt, knownUpdated);
     const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
-    await persistPlaylistKnownTimestamp(baseUri, nextTs);
+    await persistPlaylistKnownSync(baseUri, saved.updatedAt, saved.controlRevision);
     const persisted = await writeLocalPlaylistOnly(baseUri, saved);
     playlistReadCoalescer.set(cacheKey, Promise.resolve(persisted));
     return {kind: 'saved', entry: persisted};
@@ -729,7 +760,7 @@ export async function clearPlaylist(baseUri: string): Promise<void> {
   if (isVaultR2PlaylistConfigured(settings)) {
     try {
       await deleteR2PlaylistObject(settings.r2);
-      await persistPlaylistKnownTimestamp(baseUri, null);
+      await persistPlaylistKnownSync(baseUri, null, null);
       if (await vaultFs.exists(playlistUri)) {
         await vaultFs.unlink(playlistUri);
       }
@@ -740,7 +771,7 @@ export async function clearPlaylist(baseUri: string): Promise<void> {
     }
   }
 
-  await persistPlaylistKnownTimestamp(baseUri, null);
+  await persistPlaylistKnownSync(baseUri, null, null);
 
   if (!(await vaultFs.exists(playlistUri))) {
     playlistReadCoalescer.set(cacheKey, Promise.resolve(null));

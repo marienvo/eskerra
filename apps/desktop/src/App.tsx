@@ -28,6 +28,7 @@ import {
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
+  writeVaultLocalSettings,
 } from './lib/vaultBootstrap';
 import {
   createTauriVaultFilesystem,
@@ -35,7 +36,12 @@ import {
   setVaultSession,
   startVaultWatch,
 } from './lib/tauriVault';
-import {buildInboxMarkdownFromCompose, parseComposeInput, type NoteboxSettings} from '@notebox/core';
+import {
+  buildInboxMarkdownFromCompose,
+  ensureDeviceInstanceId,
+  parseComposeInput,
+  type NoteboxSettings,
+} from '@notebox/core';
 
 import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
 
@@ -70,6 +76,7 @@ export default function App() {
   const [playlistRevision, setPlaylistRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
+  const [deviceInstanceId, setDeviceInstanceId] = useState('');
 
   const bumpPlaylistRevision = useCallback(() => {
     setPlaylistRevision(r => r + 1);
@@ -92,6 +99,7 @@ export default function App() {
   const desktopPlayback = useDesktopPodcastPlayback({
     consumeCatalogReady,
     consumeEpisodes,
+    deviceInstanceId,
     fs,
     onAutoShowPlayerDock,
     onError: setErr,
@@ -101,6 +109,7 @@ export default function App() {
   });
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
+    allowPolling: desktopPlayback.playerLabel !== 'playing',
     onRemotePlaylistChanged: bumpPlaylistRevision,
     vaultRoot,
     vaultSettings,
@@ -126,7 +135,13 @@ export default function App() {
         await syncInboxMarkdownIndex(root, fs);
         const shared = await readVaultSettings(root, fs);
         setVaultSettings(shared);
-        const local = await readVaultLocalSettings(root, fs);
+        let local = await readVaultLocalSettings(root, fs);
+        const ensuredLocal = ensureDeviceInstanceId(local);
+        if (ensuredLocal.changed) {
+          local = ensuredLocal.settings;
+          await writeVaultLocalSettings(root, fs, local);
+        }
+        setDeviceInstanceId(local.deviceInstanceId);
         const label = local.displayName.trim();
         setSettingsName(label !== '' ? label : 'Notebox');
         await refreshNotes(root);
@@ -447,6 +462,7 @@ export default function App() {
                   playEpisode={desktopPlayback.playEpisode}
                   playlistRevision={playlistRevision}
                   resumeFromVault={desktopPlayback.resumeFromVault}
+                  episodeSelectLocked={desktopPlayback.playerLabel === 'playing'}
                 />
               </div>
             ) : null}

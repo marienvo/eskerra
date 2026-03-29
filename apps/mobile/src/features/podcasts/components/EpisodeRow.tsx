@@ -56,6 +56,14 @@ export function EpisodeRow({
     colorMode === 'dark' ? 'rgba(174,174,174,0.5)' : 'rgba(186,186,186,0.5)';
 
   const rowDisabled = playbackLoading || isBatchMarking;
+  const playAreaDisabled = rowDisabled || playbackState === 'playing';
+  const statusLine = isPlaying
+    ? 'Playing'
+    : isActive
+      ? 'Paused'
+      : playbackState === 'playing'
+        ? ''
+        : 'Tap to play';
 
   return (
     <View
@@ -93,7 +101,7 @@ export function EpisodeRow({
           </View>
         </Pressable>
         <Pressable
-          disabled={rowDisabled}
+          disabled={playAreaDisabled}
           onPress={() => {
             onPlayEpisode(episode).catch(() => undefined);
           }}
@@ -102,9 +110,9 @@ export function EpisodeRow({
           <Text style={[styles.meta, {color: mutedTextColor}]}>
             {episode.seriesName} - {formatRelativeCalendarLabelFromIsoDate(episode.date)}
           </Text>
-          <Text style={[styles.meta, {color: mutedTextColor}]}>
-            {isPlaying ? 'Playing' : isActive ? 'Paused' : 'Tap to play'}
-          </Text>
+          {statusLine !== '' ? (
+            <Text style={[styles.meta, {color: mutedTextColor}]}>{statusLine}</Text>
+          ) : null}
         </Pressable>
       </View>
     </View>

@@ -18,7 +18,6 @@ import {
   LIST_HORIZONTAL_INSET,
 } from '../../../core/ui/listMetrics';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {usePlaylistR2ActivePolling} from '../hooks/usePlaylistR2ActivePolling';
 import {PodcastsStackParamList} from '../../../navigation/types';
 import {PodcastEpisode} from '../../../types';
 import {EpisodeRow} from '../components/EpisodeRow';
@@ -68,13 +67,7 @@ function PodcastSectionHeader({
 }
 
 export function PodcastsScreen({navigation}: PodcastsScreenProps) {
-  const {baseUri, notifyPlaylistSyncAfterVaultRefresh, settings} = useVaultContext();
-
-  usePlaylistR2ActivePolling({
-    baseUri,
-    onRemotePlaylistUpdated: notifyPlaylistSyncAfterVaultRefresh,
-    settings,
-  });
+  const {baseUri} = useVaultContext();
   const {
     activeEpisode,
     allEpisodes,

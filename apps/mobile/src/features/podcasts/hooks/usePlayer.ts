@@ -1,3 +1,4 @@
+import {buildPlaylistEntryForWrite, MIN_PLAYLIST_PERSIST_POSITION_MS} from '@notebox/core';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {
@@ -12,8 +13,6 @@ import {
   getCachedPodcastArtworkUri,
   warmPodcastArtworkCache,
 } from '../services/podcastImageCache';
-
-const MIN_PERSIST_POSITION_MS = 10_000;
 
 type UsePlayerResult = {
   activeEpisode: PodcastEpisode | null;
@@ -45,14 +44,34 @@ type UsePlayerOptions = {
 function toPlaylistEntry(
   episode: PodcastEpisode,
   progress: PlayerProgress,
+  prior: PlaylistEntry | null,
+  deviceInstanceId: string,
+  nowMs: number,
 ): PlaylistEntry {
-  return {
-    durationMs: progress.durationMs,
-    episodeId: episode.id,
-    mp3Url: episode.mp3Url,
-    positionMs: progress.positionMs,
-    updatedAt: 0,
-  };
+  const base: PlaylistEntry =
+    prior?.episodeId === episode.id
+      ? prior
+      : {
+          durationMs: progress.durationMs,
+          episodeId: episode.id,
+          mp3Url: episode.mp3Url,
+          positionMs: 0,
+          updatedAt: 0,
+          playbackOwnerId: '',
+          controlRevision: 0,
+        };
+  return buildPlaylistEntryForWrite(
+    base,
+    {
+      durationMs: progress.durationMs,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: progress.positionMs,
+    },
+    deviceInstanceId,
+    'control',
+    nowMs,
+  );
 }
 
 const emptyProgress: PlayerProgress = {
@@ -64,7 +83,7 @@ export function usePlayer(
   episodesById: Map<string, PodcastEpisode>,
   {onMarkAsPlayed, podcastsCatalogReady, podcastsLoading}: UsePlayerOptions,
 ): UsePlayerResult {
-  const {baseUri, playlistSyncGeneration} = useVaultContext();
+  const {baseUri, localSettings, playlistSyncGeneration} = useVaultContext();
   const player = useMemo(() => getAudioPlayer(), []);
   const activeEpisodeRef = useRef<PodcastEpisode | null>(null);
   const loadedEpisodeIdRef = useRef<string | null>(null);
@@ -225,6 +244,11 @@ export function usePlayer(
 
   const playEpisode = useCallback(
     async (episode: PodcastEpisode) => {
+      const currentState = await player.getState();
+      if (currentState === 'playing') {
+        return;
+      }
+
       setError(null);
       setIsLoading(true);
       try {
@@ -255,6 +279,35 @@ export function usePlayer(
         loadedEpisodeIdRef.current = episode.id;
         setActiveEpisode(episode);
         setState('playing');
+
+        const uriForPlay = baseUriRef.current;
+        const deviceIdForPlay = localSettings?.deviceInstanceId?.trim() ?? '';
+        if (uriForPlay && deviceIdForPlay) {
+          (async () => {
+            try {
+              const latestProgress = await player.getProgress();
+              const entry = toPlaylistEntry(
+                episode,
+                latestProgress,
+                savedPlaylistEntryRef.current,
+                deviceIdForPlay,
+                Date.now(),
+              );
+              const writeResult = await writePlaylist(uriForPlay, entry, {
+                mode: 'control',
+              });
+              setSavedPlaylistEntry(writeResult.entry);
+              playlistEntryPersistedToDiskRef.current = true;
+            } catch (persistError) {
+              const fallbackMessage = 'Could not save playback position.';
+              setError(
+                persistError instanceof Error ? persistError.message : fallbackMessage,
+              );
+            }
+          })().catch(() => undefined);
+        } else if (uriForPlay && !deviceIdForPlay) {
+          setError('Device id missing from local settings.');
+        }
       } catch (playError) {
         const fallbackMessage = 'Could not start playback.';
         setError(playError instanceof Error ? playError.message : fallbackMessage);
@@ -262,7 +315,7 @@ export function usePlayer(
         setIsLoading(false);
       }
     },
-    [baseUri, player],
+    [baseUri, localSettings?.deviceInstanceId, player],
   );
 
   const togglePlayback = useCallback(async () => {
@@ -291,7 +344,12 @@ export function usePlayer(
             if (!uri || !activeEpisodeForMarking) {
               return;
             }
-            if (latestProgress.positionMs < MIN_PERSIST_POSITION_MS) {
+            const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+            if (!deviceId) {
+              setError('Device id missing from local settings.');
+              return;
+            }
+            if (latestProgress.positionMs < MIN_PLAYLIST_PERSIST_POSITION_MS) {
               playlistEntryPersistedToDiskRef.current = false;
               await clearPlaylist(uri);
               setSavedPlaylistEntry(null);
@@ -299,20 +357,26 @@ export function usePlayer(
             }
             const shouldMarkPastThresholdKeepingPlayer =
               playbackRatio >= 0.8 &&
-              latestProgress.positionMs >= MIN_PERSIST_POSITION_MS &&
+              latestProgress.positionMs >= MIN_PLAYLIST_PERSIST_POSITION_MS &&
               Boolean(activeEpisodeForMarking);
             if (shouldMarkPastThresholdKeepingPlayer) {
               await onMarkAsPlayed(activeEpisodeForMarking!, {
                 dismissNowPlaying: false,
               });
             }
-            const entry = toPlaylistEntry(activeEpisodeForMarking, latestProgress);
+            const entry = toPlaylistEntry(
+              activeEpisodeForMarking,
+              latestProgress,
+              savedPlaylistEntryRef.current,
+              deviceId,
+              Date.now(),
+            );
             if (shouldMarkPastThresholdKeepingPlayer) {
               await clearPlaylist(uri);
               setSavedPlaylistEntry(entry);
               playlistEntryPersistedToDiskRef.current = false;
             } else {
-              const writeResult = await writePlaylist(uri, entry);
+              const writeResult = await writePlaylist(uri, entry, {mode: 'control'});
               setSavedPlaylistEntry(writeResult.entry);
               playlistEntryPersistedToDiskRef.current = true;
             }
@@ -336,13 +400,43 @@ export function usePlayer(
 
       await player.resume();
       setState('playing');
+
+      const uriResume = baseUriRef.current;
+      const deviceIdResume = localSettings?.deviceInstanceId?.trim() ?? '';
+      if (uriResume && deviceIdResume) {
+        (async () => {
+          try {
+            const latestProgress = await player.getProgress();
+            setProgress(latestProgress);
+            const entry = toPlaylistEntry(
+              active,
+              latestProgress,
+              savedPlaylistEntryRef.current,
+              deviceIdResume,
+              Date.now(),
+            );
+            const writeResult = await writePlaylist(uriResume, entry, {
+              mode: 'control',
+            });
+            setSavedPlaylistEntry(writeResult.entry);
+            playlistEntryPersistedToDiskRef.current = true;
+          } catch (persistError) {
+            const fallbackMessage = 'Could not save playback position.';
+            setError(
+              persistError instanceof Error ? persistError.message : fallbackMessage,
+            );
+          }
+        })().catch(() => undefined);
+      } else if (uriResume && !deviceIdResume) {
+        setError('Device id missing from local settings.');
+      }
     } catch (toggleError) {
       const fallbackMessage = 'Could not change playback state.';
       setError(toggleError instanceof Error ? toggleError.message : fallbackMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [onMarkAsPlayed, playEpisode, player, state]);
+  }, [localSettings?.deviceInstanceId, onMarkAsPlayed, playEpisode, player, state]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {

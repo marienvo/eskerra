@@ -1,5 +1,6 @@
 import {
   defaultNoteboxLocalSettings,
+  newDeviceInstanceId,
   serializeNoteboxLocalSettings,
 } from './noteboxLocalSettings';
 import {defaultNoteboxSettings, serializeNoteboxSettings} from './noteboxSettings';
@@ -42,7 +43,11 @@ export async function initNoteboxVault(
   }
 
   if (!(await fs.exists(localUri))) {
-    await fs.writeFile(localUri, serializeNoteboxLocalSettings(defaultNoteboxLocalSettings), {
+    const initialLocal = {
+      ...defaultNoteboxLocalSettings,
+      deviceInstanceId: newDeviceInstanceId(),
+    };
+    await fs.writeFile(localUri, serializeNoteboxLocalSettings(initialLocal), {
       encoding: 'utf8',
       mimeType: 'application/json',
     });

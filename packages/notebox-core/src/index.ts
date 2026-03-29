@@ -15,6 +15,8 @@ export {
 } from './inboxComposeNote';
 export {
   defaultNoteboxLocalSettings,
+  ensureDeviceInstanceId,
+  newDeviceInstanceId,
   type NoteboxLocalSettings,
   parseNoteboxLocalSettings,
   serializeNoteboxLocalSettings,
@@ -33,11 +35,15 @@ export {
 } from './noteboxSettings';
 export {readVaultSharedSettingsRaw} from './readVaultSharedSettings';
 export {
+  buildPlaylistEntryForWrite,
+  MIN_PLAYLIST_PERSIST_POSITION_MS,
+  isRemotePlaylistNewerThanKnown,
   isValidPlaylistEntry,
   normalizePlaylistEntryForSync,
   parsePlaylistEntryOrThrow,
   pickNewerPlaylistEntry,
   type PlaylistEntry,
+  type PlaylistWriteMode,
   type PlaylistWriteResult,
   serializePlaylistEntry,
 } from './playlist';

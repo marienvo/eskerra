@@ -11,6 +11,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {PlaylistScreen} from '../features/inbox/screens/PlaylistScreen';
 import {MiniPlayer} from '../features/podcasts/components/MiniPlayer';
+import {PlaylistR2PollingHost} from '../features/podcasts/components/PlaylistR2PollingHost';
 import {RecordScreen} from '../features/record/screens/RecordScreen';
 import {PodcastsTabHeader} from '../features/podcasts/components/PodcastsTabHeader';
 import {PlayerProvider} from '../features/podcasts/context/PlayerContext';
@@ -49,8 +50,12 @@ const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}
   <MaterialIcons color={color} name="radio" size={size} />
 );
 const RECORD_TAB_ICON_COLOR = '#e53935';
-const recordTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({size}) => (
-  <MaterialIcons color={RECORD_TAB_ICON_COLOR} name="fiber-manual-record" size={size} />
+const recordTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({focused, size}) => (
+  <MaterialIcons
+    color={focused ? '#ffffff' : RECORD_TAB_ICON_COLOR}
+    name="fiber-manual-record"
+    size={size}
+  />
 );
 const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
   <TabBarButton {...props} />
@@ -171,6 +176,7 @@ function SettingsStackScreen() {
 export function MainTabNavigator() {
   return (
     <PlayerProvider>
+      <PlaylistR2PollingHost />
       <Tabs.Navigator
         initialRouteName="PodcastsTab"
         screenOptions={{

@@ -1,3 +1,5 @@
+import {ensureDeviceInstanceId} from '@notebox/core';
+
 import {appBreadcrumb} from '../observability';
 import {tryPrepareNoteboxSessionNative} from '../storage/androidVaultListing';
 import {
@@ -6,6 +8,7 @@ import {
   parseNoteboxSettings,
   readLocalSettings,
   readSettings,
+  writeLocalSettings,
 } from '../storage/noteboxStorage';
 import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
 
@@ -58,7 +61,12 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     inboxContentByUri = null;
   }
 
-  const localSettings = await readLocalSettings(baseUri);
+  let localSettings = await readLocalSettings(baseUri);
+  const ensuredLocal = ensureDeviceInstanceId(localSettings);
+  if (ensuredLocal.changed) {
+    localSettings = ensuredLocal.settings;
+    await writeLocalSettings(baseUri, localSettings);
+  }
 
   appBreadcrumb({
     category: 'vault',

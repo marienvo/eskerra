@@ -17,7 +17,12 @@ describe('playlist', () => {
 
   it('accepts legacy JSON without updatedAt', () => {
     expect(isValidPlaylistEntry(legacy)).toBe(true);
-    expect(normalizePlaylistEntryForSync(legacy)).toEqual({...legacy, updatedAt: 0});
+    expect(normalizePlaylistEntryForSync(legacy)).toEqual({
+      ...legacy,
+      controlRevision: 0,
+      playbackOwnerId: '',
+      updatedAt: 0,
+    });
   });
 
   it('rejects invalid updatedAt', () => {
@@ -29,21 +34,28 @@ describe('playlist', () => {
     ).toBe(false);
   });
 
-  it('pickNewerPlaylistEntry prefers higher updatedAt', () => {
-    const a = {...legacy, updatedAt: 10};
-    const b = {...legacy, updatedAt: 20};
+  it('pickNewerPlaylistEntry prefers higher controlRevision', () => {
+    const a = {...legacy, controlRevision: 1, updatedAt: 10, playbackOwnerId: ''};
+    const b = {...legacy, controlRevision: 2, updatedAt: 5, playbackOwnerId: ''};
+    expect(pickNewerPlaylistEntry(a, b)).toEqual(b);
+    expect(pickNewerPlaylistEntry(b, a)).toEqual(b);
+  });
+
+  it('pickNewerPlaylistEntry prefers higher updatedAt when controlRevision ties', () => {
+    const a = {...legacy, controlRevision: 1, updatedAt: 10, playbackOwnerId: ''};
+    const b = {...legacy, controlRevision: 1, updatedAt: 20, playbackOwnerId: ''};
     expect(pickNewerPlaylistEntry(a, b)).toEqual(b);
     expect(pickNewerPlaylistEntry(b, a)).toEqual(b);
   });
 
   it('pickNewerPlaylistEntry tie prefers second', () => {
-    const a = {...legacy, updatedAt: 5};
-    const b = {...legacy, episodeId: 'remote', updatedAt: 5};
+    const a = {...legacy, controlRevision: 1, updatedAt: 5, playbackOwnerId: ''};
+    const b = {...legacy, controlRevision: 1, episodeId: 'remote', updatedAt: 5, playbackOwnerId: ''};
     expect(pickNewerPlaylistEntry(a, b)).toEqual(b);
   });
 
   it('serializePlaylistEntry includes updatedAt', () => {
-    const entry = {...legacy, updatedAt: 99};
+    const entry = {...legacy, controlRevision: 0, playbackOwnerId: '', updatedAt: 99};
     expect(JSON.parse(serializePlaylistEntry(entry))).toEqual(entry);
   });
 });

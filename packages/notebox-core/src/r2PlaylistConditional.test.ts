@@ -50,7 +50,11 @@ describe('fetchR2PlaylistConditional', () => {
     );
     await expect(fetchR2PlaylistConditional(config)).resolves.toEqual({
       kind: 'updated',
-      entry: playlist,
+      entry: {
+        ...playlist,
+        controlRevision: 0,
+        playbackOwnerId: '',
+      },
       etag: '"etag1"',
     });
   });

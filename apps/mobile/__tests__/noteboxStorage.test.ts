@@ -99,12 +99,16 @@ describe('noteboxStorage', () => {
         '}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
-    expect(writeFileMock).toHaveBeenNthCalledWith(
-      2,
-      `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": "",\n  "playlistKnownUpdatedAtMs": null\n}\n',
-      {encoding: 'utf8', mimeType: 'application/json'},
-    );
+    const localWrite = writeFileMock.mock.calls[1];
+    expect(localWrite[0]).toBe(`${baseUri}/.notebox/settings-local.json`);
+    const localParsed = JSON.parse(localWrite[1] as string) as Record<string, unknown>;
+    expect(localParsed.deviceName).toBe('');
+    expect(localParsed.displayName).toBe('');
+    expect(localParsed.playlistKnownUpdatedAtMs).toBeNull();
+    expect(localParsed.playlistKnownControlRevision).toBeNull();
+    expect(typeof localParsed.deviceInstanceId).toBe('string');
+    expect((localParsed.deviceInstanceId as string).length).toBeGreaterThan(0);
+    expect(localWrite[2]).toEqual({encoding: 'utf8', mimeType: 'application/json'});
   });
 
   test('initNotebox skips writes when shared and local already exist', async () => {
@@ -140,7 +144,7 @@ describe('noteboxStorage', () => {
     );
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": "Notebook A",\n  "playlistKnownUpdatedAtMs": null\n}\n',
+      '{\n  "deviceInstanceId": "",\n  "deviceName": "",\n  "displayName": "Notebook A",\n  "playlistKnownControlRevision": null,\n  "playlistKnownUpdatedAtMs": null\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
     expect(writeFileMock).toHaveBeenCalledWith(
@@ -169,7 +173,7 @@ describe('noteboxStorage', () => {
     );
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": "From Legacy",\n  "playlistKnownUpdatedAtMs": null\n}\n',
+      '{\n  "deviceInstanceId": "",\n  "deviceName": "",\n  "displayName": "From Legacy",\n  "playlistKnownControlRevision": null,\n  "playlistKnownUpdatedAtMs": null\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
     expect(writeFileMock).toHaveBeenCalledWith(
@@ -748,9 +752,11 @@ describe('noteboxStorage', () => {
       readFileMock.mockResolvedValueOnce('{}');
 
       await writePlaylist(baseUri, {
+        controlRevision: 0,
         durationMs: 1000,
         episodeId: 'episode-a',
         mp3Url: 'https://example.com/episode-a.mp3',
+        playbackOwnerId: '',
         positionMs: 250,
         updatedAt: 0,
       });
@@ -777,9 +783,11 @@ describe('noteboxStorage', () => {
         );
 
       await expect(readPlaylist(baseUri)).resolves.toEqual({
+        controlRevision: 0,
         durationMs: 1000,
         episodeId: 'episode-a',
         mp3Url: 'https://example.com/episode-a.mp3',
+        playbackOwnerId: '',
         positionMs: 250,
         updatedAt: 0,
       });
@@ -800,9 +808,11 @@ describe('noteboxStorage', () => {
 
       expect(readFileMock).toHaveBeenCalledTimes(2);
       expect(a).toEqual({
+        controlRevision: 0,
         durationMs: 1000,
         episodeId: 'episode-a',
         mp3Url: 'https://example.com/episode-a.mp3',
+        playbackOwnerId: '',
         positionMs: 250,
         updatedAt: 0,
       });

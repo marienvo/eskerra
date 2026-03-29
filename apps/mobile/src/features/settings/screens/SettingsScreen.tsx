@@ -89,8 +89,10 @@ export function SettingsScreen() {
       await saveSettings(shared.settings);
       const trimmedDisplay = displayName.trim();
       await saveLocalSettings({
+        deviceInstanceId: localSettings?.deviceInstanceId ?? '',
         deviceName: deviceName.trimEnd(),
         displayName: trimmedDisplay,
+        playlistKnownControlRevision: localSettings?.playlistKnownControlRevision ?? null,
         playlistKnownUpdatedAtMs: localSettings?.playlistKnownUpdatedAtMs ?? null,
       });
       setDisplayName(trimmedDisplay);
