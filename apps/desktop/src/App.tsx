@@ -102,8 +102,9 @@ export default function App() {
     async (root: string) => {
       const list = await listInboxNotes(root, fs);
       setNotes(list);
+      bumpPlaylistRevision();
     },
-    [fs],
+    [bumpPlaylistRevision, fs],
   );
 
   const hydrateVault = useCallback(

@@ -13,7 +13,7 @@ import {
 } from '@gluestack-ui/themed';
 import {StyleSheet} from 'react-native';
 
-import {buildNoteboxSettingsFromForm} from '@notebox/core';
+import {buildNoteboxSettingsFromForm, type R2Jurisdiction} from '@notebox/core';
 
 import {RootStackParamList} from '../../../navigation/types';
 import {useSettings} from '../hooks/useSettings';
@@ -51,6 +51,7 @@ export function SettingsScreen() {
   const [r2Bucket, setR2Bucket] = useState('');
   const [r2AccessKeyId, setR2AccessKeyId] = useState('');
   const [r2SecretAccessKey, setR2SecretAccessKey] = useState('');
+  const [r2Jurisdiction, setR2Jurisdiction] = useState<R2Jurisdiction>('default');
   const [statusText, setStatusText] = useState<string | null>(null);
   const directoryLabel = baseUri ? getDirectoryLabel(baseUri) : 'No directory selected';
 
@@ -60,6 +61,7 @@ export function SettingsScreen() {
     setR2Bucket(r2?.bucket ?? '');
     setR2AccessKeyId(r2?.accessKeyId ?? '');
     setR2SecretAccessKey(r2?.secretAccessKey ?? '');
+    setR2Jurisdiction(r2?.jurisdiction ?? 'default');
   }, [settings]);
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export function SettingsScreen() {
       bucket: r2Bucket,
       accessKeyId: r2AccessKeyId,
       secretAccessKey: r2SecretAccessKey,
+      jurisdiction: r2Jurisdiction,
     });
 
     if (!shared.ok) {
@@ -88,6 +91,7 @@ export function SettingsScreen() {
       await saveLocalSettings({
         deviceName: deviceName.trimEnd(),
         displayName: trimmedDisplay,
+        playlistKnownUpdatedAtMs: localSettings?.playlistKnownUpdatedAtMs ?? null,
       });
       setDisplayName(trimmedDisplay);
       setDeviceName(deviceName.trimEnd());
@@ -96,11 +100,13 @@ export function SettingsScreen() {
         setR2Bucket(shared.settings.r2.bucket);
         setR2AccessKeyId(shared.settings.r2.accessKeyId);
         setR2SecretAccessKey(shared.settings.r2.secretAccessKey);
+        setR2Jurisdiction(shared.settings.r2.jurisdiction ?? 'default');
       } else {
         setR2Endpoint('');
         setR2Bucket('');
         setR2AccessKeyId('');
         setR2SecretAccessKey('');
+        setR2Jurisdiction('default');
       }
       setStatusText('Settings saved.');
     } catch (error) {
@@ -148,6 +154,10 @@ export function SettingsScreen() {
         </Text>
 
         <Text style={styles.label}>Endpoint URL</Text>
+        <Text style={styles.hint}>
+          You can paste the full S3 API URL from Cloudflare (including /bucket); the app normalizes
+          it.
+        </Text>
         <Input style={styles.input}>
           <InputField
             autoCapitalize="none"
@@ -157,6 +167,30 @@ export function SettingsScreen() {
             value={r2Endpoint}
           />
         </Input>
+
+        <Text style={styles.label}>Data location (R2)</Text>
+        <Text style={styles.hint}>
+          Buckets in the EU data location need the EU S3 API host. Choose EU if your bucket shows an EU
+          label in Cloudflare.
+        </Text>
+        <Box style={styles.jurisdictionRow}>
+          {(['default', 'eu', 'fedramp'] as const).map(j => (
+            <Pressable
+              key={j}
+              accessibilityRole="button"
+              accessibilityState={{selected: r2Jurisdiction === j}}
+              disabled={isSaving}
+              onPress={() => setR2Jurisdiction(j)}
+              style={[
+                styles.jurisdictionChip,
+                r2Jurisdiction === j ? styles.jurisdictionChipSelected : null,
+              ]}>
+              <Text style={styles.jurisdictionChipText}>
+                {j === 'default' ? 'Default' : j === 'eu' ? 'EU' : 'FedRAMP'}
+              </Text>
+            </Pressable>
+          ))}
+        </Box>
 
         <Text style={styles.label}>Bucket</Text>
         <Input style={styles.input}>
@@ -264,6 +298,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 8,
     marginTop: 4,
+  },
+  jurisdictionChip: {
+    borderColor: '#d4d4d4',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  jurisdictionChipSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+  },
+  jurisdictionChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  jurisdictionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 4,
+    marginTop: 8,
   },
   input: {
     borderRadius: 12,

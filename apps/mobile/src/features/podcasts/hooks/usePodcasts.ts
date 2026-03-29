@@ -49,7 +49,7 @@ type UsePodcastsResult = {
 };
 
 export function usePodcasts(): UsePodcastsResult {
-  const {baseUri} = useVaultContext();
+  const {baseUri, notifyPlaylistSyncAfterVaultRefresh} = useVaultContext();
   const [allEpisodes, setAllEpisodes] = useState<PodcastEpisode[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,6 +161,10 @@ export function usePodcasts(): UsePodcastsResult {
         setIsLoading(false);
       }
 
+      if (baseUri) {
+        notifyPlaylistSyncAfterVaultRefresh();
+      }
+
       if (!knownEpisodeIds) {
         return;
       }
@@ -196,7 +200,7 @@ export function usePodcasts(): UsePodcastsResult {
 
       runPlaylistHousekeeping().catch(() => undefined);
     },
-    [baseUri],
+    [baseUri, notifyPlaylistSyncAfterVaultRefresh],
   );
 
   useEffect(() => {

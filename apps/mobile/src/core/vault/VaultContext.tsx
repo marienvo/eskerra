@@ -12,7 +12,10 @@ import {
 import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../observability';
 import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
 import {getSavedUri} from '../storage/appStorage';
-import {clearAllPlaylistReadCoalescer} from '../storage/noteboxStorage';
+import {
+  clearAllPlaylistReadCoalescer,
+  invalidatePlaylistReadCache,
+} from '../storage/noteboxStorage';
 import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
 import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
@@ -40,6 +43,8 @@ type VaultContextValue = {
   setSettings: (nextSettings: NoteboxSettings) => void;
   localSettings: NoteboxLocalSettings | null;
   setLocalSettings: (next: NoteboxLocalSettings) => void;
+  playlistSyncGeneration: number;
+  notifyPlaylistSyncAfterVaultRefresh: () => void;
 };
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -82,6 +87,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const [localSettings, setLocalSettings] = useState<NoteboxLocalSettings | null>(
     initialSession?.localSettings ?? null,
   );
+  const [playlistSyncGeneration, setPlaylistSyncGeneration] = useState(0);
   const inboxPrefetchRef = useRef<{notes: NoteSummary[]; uri: string} | null>(
     initialSession?.inboxPrefetch
       ? {uri: initialSession.uri, notes: initialSession.inboxPrefetch}
@@ -144,6 +150,13 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     },
     [baseUri],
   );
+
+  const notifyPlaylistSyncAfterVaultRefresh = useCallback(() => {
+    if (baseUri) {
+      invalidatePlaylistReadCache(baseUri);
+    }
+    setPlaylistSyncGeneration(g => g + 1);
+  }, [baseUri]);
 
   const pruneInboxNoteContentFromCache = useCallback(
     (noteUris: readonly string[]) => {
@@ -314,6 +327,8 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       setSettings,
       localSettings,
       setLocalSettings,
+      playlistSyncGeneration,
+      notifyPlaylistSyncAfterVaultRefresh,
     }),
     [
       baseUri,
@@ -322,6 +337,8 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       getInboxNoteContentFromCache,
       isLoading,
       localSettings,
+      notifyPlaylistSyncAfterVaultRefresh,
+      playlistSyncGeneration,
       pruneInboxNoteContentFromCache,
       refreshSession,
       replaceInboxContentFromSession,

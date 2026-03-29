@@ -250,7 +250,14 @@ describe('usePlayer restore state', () => {
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
       setSettings: jest.fn(),
+      playlistSyncGeneration: 0,
+      notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
     });
+
+    writePlaylistMock.mockImplementation(async (_uri, entry) => ({
+      kind: 'saved',
+      entry: {...entry, updatedAt: entry.updatedAt > 0 ? entry.updatedAt : 999001},
+    }));
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
@@ -274,6 +281,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 123456,
+      updatedAt: 1,
     });
 
     let latestResult: PlayerHookSnapshot | null = null;
@@ -334,6 +342,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 123456,
+      updatedAt: 1,
     });
 
     let latestResult: PlayerHookSnapshot | null = null;
@@ -397,6 +406,7 @@ describe('usePlayer restore state', () => {
       episodeId: 'orphan-id',
       mp3Url: 'https://example.com/orphan.mp3',
       positionMs: 1000,
+      updatedAt: 1,
     });
 
     let latestResult: PlayerHookSnapshot | null = null;
@@ -489,6 +499,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 1000,
+      updatedAt: 1,
     });
 
     const listenedEpisode = {...episode, isListened: true};
@@ -522,6 +533,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 0,
+      updatedAt: 1,
     });
 
     const episodesById = new Map([[episode.id, episode]]);
@@ -556,6 +568,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 123456,
+      updatedAt: 1,
     });
 
     const episodesById = new Map([[episode.id, episode]]);
@@ -598,6 +611,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 123456,
+      updatedAt: 1,
     });
 
     const episodesById = new Map([[episode.id, episode]]);
@@ -636,6 +650,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 0,
+      updatedAt: 1,
     });
 
     const episodesById = new Map([[episode.id, episode]]);
@@ -658,6 +673,7 @@ describe('usePlayer restore state', () => {
       episodeId: episode.id,
       mp3Url: episode.mp3Url,
       positionMs: 50_000,
+      updatedAt: 2,
     });
 
     if (!resyncFn) {

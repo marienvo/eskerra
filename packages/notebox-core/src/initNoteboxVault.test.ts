@@ -40,8 +40,10 @@ describe('initNoteboxVault', () => {
     const localRaw = await fs.readFile('/vault/.notebox/settings-local.json', {
       encoding: 'utf8',
     });
-    expect(JSON.parse(localRaw).deviceName).toBe('');
-    expect(JSON.parse(localRaw).displayName).toBe('');
+    const localCreated = JSON.parse(localRaw);
+    expect(localCreated.deviceName).toBe('');
+    expect(localCreated.displayName).toBe('');
+    expect(localCreated.playlistKnownUpdatedAtMs).toBeNull();
   });
 
   it('does not overwrite legacy-only vault with default shared on init', async () => {
@@ -59,7 +61,9 @@ describe('initNoteboxVault', () => {
     const stillLegacy = await fs.readFile('/vault/.notebox/settings.json', {encoding: 'utf8'});
     expect(JSON.parse(stillLegacy).displayName).toBe('Legacy Box');
     const localRaw = await fs.readFile('/vault/.notebox/settings-local.json', {encoding: 'utf8'});
-    expect(JSON.parse(localRaw).deviceName).toBe('');
-    expect(JSON.parse(localRaw).displayName).toBe('');
+    const local = JSON.parse(localRaw);
+    expect(local.deviceName).toBe('');
+    expect(local.displayName).toBe('');
+    expect(local.playlistKnownUpdatedAtMs).toBeNull();
   });
 });

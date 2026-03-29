@@ -1,4 +1,5 @@
 mod media;
+mod r2_http;
 mod vault;
 mod vault_watch;
 
@@ -21,6 +22,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            r2_http::r2_signed_fetch,
             vault::vault_set_session,
             vault::vault_get_session,
             vault::vault_exists,

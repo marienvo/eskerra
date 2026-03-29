@@ -9,8 +9,8 @@ The following are **identical on disk** once a vault root is chosen:
 - **Vault root** is a single directory the user selects.
 - **`Inbox/`** holds user-authored markdown notes (`.md`).
 - **`General/`** holds podcast-related markdown and **`General/Inbox.md`**, a generated index of inbox note stems (same format as on Android).
-- **`.notebox/settings-shared.json`** stores vault-scoped settings synced with the vault: optional Cloudflare **R2** (S3-compatible) fields only. **`displayName`** and **`deviceName`** live in **`.notebox/settings-local.json`** (per device; default empty strings; typically not committed). Legacy **`settings.json`** is read once for migration into `settings-shared.json`. If legacy **`displayName`** still appears in shared JSON, the app copies it into local settings and rewrites shared without that key. Parsing and defaults are implemented in `@notebox/core`. **Security:** storing R2 keys in the shared file is an accepted tradeoff for private vaults; see **section 9** in [`known-risks.md`](known-risks.md).
-- **`.notebox/playlist.json`** stores the last playback pointer (`episodeId`, `mp3Url`, `positionMs`, `durationMs`) for resuming audio across devices that share the same vault folder.
+- **`.notebox/settings-shared.json`** stores vault-scoped settings synced with the vault: optional Cloudflare **R2** (S3-compatible) fields only. **`displayName`** and **`deviceName`** live in **`.notebox/settings-local.json`** (per device; default empty strings; typically not committed), along with **`playlistKnownUpdatedAtMs`** (nullable number): the last playlist **`updatedAt`** timestamp this device accepted after a successful R2 or fallback local read/write. Legacy **`settings.json`** is read once for migration into `settings-shared.json`. If legacy **`displayName`** still appears in shared JSON, the app copies it into local settings and rewrites shared without that key. Parsing and defaults are implemented in `@notebox/core`. **Security:** storing R2 keys in the shared file is an accepted tradeoff for private vaults; see **section 9** in [`known-risks.md`](known-risks.md).
+- **Playback playlist (`playlist.json`):** when **R2 is fully configured** in shared settings, the canonical JSON object lives in the R2 bucket as **`playlist.json`** at the bucket root (**one vault per bucket**). It includes the playback fields plus **`updatedAt`** (Unix ms). Devices compare timestamps with `playlistKnownUpdatedAtMs` and with any **`.notebox/playlist.json`** on disk: the **newer `updatedAt` wins**; there is no field-level merge. **`.notebox/playlist.json`** is **not** authoritative while R2 works; it is used for **offline / error fallback** until R2 succeeds again. With **no** R2 configuration, **`.notebox/playlist.json`** remains the only playlist store (still includes `updatedAt` on new writes).
 
 ## Platform-specific bootstrap
 
@@ -38,7 +38,7 @@ The following are **identical on disk** once a vault root is chosen:
 
 - **Android:** `AudioPlayer` implementation uses **Track Player**; `AudioPlayer` interface types live in `@notebox/core`.
 - **Desktop:** `HtmlAudioPlayer` implements the same interface using **`<audio>`**; Rust commands **`media_set_metadata`**, **`media_set_playback`**, and **`media_clear_session`** mirror state to the OS on Linux (**souvlaki** / MPRIS). The frontend listens for the **`media-control`** event for shell-driven **play / pause / toggle** and toggles the web audio element accordingly.
-- **Shared playlist file:** both apps read/write **`.notebox/playlist.json`** so resuming the same vault on another app is possible when URLs and file layout match.
+- **Shared playlist:** both apps use the same **`playlist.json`** payload (vault disk path or R2 object). With R2 enabled, they **re-read on startup** and on **vault/podcast refresh** so another device’s newer `updatedAt` replaces local playback state when applicable.
 
 ## Desktop main-window UX
 

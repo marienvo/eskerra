@@ -181,6 +181,8 @@ describe('usePodcasts loading lifecycle', () => {
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
       setSettings: jest.fn(),
+      playlistSyncGeneration: 0,
+      notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
     });
 
     readPlaylistMock.mockResolvedValue(null);

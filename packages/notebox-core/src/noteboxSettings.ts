@@ -1,8 +1,13 @@
+/** R2 bucket jurisdiction; EU/FedRAMP buckets must use the matching S3 API hostname. */
+export type R2Jurisdiction = 'default' | 'eu' | 'fedramp';
+
 export type NoteboxR2Config = {
   endpoint: string;
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
+  /** When set, `endpoint` host is rewritten for S3 requests (e.g. `.eu.r2.cloudflarestorage.com`). */
+  jurisdiction?: R2Jurisdiction;
 };
 
 /** Shared vault JSON: optional R2 only. Display name lives in `settings-local.json`. */
@@ -25,12 +30,103 @@ function parseR2Block(value: unknown): NoteboxR2Config {
     throw new Error('settings-shared.json has an invalid structure.');
   }
 
-  return {
+  let jurisdiction: R2Jurisdiction | undefined;
+  if (o.jurisdiction !== undefined) {
+    if (o.jurisdiction !== 'default' && o.jurisdiction !== 'eu' && o.jurisdiction !== 'fedramp') {
+      throw new Error('settings-shared.json has an invalid structure.');
+    }
+    jurisdiction = o.jurisdiction;
+  }
+
+  const out: NoteboxR2Config = {
     endpoint: o.endpoint,
     bucket: o.bucket,
     accessKeyId: o.accessKeyId,
     secretAccessKey: o.secretAccessKey,
   };
+  if (jurisdiction !== undefined && jurisdiction !== 'default') {
+    out.jurisdiction = jurisdiction;
+  }
+  return out;
+}
+
+/**
+ * Returns the S3 API base URL for this config. Rewrites the default R2 hostname when
+ * `jurisdiction` is `eu` or `fedramp` (required by Cloudflare for jurisdictional buckets).
+ */
+export function effectiveR2Endpoint(config: NoteboxR2Config): string {
+  const trimmed = config.endpoint.trim().replace(/\/+$/, '');
+  const jur = config.jurisdiction ?? 'default';
+  if (jur === 'default') {
+    return trimmed;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return trimmed;
+  }
+
+  const host = url.hostname;
+  if (jur === 'eu') {
+    if (host.endsWith('.eu.r2.cloudflarestorage.com')) {
+      return trimmed;
+    }
+    if (
+      host.endsWith('.r2.cloudflarestorage.com') &&
+      !host.includes('.fedramp.') &&
+      !host.includes('.eu.')
+    ) {
+      const account = host.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+      if (!account.includes('.')) {
+        url.hostname = `${account}.eu.r2.cloudflarestorage.com`;
+        return url.href.replace(/\/$/, '');
+      }
+    }
+    return trimmed;
+  }
+
+  if (jur === 'fedramp') {
+    if (host.endsWith('.fedramp.r2.cloudflarestorage.com')) {
+      return trimmed;
+    }
+    if (
+      host.endsWith('.r2.cloudflarestorage.com') &&
+      !host.includes('.fedramp.') &&
+      !host.includes('.eu.')
+    ) {
+      const account = host.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+      if (!account.includes('.')) {
+        url.hostname = `${account}.fedramp.r2.cloudflarestorage.com`;
+        return url.href.replace(/\/$/, '');
+      }
+    }
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Base URL for path-style S3 calls (`/<bucket>/<objectKey>`). Cloudflare's dashboard copies
+ * `https://<account>.(eu.)r2.../<bucket>`; we must not duplicate the bucket segment when building
+ * object URLs.
+ */
+export function r2S3AccountBaseUrl(config: NoteboxR2Config): string {
+  const merged = effectiveR2Endpoint(config).trim().replace(/\/+$/, '');
+  let url: URL;
+  try {
+    url = new URL(merged);
+  } catch {
+    return merged;
+  }
+  const path = url.pathname.replace(/\/$/, '') || '';
+  const bucket = config.bucket.trim();
+  if (path === '' || path === `/${bucket}`) {
+    return url.origin;
+  }
+  return merged;
 }
 
 export const defaultNoteboxSettings: NoteboxSettings = {
@@ -51,6 +147,7 @@ export type R2FormFields = {
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
+  jurisdiction?: R2Jurisdiction;
 };
 
 /**
@@ -78,7 +175,12 @@ export function buildNoteboxSettingsFromForm(
 
   const settings: NoteboxSettings = {};
   if (allNonEmpty) {
-    settings.r2 = {endpoint: e, bucket: b, accessKeyId: k, secretAccessKey: s};
+    const j = r2.jurisdiction ?? 'default';
+    const block: NoteboxR2Config = {endpoint: e, bucket: b, accessKeyId: k, secretAccessKey: s};
+    if (j !== 'default') {
+      block.jurisdiction = j;
+    }
+    settings.r2 = block;
   }
 
   return {ok: true, settings};

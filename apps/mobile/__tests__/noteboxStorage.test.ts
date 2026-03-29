@@ -102,7 +102,7 @@ describe('noteboxStorage', () => {
     expect(writeFileMock).toHaveBeenNthCalledWith(
       2,
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": ""\n}\n',
+      '{\n  "deviceName": "",\n  "displayName": "",\n  "playlistKnownUpdatedAtMs": null\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
   });
@@ -140,7 +140,7 @@ describe('noteboxStorage', () => {
     );
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": "Notebook A"\n}\n',
+      '{\n  "deviceName": "",\n  "displayName": "Notebook A",\n  "playlistKnownUpdatedAtMs": null\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
     expect(writeFileMock).toHaveBeenCalledWith(
@@ -169,7 +169,7 @@ describe('noteboxStorage', () => {
     );
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "",\n  "displayName": "From Legacy"\n}\n',
+      '{\n  "deviceName": "",\n  "displayName": "From Legacy",\n  "playlistKnownUpdatedAtMs": null\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
     expect(writeFileMock).toHaveBeenCalledWith(
@@ -727,69 +727,100 @@ describe('noteboxStorage', () => {
     );
   });
 
-  test('writePlaylist writes playlist.json', async () => {
-    existsMock.mockResolvedValueOnce(true);
+  describe('playlist (no R2)', () => {
+    function mockNoR2VaultLayoutForPlaylistLocalReadOrder(): void {
+      existsMock.mockImplementation(async (uri: string) => {
+        if (uri.includes('settings-local.json')) {
+          return false;
+        }
+        if (uri.includes('settings-shared.json')) {
+          return true;
+        }
+        if (uri.includes('playlist.json')) {
+          return true;
+        }
+        return false;
+      });
+    }
 
-    await writePlaylist(baseUri, {
-      durationMs: 1000,
-      episodeId: 'episode-a',
-      mp3Url: 'https://example.com/episode-a.mp3',
-      positionMs: 250,
+    test('writePlaylist writes playlist.json', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock.mockResolvedValueOnce('{}');
+
+      await writePlaylist(baseUri, {
+        durationMs: 1000,
+        episodeId: 'episode-a',
+        mp3Url: 'https://example.com/episode-a.mp3',
+        positionMs: 250,
+        updatedAt: 0,
+      });
+
+      const playlistWrite = writeFileMock.mock.calls.find(
+        call => call[0] === `${baseUri}/.notebox/playlist.json`,
+      );
+      expect(playlistWrite).toBeDefined();
+      const body = playlistWrite![1] as string;
+      const parsed = JSON.parse(body) as Record<string, unknown>;
+      expect(parsed.durationMs).toBe(1000);
+      expect(parsed.episodeId).toBe('episode-a');
+      expect(parsed.mp3Url).toBe('https://example.com/episode-a.mp3');
+      expect(parsed.positionMs).toBe(250);
+      expect(typeof parsed.updatedAt).toBe('number');
     });
 
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/playlist.json`,
-      '{\n  "durationMs": 1000,\n  "episodeId": "episode-a",\n  "mp3Url": "https://example.com/episode-a.mp3",\n  "positionMs": 250\n}\n',
-      {encoding: 'utf8', mimeType: 'application/json'},
-    );
-  });
+    test('readPlaylist returns parsed playlist entry', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock
+        .mockResolvedValueOnce('{}')
+        .mockResolvedValueOnce(
+          '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
+        );
 
-  test('readPlaylist returns parsed playlist entry', async () => {
-    existsMock.mockResolvedValueOnce(true);
-    readFileMock.mockResolvedValueOnce(
-      '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
-    );
-
-    await expect(readPlaylist(baseUri)).resolves.toEqual({
-      durationMs: 1000,
-      episodeId: 'episode-a',
-      mp3Url: 'https://example.com/episode-a.mp3',
-      positionMs: 250,
+      await expect(readPlaylist(baseUri)).resolves.toEqual({
+        durationMs: 1000,
+        episodeId: 'episode-a',
+        mp3Url: 'https://example.com/episode-a.mp3',
+        positionMs: 250,
+        updatedAt: 0,
+      });
     });
-  });
 
-  test('readPlaylistCoalesced coalesces concurrent reads', async () => {
-    existsMock.mockResolvedValueOnce(true);
-    readFileMock.mockResolvedValueOnce(
-      '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
-    );
+    test('readPlaylistCoalesces concurrent reads', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock
+        .mockResolvedValueOnce('{}')
+        .mockResolvedValueOnce(
+          '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
+        );
 
-    const [a, b] = await Promise.all([
-      readPlaylistCoalesced(baseUri),
-      readPlaylistCoalesced(baseUri),
-    ]);
+      const [a, b] = await Promise.all([
+        readPlaylistCoalesced(baseUri),
+        readPlaylistCoalesced(baseUri),
+      ]);
 
-    expect(existsMock).toHaveBeenCalledTimes(1);
-    expect(readFileMock).toHaveBeenCalledTimes(1);
-    expect(a).toEqual({
-      durationMs: 1000,
-      episodeId: 'episode-a',
-      mp3Url: 'https://example.com/episode-a.mp3',
-      positionMs: 250,
+      expect(readFileMock).toHaveBeenCalledTimes(2);
+      expect(a).toEqual({
+        durationMs: 1000,
+        episodeId: 'episode-a',
+        mp3Url: 'https://example.com/episode-a.mp3',
+        positionMs: 250,
+        updatedAt: 0,
+      });
+      expect(b).toEqual(a);
     });
-    expect(b).toEqual(a);
-  });
 
-  test('clearPlaylist empties existing playlist file', async () => {
-    existsMock.mockResolvedValueOnce(true);
+    test('clearPlaylist empties existing playlist file', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock.mockResolvedValueOnce('{}');
 
-    await clearPlaylist(baseUri);
+      await clearPlaylist(baseUri);
 
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/playlist.json`,
-      '',
-      {encoding: 'utf8', mimeType: 'application/json'},
-    );
+      expect(writeFileMock).toHaveBeenCalledWith(
+        `${baseUri}/.notebox/playlist.json`,
+        '',
+        {encoding: 'utf8', mimeType: 'application/json'},
+      );
+    });
   });
 
 });

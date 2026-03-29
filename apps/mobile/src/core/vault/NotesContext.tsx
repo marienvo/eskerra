@@ -86,6 +86,7 @@ export function NotesProvider({children}: NotesProviderProps) {
     clearInboxContentCache,
     consumeInboxPrefetch,
     getInboxNoteContentFromCache,
+    notifyPlaylistSyncAfterVaultRefresh,
     pruneInboxNoteContentFromCache,
     replaceInboxContentFromSession,
     setInboxNoteContentInCache,
@@ -130,9 +131,18 @@ export function NotesProvider({children}: NotesProviderProps) {
         if (!isSilent) {
           setIsLoading(false);
         }
+        if (baseUri) {
+          notifyPlaylistSyncAfterVaultRefresh();
+        }
       }
     },
-    [baseUri, clearInboxContentCache, consumeInboxPrefetch, replaceInboxContentFromSession],
+    [
+      baseUri,
+      clearInboxContentCache,
+      consumeInboxPrefetch,
+      notifyPlaylistSyncAfterVaultRefresh,
+      replaceInboxContentFromSession,
+    ],
   );
 
   useEffect(() => {

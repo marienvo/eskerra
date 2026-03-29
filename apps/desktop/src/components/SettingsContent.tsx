@@ -1,9 +1,10 @@
-import {useId, useState} from 'react';
+import {useEffect, useId, useState} from 'react';
 
 import {
   buildNoteboxSettingsFromForm,
   type NoteboxLocalSettings,
   type NoteboxSettings,
+  type R2Jurisdiction,
 } from '@notebox/core';
 
 type SettingsContentProps = {
@@ -37,9 +38,21 @@ export function SettingsContent({
   const [r2SecretAccessKey, setR2SecretAccessKey] = useState(
     vaultSettings.r2?.secretAccessKey ?? '',
   );
+  const [r2Jurisdiction, setR2Jurisdiction] = useState<R2Jurisdiction>(
+    vaultSettings.r2?.jurisdiction ?? 'default',
+  );
   const [showSecrets, setShowSecrets] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    const r2 = vaultSettings.r2;
+    setR2Endpoint(r2?.endpoint ?? '');
+    setR2Bucket(r2?.bucket ?? '');
+    setR2AccessKeyId(r2?.accessKeyId ?? '');
+    setR2SecretAccessKey(r2?.secretAccessKey ?? '');
+    setR2Jurisdiction(r2?.jurisdiction ?? 'default');
+  }, [vaultSettings.r2]);
 
   const handleSave = async () => {
     setSaveOk(null);
@@ -48,6 +61,7 @@ export function SettingsContent({
       bucket: r2Bucket,
       accessKeyId: r2AccessKeyId,
       secretAccessKey: r2SecretAccessKey,
+      jurisdiction: r2Jurisdiction,
     });
     if (!shared.ok) {
       setInlineError(shared.message);
@@ -55,9 +69,10 @@ export function SettingsContent({
     }
     setInlineError(null);
     try {
-      const nextLocal = {
+      const nextLocal: NoteboxLocalSettings = {
         deviceName: deviceName.trimEnd(),
         displayName: displayName.trim(),
+        playlistKnownUpdatedAtMs: localSettings.playlistKnownUpdatedAtMs,
       };
       await onSave(shared.settings, nextLocal);
       setSaveOk('Settings saved.');
@@ -103,6 +118,24 @@ export function SettingsContent({
             placeholder="https://accountid.r2.cloudflarestorage.com"
           />
         </label>
+        <p className="settings-hint muted small">
+          Paste the full S3 API URL from R2 settings if you like (including <code>/bucket</code>); it is
+          normalized so object paths are not duplicated.
+        </p>
+        <label className="field">
+          Data location (R2)
+          <select
+            value={r2Jurisdiction}
+            onChange={e => setR2Jurisdiction(e.target.value as R2Jurisdiction)}>
+            <option value="default">Default</option>
+            <option value="eu">EU (use .eu.r2.cloudflarestorage.com)</option>
+            <option value="fedramp">FedRAMP</option>
+          </select>
+        </label>
+        <p className="settings-hint muted small">
+          EU data location buckets must hit the EU S3 API hostname. Choosing EU rewrites a default-style
+          endpoint automatically.
+        </p>
         <label className="field">
           Bucket
           <input value={r2Bucket} onChange={e => setR2Bucket(e.target.value)} autoComplete="off" />

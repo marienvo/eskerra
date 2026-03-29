@@ -22,18 +22,33 @@ export {
 export {
   buildNoteboxSettingsFromForm,
   defaultNoteboxSettings,
+  effectiveR2Endpoint,
+  r2S3AccountBaseUrl,
   type NoteboxR2Config,
   type NoteboxSettings,
   type R2FormFields,
+  type R2Jurisdiction,
   parseNoteboxSettings,
   serializeNoteboxSettings,
 } from './noteboxSettings';
 export {readVaultSharedSettingsRaw} from './readVaultSharedSettings';
 export {
   isValidPlaylistEntry,
+  normalizePlaylistEntryForSync,
+  parsePlaylistEntryOrThrow,
+  pickNewerPlaylistEntry,
   type PlaylistEntry,
+  type PlaylistWriteResult,
   serializePlaylistEntry,
 } from './playlist';
+export type {R2PlaylistObjectOptions, R2SignedRequestTransport} from './r2PlaylistObject';
+export {
+  buildR2ObjectUrl,
+  deleteR2PlaylistObject,
+  getR2PlaylistObject,
+  putR2PlaylistObject,
+} from './r2PlaylistObject';
+export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
 export {
   GENERAL_DIRECTORY_NAME,

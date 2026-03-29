@@ -51,6 +51,7 @@ function toPlaylistEntry(
     episodeId: episode.id,
     mp3Url: episode.mp3Url,
     positionMs: progress.positionMs,
+    updatedAt: 0,
   };
 }
 
@@ -63,7 +64,7 @@ export function usePlayer(
   episodesById: Map<string, PodcastEpisode>,
   {onMarkAsPlayed, podcastsCatalogReady, podcastsLoading}: UsePlayerOptions,
 ): UsePlayerResult {
-  const {baseUri} = useVaultContext();
+  const {baseUri, playlistSyncGeneration} = useVaultContext();
   const player = useMemo(() => getAudioPlayer(), []);
   const activeEpisodeRef = useRef<PodcastEpisode | null>(null);
   const loadedEpisodeIdRef = useRef<string | null>(null);
@@ -169,7 +170,7 @@ export function usePlayer(
     return () => {
       isMounted = false;
     };
-  }, [baseUri, player]);
+  }, [baseUri, player, playlistSyncGeneration]);
 
   useEffect(() => {
     if (!savedPlaylistEntry) {
@@ -311,8 +312,8 @@ export function usePlayer(
               setSavedPlaylistEntry(entry);
               playlistEntryPersistedToDiskRef.current = false;
             } else {
-              await writePlaylist(uri, entry);
-              setSavedPlaylistEntry(entry);
+              const writeResult = await writePlaylist(uri, entry);
+              setSavedPlaylistEntry(writeResult.entry);
               playlistEntryPersistedToDiskRef.current = true;
             }
           } catch (persistError) {

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  normalizePlaylistEntryForSync,
   parseNoteboxLocalSettings,
   parseNoteboxSettings,
   serializeNoteboxLocalSettings,
@@ -496,17 +497,24 @@ export async function readPlaylist(baseUri: string): Promise<PlaylistEntry | nul
     return null;
   }
 
-  return JSON.parse(rawPlaylist) as PlaylistEntry;
+  const parsed: unknown = JSON.parse(rawPlaylist);
+  const entry = normalizePlaylistEntryForSync(parsed);
+  if (!entry) {
+    throw new Error('playlist.json has an invalid structure.');
+  }
+  return entry;
 }
 
 export async function writePlaylist(
   baseUri: string,
   entry: PlaylistEntry,
-): Promise<void> {
+): Promise<PlaylistEntry> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
-  await AsyncStorage.setItem(DEV_PLAYLIST_KEY, JSON.stringify(entry));
+  const next: PlaylistEntry = {...entry, updatedAt: Math.max(Date.now(), entry.updatedAt)};
+  await AsyncStorage.setItem(DEV_PLAYLIST_KEY, JSON.stringify(next));
+  return next;
 }
 
 export async function clearPlaylist(baseUri: string): Promise<void> {

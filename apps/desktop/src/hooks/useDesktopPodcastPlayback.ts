@@ -136,12 +136,20 @@ export function useDesktopPodcastPlayback({
         episodeId: s.episodeId,
         mp3Url: s.mp3Url,
         positionMs: p.positionMs,
-      }).catch(() => undefined);
+        updatedAt: 0,
+      })
+        .then(wr => {
+          if (wr.kind === 'superseded') {
+            setDiskPlaylist(wr.entry);
+            onPlaylistDiskUpdated?.();
+          }
+        })
+        .catch(() => undefined);
     });
     return () => {
       unsubProg();
     };
-  }, [vaultRoot, fs]);
+  }, [vaultRoot, fs, onPlaylistDiskUpdated]);
 
   useEffect(() => {
     if (!vaultRoot || !consumeCatalogReady || !diskPlaylist) {
@@ -256,12 +264,16 @@ export function useDesktopPodcastPlayback({
         /* same as missing playlist */
       }
       try {
-        await writePlaylistEntry(vaultRoot, fs, {
+        const wr = await writePlaylistEntry(vaultRoot, fs, {
           durationMs: null,
           episodeId: ep.id,
           mp3Url: ep.mp3Url,
           positionMs: startPositionMs,
+          updatedAt: 0,
         });
+        if (wr.kind === 'superseded') {
+          setDiskPlaylist(wr.entry);
+        }
         onPlaylistDiskUpdated?.();
         await getDesktopAudioPlayer().play(
           {
@@ -322,12 +334,16 @@ export function useDesktopPodcastPlayback({
       }
       playbackRef.current = {episodeId: catalogEp.id, mp3Url: catalogEp.mp3Url};
       setActiveEpisode(catalogEp);
-      await writePlaylistEntry(vaultRoot, fs, {
+      const wr = await writePlaylistEntry(vaultRoot, fs, {
         durationMs: pl.durationMs,
         episodeId: catalogEp.id,
         mp3Url: catalogEp.mp3Url,
         positionMs: pl.positionMs,
+        updatedAt: pl.updatedAt,
       });
+      if (wr.kind === 'superseded') {
+        setDiskPlaylist(wr.entry);
+      }
       onPlaylistDiskUpdated?.();
       await getDesktopAudioPlayer().play(
         {

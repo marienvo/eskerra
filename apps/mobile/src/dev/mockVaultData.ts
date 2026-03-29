@@ -24,6 +24,7 @@ export const MOCK_SETTINGS: NoteboxSettings = {
 export const MOCK_LOCAL_SETTINGS: NoteboxLocalSettings = {
   deviceName: '',
   displayName: 'Dev Notebox',
+  playlistKnownUpdatedAtMs: null,
 };
 
 /** Kept in sync with `mock-vault/Inbox/` in the repo (dev seed only; not read from disk at runtime). */

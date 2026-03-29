@@ -5,25 +5,21 @@ import {
   serializeNoteboxLocalSettings,
 } from './noteboxLocalSettings';
 
+const emptyLocal = {deviceName: '', displayName: '', playlistKnownUpdatedAtMs: null as null};
+
 describe('parseNoteboxLocalSettings', () => {
   it('parses valid local settings', () => {
     expect(
       parseNoteboxLocalSettings(JSON.stringify({deviceName: 'Phone'}, null, 2)),
-    ).toEqual({deviceName: 'Phone', displayName: ''});
+    ).toEqual({deviceName: 'Phone', displayName: '', playlistKnownUpdatedAtMs: null});
   });
 
   it('defaults missing deviceName to empty string', () => {
-    expect(parseNoteboxLocalSettings(JSON.stringify({}, null, 2))).toEqual({
-      deviceName: '',
-      displayName: '',
-    });
+    expect(parseNoteboxLocalSettings(JSON.stringify({}, null, 2))).toEqual(emptyLocal);
   });
 
   it('allows empty deviceName', () => {
-    expect(parseNoteboxLocalSettings(JSON.stringify({deviceName: ''}, null, 2))).toEqual({
-      deviceName: '',
-      displayName: '',
-    });
+    expect(parseNoteboxLocalSettings(JSON.stringify({deviceName: ''}, null, 2))).toEqual(emptyLocal);
   });
 
   it('parses displayName', () => {
@@ -31,7 +27,15 @@ describe('parseNoteboxLocalSettings', () => {
       parseNoteboxLocalSettings(
         JSON.stringify({deviceName: 'P', displayName: 'My vault'}, null, 2),
       ),
-    ).toEqual({deviceName: 'P', displayName: 'My vault'});
+    ).toEqual({deviceName: 'P', displayName: 'My vault', playlistKnownUpdatedAtMs: null});
+  });
+
+  it('parses playlistKnownUpdatedAtMs', () => {
+    expect(
+      parseNoteboxLocalSettings(
+        JSON.stringify({...emptyLocal, playlistKnownUpdatedAtMs: 123}, null, 2),
+      ),
+    ).toEqual({...emptyLocal, playlistKnownUpdatedAtMs: 123});
   });
 
   it('rejects non-object JSON', () => {
@@ -42,7 +46,7 @@ describe('parseNoteboxLocalSettings', () => {
 
 describe('serializeNoteboxLocalSettings', () => {
   it('round-trips', () => {
-    const s = {deviceName: 'X', displayName: 'Y'};
+    const s = {deviceName: 'X', displayName: 'Y', playlistKnownUpdatedAtMs: 9};
     expect(parseNoteboxLocalSettings(serializeNoteboxLocalSettings(s))).toEqual(s);
   });
 });

@@ -2,11 +2,17 @@ export type NoteboxLocalSettings = {
   deviceName: string;
   /** Per-device vault label (not synced via shared JSON). */
   displayName: string;
+  /**
+   * Last playlist `updatedAt` (Unix ms) the device accepted as authoritative after a successful
+   * R2 or fallback local read/write. `null` until first sync Baseline for this vault.
+   */
+  playlistKnownUpdatedAtMs: number | null;
 };
 
 export const defaultNoteboxLocalSettings: NoteboxLocalSettings = {
   deviceName: '',
   displayName: '',
+  playlistKnownUpdatedAtMs: null,
 };
 
 export function serializeNoteboxLocalSettings(settings: NoteboxLocalSettings): string {
@@ -28,5 +34,13 @@ export function parseNoteboxLocalSettings(raw: string): NoteboxLocalSettings {
       ? parsed.displayName
       : defaultNoteboxLocalSettings.displayName;
 
-  return {deviceName, displayName};
+  let playlistKnownUpdatedAtMs: number | null = defaultNoteboxLocalSettings.playlistKnownUpdatedAtMs;
+  if (parsed.playlistKnownUpdatedAtMs !== undefined && parsed.playlistKnownUpdatedAtMs !== null) {
+    if (typeof parsed.playlistKnownUpdatedAtMs !== 'number' || !Number.isFinite(parsed.playlistKnownUpdatedAtMs)) {
+      throw new Error('settings-local.json has an invalid structure.');
+    }
+    playlistKnownUpdatedAtMs = parsed.playlistKnownUpdatedAtMs;
+  }
+
+  return {deviceName, displayName, playlistKnownUpdatedAtMs};
 }
