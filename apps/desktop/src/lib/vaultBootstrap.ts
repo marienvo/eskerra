@@ -147,6 +147,15 @@ export async function writePlaylistEntry(
   await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'application/json'});
 }
 
+/** Removes `playlist.json` if present (matches mobile `clearPlaylist` when the entry is stale). */
+export async function clearPlaylistEntry(root: string, fs: VaultFilesystem): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const uri = getPlaylistUri(base);
+  if (await fs.exists(uri)) {
+    await fs.unlink(uri);
+  }
+}
+
 export async function createInboxMarkdownNote(
   root: string,
   fs: VaultFilesystem,

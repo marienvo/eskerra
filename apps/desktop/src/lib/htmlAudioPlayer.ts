@@ -207,6 +207,86 @@ export class HtmlAudioPlayer implements AudioPlayer {
     this.emitState();
   }
 
+  /**
+   * Loads a track and seeks to `positionMs` without starting playback — parity with mobile
+   * restoring now-playing from `playlist.json` while staying paused until the user plays.
+   */
+  async primePausedAt(track: AudioTrack, positionMs: number): Promise<void> {
+    this.endedFlag = false;
+    this.currentTrack = track;
+    this.audio.pause();
+    this.audio.src = track.url;
+
+    await new Promise<void>((resolve, reject) => {
+      const LOAD_TIMEOUT_MS = 30_000;
+      const timeoutId = window.setTimeout(() => {
+        cleanup();
+        reject(new Error('Audio metadata load timed out.'));
+      }, LOAD_TIMEOUT_MS);
+
+      const applySeekAndPause = () => {
+        window.clearTimeout(timeoutId);
+        const durationSec = this.audio.duration;
+        const durationMs = Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : null;
+        const clampedPosition = Math.max(0, positionMs);
+        let safeMs = clampedPosition;
+        if (durationMs !== null && durationMs > 0) {
+          safeMs = Math.min(clampedPosition, durationMs);
+        }
+        this.audio.currentTime = safeMs / 1000;
+        this.audio.pause();
+
+        const posOut = clampMs(this.audio.currentTime * 1000);
+        const durOut = Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : 0;
+        void syncMprisMetadata(track, Math.max(durOut, 1), posOut, false);
+        void invoke('media_set_playback', {playing: false, positionMs: posOut}).catch(() => undefined);
+
+        const progress: PlayerProgress = {
+          durationMs: Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : null,
+          positionMs: posOut,
+        };
+        for (const cb of this.progressListeners) {
+          cb(progress);
+        }
+        this.emitState();
+        resolve();
+      };
+
+      const onError = () => {
+        window.clearTimeout(timeoutId);
+        cleanup();
+        reject(new Error('Audio load error'));
+      };
+
+      const cleanup = () => {
+        this.audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+        this.audio.removeEventListener('error', onError);
+      };
+
+      const onLoadedMetadata = () => {
+        cleanup();
+        try {
+          applySeekAndPause();
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error(String(e)));
+        }
+      };
+
+      this.audio.addEventListener('loadedmetadata', onLoadedMetadata);
+      this.audio.addEventListener('error', onError);
+
+      if (this.audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+        window.clearTimeout(timeoutId);
+        cleanup();
+        try {
+          applySeekAndPause();
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error(String(e)));
+        }
+      }
+    });
+  }
+
   async seekTo(positionMs: number): Promise<void> {
     this.audio.currentTime = positionMs / 1000;
     this.emitState();

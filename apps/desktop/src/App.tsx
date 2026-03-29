@@ -4,10 +4,12 @@ import {load} from '@tauri-apps/plugin-store';
 import type {Layout} from 'react-resizable-panels';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
 
+import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
 import {RailNav} from './components/RailNav';
 import {WindowTitleBar} from './components/WindowTitleBar';
+import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
@@ -32,6 +34,8 @@ import {
   startVaultWatch,
 } from './lib/tauriVault';
 import {buildInboxMarkdownFromCompose, parseComposeInput} from '@notebox/core';
+
+import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
 
 import './App.css';
 
@@ -59,6 +63,39 @@ export default function App() {
   const [layoutsReady, setLayoutsReady] = useState(false);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
+  const [playerDockVisible, setPlayerDockVisible] = useState(true);
+  const [playlistRevision, setPlaylistRevision] = useState(0);
+  const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
+  const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
+
+  const bumpPlaylistRevision = useCallback(() => {
+    setPlaylistRevision(r => r + 1);
+  }, []);
+
+  const onAutoShowPlayerDock = useCallback(() => {
+    setPlayerDockVisible(true);
+  }, []);
+
+  const consumeCatalogReady = podcastsTabMounted && !consumeCatalogLoading;
+
+  const onConsumeCatalogState = useCallback(
+    (s: {catalogLoading: boolean; episodes: PodcastEpisode[]}) => {
+      setConsumeEpisodes(s.episodes);
+      setConsumeCatalogLoading(s.catalogLoading);
+    },
+    [],
+  );
+
+  const desktopPlayback = useDesktopPodcastPlayback({
+    consumeCatalogReady,
+    consumeEpisodes,
+    fs,
+    onAutoShowPlayerDock,
+    onError: setErr,
+    onPlaylistDiskUpdated: bumpPlaylistRevision,
+    playlistRevision,
+    vaultRoot,
+  });
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -348,40 +385,60 @@ export default function App() {
       ) : null}
 
       <div className="app-body">
-        <RailNav active={mainTab} onSelect={setMainTab} />
-        <main className="main-stage">
-          <div className="tab-panel" hidden={mainTab !== 'inbox'}>
-            <InboxTab
-              defaultLayout={layouts.inbox}
-              onLayoutChanged={persistInboxLayout}
-              notes={notes}
-              selectedUri={selectedUri}
-              onSelectNote={selectNote}
-              onAddEntry={startNewEntry}
-              composingNewEntry={composingNewEntry}
-              onCancelNewEntry={cancelNewEntry}
-              onCreateNewEntry={() => void submitNewEntry()}
-              editorBody={editorBody}
-              onEditorChange={setEditorBody}
-              onSaveNote={() => void saveNote()}
-              busy={busy}
-            />
-          </div>
-          {podcastsTabMounted ? (
-            <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
-              <PodcastsTab
-                key={vaultRoot}
-                vaultRoot={vaultRoot}
-                fs={fs}
-                displayName={settingsName}
-                defaultMainLayout={layouts.podcastsMain}
-                onMainLayoutChanged={persistPodcastsMainLayout}
-                onError={setErr}
-                fsRefreshNonce={fsRefreshNonce}
+        <RailNav
+          active={mainTab}
+          onSelect={setMainTab}
+          onTogglePlayerDock={() => setPlayerDockVisible(v => !v)}
+          playerDockVisible={playerDockVisible}
+          playerToggleDisabled={desktopPlayback.activeEpisode == null}
+        />
+        <div className="main-column">
+          <main className="main-stage">
+            <div className="tab-panel" hidden={mainTab !== 'inbox'}>
+              <InboxTab
+                defaultLayout={layouts.inbox}
+                onLayoutChanged={persistInboxLayout}
+                notes={notes}
+                selectedUri={selectedUri}
+                onSelectNote={selectNote}
+                onAddEntry={startNewEntry}
+                composingNewEntry={composingNewEntry}
+                onCancelNewEntry={cancelNewEntry}
+                onCreateNewEntry={() => void submitNewEntry()}
+                editorBody={editorBody}
+                onEditorChange={setEditorBody}
+                onSaveNote={() => void saveNote()}
+                busy={busy}
               />
             </div>
+            {podcastsTabMounted ? (
+              <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
+                <PodcastsTab
+                  key={vaultRoot}
+                  vaultRoot={vaultRoot}
+                  fs={fs}
+                  defaultMainLayout={layouts.podcastsMain}
+                  onMainLayoutChanged={persistPodcastsMainLayout}
+                  onConsumeCatalogState={onConsumeCatalogState}
+                  onError={setErr}
+                  fsRefreshNonce={fsRefreshNonce}
+                  playEpisode={desktopPlayback.playEpisode}
+                  playlistRevision={playlistRevision}
+                  resumeFromVault={desktopPlayback.resumeFromVault}
+                />
+              </div>
+            ) : null}
+          </main>
+          {playerDockVisible && desktopPlayback.activeEpisode != null ? (
+            <DesktopPlayerDock
+              activeEpisode={desktopPlayback.activeEpisode}
+              durationMs={desktopPlayback.durationMs}
+              playerLabel={desktopPlayback.playerLabel}
+              positionMs={desktopPlayback.positionMs}
+              onTogglePause={desktopPlayback.togglePause}
+            />
           ) : null}
-        </main>
+        </div>
       </div>
 
     </div>

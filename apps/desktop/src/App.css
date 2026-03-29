@@ -299,6 +299,7 @@ a:focus:not(:focus-visible) {
 
 .rail {
   flex: 0 0 auto;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -306,6 +307,12 @@ a:focus:not(:focus-visible) {
   /* Breathing room before main stage; inline-start keeps tabs off the window edge */
   padding: 0.4rem 0.18rem 0.22rem 0.34rem;
   background: transparent;
+}
+
+.rail-spacer {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
 }
 
 .rail-tab {
@@ -348,6 +355,33 @@ a:focus:not(:focus-visible) {
   color: #ffffff;
 }
 
+.rail-tab:disabled,
+.rail-tab.active:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: transparent;
+  color: var(--color-muted);
+  box-shadow: none;
+}
+
+.rail-tab:disabled:hover,
+.rail-tab:disabled:focus-visible,
+.rail-tab.active:disabled:hover,
+.rail-tab.active:disabled:focus-visible {
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.main-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
 .main-stage {
   flex: 1;
   min-width: 0;
@@ -356,6 +390,19 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   background: var(--color-bg);
   position: relative;
+}
+
+.desktop-player-dock-outer {
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-block: 0 var(--panel-grid-padding);
+  padding-inline: calc(var(--panel-grid-padding) * 0.75) var(--panel-grid-padding);
+}
+
+.desktop-player-dock-outer .desktop-player-dock {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tab-panel {

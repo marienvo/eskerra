@@ -1,24 +1,27 @@
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Group, Panel, Separator} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
 import type {VaultFilesystem} from '@notebox/core';
 import type {PlaylistEntry} from '@notebox/core';
 
-import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
 import {runPodcastPhase1Desktop} from '../lib/podcasts/podcastPhase1Desktop';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
-import {readPlaylistEntry, writePlaylistEntry} from '../lib/vaultBootstrap';
+import {readPlaylistEntry} from '../lib/vaultBootstrap';
 import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
 
 type PodcastsTabProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
-  displayName: string;
   defaultMainLayout: Layout;
   onMainLayoutChanged: (layout: Layout) => void;
+  onConsumeCatalogState?: (s: {catalogLoading: boolean; episodes: PodcastEpisode[]}) => void;
   onError: (msg: string | null) => void;
   /** Increments when the filesystem watcher reports changes; triggers a rescan. */
   fsRefreshNonce: number;
+  playEpisode: (ep: PodcastEpisode) => Promise<void>;
+  resumeFromVault: () => Promise<void>;
+  /** Incremented when vault playlist file is updated from playback (not every progress tick). */
+  playlistRevision: number;
 };
 
 function formatMs(ms: number | null): string {
@@ -39,21 +42,24 @@ function episodeListLabel(text: string): string {
 export function PodcastsTab({
   vaultRoot,
   fs,
-  displayName,
   defaultMainLayout,
   onMainLayoutChanged,
+  onConsumeCatalogState,
   onError,
   fsRefreshNonce,
+  playEpisode,
+  playlistRevision,
+  resumeFromVault,
 }: PodcastsTabProps) {
   const [sections, setSections] = useState<PodcastSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [playlistFile, setPlaylistFile] = useState<PlaylistEntry | null>(null);
-  const [activeEpisode, setActiveEpisode] = useState<PodcastEpisode | null>(null);
-  const [positionMs, setPositionMs] = useState(0);
-  const [durationMs, setDurationMs] = useState<number | null>(null);
-  const [playerLabel, setPlayerLabel] = useState<'idle' | 'paused' | 'playing' | 'loading'>('idle');
 
-  const playbackRef = useRef<{episodeId: string; mp3Url: string} | null>(null);
+  const flatEpisodes = useMemo(() => sections.flatMap(s => s.episodes), [sections]);
+
+  useEffect(() => {
+    onConsumeCatalogState?.({catalogLoading: loading, episodes: flatEpisodes});
+  }, [flatEpisodes, loading, onConsumeCatalogState]);
 
   const episodesRefreshVisible = useDeferredLoadingIndicator(loading, 100);
 
@@ -100,122 +106,11 @@ export function PodcastsTab({
   }, [fsRefreshNonce]);
 
   useEffect(() => {
-    const player = getDesktopAudioPlayer();
-    const unsubState = player.addStateListener(s => {
-      if (s === 'playing') {
-        setPlayerLabel('playing');
-      } else if (s === 'paused') {
-        setPlayerLabel('paused');
-      } else if (s === 'loading') {
-        setPlayerLabel('loading');
-      } else {
-        setPlayerLabel('idle');
-      }
-    });
-    return () => {
-      unsubState();
-    };
-  }, []);
-
-  useEffect(() => {
-    const player = getDesktopAudioPlayer();
-    const unsubProg = player.addProgressListener(p => {
-      setPositionMs(p.positionMs);
-      setDurationMs(p.durationMs);
-      const s = playbackRef.current;
-      if (!s?.mp3Url) {
-        return;
-      }
-      void writePlaylistEntry(vaultRoot, fs, {
-        durationMs: p.durationMs,
-        episodeId: s.episodeId,
-        mp3Url: s.mp3Url,
-        positionMs: p.positionMs,
-      }).catch(() => undefined);
-    });
-    return () => {
-      unsubProg();
-    };
-  }, [vaultRoot, fs]);
-
-  const playEpisode = async (ep: PodcastEpisode) => {
-    onError(null);
-    setActiveEpisode(ep);
-    playbackRef.current = {episodeId: ep.id, mp3Url: ep.mp3Url};
-    try {
-      await writePlaylistEntry(vaultRoot, fs, {
-        durationMs: null,
-        episodeId: ep.id,
-        mp3Url: ep.mp3Url,
-        positionMs: 0,
-      });
-      await loadPlaylistSnapshot();
-      await getDesktopAudioPlayer().play(
-        {
-          artist: ep.seriesName,
-          id: ep.id,
-          title: ep.title,
-          url: ep.mp3Url,
-        },
-        undefined,
-      );
-    } catch (e) {
-      if (isAbortError(e)) {
-        return;
-      }
-      onError(e instanceof Error ? e.message : String(e));
+    if (playlistRevision === 0) {
+      return;
     }
-  };
-
-  const resumeFromVault = async () => {
-    onError(null);
-    try {
-      const pl = await readPlaylistEntry(vaultRoot, fs);
-      if (!pl) {
-        onError('No playlist entry in vault.');
-        return;
-      }
-      playbackRef.current = {episodeId: pl.episodeId, mp3Url: pl.mp3Url};
-      const ep: PodcastEpisode = {
-        articleUrl: undefined,
-        date: '',
-        id: pl.episodeId,
-        isListened: false,
-        mp3Url: pl.mp3Url,
-        rssFeedUrl: undefined,
-        sectionTitle: '',
-        seriesName: displayName,
-        sourceFile: '',
-        title: 'Resume',
-      };
-      setActiveEpisode(ep);
-      await getDesktopAudioPlayer().play(
-        {
-          artist: displayName,
-          id: pl.episodeId,
-          title: 'Podcast',
-          url: pl.mp3Url,
-        },
-        pl.positionMs,
-      );
-      await loadPlaylistSnapshot();
-    } catch (e) {
-      if (isAbortError(e)) {
-        return;
-      }
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const togglePause = async () => {
-    const p = getDesktopAudioPlayer();
-    const st = await p.getState();
-    if (st === 'playing') {
-      await p.pause();
-    } else if (st === 'paused' || st === 'ended') {
-      await p.resume();
-    }
-  };
+    void loadPlaylistSnapshot();
+  }, [playlistRevision, loadPlaylistSnapshot]);
 
   const onMainLayout = (layout: Layout) => {
     onMainLayoutChanged(layout);
@@ -266,32 +161,6 @@ export function PodcastsTab({
         <Separator className="resize-sep" />
         <Panel id="rightCol" className="panel-nested podcasts-right-col" minSize={22} defaultSize="62%">
           <div className="podcasts-right-stack">
-            <section className="podcasts-player panel-surface" aria-label="Player">
-              <div className="pane-header">
-                <span className="pane-title">Player</span>
-                <span className="muted small">{playerLabel}</span>
-              </div>
-              <div className="player-chrome">
-                <p className="now-line">
-                  {activeEpisode ? (
-                    <>
-                      <strong>{activeEpisode.title}</strong>
-                      <span className="muted small"> — {activeEpisode.seriesName}</span>
-                    </>
-                  ) : (
-                    <span className="muted">Nothing playing</span>
-                  )}
-                </p>
-                <p className="muted small">
-                  {formatMs(positionMs)} / {formatMs(durationMs)}
-                </p>
-                <div className="row tight">
-                  <button type="button" className="primary" onClick={() => void togglePause()}>
-                    Play / pause
-                  </button>
-                </div>
-              </div>
-            </section>
             <section className="podcasts-playlist panel-surface" aria-label="Playlist">
               <div className="pane-header">
                 <span className="pane-title">Playlist</span>
