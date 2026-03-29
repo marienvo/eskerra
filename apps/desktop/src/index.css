@@ -36,8 +36,8 @@ html {
 
   /* Chrome (rail strip uses shell background — no separate rail fill) */
   --color-rail: var(--color-brand-bg);
-  --color-titlebar-bg: #e8e8ea;
-  --color-titlebar-border: #dadada;
+  --color-titlebar-bg: #e0e0e2;
+  --color-titlebar-border: #d0d0d0;
   --color-titlebar-hover: rgba(17, 20, 24, 0.06);
 
   /* Capture */
