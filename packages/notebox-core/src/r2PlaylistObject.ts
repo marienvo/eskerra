@@ -58,11 +58,10 @@ async function signedRequest(
   init: RequestInit | undefined,
   transport: R2SignedRequestTransport | undefined,
 ): Promise<Response> {
-  // Presigned query signing avoids forwarding Authorization through the WebView/Tauri
-  // boundary (opaque or altered headers → HTTP 403 SignatureDoesNotMatch on R2).
-  const signInit =
-    transport == null ? init : {...init, aws: {signQuery: true}};
-  const signed = await client.sign(input, signInit);
+  // Presigned query signing keeps credentials off the Authorization header. Some runtimes
+  // alter or drop that header (Tauri/WebView, React Native fetch) → R2 SignatureDoesNotMatch.
+  const signInit = {...(init ?? {}), aws: {signQuery: true}};
+  const signed = await client.sign(input, signInit as RequestInit);
   const exec = transport ?? ((r: Request) => fetch(r));
   return exec(signed);
 }

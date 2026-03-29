@@ -1,6 +1,6 @@
 {
   "name": "@notebox/mobile",
-  "version": "0.7.8",
+  "version": "0.7.10",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -36,6 +36,9 @@
     "react-native-gesture-handler": "^2.30.0",
     "react-native-keyboard-controller": "^1.21.2",
     "react-native-markdown-display": "^7.0.2",
+    "react-native-nitro-modules": "^0.35.2",
+    "react-native-quick-base64": "^2.2.2",
+    "react-native-quick-crypto": "^1.0.18",
     "react-native-reanimated": "^4.3.0",
     "react-native-saf-x": "^2.2.3",
     "react-native-safe-area-context": "^5.7.0",

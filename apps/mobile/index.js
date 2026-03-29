@@ -1,5 +1,9 @@
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
+import {install as installQuickCrypto} from 'react-native-quick-crypto';
+
+installQuickCrypto();
+
 /**
  * @format
  */
