@@ -229,7 +229,7 @@ export function PodcastsTab({
         defaultLayout={defaultMainLayout}
         onLayoutChanged={onMainLayout}
       >
-        <Panel id="episodes" className="panel-surface" minSize={20} defaultSize="38%">
+        <Panel id="episodes" className="panel-surface" minSize={12} defaultSize="38%">
           <div className="pane-header">
             <span className="pane-title">Episodes</span>
           </div>
@@ -264,7 +264,7 @@ export function PodcastsTab({
           </div>
         </Panel>
         <Separator className="resize-sep" />
-        <Panel id="rightCol" className="panel-nested podcasts-right-col" minSize={35} defaultSize="62%">
+        <Panel id="rightCol" className="panel-nested podcasts-right-col" minSize={22} defaultSize="62%">
           <div className="podcasts-right-stack">
             <section className="podcasts-player panel-surface" aria-label="Player">
               <div className="pane-header">

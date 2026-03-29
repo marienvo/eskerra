@@ -16,6 +16,8 @@
         "title": "Notebox",
         "width": 800,
         "height": 600,
+        "minWidth": 520,
+        "minHeight": 380,
         "resizable": true,
         "fullscreen": false,
         "decorations": false

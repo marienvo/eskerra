@@ -36,7 +36,7 @@ export function InboxTab({
         defaultLayout={defaultLayout}
         onLayoutChanged={onLayoutChanged}
       >
-        <Panel id="files" className="panel-surface" minSize={18} defaultSize="30%">
+        <Panel id="files" className="panel-surface" minSize={10} defaultSize="30%">
           <div className="pane-header">
             <button type="button" className="primary" onClick={onAddEntry} disabled={busy}>
               Add entry
@@ -57,7 +57,7 @@ export function InboxTab({
           </ul>
         </Panel>
         <Separator className="resize-sep" />
-        <Panel id="editor" className="panel-surface" minSize={28} defaultSize="70%">
+        <Panel id="editor" className="panel-surface" minSize={18} defaultSize="70%">
           {selectedUri ? (
             <>
               <textarea

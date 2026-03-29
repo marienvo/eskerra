@@ -56,8 +56,11 @@ a:focus:not(:focus-visible) {
 .window-title-bar-icon {
   display: block;
   flex-shrink: 0;
+  width: 29px;
+  height: 29px;
   border-radius: 6px;
   pointer-events: none;
+  /* 29px matches the app icon grid; avoids odd fractional raster sizes at 1x. */
 }
 
 .window-title-bar-drag {

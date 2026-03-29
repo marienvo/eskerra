@@ -24,6 +24,8 @@ export async function openSettingsWindow(): Promise<void> {
     title: 'Settings',
     width: 480,
     height: 560,
+    minWidth: 380,
+    minHeight: 400,
     resizable: true,
     decorations: true,
     center: true,
