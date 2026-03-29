@@ -4,7 +4,7 @@ import type {Layout} from 'react-resizable-panels';
 import type {VaultFilesystem} from '@notebox/core';
 import type {PlaylistEntry} from '@notebox/core';
 
-import {getDesktopAudioPlayer} from '../lib/htmlAudioPlayer';
+import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
 import {runPodcastPhase1Desktop} from '../lib/podcasts/podcastPhase1Desktop';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
 import {readPlaylistEntry, writePlaylistEntry} from '../lib/vaultBootstrap';
@@ -160,6 +160,9 @@ export function PodcastsTab({
         undefined,
       );
     } catch (e) {
+      if (isAbortError(e)) {
+        return;
+      }
       onError(e instanceof Error ? e.message : String(e));
     }
   };
@@ -197,6 +200,9 @@ export function PodcastsTab({
       );
       await loadPlaylistSnapshot();
     } catch (e) {
+      if (isAbortError(e)) {
+        return;
+      }
       onError(e instanceof Error ? e.message : String(e));
     }
   };

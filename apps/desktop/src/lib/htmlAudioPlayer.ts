@@ -14,6 +14,25 @@ function clampMs(n: number): number {
   return Math.floor(n);
 }
 
+/** HTMLMediaElement.play() rejects with AbortError when a newer play() supersedes the previous one (not a user-facing failure). */
+export function isAbortError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === 'AbortError') {
+    return true;
+  }
+  return e instanceof Error && e.message === 'The operation was aborted';
+}
+
+async function playIgnoringSuperseded(audio: HTMLAudioElement): Promise<void> {
+  try {
+    await audio.play();
+  } catch (e) {
+    if (isAbortError(e)) {
+      return;
+    }
+    throw e;
+  }
+}
+
 function mapAudioPaused(audio: HTMLAudioElement, ended: boolean): PlayerState {
   if (ended) {
     return 'ended';
@@ -173,7 +192,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
   }
 
   async resume(): Promise<void> {
-    await this.audio.play();
+    await playIgnoringSuperseded(this.audio);
     this.emitState();
   }
 
@@ -184,7 +203,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
     if (positionMs !== undefined && positionMs > 0) {
       this.audio.currentTime = positionMs / 1000;
     }
-    await this.audio.play();
+    await playIgnoringSuperseded(this.audio);
     this.emitState();
   }
 
@@ -208,7 +227,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
       return;
     }
     if (this.audio.paused) {
-      await this.audio.play();
+      await playIgnoringSuperseded(this.audio);
     } else {
       this.audio.pause();
     }
