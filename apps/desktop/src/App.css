@@ -996,5 +996,52 @@ textarea::placeholder {
 }
 
 .settings-content {
-  max-width: 28rem;
+  max-width: 32rem;
+}
+
+.settings-section {
+  margin-top: 1.25rem;
+}
+
+.settings-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.settings-subsection-title {
+  margin: 0.85rem 0 0.25rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.settings-hint {
+  margin: 0 0 0.65rem;
+  line-height: 1.35;
+}
+
+.settings-security-note {
+  margin: 1rem 0 0;
+  line-height: 1.4;
+}
+
+.settings-secret-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-secret-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-save-ok {
+  margin: 0 0 0.5rem;
+}
+
+button.small {
+  font-size: 0.78rem;
+  padding: 0.2rem 0.45rem;
+  flex-shrink: 0;
 }

@@ -9,7 +9,7 @@ The following are **identical on disk** once a vault root is chosen:
 - **Vault root** is a single directory the user selects.
 - **`Inbox/`** holds user-authored markdown notes (`.md`).
 - **`General/`** holds podcast-related markdown and **`General/Inbox.md`**, a generated index of inbox note stems (same format as on Android).
-- **`.notebox/settings-shared.json`** stores vault-scoped settings synced with the vault: `displayName` and optional Cloudflare **R2** (S3-compatible) fields for future uploads. **`.notebox/settings-local.json`** holds per-device data such as `deviceName`. Legacy **`settings.json`** is read once for migration into `settings-shared.json`. Parsing and defaults are implemented in `@notebox/core`.
+- **`.notebox/settings-shared.json`** stores vault-scoped settings synced with the vault: optional Cloudflare **R2** (S3-compatible) fields only. **`displayName`** and **`deviceName`** live in **`.notebox/settings-local.json`** (per device; default empty strings; typically not committed). Legacy **`settings.json`** is read once for migration into `settings-shared.json`. If legacy **`displayName`** still appears in shared JSON, the app copies it into local settings and rewrites shared without that key. Parsing and defaults are implemented in `@notebox/core`. **Security:** storing R2 keys in the shared file is an accepted tradeoff for private vaults; see **section 9** in [`known-risks.md`](known-risks.md).
 - **`.notebox/playlist.json`** stores the last playback pointer (`episodeId`, `mp3Url`, `positionMs`, `durationMs`) for resuming audio across devices that share the same vault folder.
 
 ## Platform-specific bootstrap
@@ -26,7 +26,7 @@ The following are **identical on disk** once a vault root is chosen:
 | ---------- | ------- | --------------------------- |
 | Choose vault folder | Yes (SAF) | Yes (native folder dialog) |
 | Read/write Inbox markdown | Yes | Yes |
-| Edit `settings-shared.json` display name | Yes | Yes |
+| Edit vault display name (`settings-local.json`) | Yes | Yes |
 | Stream MP3 / resume from `playlist.json` | Yes (`react-native-track-player`) | Yes (`HTMLAudioElement` + Linux MPRIS via souvlaki) |
 | Episodes list from vault `General/` podcast markdown | Yes (sectioned list) | Yes (desktop parses the same `*- podcasts.md` / RSS pie rules via TypeScript under `apps/desktop/src/lib/podcasts/`) |
 | OS play/pause (lock screen / shell) | Yes (Track Player service) | Yes on Linux (MPRIS); other OSes depend on Tauri + souvlaki behavior |

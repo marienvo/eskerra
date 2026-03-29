@@ -23,6 +23,7 @@ import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
   listInboxNotes,
+  readVaultLocalSettings,
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
@@ -113,8 +114,10 @@ export default function App() {
         await setVaultSession(root);
         await bootstrapVaultLayout(root, fs);
         await syncInboxMarkdownIndex(root, fs);
-        const s = await readVaultSettings(root, fs);
-        setSettingsName(s.displayName);
+        await readVaultSettings(root, fs);
+        const local = await readVaultLocalSettings(root, fs);
+        const label = local.displayName.trim();
+        setSettingsName(label !== '' ? label : 'Notebox');
         await refreshNotes(root);
         setVaultRoot(root);
         const store = await load(STORE_PATH);

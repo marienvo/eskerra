@@ -474,7 +474,6 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     /** Matches `serializeNoteboxSettings(defaultNoteboxSettings)` in `@notebox/core` (JSON.stringify + trailing newline). */
     private const val DEFAULT_SETTINGS_JSON =
       "{\n" +
-        "  \"displayName\": \"My Notebox\",\n" +
         "  \"r2\": {\n" +
         "    \"endpoint\": \"https://00000000000000000000000000000000.r2.cloudflarestorage.com\",\n" +
         "    \"bucket\": \"mock-bucket\",\n" +

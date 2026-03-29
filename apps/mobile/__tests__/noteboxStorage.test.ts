@@ -90,7 +90,6 @@ describe('noteboxStorage', () => {
       1,
       `${baseUri}/.notebox/settings-shared.json`,
       '{\n' +
-        '  "displayName": "My Notebox",\n' +
         '  "r2": {\n' +
         '    "endpoint": "https://00000000000000000000000000000000.r2.cloudflarestorage.com",\n' +
         '    "bucket": "mock-bucket",\n' +
@@ -103,7 +102,7 @@ describe('noteboxStorage', () => {
     expect(writeFileMock).toHaveBeenNthCalledWith(
       2,
       `${baseUri}/.notebox/settings-local.json`,
-      '{\n  "deviceName": "This device"\n}\n',
+      '{\n  "deviceName": "",\n  "displayName": ""\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
   });
@@ -121,48 +120,71 @@ describe('noteboxStorage', () => {
     expect(writeFileMock).not.toHaveBeenCalled();
   });
 
-  test('parseNoteboxSettings throws when displayName is missing', () => {
-    expect(() => parseNoteboxSettings('{}')).toThrow(
-      'settings-shared.json has an invalid structure.',
-    );
+  test('parseNoteboxSettings accepts empty shared object', () => {
+    expect(parseNoteboxSettings('{}')).toEqual({});
   });
 
-  test('readSettings reads settings-shared.json and parses content', async () => {
-    existsMock.mockResolvedValueOnce(true);
+  test('readSettings reads settings-shared.json, strips legacy displayName, copies to local', async () => {
+    existsMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
     readFileMock.mockResolvedValueOnce('{"displayName":"Notebook A"}');
+    writeFileMock.mockResolvedValue(undefined);
 
-    await expect(readSettings(baseUri)).resolves.toEqual({
-      displayName: 'Notebook A',
-    });
+    await expect(readSettings(baseUri)).resolves.toEqual({});
+
     expect(readFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-shared.json`,
       {encoding: 'utf8'},
     );
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/.notebox/settings-local.json`,
+      '{\n  "deviceName": "",\n  "displayName": "Notebook A"\n}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
+    );
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/.notebox/settings-shared.json`,
+      '{}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
+    );
   });
 
-  test('readSettings migrates legacy settings.json to shared when shared is absent', async () => {
+  test('readSettings migrates legacy settings.json to shared and displayName to local', async () => {
     existsMock
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
     readFileMock.mockResolvedValueOnce('{"displayName":"From Legacy"}');
-    writeFileMock.mockResolvedValueOnce(undefined);
+    writeFileMock.mockResolvedValue(undefined);
 
-    await expect(readSettings(baseUri)).resolves.toEqual({
-      displayName: 'From Legacy',
-    });
+    await expect(readSettings(baseUri)).resolves.toEqual({});
+
+    expect(writeFileMock).toHaveBeenNthCalledWith(
+      1,
+      `${baseUri}/.notebox/settings-shared.json`,
+      '{}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
+    );
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/.notebox/settings-local.json`,
+      '{\n  "deviceName": "",\n  "displayName": "From Legacy"\n}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
+    );
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-shared.json`,
-      '{\n  "displayName": "From Legacy"\n}\n',
+      '{}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
   });
 
   test('writeSettings writes JSON to settings-shared.json', async () => {
-    await writeSettings(baseUri, {displayName: 'Notebook B'});
+    await writeSettings(baseUri, {});
 
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/.notebox/settings-shared.json`,
-      '{\n  "displayName": "Notebook B"\n}\n',
+      '{}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
   });

@@ -4,7 +4,7 @@ import {DEV_MOCK_VAULT_URI} from '../src/dev/mockVaultData';
 import {tryPrepareNoteboxSessionNative} from '../src/core/storage/androidVaultListing';
 
 describe('tryPrepareNoteboxSessionNative', () => {
-  const settingsSample = '{\n  "displayName": "My Notebox"\n}\n';
+  const settingsSample = '{\n}\n';
 
   beforeEach(() => {
     Object.defineProperty(Platform, 'OS', {

@@ -74,13 +74,44 @@ export async function syncInboxMarkdownIndex(
   await fs.writeFile(indexUri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
 }
 
+async function migrateLegacySharedDisplayNameIfNeeded(
+  root: string,
+  fs: VaultFilesystem,
+  rawShared: string,
+  normalizedSettings: NoteboxSettings,
+): Promise<void> {
+  let loose: Record<string, unknown>;
+  try {
+    loose = JSON.parse(rawShared) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  if (!('displayName' in loose)) {
+    return;
+  }
+
+  const legacy = typeof loose.displayName === 'string' ? loose.displayName : '';
+  const legacyDisplay = legacy.trim();
+  if (legacyDisplay !== '') {
+    const local = await readVaultLocalSettings(root, fs);
+    if (local.displayName === '') {
+      await writeVaultLocalSettings(root, fs, {...local, displayName: legacyDisplay});
+    }
+  }
+
+  await writeVaultSettings(root, fs, normalizedSettings);
+}
+
 export async function readVaultSettings(
   root: string,
   fs: VaultFilesystem,
 ): Promise<NoteboxSettings> {
   const base = normalizeVaultBaseUri(root);
   const raw = await readVaultSharedSettingsRaw(base, fs);
-  return parseNoteboxSettings(raw);
+  const settings = parseNoteboxSettings(raw);
+  await migrateLegacySharedDisplayNameIfNeeded(root, fs, raw, settings);
+  return settings;
 }
 
 export async function writeVaultSettings(

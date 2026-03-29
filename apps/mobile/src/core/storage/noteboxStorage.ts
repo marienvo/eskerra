@@ -160,6 +160,42 @@ export async function initNotebox(baseUri: string): Promise<void> {
   await initNoteboxVault(baseUri, vaultFs);
 }
 
+/**
+ * If shared JSON still has legacy `displayName`, copy it to local when local `displayName` is empty,
+ * then rewrite shared without that key.
+ */
+export async function migrateLegacySharedDisplayNameIfNeeded(
+  baseUri: string,
+  rawShared: string,
+  normalizedSettings: NoteboxSettings,
+): Promise<void> {
+  if (isDevMockVaultBaseUri(baseUri)) {
+    return;
+  }
+
+  let loose: Record<string, unknown>;
+  try {
+    loose = JSON.parse(rawShared) as Record<string, unknown>;
+  } catch {
+    return;
+  }
+
+  if (!('displayName' in loose)) {
+    return;
+  }
+
+  const legacy = typeof loose.displayName === 'string' ? loose.displayName : '';
+  const legacyDisplay = legacy.trim();
+  if (legacyDisplay !== '') {
+    const local = await readLocalSettings(baseUri);
+    if (local.displayName === '') {
+      await writeLocalSettings(baseUri, {...local, displayName: legacyDisplay});
+    }
+  }
+
+  await writeSettings(baseUri, normalizedSettings);
+}
+
 export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
   if (isDevMockVaultBaseUri(baseUri)) {
     const devStorage = getDevStorage();
@@ -168,7 +204,9 @@ export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
 
   const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
   const rawSettings = await readVaultSharedSettingsRaw(normalizedBaseUri, vaultFs);
-  return parseNoteboxSettings(rawSettings);
+  const settings = parseNoteboxSettings(rawSettings);
+  await migrateLegacySharedDisplayNameIfNeeded(baseUri, rawSettings, settings);
+  return settings;
 }
 
 export async function writeSettings(

@@ -23,7 +23,8 @@ jest.mock('../src/core/observability', () => ({
 
 type VaultInitialSession = {
   uri: string;
-  settings: {displayName: string};
+  settings: Record<string, unknown>;
+  localSettings: {deviceName: string; displayName: string};
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
 };
@@ -40,7 +41,8 @@ function Harness({
   onResult: (result: {
     baseUri: string | null;
     isLoading: boolean;
-    settings: {displayName: string} | null;
+    settings: Record<string, unknown> | null;
+    localSettings: {deviceName: string; displayName: string} | null;
     inboxPrefetch: NoteSummary[] | null;
   }) => void;
 }) {
@@ -50,7 +52,8 @@ function Harness({
     onResult({
       baseUri: ctx.baseUri,
       isLoading: ctx.isLoading,
-      settings: ctx.settings ? {displayName: ctx.settings.displayName} : null,
+      settings: ctx.settings,
+      localSettings: ctx.localSettings,
       inboxPrefetch: ctx.consumeInboxPrefetch(uri),
     });
     // Intentionally run once. We only care about the post-mount state.
@@ -81,7 +84,8 @@ describe('VaultProvider initialSession hydration', () => {
 
     const initialSession: VaultInitialSession = {
       uri: 'content://vault-root',
-      settings: {displayName: 'Dev Notebox'},
+      settings: {},
+      localSettings: {deviceName: '', displayName: 'Dev Notebox'},
       inboxContentByUri: null,
       inboxPrefetch: initialInboxPrefetch,
     };
@@ -90,6 +94,7 @@ describe('VaultProvider initialSession hydration', () => {
     prepareVaultSessionMock.mockResolvedValue({
       inboxContentByUri: null,
       inboxPrefetch: null,
+      localSettings: initialSession.localSettings,
       sessionPrep: 'legacy',
       settings: initialSession.settings,
     });
@@ -98,7 +103,8 @@ describe('VaultProvider initialSession hydration', () => {
       | {
           baseUri: string | null;
           isLoading: boolean;
-          settings: {displayName: string} | null;
+          settings: Record<string, unknown> | null;
+          localSettings: {deviceName: string; displayName: string} | null;
           inboxPrefetch: NoteSummary[] | null;
         }
       | null = null;
@@ -120,7 +126,8 @@ describe('VaultProvider initialSession hydration', () => {
 
     expect(nonNullResult.baseUri).toBe(initialSession.uri);
     expect(nonNullResult.isLoading).toBe(false);
-    expect(nonNullResult.settings).toEqual(initialSession.settings);
+    expect(nonNullResult.settings).toEqual({});
+    expect(nonNullResult.localSettings).toEqual(initialSession.localSettings);
     expect(nonNullResult.inboxPrefetch).toEqual(initialInboxPrefetch);
 
     // Because savedUri matches initialSession, we should not do a second apply.

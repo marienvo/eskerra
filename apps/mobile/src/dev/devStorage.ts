@@ -165,7 +165,7 @@ async function writePodcastIndex(index: PodcastIndex): Promise<void> {
 async function ensureSeeded(): Promise<void> {
   const seeded = await AsyncStorage.getItem(DEV_SEEDED_KEY);
 
-  if (seeded === '6') {
+  if (seeded === '7') {
     return;
   }
 
@@ -194,7 +194,7 @@ async function ensureSeeded(): Promise<void> {
     DEV_LOCAL_SETTINGS_KEY,
     serializeNoteboxLocalSettings(MOCK_LOCAL_SETTINGS),
   );
-  await AsyncStorage.setItem(DEV_SEEDED_KEY, '6');
+  await AsyncStorage.setItem(DEV_SEEDED_KEY, '7');
 }
 
 function assertMockBaseUri(baseUri: string): void {

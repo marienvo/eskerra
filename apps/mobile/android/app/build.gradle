@@ -115,8 +115,8 @@ android {
         applicationId "com.notebox"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 68
-        versionName "0.7.5"
+        versionCode 69
+        versionName "0.7.6"
     }
     signingConfigs {
         debug {

@@ -2,7 +2,20 @@ import {open} from '@tauri-apps/plugin-dialog';
 import {load} from '@tauri-apps/plugin-store';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 
-import {bootstrapVaultLayout, readVaultSettings, writeVaultSettings} from '../lib/vaultBootstrap';
+import {
+  defaultNoteboxLocalSettings,
+  defaultNoteboxSettings,
+  type NoteboxLocalSettings,
+  type NoteboxSettings,
+} from '@notebox/core';
+
+import {
+  bootstrapVaultLayout,
+  readVaultLocalSettings,
+  readVaultSettings,
+  writeVaultLocalSettings,
+  writeVaultSettings,
+} from '../lib/vaultBootstrap';
 import {createTauriVaultFilesystem, getVaultSession, setVaultSession, startVaultWatch} from '../lib/tauriVault';
 import {SettingsContent} from './SettingsContent';
 
@@ -15,7 +28,10 @@ const STORE_KEY_VAULT = 'vaultRoot';
 export function SettingsWindowApp() {
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
-  const [settingsName, setSettingsName] = useState('Notebox');
+  const [vaultSettings, setVaultSettings] = useState<NoteboxSettings>(defaultNoteboxSettings);
+  const [localSettings, setLocalSettings] = useState<NoteboxLocalSettings>(defaultNoteboxLocalSettings);
+  /** Bumps to remount [SettingsContent] so form state reloads from disk after save/refresh. */
+  const [settingsFormKey, setSettingsFormKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -27,8 +43,11 @@ export function SettingsWindowApp() {
       try {
         await setVaultSession(root);
         await bootstrapVaultLayout(root, fs);
-        const s = await readVaultSettings(root, fs);
-        setSettingsName(s.displayName);
+        const shared = await readVaultSettings(root, fs);
+        const local = await readVaultLocalSettings(root, fs);
+        setVaultSettings(shared);
+        setLocalSettings(local);
+        setSettingsFormKey(k => k + 1);
         setVaultRoot(root);
         const store = await load(STORE_PATH);
         await store.set(STORE_KEY_VAULT, root);
@@ -77,21 +96,6 @@ export function SettingsWindowApp() {
     await hydrateVault(dir);
   };
 
-  const saveDisplayName = async () => {
-    if (!vaultRoot) {
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      await writeVaultSettings(vaultRoot, fs, {displayName: settingsName});
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const refreshFromDisk = async () => {
     if (!vaultRoot) {
       return;
@@ -99,10 +103,29 @@ export function SettingsWindowApp() {
     setBusy(true);
     setErr(null);
     try {
-      const s = await readVaultSettings(vaultRoot, fs);
-      setSettingsName(s.displayName);
+      const shared = await readVaultSettings(vaultRoot, fs);
+      const local = await readVaultLocalSettings(vaultRoot, fs);
+      setVaultSettings(shared);
+      setLocalSettings(local);
+      setSettingsFormKey(k => k + 1);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSave = async (shared: NoteboxSettings, local: NoteboxLocalSettings) => {
+    if (!vaultRoot) {
+      throw new Error('No vault folder selected.');
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await writeVaultSettings(vaultRoot, fs, shared);
+      await writeVaultLocalSettings(vaultRoot, fs, local);
+      setVaultSettings(shared);
+      setLocalSettings(local);
     } finally {
       setBusy(false);
     }
@@ -132,9 +155,10 @@ export function SettingsWindowApp() {
         </div>
       ) : (
         <SettingsContent
-          displayName={settingsName}
-          onDisplayNameChange={setSettingsName}
-          onSaveDisplayName={() => void saveDisplayName()}
+          key={settingsFormKey}
+          vaultSettings={vaultSettings}
+          localSettings={localSettings}
+          onSave={handleSave}
           onChangeFolder={() => void pickFolder()}
           onRefreshVault={() => void refreshFromDisk()}
           busy={busy}

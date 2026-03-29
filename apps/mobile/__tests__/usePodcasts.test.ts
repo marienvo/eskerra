@@ -176,6 +176,8 @@ describe('usePodcasts loading lifecycle', () => {
       refreshSession: jest.fn(async () => undefined),
       replaceInboxContentFromSession: jest.fn(),
       setInboxNoteContentInCache: jest.fn(),
+      localSettings: null,
+      setLocalSettings: jest.fn(),
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
       setSettings: jest.fn(),

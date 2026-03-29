@@ -1,5 +1,4 @@
 {
-  "displayName": "Dev Notebox",
   "r2": {
     "endpoint": "https://00000000000000000000000000000000.r2.cloudflarestorage.com",
     "bucket": "mock-bucket",

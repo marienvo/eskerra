@@ -5,8 +5,8 @@ export type NoteboxR2Config = {
   secretAccessKey: string;
 };
 
+/** Shared vault JSON: optional R2 only. Display name lives in `settings-local.json`. */
 export type NoteboxSettings = {
-  displayName: string;
   r2?: NoteboxR2Config;
 };
 
@@ -34,7 +34,6 @@ function parseR2Block(value: unknown): NoteboxR2Config {
 }
 
 export const defaultNoteboxSettings: NoteboxSettings = {
-  displayName: 'My Notebox',
   r2: {
     endpoint: 'https://00000000000000000000000000000000.r2.cloudflarestorage.com',
     bucket: 'mock-bucket',
@@ -47,14 +46,55 @@ export function serializeNoteboxSettings(settings: NoteboxSettings): string {
   return `${JSON.stringify(settings, null, 2)}\n`;
 }
 
-export function parseNoteboxSettings(rawSettings: string): NoteboxSettings {
-  const parsed = JSON.parse(rawSettings) as Partial<NoteboxSettings>;
+export type R2FormFields = {
+  endpoint: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+};
 
-  if (typeof parsed !== 'object' || parsed === null || typeof parsed.displayName !== 'string') {
+/**
+ * Builds shared vault settings from R2 form fields. R2 is optional: if any field is non-empty,
+ * all four must be non-empty after trim.
+ */
+export function buildNoteboxSettingsFromForm(
+  r2: R2FormFields,
+):
+  | {ok: true; settings: NoteboxSettings}
+  | {ok: false; message: string} {
+  const e = r2.endpoint.trim();
+  const b = r2.bucket.trim();
+  const k = r2.accessKeyId.trim();
+  const s = r2.secretAccessKey.trim();
+  const anyNonEmpty = Boolean(e || b || k || s);
+  const allNonEmpty = Boolean(e && b && k && s);
+
+  if (anyNonEmpty && !allNonEmpty) {
+    return {
+      ok: false,
+      message: 'Complete all Cloudflare R2 fields or clear them all.',
+    };
+  }
+
+  const settings: NoteboxSettings = {};
+  if (allNonEmpty) {
+    settings.r2 = {endpoint: e, bucket: b, accessKeyId: k, secretAccessKey: s};
+  }
+
+  return {ok: true, settings};
+}
+
+/**
+ * Parses shared settings. Legacy `displayName` in JSON is ignored (migrate to local via storage layer).
+ */
+export function parseNoteboxSettings(rawSettings: string): NoteboxSettings {
+  const parsed = JSON.parse(rawSettings) as Record<string, unknown>;
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error('settings-shared.json has an invalid structure.');
   }
 
-  const out: NoteboxSettings = {displayName: parsed.displayName};
+  const out: NoteboxSettings = {};
 
   if (parsed.r2 !== undefined) {
     out.r2 = parseR2Block(parsed.r2);

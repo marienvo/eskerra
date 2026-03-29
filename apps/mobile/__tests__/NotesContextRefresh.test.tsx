@@ -78,7 +78,8 @@ describe('NotesContext refresh', () => {
           initialSession={{
             inboxContentByUri: null,
             inboxPrefetch: null,
-            settings: {displayName: 'Vault'},
+            settings: {},
+            localSettings: {deviceName: '', displayName: 'Vault'},
             uri: vaultUri,
           }}>
           <NotesProvider>
@@ -114,7 +115,8 @@ describe('NotesContext refresh', () => {
           initialSession={{
             inboxContentByUri: null,
             inboxPrefetch: null,
-            settings: {displayName: 'Vault'},
+            settings: {},
+            localSettings: {deviceName: '', displayName: 'Vault'},
             uri: vaultUri,
           }}>
           <NotesProvider>

@@ -15,7 +15,7 @@ import {getSavedUri} from '../storage/appStorage';
 import {clearAllPlaylistReadCoalescer} from '../storage/noteboxStorage';
 import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
-import {NoteboxSettings, NoteSummary} from '../../types';
+import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
 import {prepareVaultSession} from './applyVaultSession';
 
 type InboxContentCacheSession = {
@@ -38,6 +38,8 @@ type VaultContextValue = {
   setSessionUri: (nextUri: string | null) => Promise<void>;
   settings: NoteboxSettings | null;
   setSettings: (nextSettings: NoteboxSettings) => void;
+  localSettings: NoteboxLocalSettings | null;
+  setLocalSettings: (next: NoteboxLocalSettings) => void;
 };
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -47,6 +49,7 @@ type VaultProviderProps = {
   initialSession?: {
     uri: string;
     settings: NoteboxSettings;
+    localSettings: NoteboxLocalSettings;
     inboxContentByUri: Record<string, string> | null;
     inboxPrefetch: NoteSummary[] | null;
   } | null;
@@ -75,6 +78,9 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const [isLoading, setIsLoading] = useState<boolean>(initialSession != null ? false : true);
   const [settings, setSettings] = useState<NoteboxSettings | null>(
     initialSession?.settings ?? null,
+  );
+  const [localSettings, setLocalSettings] = useState<NoteboxLocalSettings | null>(
+    initialSession?.localSettings ?? null,
   );
   const inboxPrefetchRef = useRef<{notes: NoteSummary[]; uri: string} | null>(
     initialSession?.inboxPrefetch
@@ -175,6 +181,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
 
     setBaseUri(nextUri);
     setSettings(prepared.settings);
+    setLocalSettings(prepared.localSettings);
   }, [clearSessionPrefetchRefs]);
 
   const setSessionUri = useCallback(
@@ -183,6 +190,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         clearSessionPrefetchRefs();
         setBaseUri(null);
         setSettings(null);
+        setLocalSettings(null);
         clearAllPlaylistReadCoalescer();
         clearPodcastBootstrapCache();
         return;
@@ -215,6 +223,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         clearSessionPrefetchRefs();
         setBaseUri(null);
         setSettings(null);
+        setLocalSettings(null);
         appBreadcrumb({
           category: 'vault',
           message: 'vault.session.restore.complete',
@@ -239,6 +248,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       clearSessionPrefetchRefs();
       setBaseUri(null);
       setSettings(null);
+      setLocalSettings(null);
       reportUnexpectedError(error, {flow: 'vault_restore'});
       appBreadcrumb({
         category: 'vault',
@@ -302,6 +312,8 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       setSessionUri,
       settings,
       setSettings,
+      localSettings,
+      setLocalSettings,
     }),
     [
       baseUri,
@@ -309,6 +321,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       consumeInboxPrefetch,
       getInboxNoteContentFromCache,
       isLoading,
+      localSettings,
       pruneInboxNoteContentFromCache,
       refreshSession,
       replaceInboxContentFromSession,

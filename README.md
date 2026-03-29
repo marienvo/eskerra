@@ -45,7 +45,7 @@ npm run desktop:dev -w @notebox/desktop
 
 - Select a Notes directory with the Android folder picker (SAF).
 - Persist the selected tree URI in AsyncStorage.
-- Create/update `/.notebox/settings-shared.json` (for example `displayName` and optional R2 fields), and `/.notebox/settings-local.json` for per-device `deviceName`.
+- Create/update `/.notebox/settings-shared.json` (optional R2 fields only on the shared file) and `/.notebox/settings-local.json` for per-device `deviceName` and `displayName` (both default to empty strings).
 - Debug APK build/install scripts live under [`scripts/`](scripts/) and call Gradle in [`apps/mobile/android/`](apps/mobile/android/).
 
 ### Extra prerequisites (Android only)

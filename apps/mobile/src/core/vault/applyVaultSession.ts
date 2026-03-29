@@ -1,11 +1,18 @@
 import {appBreadcrumb} from '../observability';
 import {tryPrepareNoteboxSessionNative} from '../storage/androidVaultListing';
-import {initNotebox, parseNoteboxSettings, readSettings} from '../storage/noteboxStorage';
-import {NoteboxSettings, NoteSummary} from '../../types';
+import {
+  initNotebox,
+  migrateLegacySharedDisplayNameIfNeeded,
+  parseNoteboxSettings,
+  readLocalSettings,
+  readSettings,
+} from '../storage/noteboxStorage';
+import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
 
 export type PreparedVaultSession = {
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
+  localSettings: NoteboxLocalSettings;
   sessionPrep: 'native' | 'legacy';
   settings: NoteboxSettings;
 };
@@ -31,6 +38,11 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     const prepared = await tryPrepareNoteboxSessionNative(baseUri);
     if (prepared !== null) {
       nextSettings = parseNoteboxSettings(prepared.settingsJson);
+      await migrateLegacySharedDisplayNameIfNeeded(
+        baseUri,
+        prepared.settingsJson,
+        nextSettings,
+      );
       sessionPrep = 'native';
       inboxPrefetch = prepared.inboxPrefetch;
       inboxContentByUri = prepared.inboxContentByUri;
@@ -46,6 +58,8 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     inboxContentByUri = null;
   }
 
+  const localSettings = await readLocalSettings(baseUri);
+
   appBreadcrumb({
     category: 'vault',
     message: 'session.apply.complete',
@@ -56,6 +70,6 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     },
   });
 
-  return {inboxContentByUri, inboxPrefetch, sessionPrep, settings: nextSettings};
+  return {inboxContentByUri, inboxPrefetch, localSettings, sessionPrep, settings: nextSettings};
 }
 

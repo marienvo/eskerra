@@ -105,3 +105,22 @@ Contingency:
 ### Mitigation
 
 - New downloads store artwork under app-internal `filesDir` as **`file://`** (`writeArtworkFile` in [`PodcastArtworkCacheModule`](../../apps/mobile/android/app/src/main/java/com/notebox/PodcastArtworkCacheModule.kt)); **`Image` uses those URIs directly.** Legacy cached vault **`content://`** artwork is still copied to app cache on a **background native thread** via `ensureLocalArtworkFile` before display (see [`androidPodcastArtworkCache.ts`](../../apps/mobile/src/core/storage/androidPodcastArtworkCache.ts) and [`usePodcastArtworkDisplayUri.ts`](../../apps/mobile/src/features/podcasts/hooks/usePodcastArtworkDisplayUri.ts)).
+
+## 9) Cloudflare R2 credentials in `settings-shared.json` (Medium — accepted for private vaults)
+
+Risk:
+
+- Optional R2 fields (`endpoint`, `bucket`, `accessKeyId`, `secretAccessKey`) are stored as **plain JSON inside the Notes vault**. Any copy of the vault (backup, sync to another machine, accidental commit to a shared Git remote, malware with file access) can expose those credentials.
+
+Current stance:
+
+- The product treats the Notes vault as **private and user-controlled**, like the markdown notes themselves. Keeping secrets in the vault avoids a separate secrets store for the current single-user, local-first model.
+
+Future direction:
+
+- If the app must support **multi-user**, **published/shared vaults**, or stricter security requirements, R2 (and similar) access should move to **short-lived or server-mediated credentials** via an authenticated backend, not long-lived keys in vault JSON.
+
+Mitigation (today):
+
+- Settings UI calls out that credentials live in the vault folder and should not be shared widely.
+- Do not treat `mock-vault` or developer samples as a pattern for production secrets in a public repo (use placeholders only).

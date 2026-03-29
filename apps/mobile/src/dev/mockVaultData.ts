@@ -13,7 +13,6 @@ export type MockPodcastFileSeed = {
 export const DEV_MOCK_VAULT_URI = '__dev_mock_vault__';
 
 export const MOCK_SETTINGS: NoteboxSettings = {
-  displayName: 'Dev Notebox',
   r2: {
     endpoint: 'https://00000000000000000000000000000000.r2.cloudflarestorage.com',
     bucket: 'mock-bucket',
@@ -23,7 +22,8 @@ export const MOCK_SETTINGS: NoteboxSettings = {
 };
 
 export const MOCK_LOCAL_SETTINGS: NoteboxLocalSettings = {
-  deviceName: 'Dev device',
+  deviceName: '',
+  displayName: 'Dev Notebox',
 };
 
 /** Kept in sync with `mock-vault/Inbox/` in the repo (dev seed only; not read from disk at runtime). */

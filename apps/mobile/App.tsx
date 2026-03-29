@@ -20,7 +20,7 @@ import {clearUri} from './src/core/storage/appStorage';
 import {readPlaylistCoalesced} from './src/core/storage/noteboxStorage';
 import {setPodcastBootstrapPayload} from './src/features/podcasts/services/podcastBootstrapCache';
 import {runPodcastPhase1} from './src/features/podcasts/services/podcastPhase1';
-import {NoteSummary, NoteboxSettings} from './src/types';
+import {NoteSummary, NoteboxLocalSettings, NoteboxSettings} from './src/types';
 import {appBreadcrumb} from './src/core/observability/appBreadcrumb';
 import {elapsedMsSinceJsBundleEval} from './src/core/observability/startupTiming';
 import {NotesProvider} from './src/core/vault/NotesContext';
@@ -31,6 +31,7 @@ type InitialRoute = keyof RootStackParamList;
 type VaultInitialSession = {
   uri: string;
   settings: NoteboxSettings;
+  localSettings: NoteboxLocalSettings;
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
 };
@@ -124,6 +125,7 @@ function App() {
             const initial: VaultInitialSession = {
               uri: savedUri,
               settings: prepared.settings,
+              localSettings: prepared.localSettings,
               inboxContentByUri: prepared.inboxContentByUri,
               inboxPrefetch: prepared.inboxPrefetch,
             };

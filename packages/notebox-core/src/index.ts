@@ -20,9 +20,11 @@ export {
   serializeNoteboxLocalSettings,
 } from './noteboxLocalSettings';
 export {
+  buildNoteboxSettingsFromForm,
   defaultNoteboxSettings,
   type NoteboxR2Config,
   type NoteboxSettings,
+  type R2FormFields,
   parseNoteboxSettings,
   serializeNoteboxSettings,
 } from './noteboxSettings';

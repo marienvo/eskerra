@@ -8,7 +8,6 @@ import {
   create,
   ReactTestRenderer,
 } from 'react-test-renderer';
-import {Button, TextInput} from 'react-native';
 
 import {SettingsScreen} from '../src/features/settings/screens/SettingsScreen';
 import {useSettings} from '../src/features/settings/hooks/useSettings';
@@ -28,23 +27,23 @@ describe('SettingsScreen', () => {
   >;
   const useSettingsMock = useSettings as jest.MockedFunction<typeof useSettings>;
   const saveSettingsMock = jest.fn();
+  const saveLocalSettingsMock = jest.fn();
   const clearDirectoryMock = jest.fn();
-
-  function getButtonByTitle(tree: ReactTestRenderer, title: string) {
-    return tree.root.findAllByType(Button).find(button => button.props.title === title)!;
-  }
 
   beforeEach(() => {
     jest.clearAllMocks();
     useNavigationMock.mockReturnValue({navigate: navigateMock} as never);
     saveSettingsMock.mockResolvedValue(undefined);
+    saveLocalSettingsMock.mockResolvedValue(undefined);
     clearDirectoryMock.mockResolvedValue(undefined);
     useSettingsMock.mockReturnValue({
       baseUri: 'content://notes',
       clearDirectory: clearDirectoryMock,
       isSaving: false,
+      localSettings: {deviceName: '', displayName: 'My Notebox'},
+      saveLocalSettings: saveLocalSettingsMock,
       saveSettings: saveSettingsMock,
-      settings: {displayName: 'My Notebox'},
+      settings: {},
     });
   });
 
@@ -55,28 +54,30 @@ describe('SettingsScreen', () => {
       tree = create(<SettingsScreen />);
     });
 
-    const input = tree!.root.findByType(TextInput);
+    const input = tree!.root.findByProps({testID: 'settings-display-name'});
     expect(input.props.value).toBe('My Notebox');
   });
 
-  test('saves trimmed displayName', async () => {
+  test('saves trimmed displayName and device name', async () => {
     let tree: ReactTestRenderer;
 
     await act(async () => {
       tree = create(<SettingsScreen />);
     });
 
-    const input = tree!.root.findByType(TextInput);
+    const input = tree!.root.findByProps({testID: 'settings-display-name'});
     await act(async () => {
       input.props.onChangeText('  Team Notes  ');
     });
 
-    const saveButton = getButtonByTitle(tree!, 'Save');
+    const saveButton = tree!.root.findByProps({testID: 'settings-save-button'});
     await act(async () => {
       await saveButton.props.onPress();
     });
 
-    expect(saveSettingsMock).toHaveBeenCalledWith({
+    expect(saveSettingsMock).toHaveBeenCalledWith({});
+    expect(saveLocalSettingsMock).toHaveBeenCalledWith({
+      deviceName: '',
       displayName: 'Team Notes',
     });
   });
