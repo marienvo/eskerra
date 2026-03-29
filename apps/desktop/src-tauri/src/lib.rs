@@ -1,5 +1,6 @@
 mod media;
 mod vault;
+mod vault_watch;
 
 use vault::VaultRootState;
 
@@ -15,6 +16,7 @@ pub fn run() {
         )
         .setup(|app| {
             media::init_media_session(app)?;
+            vault_watch::setup_vault_watch(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -26,6 +28,7 @@ pub fn run() {
             vault::vault_write_file,
             vault::vault_remove_file,
             vault::vault_list_dir,
+            vault_watch::vault_start_watch,
             media::media_set_metadata,
             media::media_set_playback,
             media::media_clear_session,

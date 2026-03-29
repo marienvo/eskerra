@@ -53,3 +53,7 @@ export async function getVaultSession(): Promise<string | null> {
   const v = await invoke<string | null>('vault_get_session');
   return v;
 }
+
+export async function startVaultWatch(): Promise<void> {
+  await invoke('vault_start_watch');
+}

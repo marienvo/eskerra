@@ -28,7 +28,9 @@ The following are **identical on disk** once a vault root is chosen:
 | Read/write Inbox markdown | Yes | Yes |
 | Edit `settings.json` display name | Yes | Yes |
 | Stream MP3 / resume from `playlist.json` | Yes (`react-native-track-player`) | Yes (`HTMLAudioElement` + Linux MPRIS via souvlaki) |
+| Episodes list from vault `General/` podcast markdown | Yes (sectioned list) | Yes (desktop parses the same `*- podcasts.md` / RSS pie rules via TypeScript under `apps/desktop/src/lib/podcasts/`) |
 | OS play/pause (lock screen / shell) | Yes (Track Player service) | Yes on Linux (MPRIS); other OSes depend on Tauri + souvlaki behavior |
+| Filesystem-driven vault refresh | Pull-to-refresh / native listing | **notify**-based watch on `Inbox/`, `General/`, `.notebox/` with debounced UI refresh (plus optional Settings “Refresh from disk”) |
 | RSS → vault markdown sync (Kotlin / native) | Yes | **Deferred** — not required for first desktop milestone |
 | Native podcast artwork cache module | Android | **Deferred** on desktop |
 

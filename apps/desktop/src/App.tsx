@@ -1,24 +1,36 @@
 import {open} from '@tauri-apps/plugin-dialog';
-import {load} from '@tauri-apps/plugin-store';
 import {listen} from '@tauri-apps/api/event';
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {load} from '@tauri-apps/plugin-store';
+import type {Layout} from 'react-resizable-panels';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
 
+import {AddNoteModal} from './components/AddNoteModal';
+import {InboxTab} from './components/InboxTab';
+import {PodcastsTab} from './components/PodcastsTab';
+import {RailNav} from './components/RailNav';
+import {SettingsModal} from './components/SettingsModal';
+import {WindowTitleBar} from './components/WindowTitleBar';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
+import {
+  DEFAULT_LAYOUTS,
+  loadStoredLayouts,
+  saveStoredLayouts,
+  type StoredLayouts,
+} from './lib/layoutStore';
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
   listInboxNotes,
-  readPlaylistEntry,
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
-  writePlaylistEntry,
   writeVaultSettings,
 } from './lib/vaultBootstrap';
 import {
   createTauriVaultFilesystem,
   getVaultSession,
   setVaultSession,
+  startVaultWatch,
 } from './lib/tauriVault';
 
 import './App.css';
@@ -27,6 +39,7 @@ const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
+type MainTab = 'podcasts' | 'inbox';
 
 export default function App() {
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
@@ -38,8 +51,13 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [mp3Url, setMp3Url] = useState('');
-  const [nowPlaying, setNowPlaying] = useState('');
+  const [mainTab, setMainTab] = useState<MainTab>('inbox');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
+  const [layoutsReady, setLayoutsReady] = useState(false);
+  const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
+  const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -64,6 +82,7 @@ export default function App() {
         const store = await load(STORE_PATH);
         await store.set(STORE_KEY_VAULT, root);
         await store.save();
+        await startVaultWatch();
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -72,6 +91,25 @@ export default function App() {
     },
     [fs, refreshNotes],
   );
+
+  useLayoutEffect(() => {
+    if (mainTab === 'podcasts') {
+      setPodcastsTabMounted(true);
+    }
+  }, [mainTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadStoredLayouts().then(loaded => {
+      if (!cancelled) {
+        setLayouts(loaded);
+        setLayoutsReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +124,7 @@ export default function App() {
           await hydrateVault(root);
         }
       } catch {
-        // first launch: no store yet
+        // first launch
       }
     })();
     return () => {
@@ -107,18 +145,44 @@ export default function App() {
       if (action === 'play' || action === 'toggle') {
         void p.resumeOrToggleFromOs();
       }
-    }).then(fn => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
+    })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!vaultRoot) {
+      return;
+    }
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void listen('vault-files-changed', () => {
+      void refreshNotes(vaultRoot);
+      setFsRefreshNonce(n => n + 1);
+    })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [vaultRoot, refreshNotes]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {
@@ -166,15 +230,14 @@ export default function App() {
     }
   };
 
-  const addNote = async () => {
+  const addNote = async (title: string, body: string) => {
     if (!vaultRoot) {
       return;
     }
-    const title = window.prompt('Note title', 'Draft') ?? 'Draft';
     setBusy(true);
     setErr(null);
     try {
-      const created = await createInboxMarkdownNote(vaultRoot, fs, title, '');
+      const created = await createInboxMarkdownNote(vaultRoot, fs, title, body);
       await refreshNotes(vaultRoot);
       setSelectedUri(created.uri);
     } catch (e) {
@@ -202,166 +265,124 @@ export default function App() {
     }
   };
 
-  const playStream = async () => {
-    const url = mp3Url.trim();
-    if (!url) {
-      return;
-    }
-    setErr(null);
-    const p = getDesktopAudioPlayer();
-    const entryId = 'manual-stream';
-    const episodeId = entryId;
-    if (vaultRoot) {
-      try {
-        await writePlaylistEntry(vaultRoot, fs, {
-          episodeId,
-          mp3Url: url,
-          positionMs: 0,
-          durationMs: null,
-        });
-      } catch {
-        // ignore playlist write errors for ad-hoc streams
-      }
-    }
-    setNowPlaying(url);
-    await p.play(
-      {
-        id: entryId,
-        title: 'Stream',
-        artist: settingsName,
-        url,
-      },
-      undefined,
-    );
-  };
-
-  const resumeFromVault = async () => {
+  const refreshFromDisk = async () => {
     if (!vaultRoot) {
       return;
     }
+    setBusy(true);
     setErr(null);
     try {
-      const pl = await readPlaylistEntry(vaultRoot, fs);
-      if (!pl) {
-        setErr('No playlist entry in vault.');
-        return;
-      }
-      const p = getDesktopAudioPlayer();
-      setNowPlaying(pl.mp3Url);
-      await p.play(
-        {
-          id: pl.episodeId,
-          title: 'Podcast',
-          artist: settingsName,
-          url: pl.mp3Url,
-        },
-        pl.positionMs,
-      );
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      await refreshNotes(vaultRoot);
+      setFsRefreshNonce(n => n + 1);
+    } finally {
+      setBusy(false);
     }
   };
 
+  const persistInboxLayout = useCallback((layout: Layout) => {
+    setLayouts(prev => {
+      const next = {...prev, inbox: layout};
+      void saveStoredLayouts(next);
+      return next;
+    });
+  }, []);
+
+  const persistPodcastsLayouts = useCallback((next: {main: Layout; right: Layout}) => {
+    setLayouts(prev => {
+      const merged = {...prev, podcastsMain: next.main, podcastsRight: next.right};
+      void saveStoredLayouts(merged);
+      return merged;
+    });
+  }, []);
+
   if (!vaultRoot) {
     return (
-      <div className="shell">
-        <h1>{settingsName}</h1>
-        <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
-        <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
-          Choose folder…
-        </button>
-        {err ? <p className="error">{err}</p> : null}
+      <div className="app-root">
+        <WindowTitleBar title={settingsName} />
+        <div className="shell setup-shell">
+          <h1>{settingsName}</h1>
+          <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
+          <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
+            Choose folder…
+          </button>
+          {err ? <p className="error">{err}</p> : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (!layoutsReady) {
+    return (
+      <div className="app-root">
+        <WindowTitleBar title={settingsName} />
+        <div className="shell setup-shell">
+          <p className="muted">Loading…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="shell layout">
-      <header className="header">
-        <h1>{settingsName}</h1>
-        <div className="row">
-          <label className="grow">
-            Display name
-            <input
-              value={settingsName}
-              onChange={e => setSettingsName(e.target.value)}
-            />
-          </label>
-          <button type="button" onClick={() => void saveDisplayName()} disabled={busy}>
-            Save name
-          </button>
-          <button type="button" className="ghost" onClick={() => void pickFolder()} disabled={busy}>
-            Change folder…
-          </button>
+    <div className="app-root">
+      <WindowTitleBar title={settingsName} onSettingsClick={() => setSettingsOpen(true)} />
+
+      {err ? (
+        <div className="error-banner" role="alert">
+          {err}
         </div>
-      </header>
+      ) : null}
 
-      {err ? <p className="error">{err}</p> : null}
-
-      <div className="main">
-        <aside className="sidebar">
-          <div className="row">
-            <button type="button" className="primary" onClick={() => void addNote()} disabled={busy}>
-              New note
-            </button>
-            <button type="button" onClick={() => void refreshNotes(vaultRoot)} disabled={busy}>
-              Refresh
-            </button>
+      <div className="app-body">
+        <RailNav active={mainTab} onSelect={setMainTab} />
+        <main className="main-stage">
+          <div className="tab-panel" hidden={mainTab !== 'inbox'}>
+            <InboxTab
+              defaultLayout={layouts.inbox}
+              onLayoutChanged={persistInboxLayout}
+              notes={notes}
+              selectedUri={selectedUri}
+              onSelectNote={setSelectedUri}
+              onAddEntry={() => setAddNoteOpen(true)}
+              editorBody={editorBody}
+              onEditorChange={setEditorBody}
+              onSaveNote={() => void saveNote()}
+              busy={busy}
+            />
           </div>
-          <ul className="note-list">
-            {notes.map(n => (
-              <li key={n.uri}>
-                <button
-                  type="button"
-                  className={n.uri === selectedUri ? 'active' : ''}
-                  onClick={() => setSelectedUri(n.uri)}
-                >
-                  {n.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
-
-        <section className="editor">
-          {selectedUri ? (
-            <>
-              <textarea
-                value={editorBody}
-                onChange={e => setEditorBody(e.target.value)}
-                spellCheck={false}
-                placeholder="Markdown"
+          {podcastsTabMounted ? (
+            <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
+              <PodcastsTab
+                key={vaultRoot}
+                vaultRoot={vaultRoot}
+                fs={fs}
+                displayName={settingsName}
+                layouts={{main: layouts.podcastsMain, right: layouts.podcastsRight}}
+                onPodcastsLayoutsChange={persistPodcastsLayouts}
+                onError={setErr}
+                fsRefreshNonce={fsRefreshNonce}
               />
-              <div className="row">
-                <button type="button" className="primary" onClick={() => void saveNote()} disabled={busy}>
-                  Save note
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="muted">Select a note or create one.</p>
-          )}
-        </section>
+            </div>
+          ) : null}
+        </main>
       </div>
 
-      <footer className="player-panel">
-        <div className="row wrap">
-          <label className="grow">
-            MP3 URL (stream)
-            <input value={mp3Url} onChange={e => setMp3Url(e.target.value)} placeholder="https://…" />
-          </label>
-          <button type="button" className="primary" onClick={() => void playStream()}>
-            Play
-          </button>
-          <button type="button" onClick={() => void getDesktopAudioPlayer().pause()}>
-            Pause
-          </button>
-          <button type="button" onClick={() => void resumeFromVault()}>
-            Resume from vault playlist
-          </button>
-        </div>
-        {nowPlaying ? <p className="muted small">Now playing: {nowPlaying}</p> : null}
-      </footer>
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        displayName={settingsName}
+        onDisplayNameChange={setSettingsName}
+        onSaveDisplayName={() => void saveDisplayName()}
+        onChangeFolder={() => void pickFolder()}
+        onRefreshVault={() => void refreshFromDisk()}
+        busy={busy}
+      />
+
+      <AddNoteModal
+        open={addNoteOpen}
+        onClose={() => setAddNoteOpen(false)}
+        onCreate={addNote}
+        busy={busy}
+      />
     </div>
   );
 }
