@@ -1,6 +1,5 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
-import {useCallback, useEffect, useState} from 'react';
 
 import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
 
@@ -8,55 +7,16 @@ import {DemoMenuBar} from './DemoMenuBar';
 
 type WindowTitleBarProps = {
   onOpenSettings: () => void;
+  maximized: boolean;
+  onMaximizedRefresh: () => void;
 };
 
-export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
-  const [maximized, setMaximized] = useState(false);
+export function WindowTitleBar({
+  onOpenSettings,
+  maximized,
+  onMaximizedRefresh,
+}: WindowTitleBarProps) {
   const tauri = isTauri();
-
-  const syncMaximized = useCallback(async () => {
-    if (!tauri) {
-      return;
-    }
-    try {
-      const m = await getCurrentWindow().isMaximized();
-      setMaximized(m);
-    } catch {
-      // ignore
-    }
-  }, [tauri]);
-
-  useEffect(() => {
-    if (!tauri) {
-      return;
-    }
-    queueMicrotask(() => {
-      void syncMaximized();
-    });
-    let unlistenResize: (() => void) | undefined;
-    let cancelled = false;
-    void getCurrentWindow()
-      .onResized(() => {
-        void syncMaximized();
-      })
-      .then(fn => {
-        if (cancelled) {
-          fn();
-        } else {
-          unlistenResize = fn;
-        }
-      })
-      .catch(() => undefined);
-    const onFocus = () => {
-      void syncMaximized();
-    };
-    window.addEventListener('focus', onFocus);
-    return () => {
-      cancelled = true;
-      unlistenResize?.();
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [tauri, syncMaximized]);
 
   const onMinimize = () => {
     if (!tauri) {
@@ -69,7 +29,7 @@ export function WindowTitleBar({onOpenSettings}: WindowTitleBarProps) {
     if (!tauri) {
       return;
     }
-    void getCurrentWindow().toggleMaximize().then(() => syncMaximized());
+    void getCurrentWindow().toggleMaximize().then(() => onMaximizedRefresh());
   };
 
   const onClose = () => {

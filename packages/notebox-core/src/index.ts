@@ -8,6 +8,12 @@ export {
   stemFromMarkdownFileName,
 } from './inboxMarkdown';
 export {
+  buildInboxMarkdownFromCompose,
+  inboxMarkdownFileToComposeInput,
+  parseComposeInput,
+  type ParsedComposeInput,
+} from './inboxComposeNote';
+export {
   defaultNoteboxSettings,
   type NoteboxSettings,
   parseNoteboxSettings,

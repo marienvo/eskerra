@@ -4,11 +4,11 @@ import {load} from '@tauri-apps/plugin-store';
 import type {Layout} from 'react-resizable-panels';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
 
-import {AddNoteModal} from './components/AddNoteModal';
 import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
 import {RailNav} from './components/RailNav';
 import {WindowTitleBar} from './components/WindowTitleBar';
+import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {
@@ -31,6 +31,7 @@ import {
   setVaultSession,
   startVaultWatch,
 } from './lib/tauriVault';
+import {buildInboxMarkdownFromCompose, parseComposeInput} from '@notebox/core';
 
 import './App.css';
 
@@ -41,6 +42,8 @@ type NoteRow = {lastModified: number | null; name: string; uri: string};
 type MainTab = 'podcasts' | 'inbox';
 
 export default function App() {
+  const {maximized, refresh: refreshWindowMaximized} = useTauriWindowMaximized();
+  const appRootClassName = maximized ? 'app-root app-root--maximized' : 'app-root';
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [settingsName, setSettingsName] = useState('Notebox');
@@ -51,7 +54,7 @@ export default function App() {
   const [err, setErr] = useState<string | null>(null);
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
-  const [addNoteOpen, setAddNoteOpen] = useState(false);
+  const [composingNewEntry, setComposingNewEntry] = useState(false);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [layoutsReady, setLayoutsReady] = useState(false);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
@@ -213,22 +216,53 @@ export default function App() {
     await hydrateVault(dir);
   };
 
-  const addNote = async (title: string, body: string) => {
-    if (!vaultRoot) {
+  const addNote = useCallback(
+    async (title: string, body: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      setBusy(true);
+      setErr(null);
+      try {
+        const created = await createInboxMarkdownNote(vaultRoot, fs, title, body);
+        await refreshNotes(vaultRoot);
+        setSelectedUri(created.uri);
+        setComposingNewEntry(false);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes],
+  );
+
+  const startNewEntry = useCallback(() => {
+    setErr(null);
+    setComposingNewEntry(true);
+    setSelectedUri(null);
+    setEditorBody('');
+  }, []);
+
+  const cancelNewEntry = useCallback(() => {
+    setComposingNewEntry(false);
+    setEditorBody('');
+  }, []);
+
+  const selectNote = useCallback((uri: string) => {
+    setComposingNewEntry(false);
+    setSelectedUri(uri);
+  }, []);
+
+  const submitNewEntry = useCallback(() => {
+    const {titleLine, bodyAfterBlank} = parseComposeInput(editorBody);
+    if (!titleLine.trim()) {
+      setErr('First line is required.');
       return;
     }
-    setBusy(true);
-    setErr(null);
-    try {
-      const created = await createInboxMarkdownNote(vaultRoot, fs, title, body);
-      await refreshNotes(vaultRoot);
-      setSelectedUri(created.uri);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+    const fullMarkdown = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
+    void addNote(titleLine, fullMarkdown);
+  }, [addNote, editorBody]);
 
   const saveNote = async () => {
     if (!selectedUri) {
@@ -266,8 +300,12 @@ export default function App() {
 
   if (!vaultRoot) {
     return (
-      <div className="app-root">
-        <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
+      <div className={appRootClassName}>
+        <WindowTitleBar
+          maximized={maximized}
+          onMaximizedRefresh={refreshWindowMaximized}
+          onOpenSettings={() => void openSettingsWindow()}
+        />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
           <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
@@ -282,8 +320,12 @@ export default function App() {
 
   if (!layoutsReady) {
     return (
-      <div className="app-root">
-        <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
+      <div className={appRootClassName}>
+        <WindowTitleBar
+          maximized={maximized}
+          onMaximizedRefresh={refreshWindowMaximized}
+          onOpenSettings={() => void openSettingsWindow()}
+        />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
         </div>
@@ -292,8 +334,12 @@ export default function App() {
   }
 
   return (
-    <div className="app-root">
-      <WindowTitleBar onOpenSettings={() => void openSettingsWindow()} />
+    <div className={appRootClassName}>
+      <WindowTitleBar
+        maximized={maximized}
+        onMaximizedRefresh={refreshWindowMaximized}
+        onOpenSettings={() => void openSettingsWindow()}
+      />
 
       {err ? (
         <div className="error-banner" role="alert">
@@ -310,8 +356,11 @@ export default function App() {
               onLayoutChanged={persistInboxLayout}
               notes={notes}
               selectedUri={selectedUri}
-              onSelectNote={setSelectedUri}
-              onAddEntry={() => setAddNoteOpen(true)}
+              onSelectNote={selectNote}
+              onAddEntry={startNewEntry}
+              composingNewEntry={composingNewEntry}
+              onCancelNewEntry={cancelNewEntry}
+              onCreateNewEntry={() => void submitNewEntry()}
               editorBody={editorBody}
               onEditorChange={setEditorBody}
               onSaveNote={() => void saveNote()}
@@ -335,12 +384,6 @@ export default function App() {
         </main>
       </div>
 
-      <AddNoteModal
-        open={addNoteOpen}
-        onClose={() => setAddNoteOpen(false)}
-        onCreate={addNote}
-        busy={busy}
-      />
     </div>
   );
 }

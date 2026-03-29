@@ -40,6 +40,10 @@ The following are **identical on disk** once a vault root is chosen:
 - **Desktop:** `HtmlAudioPlayer` implements the same interface using **`<audio>`**; Rust commands **`media_set_metadata`**, **`media_set_playback`**, and **`media_clear_session`** mirror state to the OS on Linux (**souvlaki** / MPRIS). The frontend listens for the **`media-control`** event for shell-driven **play / pause / toggle** and toggles the web audio element accordingly.
 - **Shared playlist file:** both apps read/write **`.notebox/playlist.json`** so resuming the same vault on another app is possible when URLs and file layout match.
 
+## Desktop main-window UX
+
+Primary-window flows should **not** use modal backdrops over the shell; use panes or a separate window. See [`specs/design/desktop-shell-patterns.md`](../design/desktop-shell-patterns.md).
+
 ## Performance expectations
 
 - **Desktop** uses direct filesystem access; still avoid full vault scans on startup unless the first screen requires it (same product instinct as mobile). Heavy work should stay off the first paint path.

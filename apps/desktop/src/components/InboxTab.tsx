@@ -13,6 +13,9 @@ type InboxTabProps = {
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
   onAddEntry: () => void;
+  composingNewEntry: boolean;
+  onCancelNewEntry: () => void;
+  onCreateNewEntry: () => void;
   editorBody: string;
   onEditorChange: (body: string) => void;
   onSaveNote: () => void;
@@ -26,12 +29,18 @@ export function InboxTab({
   selectedUri,
   onSelectNote,
   onAddEntry,
+  composingNewEntry,
+  onCancelNewEntry,
+  onCreateNewEntry,
   editorBody,
   onEditorChange,
   onSaveNote,
   busy,
 }: InboxTabProps) {
   const editorPaneTitle = useMemo(() => {
+    if (composingNewEntry) {
+      return 'New entry';
+    }
     if (!selectedUri) {
       return 'Editor';
     }
@@ -41,7 +50,9 @@ export function InboxTab({
     }
     const tail = selectedUri.split(/[/\\]/).pop()?.trim();
     return tail || 'Editor';
-  }, [notes, selectedUri]);
+  }, [composingNewEntry, notes, selectedUri]);
+
+  const editorOpen = composingNewEntry || Boolean(selectedUri);
 
   return (
     <div className="inbox-root" data-app-surface="capture">
@@ -88,23 +99,43 @@ export function InboxTab({
             <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
               {editorPaneTitle}
             </span>
+            {composingNewEntry ? (
+              <button
+                type="button"
+                className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                onClick={onCancelNewEntry}
+                disabled={busy}
+                aria-label="Cancel new entry"
+                data-tooltip="Cancel"
+                data-tooltip-placement="inline-start"
+              >
+                <span className="pane-header-add-btn__glyph" aria-hidden>
+                  <MaterialIcon name="clear" size={12} />
+                </span>
+              </button>
+            ) : null}
           </div>
-          {selectedUri ? (
+          {editorOpen ? (
             <>
               <textarea
                 value={editorBody}
                 onChange={e => onEditorChange(e.target.value)}
                 spellCheck={false}
-                placeholder="Markdown"
+                placeholder={composingNewEntry ? 'First line is title (H1)…' : 'Markdown'}
               />
               <div className="pane-footer">
-                <button type="button" className="primary" onClick={() => void onSaveNote()} disabled={busy}>
-                  Save note
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={composingNewEntry ? onCreateNewEntry : () => void onSaveNote()}
+                  disabled={busy}
+                >
+                  {composingNewEntry ? 'Create note' : 'Save note'}
                 </button>
               </div>
             </>
           ) : (
-            <p className="muted empty-hint">Select a note or use Add entry.</p>
+            <p className="muted empty-hint">Select a note from the log or use Add entry.</p>
           )}
         </Panel>
       </Group>

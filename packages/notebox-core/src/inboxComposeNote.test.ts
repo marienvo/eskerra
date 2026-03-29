@@ -1,10 +1,12 @@
+import {describe, expect, test} from 'vitest';
+
 import {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
-} from '../src/core/vault/vaultComposeNote';
+} from './inboxComposeNote';
 
-describe('vaultComposeNote', () => {
+describe('inboxComposeNote', () => {
   test('parses input with only first line as title', () => {
     expect(parseComposeInput('Meeting notes')).toEqual({
       bodyAfterBlank: '',
