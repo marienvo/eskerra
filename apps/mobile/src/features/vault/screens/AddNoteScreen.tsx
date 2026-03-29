@@ -70,6 +70,7 @@ function navigateToNewNoteDetail(stackNavigation: AddNoteNavigation, created: No
   tabNavigation?.navigate('VaultTab', {
     screen: 'NoteDetail',
     params,
+    initial: false,
   });
   stackNavigation.dispatch(
     CommonActions.reset({
