@@ -8,7 +8,7 @@ Notebox is a **notes + podcast** companion with two apps in one repo:
 | **Desktop** | [`apps/desktop/`](apps/desktop/) | Tauri 2 + Vite + React (Linux-first; Fedora / GNOME is the reference) |
 | **Shared logic** | [`packages/notebox-core/`](packages/notebox-core/) | TypeScript (vault paths, settings, `VaultFilesystem`, audio types) |
 
-Both apps use the same **vault layout** on disk: user-chosen root folder, then `Inbox/`, `General/`, and `/.notebox/settings.json` (see [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)).
+Both apps use the same **vault layout** on disk: user-chosen root folder, then `Inbox/`, `General/`, and `/.notebox/settings-shared.json` plus per-device `/.notebox/settings-local.json` (see [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)).
 
 ---
 
@@ -45,7 +45,7 @@ npm run desktop:dev -w @notebox/desktop
 
 - Select a Notes directory with the Android folder picker (SAF).
 - Persist the selected tree URI in AsyncStorage.
-- Create/update `/.notebox/settings.json` (for example `displayName`).
+- Create/update `/.notebox/settings-shared.json` (for example `displayName` and optional R2 fields), and `/.notebox/settings-local.json` for per-device `deviceName`.
 - Debug APK build/install scripts live under [`scripts/`](scripts/) and call Gradle in [`apps/mobile/android/`](apps/mobile/android/).
 
 ### Extra prerequisites (Android only)
@@ -103,7 +103,7 @@ Release signing defaults to the **debug keystore** in [`apps/mobile/android/app/
 ### First-launch check (mobile)
 
 1. Open the app, tap **Choose Notes Directory**, pick a folder.
-2. Confirm `/.notebox/settings.json` exists.
+2. Confirm `/.notebox/settings-shared.json` (and `settings-local.json`) exist after first init.
 3. Change `displayName`, save, force-close and reopen to verify persistence.
 
 If Android revokes SAF access, the app should clear the saved URI and send you back to setup.

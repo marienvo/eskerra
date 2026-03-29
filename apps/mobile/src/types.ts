@@ -1,4 +1,8 @@
-export type {NoteboxSettings, PlaylistEntry} from '@notebox/core';
+export type {
+  NoteboxLocalSettings,
+  NoteboxSettings,
+  PlaylistEntry,
+} from '@notebox/core';
 
 export type NoteSummary = {
   lastModified: number | null;

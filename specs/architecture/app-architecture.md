@@ -30,7 +30,7 @@ SetupScreen
   -> Choose Notes Directory
   -> openDocumentTree(true)
   -> save URI in AsyncStorage
-  -> init .notebox/settings.json
+  -> init .notebox/settings-shared.json and settings-local.json
   -> set VaultProvider session
   -> navigate MainTabs (Vault tab)
 ```
@@ -114,7 +114,7 @@ apps/desktop/src/            # Tauri UI + invoke-backed vault + HTML audio / MPR
 ## Android directory ownership model
 
 - The selected Notes directory is user-owned external/shared storage.
-- App-owned settings live in `/.notebox/settings.json` under that directory.
+- App-owned settings live in `/.notebox/settings-shared.json` and `/.notebox/settings-local.json` under that directory.
 - Notes are `.md` files in the selected directory's `/Inbox` folder and are the source of truth.
 - App sandbox storage (AsyncStorage) stores only `notesDirectoryUri`.
 

@@ -14,11 +14,19 @@ export {
   type ParsedComposeInput,
 } from './inboxComposeNote';
 export {
+  defaultNoteboxLocalSettings,
+  type NoteboxLocalSettings,
+  parseNoteboxLocalSettings,
+  serializeNoteboxLocalSettings,
+} from './noteboxLocalSettings';
+export {
   defaultNoteboxSettings,
+  type NoteboxR2Config,
   type NoteboxSettings,
   parseNoteboxSettings,
   serializeNoteboxSettings,
 } from './noteboxSettings';
+export {readVaultSharedSettingsRaw} from './readVaultSharedSettings';
 export {
   isValidPlaylistEntry,
   type PlaylistEntry,
@@ -30,15 +38,19 @@ export {
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,
+  getLegacySettingsUri,
+  getLocalSettingsUri,
   getNoteboxDirectoryUri,
   getPlaylistUri,
-  getSettingsUri,
+  getSharedSettingsUri,
   INBOX_DIRECTORY_NAME,
   INBOX_INDEX_FILE_NAME,
   MARKDOWN_EXTENSION,
   NOTEBOX_DIRECTORY_NAME,
   normalizeVaultBaseUri,
   PLAYLIST_FILE_NAME,
-  SETTINGS_FILE_NAME,
+  SETTINGS_LEGACY_FILE_NAME,
+  SETTINGS_LOCAL_FILE_NAME,
+  SETTINGS_SHARED_FILE_NAME,
   isSyncConflictFileName,
 } from './vaultLayout';

@@ -22,7 +22,7 @@ Risk:
 Mitigation:
 
 - Keep URI joining logic centralized in `noteboxStorage.ts`.
-- Validate by creating `.notebox/settings.json` and reading it back in one flow test.
+- Validate by creating `.notebox/settings-shared.json` and reading it back in one flow test.
 - Avoid ad-hoc URI string manipulation across screens.
 
 ## 3) Persisted permission may disappear (Medium)

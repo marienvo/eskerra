@@ -1,4 +1,4 @@
-import {NoteboxSettings} from '../types';
+import {NoteboxLocalSettings, NoteboxSettings} from '../types';
 
 export type MockNoteSeed = {
   content: string;
@@ -14,6 +14,16 @@ export const DEV_MOCK_VAULT_URI = '__dev_mock_vault__';
 
 export const MOCK_SETTINGS: NoteboxSettings = {
   displayName: 'Dev Notebox',
+  r2: {
+    endpoint: 'https://00000000000000000000000000000000.r2.cloudflarestorage.com',
+    bucket: 'mock-bucket',
+    accessKeyId: 'mock_access_key_id',
+    secretAccessKey: 'mock_secret_access_key',
+  },
+};
+
+export const MOCK_LOCAL_SETTINGS: NoteboxLocalSettings = {
+  deviceName: 'Dev device',
 };
 
 /** Kept in sync with `mock-vault/Inbox/` in the repo (dev seed only; not read from disk at runtime). */

@@ -29,10 +29,34 @@ function createMemoryFs(initial: Map<string, string | 'dir'>): VaultFilesystem {
 }
 
 describe('initNoteboxVault', () => {
-  it('creates default settings when missing', async () => {
+  it('creates default shared and local settings when missing', async () => {
     const fs = createMemoryFs(new Map([['/vault', 'dir']]));
     await initNoteboxVault('/vault', fs);
-    const raw = await fs.readFile('/vault/.notebox/settings.json', {encoding: 'utf8'});
-    expect(JSON.parse(raw).displayName).toBe('My Notebox');
+    const sharedRaw = await fs.readFile('/vault/.notebox/settings-shared.json', {
+      encoding: 'utf8',
+    });
+    expect(JSON.parse(sharedRaw).displayName).toBe('My Notebox');
+    const localRaw = await fs.readFile('/vault/.notebox/settings-local.json', {
+      encoding: 'utf8',
+    });
+    expect(JSON.parse(localRaw).deviceName).toBe('This device');
+  });
+
+  it('does not overwrite legacy-only vault with default shared on init', async () => {
+    const legacy =
+      '{\n  "displayName": "Legacy Box"\n}\n';
+    const fs = createMemoryFs(
+      new Map([
+        ['/vault', 'dir'],
+        ['/vault/.notebox', 'dir'],
+        ['/vault/.notebox/settings.json', legacy],
+      ]),
+    );
+    await initNoteboxVault('/vault', fs);
+    expect(await fs.exists('/vault/.notebox/settings-shared.json')).toBe(false);
+    const stillLegacy = await fs.readFile('/vault/.notebox/settings.json', {encoding: 'utf8'});
+    expect(JSON.parse(stillLegacy).displayName).toBe('Legacy Box');
+    const localRaw = await fs.readFile('/vault/.notebox/settings-local.json', {encoding: 'utf8'});
+    expect(JSON.parse(localRaw).deviceName).toBe('This device');
   });
 });

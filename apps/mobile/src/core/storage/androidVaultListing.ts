@@ -77,7 +77,8 @@ export async function tryListMarkdownFilesNative(
 }
 
 /**
- * Ensures `.notebox/settings.json` and (on current Android native) Inbox listing + General/Inbox.md
+ * Ensures `.notebox/settings-shared.json` (or legacy `settings.json`) and (on current Android native)
+ * Inbox listing + General/Inbox.md
  * in one call. Returns `inboxPrefetch` when the native map includes `inboxNotes` so the first Vault
  * load can skip duplicate listing/index SAF work. Legacy native that returns only a string yields
  * `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android, or

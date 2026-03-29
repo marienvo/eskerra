@@ -53,7 +53,8 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
   }
 
   /**
-   * Ensures `.notebox/settings.json`, ensures `Inbox` and `General`, lists Inbox markdown,
+   * Ensures `.notebox/settings-shared.json` (or legacy `settings.json` with migration to shared),
+   * ensures `Inbox` and `General`, lists Inbox markdown,
    * writes `General/Inbox.md` (same body as `buildInboxMarkdownIndexContent` in `@notebox/core`),
    * and returns a map: `settings` (UTF-8 JSON string) and `inboxNotes` (array of uri/name/lastModified).
    */
@@ -320,28 +321,58 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
       throw IllegalStateException(".notebox exists but is not a directory.")
     }
 
-    var settingsDoc = notebox.findFile(SETTINGS_FILE_NAME)
+    val sharedDoc = notebox.findFile(SETTINGS_SHARED_FILE_NAME)
+    val legacyDoc = notebox.findFile(SETTINGS_LEGACY_FILE_NAME)
     val resolver = reactContext.contentResolver
-    if (settingsDoc == null || !settingsDoc.exists()) {
-      settingsDoc =
-        notebox.createFile("application/json", SETTINGS_FILE_NAME)
-          ?: throw IllegalStateException("Could not create settings.json.")
-      resolver.openOutputStream(settingsDoc.uri)?.use { out ->
-        out.write(DEFAULT_SETTINGS_JSON.toByteArray(StandardCharsets.UTF_8))
-      } ?: throw IllegalStateException("Could not write default settings.json.")
-    }
 
-    if (!settingsDoc.isFile) {
-      throw IllegalStateException("settings.json is not a file.")
-    }
+    val pickShared =
+      sharedDoc != null && sharedDoc.exists() && sharedDoc.isFile
+    val pickLegacy =
+      legacyDoc != null && legacyDoc.exists() && legacyDoc.isFile
 
-    val raw =
-      resolver.openInputStream(settingsDoc.uri)?.use { input ->
-        input.bufferedReader(StandardCharsets.UTF_8).readText()
-      } ?: throw IllegalStateException("Could not read settings.json.")
+    val raw: String =
+      when {
+        pickShared -> {
+          resolver.openInputStream(sharedDoc!!.uri)?.use { input ->
+              input.bufferedReader(StandardCharsets.UTF_8).readText()
+            }
+            ?: throw IllegalStateException("Could not read settings-shared.json.")
+        }
+        pickLegacy -> {
+          val legacyRaw =
+            resolver.openInputStream(legacyDoc!!.uri)?.use { input ->
+              input.bufferedReader(StandardCharsets.UTF_8).readText()
+            }
+              ?: throw IllegalStateException("Could not read legacy settings.json.")
+          var sharedTarget = notebox.findFile(SETTINGS_SHARED_FILE_NAME)
+          if (sharedTarget == null || !sharedTarget.exists()) {
+            sharedTarget =
+              notebox.createFile("application/json", SETTINGS_SHARED_FILE_NAME)
+                ?: throw IllegalStateException("Could not create settings-shared.json.")
+          }
+          resolver.openOutputStream(sharedTarget.uri)?.use { out ->
+            out.write(legacyRaw.toByteArray(StandardCharsets.UTF_8))
+          }
+            ?: throw IllegalStateException("Could not write migrated settings-shared.json.")
+          legacyRaw
+        }
+        else -> {
+          val created =
+            notebox.createFile("application/json", SETTINGS_SHARED_FILE_NAME)
+              ?: throw IllegalStateException("Could not create settings-shared.json.")
+          resolver.openOutputStream(created.uri)?.use { out ->
+            out.write(DEFAULT_SETTINGS_JSON.toByteArray(StandardCharsets.UTF_8))
+          }
+            ?: throw IllegalStateException("Could not write default settings-shared.json.")
+          resolver.openInputStream(created.uri)?.use { input ->
+              input.bufferedReader(StandardCharsets.UTF_8).readText()
+            }
+            ?: throw IllegalStateException("Could not read settings-shared.json.")
+        }
+      }
 
     if (raw.isBlank()) {
-      throw IllegalStateException("settings.json is empty.")
+      throw IllegalStateException("settings-shared.json is empty.")
     }
 
     var inbox = resolveOrCreateRootSubdir(root, INBOX_DIR_NAME, rootChildrenByName)
@@ -433,7 +464,8 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     private const val MARKDOWN_SUFFIX = ".md"
     private const val SYNC_CONFLICT_MARKER = "sync-conflict"
     private const val NOTEBOX_DIR_NAME = ".notebox"
-    private const val SETTINGS_FILE_NAME = "settings.json"
+    private const val SETTINGS_SHARED_FILE_NAME = "settings-shared.json"
+    private const val SETTINGS_LEGACY_FILE_NAME = "settings.json"
     private const val INBOX_DIR_NAME = "Inbox"
     private const val GENERAL_DIR_NAME = "General"
     private const val INBOX_INDEX_FILE_NAME = "Inbox.md"
@@ -441,6 +473,14 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     private const val INBOX_NOTE_CONTENT_MAX_BYTES = 512 * 1024
     /** Matches `serializeNoteboxSettings(defaultNoteboxSettings)` in `@notebox/core` (JSON.stringify + trailing newline). */
     private const val DEFAULT_SETTINGS_JSON =
-      "{\n  \"displayName\": \"My Notebox\"\n}\n"
+      "{\n" +
+        "  \"displayName\": \"My Notebox\",\n" +
+        "  \"r2\": {\n" +
+        "    \"endpoint\": \"https://00000000000000000000000000000000.r2.cloudflarestorage.com\",\n" +
+        "    \"bucket\": \"mock-bucket\",\n" +
+        "    \"accessKeyId\": \"mock_access_key_id\",\n" +
+        "    \"secretAccessKey\": \"mock_secret_access_key\"\n" +
+        "  }\n" +
+        "}\n"
   }
 }

@@ -1,8 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  parseNoteboxLocalSettings,
+  parseNoteboxSettings,
+  serializeNoteboxLocalSettings,
+  serializeNoteboxSettings,
+} from '@notebox/core';
+
+import {
   NoteDetail,
   NoteSummary,
+  NoteboxLocalSettings,
   NoteboxSettings,
   PlaylistEntry,
   RootMarkdownFile,
@@ -11,6 +19,7 @@ import {NOTES_DIRECTORY_URI_KEY} from '../core/storage/keys';
 import {pickNextInboxMarkdownFileName} from '../core/storage/noteboxStorage';
 import {
   DEV_MOCK_VAULT_URI,
+  MOCK_LOCAL_SETTINGS,
   MOCK_NOTES,
   MOCK_PODCAST_FILES,
   MOCK_SETTINGS,
@@ -19,6 +28,7 @@ import {
 const DEV_STORAGE_PREFIX = '@notebox_dev';
 const DEV_SEEDED_KEY = `${DEV_STORAGE_PREFIX}:seeded`;
 const DEV_SETTINGS_KEY = `${DEV_STORAGE_PREFIX}:settings`;
+const DEV_LOCAL_SETTINGS_KEY = `${DEV_STORAGE_PREFIX}:local_settings`;
 const DEV_NOTES_INDEX_KEY = `${DEV_STORAGE_PREFIX}:notes:index`;
 const DEV_PODCAST_INDEX_KEY = `${DEV_STORAGE_PREFIX}:podcasts:index`;
 const DEV_PLAYLIST_KEY = `${DEV_STORAGE_PREFIX}:playlist`;
@@ -56,24 +66,6 @@ function normalizeNoteUri(noteUri: string): string {
   }
 
   return normalizedNoteUri;
-}
-
-function serializeSettings(settings: NoteboxSettings): string {
-  return `${JSON.stringify(settings, null, 2)}\n`;
-}
-
-function parseSettings(rawSettings: string): NoteboxSettings {
-  const parsed = JSON.parse(rawSettings) as Partial<NoteboxSettings>;
-
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    typeof parsed.displayName !== 'string'
-  ) {
-    throw new Error('settings.json has an invalid structure.');
-  }
-
-  return {displayName: parsed.displayName};
 }
 
 function sanitizeFileName(rawName: string): string {
@@ -173,7 +165,7 @@ async function writePodcastIndex(index: PodcastIndex): Promise<void> {
 async function ensureSeeded(): Promise<void> {
   const seeded = await AsyncStorage.getItem(DEV_SEEDED_KEY);
 
-  if (seeded === '5') {
+  if (seeded === '6') {
     return;
   }
 
@@ -197,8 +189,12 @@ async function ensureSeeded(): Promise<void> {
 
   await writeNotesIndex(notesIndex);
   await writePodcastIndex(podcastIndex);
-  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeSettings(MOCK_SETTINGS));
-  await AsyncStorage.setItem(DEV_SEEDED_KEY, '5');
+  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeNoteboxSettings(MOCK_SETTINGS));
+  await AsyncStorage.setItem(
+    DEV_LOCAL_SETTINGS_KEY,
+    serializeNoteboxLocalSettings(MOCK_LOCAL_SETTINGS),
+  );
+  await AsyncStorage.setItem(DEV_SEEDED_KEY, '6');
 }
 
 function assertMockBaseUri(baseUri: string): void {
@@ -247,10 +243,10 @@ export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
   const rawSettings = await AsyncStorage.getItem(DEV_SETTINGS_KEY);
 
   if (!rawSettings) {
-    throw new Error('settings.json was not found in dev mock vault.');
+    throw new Error('settings-shared.json was not found in dev mock vault.');
   }
 
-  return parseSettings(rawSettings);
+  return parseNoteboxSettings(rawSettings);
 }
 
 export async function writeSettings(
@@ -260,7 +256,33 @@ export async function writeSettings(
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
-  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeSettings(settings));
+  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeNoteboxSettings(settings));
+}
+
+export async function readLocalSettings(baseUri: string): Promise<NoteboxLocalSettings> {
+  assertMockBaseUri(baseUri);
+  await ensureSeeded();
+
+  const raw = await AsyncStorage.getItem(DEV_LOCAL_SETTINGS_KEY);
+
+  if (!raw) {
+    throw new Error('settings-local.json was not found in dev mock vault.');
+  }
+
+  return parseNoteboxLocalSettings(raw);
+}
+
+export async function writeLocalSettings(
+  baseUri: string,
+  settings: NoteboxLocalSettings,
+): Promise<void> {
+  assertMockBaseUri(baseUri);
+  await ensureSeeded();
+
+  await AsyncStorage.setItem(
+    DEV_LOCAL_SETTINGS_KEY,
+    serializeNoteboxLocalSettings(settings),
+  );
 }
 
 export async function listNotes(baseUri: string): Promise<NoteSummary[]> {

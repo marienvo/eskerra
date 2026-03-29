@@ -73,26 +73,47 @@ describe('noteboxStorage', () => {
     tryListMarkdownFilesNativeMock.mockResolvedValue(null);
   });
 
-  test('initNotebox creates .notebox and default settings when missing', async () => {
-    existsMock.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+  test('initNotebox creates .notebox, default shared, and default local when missing', async () => {
+    existsMock
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false);
 
     await initNotebox(baseUri);
 
     expect(existsMock).toHaveBeenNthCalledWith(1, `${baseUri}/.notebox`);
     expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/.notebox`);
-    expect(existsMock).toHaveBeenNthCalledWith(
-      2,
-      `${baseUri}/.notebox/settings.json`,
+    expect(existsMock).toHaveBeenNthCalledWith(2, `${baseUri}/.notebox/settings-shared.json`);
+    expect(existsMock).toHaveBeenNthCalledWith(3, `${baseUri}/.notebox/settings.json`);
+    expect(writeFileMock).toHaveBeenNthCalledWith(
+      1,
+      `${baseUri}/.notebox/settings-shared.json`,
+      '{\n' +
+        '  "displayName": "My Notebox",\n' +
+        '  "r2": {\n' +
+        '    "endpoint": "https://00000000000000000000000000000000.r2.cloudflarestorage.com",\n' +
+        '    "bucket": "mock-bucket",\n' +
+        '    "accessKeyId": "mock_access_key_id",\n' +
+        '    "secretAccessKey": "mock_secret_access_key"\n' +
+        '  }\n' +
+        '}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
     );
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/settings.json`,
-      '{\n  "displayName": "My Notebox"\n}\n',
+    expect(writeFileMock).toHaveBeenNthCalledWith(
+      2,
+      `${baseUri}/.notebox/settings-local.json`,
+      '{\n  "deviceName": "This device"\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );
   });
 
-  test('initNotebox skips writes when folder and file already exist', async () => {
-    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+  test('initNotebox skips writes when shared and local already exist', async () => {
+    existsMock
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
 
     await initNotebox(baseUri);
 
@@ -101,26 +122,46 @@ describe('noteboxStorage', () => {
   });
 
   test('parseNoteboxSettings throws when displayName is missing', () => {
-    expect(() => parseNoteboxSettings('{}')).toThrow('settings.json has an invalid structure.');
+    expect(() => parseNoteboxSettings('{}')).toThrow(
+      'settings-shared.json has an invalid structure.',
+    );
   });
 
-  test('readSettings parses settings.json content', async () => {
+  test('readSettings reads settings-shared.json and parses content', async () => {
+    existsMock.mockResolvedValueOnce(true);
     readFileMock.mockResolvedValueOnce('{"displayName":"Notebook A"}');
 
     await expect(readSettings(baseUri)).resolves.toEqual({
       displayName: 'Notebook A',
     });
     expect(readFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/settings.json`,
+      `${baseUri}/.notebox/settings-shared.json`,
       {encoding: 'utf8'},
     );
   });
 
-  test('writeSettings writes JSON to settings.json', async () => {
+  test('readSettings migrates legacy settings.json to shared when shared is absent', async () => {
+    existsMock
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    readFileMock.mockResolvedValueOnce('{"displayName":"From Legacy"}');
+    writeFileMock.mockResolvedValueOnce(undefined);
+
+    await expect(readSettings(baseUri)).resolves.toEqual({
+      displayName: 'From Legacy',
+    });
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/.notebox/settings-shared.json`,
+      '{\n  "displayName": "From Legacy"\n}\n',
+      {encoding: 'utf8', mimeType: 'application/json'},
+    );
+  });
+
+  test('writeSettings writes JSON to settings-shared.json', async () => {
     await writeSettings(baseUri, {displayName: 'Notebook B'});
 
     expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/.notebox/settings.json`,
+      `${baseUri}/.notebox/settings-shared.json`,
       '{\n  "displayName": "Notebook B"\n}\n',
       {encoding: 'utf8', mimeType: 'application/json'},
     );

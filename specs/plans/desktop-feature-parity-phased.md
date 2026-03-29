@@ -28,7 +28,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 | Area | Implemented behavior (summary) |
 | ---- | ------------------------------ |
 | **Setup** | SAF tree selection; initial route resolution; vault context |
-| **Settings** | Display name in `.notebox/settings.json`; change vault directory; navigation back to setup |
+| **Settings** | Display name in `.notebox/settings-shared.json`; change vault directory; navigation back to setup |
 | **Vault / “Log”** | Inbox list (`Inbox/`), refresh, **multi-select + delete**, open **NoteDetail**, title-from-H1, relative date labels, tile coloring |
 | **Entry / Add note** | Compose flow with markdown body, keyboard handling, save via shared vault compose helpers; integration with notes list refresh |
 | **Episodes / Podcasts** | Scan `General/` markdown; build **sectioned episode list**; **pull-to-refresh** triggers **native Kotlin RSS sync** (batch); **play episode** via Track Player; **mini player**; **mark played** / batch mark; optional **artwork** selection for mini player; **seek**; errors and loading states |

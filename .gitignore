@@ -84,3 +84,6 @@ yarn-error.log
 *.log
 
 .tmp/
+
+# Per-device vault settings (copy from settings-local.example.json locally)
+mock-vault/.notebox/settings-local.json

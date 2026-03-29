@@ -1,19 +1,26 @@
 import {
   buildInboxMarkdownIndexContent,
+  defaultNoteboxLocalSettings,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,
+  getLocalSettingsUri,
   getNoteboxDirectoryUri,
   getPlaylistUri,
-  getSettingsUri,
+  getSharedSettingsUri,
   initNoteboxVault,
   isSyncConflictFileName,
   isValidPlaylistEntry,
   MARKDOWN_EXTENSION,
   normalizeVaultBaseUri,
+  parseNoteboxLocalSettings,
   parseNoteboxSettings,
   pickNextInboxMarkdownFileName,
+  readVaultSharedSettingsRaw,
   sanitizeFileName,
+  serializeNoteboxLocalSettings,
+  serializeNoteboxSettings,
+  type NoteboxLocalSettings,
   type NoteboxSettings,
   type PlaylistEntry,
   type VaultFilesystem,
@@ -72,7 +79,7 @@ export async function readVaultSettings(
   fs: VaultFilesystem,
 ): Promise<NoteboxSettings> {
   const base = normalizeVaultBaseUri(root);
-  const raw = await fs.readFile(getSettingsUri(base), {encoding: 'utf8'});
+  const raw = await readVaultSharedSettingsRaw(base, fs);
   return parseNoteboxSettings(raw);
 }
 
@@ -82,9 +89,38 @@ export async function writeVaultSettings(
   settings: NoteboxSettings,
 ): Promise<void> {
   const base = normalizeVaultBaseUri(root);
-  const settingsUri = getSettingsUri(base);
-  const body = `${JSON.stringify(settings, null, 2)}\n`;
-  await fs.writeFile(settingsUri, body, {
+  const settingsUri = getSharedSettingsUri(base);
+  await fs.writeFile(settingsUri, serializeNoteboxSettings(settings), {
+    encoding: 'utf8',
+    mimeType: 'application/json',
+  });
+}
+
+export async function readVaultLocalSettings(
+  root: string,
+  fs: VaultFilesystem,
+): Promise<NoteboxLocalSettings> {
+  const base = normalizeVaultBaseUri(root);
+  const localUri = getLocalSettingsUri(base);
+  if (!(await fs.exists(localUri))) {
+    return defaultNoteboxLocalSettings;
+  }
+  const raw = await fs.readFile(localUri, {encoding: 'utf8'});
+  return parseNoteboxLocalSettings(raw);
+}
+
+export async function writeVaultLocalSettings(
+  root: string,
+  fs: VaultFilesystem,
+  settings: NoteboxLocalSettings,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const noteboxDir = getNoteboxDirectoryUri(base);
+  if (!(await fs.exists(noteboxDir))) {
+    await fs.mkdir(noteboxDir);
+  }
+  const localUri = getLocalSettingsUri(base);
+  await fs.writeFile(localUri, serializeNoteboxLocalSettings(settings), {
     encoding: 'utf8',
     mimeType: 'application/json',
   });

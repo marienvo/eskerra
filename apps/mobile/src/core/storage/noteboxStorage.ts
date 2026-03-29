@@ -3,19 +3,25 @@ import {
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,
+  getLocalSettingsUri,
   getNoteboxDirectoryUri,
   getPlaylistUri,
-  getSettingsUri,
+  getSharedSettingsUri,
   isSyncConflictFileName,
   isValidPlaylistEntry,
   MARKDOWN_EXTENSION,
+  defaultNoteboxLocalSettings,
   initNoteboxVault,
   normalizeVaultBaseUri,
+  parseNoteboxLocalSettings,
   parseNoteboxSettings,
   pickNextInboxMarkdownFileName,
+  readVaultSharedSettingsRaw,
   sanitizeFileName,
+  serializeNoteboxLocalSettings,
   serializeNoteboxSettings,
   serializePlaylistEntry,
+  type NoteboxLocalSettings,
   type NoteboxSettings,
   type PlaylistEntry,
 } from '@notebox/core';
@@ -161,9 +167,7 @@ export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
   }
 
   const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
-  const settingsUri = getSettingsUri(normalizedBaseUri);
-  const rawSettings = await vaultFs.readFile(settingsUri, {encoding: 'utf8'});
-
+  const rawSettings = await readVaultSharedSettingsRaw(normalizedBaseUri, vaultFs);
   return parseNoteboxSettings(rawSettings);
 }
 
@@ -178,9 +182,46 @@ export async function writeSettings(
   }
 
   const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
-  const settingsUri = getSettingsUri(normalizedBaseUri);
+  const settingsUri = getSharedSettingsUri(normalizedBaseUri);
 
   await vaultFs.writeFile(settingsUri, serializeNoteboxSettings(settings), {
+    encoding: 'utf8',
+    mimeType: 'application/json',
+  });
+}
+
+export async function readLocalSettings(baseUri: string): Promise<NoteboxLocalSettings> {
+  if (isDevMockVaultBaseUri(baseUri)) {
+    const devStorage = getDevStorage();
+    return devStorage.readLocalSettings(baseUri);
+  }
+
+  const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
+  const localUri = getLocalSettingsUri(normalizedBaseUri);
+  if (!(await vaultFs.exists(localUri))) {
+    return defaultNoteboxLocalSettings;
+  }
+  const raw = await vaultFs.readFile(localUri, {encoding: 'utf8'});
+  return parseNoteboxLocalSettings(raw);
+}
+
+export async function writeLocalSettings(
+  baseUri: string,
+  settings: NoteboxLocalSettings,
+): Promise<void> {
+  if (isDevMockVaultBaseUri(baseUri)) {
+    const devStorage = getDevStorage();
+    await devStorage.writeLocalSettings(baseUri, settings);
+    return;
+  }
+
+  const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
+  const noteboxDir = getNoteboxDirectoryUri(normalizedBaseUri);
+  if (!(await vaultFs.exists(noteboxDir))) {
+    await vaultFs.mkdir(noteboxDir);
+  }
+  const localUri = getLocalSettingsUri(normalizedBaseUri);
+  await vaultFs.writeFile(localUri, serializeNoteboxLocalSettings(settings), {
     encoding: 'utf8',
     mimeType: 'application/json',
   });
