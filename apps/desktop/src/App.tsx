@@ -51,7 +51,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const [mainTab, setMainTab] = useState<MainTab>('inbox');
+  const [mainTab, setMainTab] = useState<MainTab>('podcasts');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [addNoteOpen, setAddNoteOpen] = useState(false);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
@@ -287,11 +287,11 @@ export default function App() {
     });
   }, []);
 
-  const persistPodcastsLayouts = useCallback((next: {main: Layout; right: Layout}) => {
+  const persistPodcastsMainLayout = useCallback((layout: Layout) => {
     setLayouts(prev => {
-      const merged = {...prev, podcastsMain: next.main, podcastsRight: next.right};
-      void saveStoredLayouts(merged);
-      return merged;
+      const next = {...prev, podcastsMain: layout};
+      void saveStoredLayouts(next);
+      return next;
     });
   }, []);
 
@@ -356,8 +356,8 @@ export default function App() {
                 vaultRoot={vaultRoot}
                 fs={fs}
                 displayName={settingsName}
-                layouts={{main: layouts.podcastsMain, right: layouts.podcastsRight}}
-                onPodcastsLayoutsChange={persistPodcastsLayouts}
+                defaultMainLayout={layouts.podcastsMain}
+                onMainLayoutChanged={persistPodcastsMainLayout}
                 onError={setErr}
                 fsRefreshNonce={fsRefreshNonce}
               />

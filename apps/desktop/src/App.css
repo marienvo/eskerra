@@ -16,6 +16,21 @@
   overflow: hidden;
   background: var(--color-bg);
   color: var(--color-text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .window-title-bar {
@@ -26,8 +41,8 @@
   height: 44px;
   padding: 0.15rem 0.35rem 0.15rem 0.65rem;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-titlebar-border);
+  background: var(--color-titlebar-bg);
   user-select: none;
 }
 
@@ -63,8 +78,8 @@
   height: 2.25rem;
   padding: 0;
   border-radius: 8px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border: 1px solid var(--color-titlebar-border);
+  background: var(--color-titlebar-bg);
   color: var(--color-text);
   cursor: pointer;
   font-size: 1.1rem;
@@ -170,6 +185,11 @@
 .rail-tab:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--color-text);
+  font-weight: 600;
+}
+
+.rail-tab:focus-visible {
+  font-weight: 600;
 }
 
 .rail-tab.active {
@@ -236,7 +256,7 @@
 }
 
 .panel-surface.inner {
-  background: #fafbfc;
+  background: var(--color-editor-bg);
 }
 
 .panel-nested {
@@ -262,7 +282,7 @@
   gap: 0.5rem;
   padding: 0.45rem 0.6rem;
   border-bottom: 1px solid var(--color-border);
-  background: #fafbfc;
+  background: var(--color-editor-bg);
 }
 
 .pane-title {
@@ -283,8 +303,8 @@
 }
 
 .episodes-refresh-strip--active {
-  background-color: rgba(79, 175, 230, 0.12);
-  border-bottom-color: rgba(79, 175, 230, 0.35);
+  background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
 }
 
 .episodes-refresh-strip__segment {
@@ -293,7 +313,7 @@
   left: 0;
   height: 100%;
   width: 38%;
-  background-color: #4fafe6;
+  background-color: var(--color-accent);
   animation: episodes-refresh-strip-sweep 1.2s ease-in-out infinite alternate;
 }
 
@@ -337,12 +357,17 @@
   font: inherit;
 }
 
+.note-list button,
 .note-list button:hover {
-  background: #eef1f5;
+  font-weight: 400;
+}
+
+.note-list button:hover {
+  background: var(--color-row-hover);
 }
 
 .note-list button.active {
-  background: #d8eefc;
+  background: var(--color-accent-subtle-bg);
 }
 
 .panel-surface textarea {
@@ -354,7 +379,8 @@
   border: none;
   border-radius: 0;
   resize: none;
-  background: var(--color-surface);
+  background: var(--color-editor-bg);
+  color: var(--color-editor-text);
 }
 
 .panel-surface .editor {
@@ -401,7 +427,7 @@ button {
   padding: 0.45rem 0.75rem;
   border-radius: 6px;
   border: 1px solid var(--color-border);
-  background: #f5f6f8;
+  background: var(--color-button-secondary-bg);
   color: var(--color-text);
   cursor: pointer;
   font: inherit;
@@ -410,7 +436,7 @@ button {
 button.primary {
   background: var(--color-primary);
   border-color: var(--color-primary-border);
-  color: #0a0a0a;
+  color: var(--color-primary-fg);
 }
 
 button.ghost {
@@ -469,7 +495,11 @@ button:disabled {
 }
 
 .episode-row:hover {
-  background: #eef1f5;
+  background: var(--color-row-hover);
+}
+
+.episode-row:hover .ep-title {
+  font-weight: 500;
 }
 
 .ep-date {
@@ -490,7 +520,7 @@ button:disabled {
 
 .player-chrome {
   padding: 0.5rem 0.6rem 0.75rem;
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -591,4 +621,90 @@ button:disabled {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+/* Capture (inbox): warm panels, not pure white */
+.inbox-root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-app-surface='capture'] .panel-surface {
+  background: var(--color-capture-panel);
+}
+
+[data-app-surface='capture'] .pane-header {
+  background: var(--color-capture-chrome);
+  border-bottom-color: var(--color-capture-border);
+}
+
+[data-app-surface='capture'] .pane-footer {
+  background: var(--color-capture-chrome);
+  border-top-color: var(--color-capture-border);
+}
+
+/* Consume (podcasts / news): scoped mental space; see specs/design/design-system-calm-editorial.md */
+.consume-root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-app-surface='consume'] {
+  --color-surface: var(--color-consume-surface);
+  --color-border: var(--color-consume-border);
+  --color-text: var(--color-consume-text);
+  --color-muted: var(--color-consume-muted);
+  --color-row-hover: var(--color-consume-hover);
+  --color-editor-bg: var(--color-consume-inner);
+}
+
+[data-app-surface='consume'] .pane-header {
+  background: var(--color-consume-chrome);
+}
+
+.podcasts-right-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.podcasts-right-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.podcasts-player {
+  flex: 0 0 auto;
+}
+
+.podcasts-playlist {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--color-border);
+}
+
+.podcasts-playlist .playlist-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
 }

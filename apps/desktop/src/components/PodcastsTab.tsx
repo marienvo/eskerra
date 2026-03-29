@@ -14,8 +14,8 @@ type PodcastsTabProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
   displayName: string;
-  layouts: {main: Layout; right: Layout};
-  onPodcastsLayoutsChange: (next: {main: Layout; right: Layout}) => void;
+  defaultMainLayout: Layout;
+  onMainLayoutChanged: (layout: Layout) => void;
   onError: (msg: string | null) => void;
   /** Increments when the filesystem watcher reports changes; triggers a rescan. */
   fsRefreshNonce: number;
@@ -35,8 +35,8 @@ export function PodcastsTab({
   vaultRoot,
   fs,
   displayName,
-  layouts,
-  onPodcastsLayoutsChange,
+  defaultMainLayout,
+  onMainLayoutChanged,
   onError,
   fsRefreshNonce,
 }: PodcastsTabProps) {
@@ -207,119 +207,111 @@ export function PodcastsTab({
   };
 
   const onMainLayout = (layout: Layout) => {
-    onPodcastsLayoutsChange({main: layout, right: layouts.right});
-  };
-
-  const onRightLayout = (layout: Layout) => {
-    onPodcastsLayoutsChange({main: layouts.main, right: layout});
+    onMainLayoutChanged(layout);
   };
 
   return (
-    <Group
-      className="panel-group fill"
-      orientation="horizontal"
-      defaultLayout={layouts.main}
-      onLayoutChanged={onMainLayout}
-    >
-      <Panel id="episodes" className="panel-surface" minSize={20} defaultSize="38%">
-        <div className="pane-header">
-          <span className="pane-title">Episodes</span>
-        </div>
-        <div
-          className={
-            episodesRefreshVisible ? 'episodes-refresh-strip episodes-refresh-strip--active' : 'episodes-refresh-strip'
-          }
-          aria-hidden
-        >
-          {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
-        </div>
-        <div className="episode-scroll">
-          {sections.map(section => (
-            <section key={section.title} className="episode-section">
-              <h3 className="section-heading">{section.title}</h3>
-              <ul className="episode-list">
-                {section.episodes.map(ep => (
-                  <li key={ep.id}>
-                    <button type="button" className="episode-row" onClick={() => void playEpisode(ep)}>
-                      <span className="ep-date">{ep.date}</span>
-                      <span className="ep-title">{ep.title}</span>
-                      <span className="ep-series muted small">{ep.seriesName}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+    <div className="consume-root" data-app-surface="consume">
+      <Group
+        className="panel-group fill"
+        orientation="horizontal"
+        defaultLayout={defaultMainLayout}
+        onLayoutChanged={onMainLayout}
+      >
+        <Panel id="episodes" className="panel-surface" minSize={20} defaultSize="38%">
+          <div className="pane-header">
+            <span className="pane-title">Episodes</span>
+          </div>
+          <div
+            className={
+              episodesRefreshVisible ? 'episodes-refresh-strip episodes-refresh-strip--active' : 'episodes-refresh-strip'
+            }
+            aria-hidden
+          >
+            {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
+          </div>
+          <div className="episode-scroll">
+            {sections.map(section => (
+              <section key={section.title} className="episode-section">
+                <h3 className="section-heading">{section.title}</h3>
+                <ul className="episode-list">
+                  {section.episodes.map(ep => (
+                    <li key={ep.id}>
+                      <button type="button" className="episode-row" onClick={() => void playEpisode(ep)}>
+                        <span className="ep-date">{ep.date}</span>
+                        <span className="ep-title">{ep.title}</span>
+                        <span className="ep-series muted small">{ep.seriesName}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {!loading && sections.length === 0 ? (
+              <p className="muted empty-hint">No episodes found in vault General/ podcast markdown.</p>
+            ) : null}
+          </div>
+        </Panel>
+        <Separator className="resize-sep" />
+        <Panel id="rightCol" className="panel-nested podcasts-right-col" minSize={35} defaultSize="62%">
+          <div className="podcasts-right-stack">
+            <section className="podcasts-player panel-surface" aria-label="Player">
+              <div className="pane-header">
+                <span className="pane-title">Player</span>
+                <span className="muted small">{playerLabel}</span>
+              </div>
+              <div className="player-chrome">
+                <p className="now-line">
+                  {activeEpisode ? (
+                    <>
+                      <strong>{activeEpisode.title}</strong>
+                      <span className="muted small"> — {activeEpisode.seriesName}</span>
+                    </>
+                  ) : (
+                    <span className="muted">Nothing playing</span>
+                  )}
+                </p>
+                <p className="muted small">
+                  {formatMs(positionMs)} / {formatMs(durationMs)}
+                </p>
+                <div className="row tight">
+                  <button type="button" className="primary" onClick={() => void togglePause()}>
+                    Play / pause
+                  </button>
+                </div>
+              </div>
             </section>
-          ))}
-          {!loading && sections.length === 0 ? (
-            <p className="muted empty-hint">No episodes found in vault General/ podcast markdown.</p>
-          ) : null}
-        </div>
-      </Panel>
-      <Separator className="resize-sep" />
-      <Panel id="rightCol" className="panel-surface panel-nested" minSize={35} defaultSize="62%">
-        <Group
-          className="panel-group fill-vertical"
-          orientation="vertical"
-          defaultLayout={layouts.right}
-          onLayoutChanged={onRightLayout}
-        >
-          <Panel id="player" className="panel-surface inner" minSize={18} defaultSize="28%">
-            <div className="pane-header">
-              <span className="pane-title">Player</span>
-              <span className="muted small">{playerLabel}</span>
-            </div>
-            <div className="player-chrome">
-              <p className="now-line">
-                {activeEpisode ? (
-                  <>
-                    <strong>{activeEpisode.title}</strong>
-                    <span className="muted small"> — {activeEpisode.seriesName}</span>
-                  </>
+            <section className="podcasts-playlist panel-surface" aria-label="Playlist">
+              <div className="pane-header">
+                <span className="pane-title">Playlist</span>
+              </div>
+              <div className="playlist-body">
+                <p className="muted small">
+                  Resume pointer and playback state sync to <code>.notebox/playlist.json</code> for cross-device
+                  resume.
+                </p>
+                {playlistFile ? (
+                  <dl className="playlist-dl">
+                    <dt>Episode ID</dt>
+                    <dd className="mono small">{playlistFile.episodeId}</dd>
+                    <dt>MP3 URL</dt>
+                    <dd className="mono small wrap">{playlistFile.mp3Url}</dd>
+                    <dt>Position</dt>
+                    <dd>{formatMs(playlistFile.positionMs)}</dd>
+                    <dt>Duration</dt>
+                    <dd>{playlistFile.durationMs === null ? '—' : formatMs(playlistFile.durationMs)}</dd>
+                  </dl>
                 ) : (
-                  <span className="muted">Nothing playing</span>
+                  <p className="muted">No playlist entry yet. Play an episode to create one.</p>
                 )}
-              </p>
-              <p className="muted small">
-                {formatMs(positionMs)} / {formatMs(durationMs)}
-              </p>
-              <div className="row tight">
-                <button type="button" className="primary" onClick={() => void togglePause()}>
-                  Play / pause
+                <button type="button" onClick={() => void resumeFromVault()}>
+                  Resume from vault playlist
                 </button>
               </div>
-            </div>
-          </Panel>
-          <Separator className="resize-sep" />
-          <Panel id="playlist" className="panel-surface inner" minSize={22} defaultSize="72%">
-            <div className="pane-header">
-              <span className="pane-title">Playlist</span>
-            </div>
-            <div className="playlist-body">
-              <p className="muted small">
-                Resume pointer and playback state sync to <code>.notebox/playlist.json</code> for cross-device
-                resume.
-              </p>
-              {playlistFile ? (
-                <dl className="playlist-dl">
-                  <dt>Episode ID</dt>
-                  <dd className="mono small">{playlistFile.episodeId}</dd>
-                  <dt>MP3 URL</dt>
-                  <dd className="mono small wrap">{playlistFile.mp3Url}</dd>
-                  <dt>Position</dt>
-                  <dd>{formatMs(playlistFile.positionMs)}</dd>
-                  <dt>Duration</dt>
-                  <dd>{playlistFile.durationMs === null ? '—' : formatMs(playlistFile.durationMs)}</dd>
-                </dl>
-              ) : (
-                <p className="muted">No playlist entry yet. Play an episode to create one.</p>
-              )}
-              <button type="button" onClick={() => void resumeFromVault()}>
-                Resume from vault playlist
-              </button>
-            </div>
-          </Panel>
-        </Group>
-      </Panel>
-    </Group>
+            </section>
+          </div>
+        </Panel>
+      </Group>
+    </div>
   );
 }

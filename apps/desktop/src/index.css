@@ -1,54 +1,86 @@
-:root {
+/* Calm Editorial Blue — see specs/design/design-system-calm-editorial.md. Light only; no prefers-color-scheme until dark is a product feature. */
+html {
   color-scheme: light;
+}
+
+:root {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.45;
-  --color-bg: #f0f2f5;
+  /* Foundation */
+  --color-bg: #f7f6f3;
   --color-surface: #ffffff;
-  --color-text: #121212;
-  --color-muted: #5c5c5c;
-  --color-border: #c8ccd4;
+  --color-text: #111111;
+  --color-muted: #6b6b6b;
+  --color-border: #e5e3df;
+  /* Accent */
+  --color-accent: #4fafe6;
   --color-primary: #4fafe6;
-  --color-primary-border: #3aa3d8;
-  --color-error: #b00020;
-  --color-rail: #e8eaef;
+  --color-primary-border: #3a97cc;
+  --color-primary-fg: #111111;
+  --color-accent-subtle-bg: #eaf6fd;
+  /* Editor */
+  --color-editor-bg: #f7f6f3;
+  --color-editor-text: #111111;
+  /* Chrome (warm editorial; title bar aligns with consume chrome) */
+  --color-rail: #eeece8;
+  --color-titlebar-bg: #c4bfb8;
+  --color-titlebar-border: #a8a39a;
   --color-titlebar-hover: rgba(0, 0, 0, 0.08);
+  /* Capture (inbox): panels warmer than pure white */
+  --color-capture-panel: #f3f1ed;
+  --color-capture-chrome: #ebe9e4;
+  --color-capture-border: #dedbd6;
   --color-titlebar-close-hover: #e53935;
   --color-titlebar-close-fg: #ffffff;
-  --color-error-banner-bg: #ffebee;
-  --color-error-banner-border: #ffcdd2;
+  /* Danger / errors (sober; not semanticRecording) */
+  --color-danger: #9e3a3a;
+  --color-error: #9e3a3a;
+  --color-error-banner-bg: #fdedec;
+  --color-error-banner-border: #e8c4c4;
+  /* Semantic (use when UI has the state; see spec) */
+  --color-semantic-recording: #e35d5d;
+  --color-semantic-success: #5faf7a;
+  --color-semantic-warning: #d9a441;
+  --color-semantic-draft: #6b6b6b;
+  /* Focus */
+  --color-focus-ring: #4fafe6;
+  /* Consume surface (scoped under [data-app-surface='consume']) */
+  --color-consume-surface: #f2f0ec;
+  --color-consume-inner: #ebe8e3;
+  --color-consume-border: #d4d1cb;
+  --color-consume-hover: #e3dfd8;
+  --color-consume-chrome: #e6e3de;
+  --color-consume-text: #0d0d0d;
+  --color-consume-muted: #5a5a5a;
+  /* Capture: list/button hover (warm neutral) */
+  --color-row-hover: #e8e6e2;
+  --color-button-secondary-bg: #efede9;
   color: var(--color-text);
   background: var(--color-bg);
   text-rendering: optimizeLegibility;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --color-bg: #242424;
-    --color-surface: #303030;
-    --color-text: #f2f2f2;
-    --color-muted: #a8a8a8;
-    --color-border: #454545;
-    --color-primary: #5eb8e8;
-    --color-primary-border: #4aa3d4;
-    --color-error: #ff8a80;
-    --color-rail: #2c2c2c;
-    --color-titlebar-hover: rgba(255, 255, 255, 0.1);
-    --color-titlebar-close-hover: #c62828;
-    --color-titlebar-close-fg: #ffffff;
-    --color-error-banner-bg: #3d2020;
-    --color-error-banner-border: #5c3030;
-  }
 }
 
 body {
   margin: 0;
   color: var(--color-text);
   background: var(--color-bg);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 #root {
   min-height: 100vh;
+}
+
+input,
+textarea,
+code,
+[contenteditable='true'],
+[role='alert'],
+.error-banner,
+.mono.wrap {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 button,

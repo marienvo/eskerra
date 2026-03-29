@@ -7,19 +7,15 @@ const KEY = 'layoutPanelsV3';
 export type StoredLayouts = {
   inbox: Layout;
   podcastsMain: Layout;
-  podcastsRight: Layout;
 };
 
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {editor: 70, files: 30},
   podcastsMain: {episodes: 38, rightCol: 62},
-  podcastsRight: {player: 28, playlist: 72},
 };
 
 const INBOX_IDS = ['files', 'editor'] as const;
 const PODCASTS_MAIN_IDS = ['episodes', 'rightCol'] as const;
-const PODCASTS_RIGHT_IDS = ['player', 'playlist'] as const;
-
 function sanitizeLayout(
   layout: Layout | undefined,
   requiredIds: readonly string[],
@@ -58,7 +54,6 @@ export async function loadStoredLayouts(): Promise<StoredLayouts> {
     return {
       inbox: sanitizeLayout(o.inbox, INBOX_IDS, DEFAULT_LAYOUTS.inbox),
       podcastsMain: sanitizeLayout(o.podcastsMain, PODCASTS_MAIN_IDS, DEFAULT_LAYOUTS.podcastsMain),
-      podcastsRight: sanitizeLayout(o.podcastsRight, PODCASTS_RIGHT_IDS, DEFAULT_LAYOUTS.podcastsRight),
     };
   } catch {
     return DEFAULT_LAYOUTS;
