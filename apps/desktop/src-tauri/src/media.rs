@@ -34,7 +34,7 @@ pub fn init_media_session(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     {
         let config = PlatformConfig {
             dbus_name: "com_notebox_desktop",
-            display_name: "Notebox",
+            display_name: "Eskerra",
             hwnd: None,
         };
         let mut controls = MediaControls::new(config).map_err(souvlaki_io)?;

@@ -1,6 +1,6 @@
 {
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "notebox-desktop",
+  "productName": "Eskerra",
   "version": "0.1.0",
   "identifier": "com.notebox.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Notebox",
+        "title": "Eskerra",
         "width": 800,
         "height": 600,
         "minWidth": 520,
