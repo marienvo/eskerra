@@ -1,0 +1,248 @@
+import {
+  getGeneralDirectoryUri,
+  MARKDOWN_EXTENSION,
+  normalizeVaultBaseUri,
+} from '@notebox/core';
+import type {VaultFilesystem} from '@notebox/core';
+
+import {
+  filterPodcastRelevantGeneralMarkdownFiles,
+  splitPodcastAndRssMarkdownFiles,
+} from './generalIndex';
+import {
+  loadPersistedPodcastMarkdownIndex,
+  savePersistedPodcastMarkdownIndex,
+} from './podcastMarkdownIndexStore';
+import {groupBySection, isPodcastFile, parsePodcastFile} from './podcastParser';
+import type {PodcastEpisode, PodcastSection, RootMarkdownFile} from './podcastTypes';
+import {extractRssFeedUrl, extractRssPodcastTitle} from './rssParser';
+import {
+  hydrateRssFeedUrlCacheFromStore,
+  persistRssFeedUrl,
+  resolveCachedRssFeedUrl,
+} from './rssFeedUrlCacheDesktop';
+
+export type RefreshPodcastsOptions = {
+  forceFullScan?: boolean;
+};
+
+type FileContentCacheEntry = {lastModified: number; content: string};
+const fileContentCache = new Map<string, FileContentCacheEntry>();
+
+export function clearPodcastMarkdownFileContentCache(): void {
+  fileContentCache.clear();
+}
+
+async function readMarkdownWithSessionCache(
+  file: RootMarkdownFile,
+  fs: VaultFilesystem,
+): Promise<{content: string; file: RootMarkdownFile}> {
+  const lastModified = file.lastModified ?? -1;
+  const cached = fileContentCache.get(file.uri);
+  if (cached && lastModified > 0 && cached.lastModified === lastModified) {
+    return {content: cached.content, file};
+  }
+  const content = await fs.readFile(file.uri, {encoding: 'utf8'});
+  if (lastModified > 0) {
+    fileContentCache.set(file.uri, {lastModified, content});
+  }
+  return {content, file};
+}
+
+export function enrichEpisodesWithCachedRss(
+  baseUri: string,
+  episodes: PodcastEpisode[],
+): PodcastEpisode[] {
+  return episodes.map(episode => ({
+    ...episode,
+    rssFeedUrl:
+      episode.rssFeedUrl ??
+      resolveCachedRssFeedUrl(baseUri, episode.seriesName) ??
+      resolveCachedRssFeedUrl(baseUri, episode.sectionTitle),
+  }));
+}
+
+export function createSectionsWithRss(
+  baseUri: string,
+  episodes: PodcastEpisode[],
+): PodcastSection[] {
+  return groupBySection(episodes.filter(episode => !episode.isListened)).map(section => {
+    const rssFeedUrl =
+      section.episodes.find(episode => episode.rssFeedUrl)?.rssFeedUrl ??
+      resolveCachedRssFeedUrl(baseUri, section.title);
+
+    return {
+      ...section,
+      rssFeedUrl,
+    };
+  });
+}
+
+async function listGeneralMarkdownFiles(
+  baseUri: string,
+  fs: VaultFilesystem,
+): Promise<RootMarkdownFile[]> {
+  const general = getGeneralDirectoryUri(normalizeVaultBaseUri(baseUri));
+  if (!(await fs.exists(general))) {
+    return [];
+  }
+  const rows = await fs.listFiles(general);
+  return rows
+    .filter(
+      r =>
+        (r.type === 'file' || r.type === undefined) && r.name.endsWith(MARKDOWN_EXTENSION),
+    )
+    .map(r => ({
+      lastModified: r.lastModified,
+      name: r.name,
+      uri: r.uri,
+    }));
+}
+
+export async function buildPodcastSectionsFromPodcastMarkdownFiles(
+  baseUri: string,
+  podcastFiles: RootMarkdownFile[],
+  fs: VaultFilesystem,
+): Promise<{
+  nextAllEpisodes: PodcastEpisode[];
+  nextSections: PodcastSection[];
+}> {
+  const contentsByFile = await Promise.all(
+    podcastFiles.map(file => readMarkdownWithSessionCache(file, fs)),
+  );
+
+  const legacyEpisodes: PodcastEpisode[] = [];
+
+  for (const {content, file} of contentsByFile) {
+    if (isPodcastFile(file.name)) {
+      legacyEpisodes.push(...parsePodcastFile(file.name, content));
+    }
+  }
+
+  const legacyEpisodesWithRss = enrichEpisodesWithCachedRss(baseUri, legacyEpisodes);
+
+  const dedupedEpisodes = new Map<string, PodcastEpisode>();
+  for (const episode of legacyEpisodesWithRss) {
+    if (!dedupedEpisodes.has(episode.id)) {
+      dedupedEpisodes.set(episode.id, episode);
+    }
+  }
+
+  const nextAllEpisodes = Array.from(dedupedEpisodes.values()).sort((left, right) =>
+    right.date.localeCompare(left.date),
+  );
+  const nextSections = createSectionsWithRss(baseUri, nextAllEpisodes);
+
+  return {nextAllEpisodes, nextSections};
+}
+
+export type PodcastPhase1DesktopResult = {
+  allEpisodes: PodcastEpisode[];
+  didFullVaultListingThisRefresh: boolean;
+  error: string | null;
+  podcastRelevantFiles: RootMarkdownFile[];
+  rssFeedFiles: RootMarkdownFile[];
+  sections: PodcastSection[];
+};
+
+async function runRssMarkdownEnrichment(
+  baseUri: string,
+  renderedEpisodes: PodcastEpisode[],
+  rssFeedFiles: RootMarkdownFile[],
+  fs: VaultFilesystem,
+): Promise<{episodes: PodcastEpisode[]; sections: PodcastSection[]}> {
+  if (rssFeedFiles.length === 0) {
+    return {episodes: renderedEpisodes, sections: createSectionsWithRss(baseUri, renderedEpisodes)};
+  }
+
+  const rssContentsByFile = await Promise.all(
+    rssFeedFiles.map(file => readMarkdownWithSessionCache(file, fs)),
+  );
+
+  for (const {content, file} of rssContentsByFile) {
+    const rssFeedUrl = extractRssFeedUrl(content);
+    if (!rssFeedUrl) {
+      continue;
+    }
+    const sectionTitle = extractRssPodcastTitle(file.name, content);
+    persistRssFeedUrl(baseUri, sectionTitle, rssFeedUrl);
+  }
+
+  const enrichedEpisodes = enrichEpisodesWithCachedRss(baseUri, renderedEpisodes);
+  return {
+    episodes: enrichedEpisodes,
+    sections: createSectionsWithRss(baseUri, enrichedEpisodes),
+  };
+}
+
+export async function runPodcastPhase1Desktop(
+  baseUri: string,
+  fs: VaultFilesystem,
+  options?: RefreshPodcastsOptions,
+): Promise<PodcastPhase1DesktopResult> {
+  const forceFullScan = options?.forceFullScan ?? false;
+
+  let rssFeedFiles: RootMarkdownFile[] = [];
+
+  try {
+    await hydrateRssFeedUrlCacheFromStore(baseUri);
+
+    let podcastRelevantFiles: RootMarkdownFile[];
+    let didFullVaultListingThisRefresh = false;
+
+    if (!forceFullScan) {
+      const persisted = await loadPersistedPodcastMarkdownIndex(baseUri);
+      if (persisted !== null) {
+        podcastRelevantFiles = persisted;
+      } else {
+        const full = await listGeneralMarkdownFiles(baseUri, fs);
+        podcastRelevantFiles = filterPodcastRelevantGeneralMarkdownFiles(full);
+        await savePersistedPodcastMarkdownIndex(baseUri, podcastRelevantFiles);
+        didFullVaultListingThisRefresh = true;
+      }
+    } else {
+      const full = await listGeneralMarkdownFiles(baseUri, fs);
+      podcastRelevantFiles = filterPodcastRelevantGeneralMarkdownFiles(full);
+      await savePersistedPodcastMarkdownIndex(baseUri, podcastRelevantFiles);
+      didFullVaultListingThisRefresh = true;
+    }
+
+    const {podcastFiles, rssFeedFiles: rssMarkdownFiles} =
+      splitPodcastAndRssMarkdownFiles(podcastRelevantFiles);
+    rssFeedFiles = rssMarkdownFiles;
+
+    let {nextAllEpisodes, nextSections} = await buildPodcastSectionsFromPodcastMarkdownFiles(
+      baseUri,
+      podcastFiles,
+      fs,
+    );
+
+    const enriched = await runRssMarkdownEnrichment(
+      baseUri,
+      nextAllEpisodes,
+      rssFeedFiles,
+      fs,
+    );
+    nextAllEpisodes = enriched.episodes;
+    nextSections = enriched.sections;
+
+    return {
+      allEpisodes: nextAllEpisodes,
+      didFullVaultListingThisRefresh,
+      error: null,
+      podcastRelevantFiles,
+      rssFeedFiles,
+      sections: nextSections,
+    };
+  } catch (loadError) {
+    const fallbackMessage = 'Could not load podcasts from vault.';
+    return {
+      allEpisodes: [],
+      didFullVaultListingThisRefresh: false,
+      error: loadError instanceof Error ? loadError.message : fallbackMessage,
+      podcastRelevantFiles: [],
+      rssFeedFiles: [],
+      sections: [],
+    };
+  }
+}

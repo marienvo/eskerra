@@ -1,9 +1,11 @@
 # Accent colors
 
-## App accent
+The app **accent** is a single intentional blue. Full palette, semantics, and rules live in **[design-system-calm-editorial.md](design-system-calm-editorial.md)**.
 
-- **Primary accent (interactive highlights, progress, key emphasis):** `#4FAFE6`.
+## App accent (token: `accent`)
 
-Use this hex for all **accent** UI: progress indicators, primary decorative emphasis on dark surfaces, and other “brand accent” elements unless a feature spec calls for a deliberate exception (accessibility contrast overrides still apply).
+- **Hex:** `#4FAFE6`
 
-Implementation should reference this value consistently (shared constant or theme) so future palette tweaks stay centralized.
+Use for primary interactive emphasis, progress that reflects real work (not decoration), and key navigation highlights. **Do not** sprinkle accent on every list row—follow the 60-30-10 rule in the design system.
+
+Implementation should reference this value via **shared tokens** (CSS custom properties on desktop, shared constants on mobile) so future tweaks stay centralized.

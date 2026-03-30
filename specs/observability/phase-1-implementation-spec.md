@@ -326,15 +326,15 @@ Order respects dependencies: **observability core → init → navigation → bo
 | 2 | **`src/core/observability/`** (new) | `initSentry.ts`, `breadcrumbs.ts`, `ringBuffer.ts`, `types.ts` — **single API** `appBreadcrumb()`, `reportUnexpectedError()`. |
 | 3 | [`index.js`](index.js) | Initialize Sentry **immediately** after polyfills / `gesture-handler`, **before** `App` import if required by SDK; keep `TrackPlayer` registration order valid. |
 | 4 | [`App.tsx`](App.tsx) | Wrap bootstrap: breadcrumbs; single `captureException` for bootstrap failure; optional ErrorBoundary **if** minimal (defer boundary to sub-release if risky). |
-| 5 | [`src/core/bootstrap/resolveInitialRoute.ts`](src/core/bootstrap/resolveInitialRoute.ts) | Bootstrap breadcrumbs only. |
-| 6 | [`src/navigation/RootNavigator.tsx`](src/navigation/RootNavigator.tsx) | `NavigationContainer` + Sentry integration; `onReady` optional. |
-| 7 | [`src/core/vault/VaultContext.tsx`](src/core/vault/VaultContext.tsx) | Vault restore breadcrumbs + non-fatal on failure. |
-| 8 | [`src/core/storage/noteboxStorage.ts`](src/core/storage/noteboxStorage.ts) | Selected function boundaries: breadcrumbs + failures. |
-| 9 | [`src/features/vault/hooks/useNotes.ts`](src/features/vault/hooks/useNotes.ts) or note read path | Note load breadcrumbs (if cleaner than screen-only). |
-| 10 | [`src/features/vault/screens/NoteDetailScreen.tsx`](src/features/vault/screens/NoteDetailScreen.tsx) | Note load lifecycle breadcrumbs. |
-| 11 | [`src/features/podcasts/hooks/usePodcasts.ts`](src/features/podcasts/hooks/usePodcasts.ts) | Refresh breadcrumbs + non-fatal. |
-| 12 | [`src/features/podcasts/services/rssArtwork.ts`](src/features/podcasts/services/rssArtwork.ts) | RSS fetch breadcrumb wrapper at `fetchRssArtworkUrl`. |
-| 13 | [`src/features/podcasts/services/playbackService.ts`](src/features/podcasts/services/playbackService.ts) | Remote event breadcrumbs; selective non-fatal. |
+| 5 | [`src/core/bootstrap/resolveInitialRoute.ts`](../../apps/mobile/src/core/bootstrap/resolveInitialRoute.ts) | Bootstrap breadcrumbs only. |
+| 6 | [`src/navigation/RootNavigator.tsx`](../../apps/mobile/src/navigation/RootNavigator.tsx) | `NavigationContainer` + Sentry integration; `onReady` optional. |
+| 7 | [`src/core/vault/VaultContext.tsx`](../../apps/mobile/src/core/vault/VaultContext.tsx) | Vault restore breadcrumbs + non-fatal on failure. |
+| 8 | [`src/core/storage/noteboxStorage.ts`](../../apps/mobile/src/core/storage/noteboxStorage.ts) | Selected function boundaries: breadcrumbs + failures. |
+| 9 | [`src/features/vault/hooks/useNotes.ts`](../../apps/mobile/src/features/vault/hooks/useNotes.ts) or note read path | Note load breadcrumbs (if cleaner than screen-only). |
+| 10 | [`src/features/vault/screens/NoteDetailScreen.tsx`](../../apps/mobile/src/features/vault/screens/NoteDetailScreen.tsx) | Note load lifecycle breadcrumbs. |
+| 11 | [`src/features/podcasts/hooks/usePodcasts.ts`](../../apps/mobile/src/features/podcasts/hooks/usePodcasts.ts) | Refresh breadcrumbs + non-fatal. |
+| 12 | [`src/features/podcasts/services/rssArtwork.ts`](../../apps/mobile/src/features/podcasts/services/rssArtwork.ts) | RSS fetch breadcrumb wrapper at `fetchRssArtworkUrl`. |
+| 13 | [`src/features/podcasts/services/playbackService.ts`](../../apps/mobile/src/features/podcasts/services/playbackService.ts) | Remote event breadcrumbs; selective non-fatal. |
 
 **Dependencies:** `core/observability` has **no** imports from features. Features import observability. `index.js` depends on observability init. Navigation depends on observability after init.
 

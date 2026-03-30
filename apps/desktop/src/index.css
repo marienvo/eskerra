@@ -1,0 +1,132 @@
+/* Calm Editorial Blue — see specs/design/design-system-calm-editorial.md.
+   Desktop brand: specs/design/brand-tokens-desktop.md.
+   Typography / WebKit: see specs/design/desktop-text-rendering.md (body uses text-rendering: auto). */
+html {
+  color-scheme: light;
+}
+
+:root {
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.45;
+
+  /* Brand (desktop) — see specs/design/brand-tokens-desktop.md */
+  /* Shell: soft gray; panels use bright surface (inverted vs. earlier soft-white shell + gray panels). */
+  --color-brand-bg: #f2f2f2;
+  --color-brand-surface-bright: #ffffff;
+  --color-interactive-text: rgb(203, 77, 73);
+
+  /* Foundation — app shell uses soft gray; panels use white surfaces */
+  --color-bg: var(--color-brand-bg);
+  --color-surface: #ffffff;
+  --color-text: #111418;
+  --color-muted: #66707a;
+  --color-border: #e2e0e0;
+  --color-border-soft: color-mix(in srgb, var(--color-text) 8%, transparent);
+
+  /* Accent (controls, primary actions — not the same as interactive text) */
+  --color-accent: #4fafe6;
+  --color-primary: #4fafe6;
+  --color-primary-border: #338fc4;
+  --color-primary-fg: #0f1418;
+  --color-accent-subtle-bg: #e8f5fc;
+
+  /* Editor */
+  --color-editor-bg: #ffffff;
+  --color-editor-text: #111418;
+
+  /* Window chrome (frameless webview edge) */
+  --color-window-border: #1a1c1e;
+
+  /* Chrome (rail strip uses shell background — no separate rail fill) */
+  --color-rail: var(--color-brand-bg);
+  --color-titlebar-bg: #e0e0e2;
+  --color-titlebar-border: #d0d0d0;
+  --color-titlebar-hover: rgba(17, 20, 24, 0.06);
+
+  /* Capture */
+  --color-capture-panel: #ffffff;
+  /* Pane title bars / footers: darker gray than white panel body */
+  --color-pane-chrome: #e6e6e6;
+  --color-capture-chrome: var(--color-pane-chrome);
+  --color-capture-border: #d6d6d6;
+
+  --color-titlebar-close-hover: #e53935;
+  --color-titlebar-close-fg: #ffffff;
+
+  /* Danger / errors */
+  --color-danger: #a23f3f;
+  --color-error: #a23f3f;
+  --color-error-banner-bg: #fdeeee;
+  --color-error-banner-border: #ebcaca;
+
+  /* Semantic */
+  --color-semantic-recording: #e35d5d;
+  --color-semantic-success: #5faf7a;
+  --color-semantic-warning: #d9a441;
+  --color-semantic-draft: #6f7780;
+
+  /* Focus */
+  --color-focus-ring: #4fafe6;
+
+  /* Consume surface */
+  --color-consume-surface: #ffffff;
+  --color-consume-inner: #f7f7f7;
+  --color-consume-border: #d8d8d8;
+  --color-consume-hover: #e4e4e4;
+  --color-consume-chrome: var(--color-pane-chrome);
+  --color-consume-text: #0f1418;
+  --color-consume-muted: #5d6873;
+
+  /* Capture: list/button hover */
+  --color-row-hover: #e8e8e8;
+  --color-button-secondary-bg: #eef0f2;
+
+  /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
+  --color-icon-ghost-hover-bg: color-mix(in srgb, var(--color-text) 16%, transparent);
+
+  /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
+  --panel-grid-gap: 8px;
+  --panel-grid-padding: 6px;
+
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  background: var(--color-bg);
+  text-rendering: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Clickable text in prose (not buttons) — brand interactive */
+.prose a,
+.inbox-root a:not([class]),
+.settings-content a:not([class]) {
+  color: var(--color-interactive-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+input,
+textarea,
+code,
+[contenteditable='true'],
+[role='alert'],
+.error-banner,
+.mono.wrap {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button,
+input,
+textarea {
+  color: var(--color-text);
+}

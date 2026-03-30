@@ -14,12 +14,12 @@ This note records the **triage decision** and **developer workflow** for Android
 2. Use a **physical** Android device when possible (especially lower-RAM ARM devices).
 3. Exercise **cold start** and **resume** with a **saved vault** (`session` present), matching Sentry tags when available.
 4. **Android Studio:** CPU Profiler / **System Trace** during launch and first navigation after vault restore; inspect the **main thread** for long stalls.
-5. **Debug builds:** `StrictMode` is enabled in [`MainApplication.kt`](android/app/src/main/java/com/notebox/MainApplication.kt) (`penaltyLog` only). Watch **Logcat** for `StrictMode` violations (main-thread disk/network).
+5. **Debug builds:** `StrictMode` is enabled in [`MainApplication.kt`](../../apps/mobile/android/app/src/main/java/com/notebox/MainApplication.kt) (`penaltyLog` only). Watch **Logcat** for `StrictMode` violations (main-thread disk/network).
 
 ## Observability (Phase C)
 
-- **Sentry:** `attachThreads: true` is set in [`registerSentry.ts`](src/core/observability/registerSentry.ts) so **Android** events include **thread snapshots** where the SDK supports it, without turning on performance transactions (`tracesSampleRate` remains `0` per Phase 1).
-- **Bootstrap / vault:** Breadcrumbs follow [`phase-1-implementation-spec.md`](phase-1-implementation-spec.md) (`app.bootstrap.*`, `vault.session.restore.*`); [`startupTiming.ts`](src/core/observability/startupTiming.ts) adds `elapsed_ms` fields for correlation with ANR timelines.
+- **Sentry:** `attachThreads: true` is set in [`registerSentry.ts`](../../apps/mobile/src/core/observability/registerSentry.ts) so **Android** events include **thread snapshots** where the SDK supports it, without turning on performance transactions (`tracesSampleRate` remains `0` per Phase 1).
+- **Bootstrap / vault:** Breadcrumbs follow [`phase-1-implementation-spec.md`](phase-1-implementation-spec.md) (`app.bootstrap.*`, `vault.session.restore.*`); [`startupTiming.ts`](../../apps/mobile/src/core/observability/startupTiming.ts) adds `elapsed_ms` fields for correlation with ANR timelines.
 - **Phase 1 spec** still defers dedicated **App Hang / ANR** product toggles that duplicate freeze detection; thread attachment is **error-context enrichment**, not a second hang detector.
 
 ## Code changes (Phase D)

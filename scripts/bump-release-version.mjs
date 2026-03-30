@@ -19,8 +19,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const STATE_DIR = join(ROOT, '.local');
 const STATE_FILE = join(STATE_DIR, 'build-version-state.json');
-const PACKAGE_JSON = join(ROOT, 'package.json');
-const BUILD_GRADLE = join(ROOT, 'android', 'app', 'build.gradle');
+const PACKAGE_JSON = join(ROOT, 'apps', 'mobile', 'package.json');
+const BUILD_GRADLE = join(
+  ROOT,
+  'apps',
+  'mobile',
+  'android',
+  'app',
+  'build.gradle',
+);
 
 function git(...args) {
   return execFileSync('git', args, {

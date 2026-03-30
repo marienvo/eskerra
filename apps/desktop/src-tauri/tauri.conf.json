@@ -1,0 +1,54 @@
+{
+  "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Eskerra",
+  "version": "0.1.0",
+  "identifier": "com.notebox.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Eskerra",
+        "width": 800,
+        "height": 600,
+        "minWidth": 520,
+        "minHeight": 380,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "Notebox",
+    "homepage": "https://github.com/marienvo/notebox",
+    "category": "Productivity",
+    "shortDescription": "Desktop companion for your local Notebox vault — notes, podcasts, and playback.",
+    "longDescription": "Eskerra opens a folder-based Notebox vault on your machine: markdown in Inbox, podcast notes from General, and MP3 streaming with playlist state. On Fedora and GNOME, playback integrates with the shell via MPRIS (media keys and system controls). RSS sync and some mobile-only accelerations are not required for this desktop release; the vault layout stays compatible with the Android app.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "linux": {
+      "rpm": {
+        "files": {
+          "metainfo/Eskerra.metainfo.xml": "/usr/share/metainfo/Eskerra.metainfo.xml",
+          "../../../assets/screenshot.png": "/usr/share/Eskerra/screenshot.png"
+        }
+      }
+    }
+  }
+}

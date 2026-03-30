@@ -1,0 +1,73 @@
+import {isTauri} from '@tauri-apps/api/core';
+import {getCurrentWindow} from '@tauri-apps/api/window';
+import {WebviewWindow} from '@tauri-apps/api/webviewWindow';
+import {useEffect, useState} from 'react';
+
+import {SETTINGS_WINDOW_LABEL} from '../lib/openSettingsWindow';
+
+/**
+ * True while the main (non-settings) Tauri window is focused, visible, and the document is visible.
+ */
+export function useTauriMainWindowPollActive(): boolean {
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    let cancelled = false;
+    let unlistenFocus: (() => void) | undefined;
+
+    const sync = async (): Promise<void> => {
+      try {
+        if (WebviewWindow.getCurrent().label === SETTINGS_WINDOW_LABEL) {
+          if (!cancelled) {
+            setActive(false);
+          }
+          return;
+        }
+        const win = getCurrentWindow();
+        const focused = await win.isFocused();
+        const visible = await win.isVisible();
+        const docVisible = typeof document !== 'undefined' && document.visibilityState === 'visible';
+        if (!cancelled) {
+          setActive(focused && visible && docVisible);
+        }
+      } catch {
+        if (!cancelled) {
+          setActive(false);
+        }
+      }
+    };
+
+    queueMicrotask(() => {
+      void sync();
+    });
+    void getCurrentWindow()
+      .onFocusChanged(() => {
+        void sync();
+      })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlistenFocus = fn;
+        }
+      })
+      .catch(() => undefined);
+
+    const onVisibility = (): void => {
+      void sync();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      unlistenFocus?.();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  return active;
+}

@@ -13,10 +13,16 @@ This document records product and engineering decisions about which platforms No
 - There is **no** plan to add iOS, to prioritize iOS parity, or to sort or rank work with iOS in mind.
 - Do not propose iOS-specific builds, App Store work, or cross-platform abstractions whose main justification is eventual iOS support.
 
-## Desktop (future): Linux (Fedora / GNOME)
+## Desktop companion: Linux (Fedora / GNOME)
 
-- A **desktop application** is a plausible **future** direction, separate from the current mobile focus.
-- When that work happens, the intended environment is **Linux**, with **Fedora Workstation** and the **GNOME** desktop as the primary reference stack (not a commitment to ship date or feature parity with Android).
+- A **desktop companion app** ships as **Tauri** in this repository under `apps/desktop/`, sharing vault semantics and TypeScript core with Android.
+- The **primary** engineering and manual testing target is **Linux** (**Fedora Workstation**, **GNOME**). Builds may work on other OSes when upstream Tauri/tooling allows it; product commitments stay Linux-first.
+- OS media integration on Linux uses **MPRIS** (for example via **souvlaki**) so GNOME shell and hardware media keys can control playback.
+
+## Shipping artifacts: Android + Fedora RPM
+
+- **Mobile:** ship **Android** builds (APK / Play track) per [`apps/mobile`](../../apps/mobile); iOS is not a target (see above).
+- **Desktop:** ship **RPM packages for Fedora** (and RPM-based derivatives that accept the same package). **Debian packages (.deb), AppImage, and other Linux bundle formats are not product commitments** for this project; the Tauri Linux bundle config limits targets to **rpm** only in [`apps/desktop/src-tauri/tauri.linux.conf.json`](../../apps/desktop/src-tauri/tauri.linux.conf.json).
 
 ## Summary
 
@@ -24,4 +30,5 @@ This document records product and engineering decisions about which platforms No
 | --------------------- | ------------------------------------------- |
 | Android (mobile)      | In scope — current focus                    |
 | iOS / iPhone / iPad   | Out of scope permanently — do not pursue    |
-| Desktop Linux (Fedora / GNOME) | Future possibility — not current MVP scope |
+| Desktop Linux (Fedora / GNOME) | In scope — companion app (vault + notes + playback MVP); Linux-first |
+| Desktop Linux packages | **RPM only** (Fedora); not .deb / AppImage as shipping targets |

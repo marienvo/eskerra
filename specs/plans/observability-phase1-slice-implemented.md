@@ -13,7 +13,7 @@ This documents what was shipped in the minimal Sentry + ring buffer slice (see a
 - **Navigation:** [`RootNavigator.tsx`](../../src/navigation/RootNavigator.tsx) — `onStateChange` breadcrumbs with `name` + `params_keys` only (no param values).
 - **Vault:** [`VaultContext.tsx`](../../src/core/vault/VaultContext.tsx) — restore/apply breadcrumbs; `reportUnexpectedError` for `init_notebox`, `read_settings`, and `get_saved_uri` failures.
 - **Privacy:** [`redact.ts`](../../src/core/observability/redact.ts) scrubs URI-like substrings in `beforeSend` and `beforeBreadcrumb`.
-- **Android:** [`android/app/build.gradle`](../../android/app/build.gradle) applies `sentry.gradle`; [`android/sentry.properties`](../../android/sentry.properties) has org/project (no auth token).
+- **Android:** [`apps/mobile/android/app/build.gradle`](../../apps/mobile/android/app/build.gradle) applies `sentry.gradle`; [`apps/mobile/android/sentry.properties`](../../apps/mobile/android/sentry.properties) has org/project (no auth token).
 - **Jest:** [`__mocks__/sentry-react-native.ts`](../../__mocks__/sentry-react-native.ts) + [`jest.config.js`](../../jest.config.js) mapper so tests do not load the native SDK.
 - **TypeScript:** [`tsconfig.json`](../../tsconfig.json) `resolveJsonModule` for `package.json` release string.
 
@@ -24,7 +24,7 @@ Release builds apply `sentry.gradle`, which registers source map upload tasks. U
 - `SENTRY_AUTH_TOKEN` is set in the environment (recommended for CI), or  
 - `auth.token=...` is present in `android/sentry.properties` (local only; **never commit** tokens).
 
-Override: `SENTRY_DISABLE_AUTO_UPLOAD=true` forces skip. This is implemented in [`android/app/build.gradle`](../../android/app/build.gradle) by replacing `shouldSentryAutoUploadGeneral` after the Sentry script is applied.
+Override: `SENTRY_DISABLE_AUTO_UPLOAD=true` forces skip. This is implemented in [`apps/mobile/android/app/build.gradle`](../../apps/mobile/android/app/build.gradle) by replacing `shouldSentryAutoUploadGeneral` after the Sentry script is applied.
 
 ## Intentionally deferred
 

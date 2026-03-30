@@ -2,6 +2,8 @@
 
 This document explains why JavaScript stack traces in Sentry sometimes show minified bundle locations (`index.android.bundle`, `InternalBytecode.js`) instead of your TypeScript files, and what you need to fix it. It applies to the Notebox React Native app using Hermes and `@sentry/react-native`.
 
+**Monorepo paths:** Android Gradle and Kotlin live under [`apps/mobile/android/`](apps/mobile/android/). TypeScript sources for the mobile app live under [`apps/mobile/src/`](apps/mobile/src/).
+
 ---
 
 ## Why stacks stay “minified”
@@ -41,9 +43,9 @@ Sentry ties uploaded artifacts to a **`release`** string and usually a **`dist`*
 
 ### What the app sends today
 
-In `src/core/observability/registerSentry.ts`, the SDK sets:
+In `apps/mobile/src/core/observability/registerSentry.ts`, the SDK sets:
 
-- `release`: `notebox@<version>` where `<version>` comes from `package.json` (for example `notebox@0.0.1`).
+- `release`: `notebox@<version>` where `<version>` comes from `apps/mobile/package.json` (for example `notebox@0.0.1`).
 
 Events may also include **`dist`** (for example `1`) from the native layer, aligned with Android `versionCode` when configured.
 
@@ -53,7 +55,7 @@ The Sentry React Native Gradle script (`node_modules/@sentry/react-native/sentry
 
 - `defaultReleaseName = "${applicationId}@${versionName}+${versionCode}"`
 
-For this project’s `android/app/build.gradle`, with `applicationId "com.notebox"`, `versionName "1.0"`, and `versionCode 1`, that is:
+For this project’s `apps/mobile/android/app/build.gradle`, with `applicationId "com.notebox"`, `versionName "1.0"`, and `versionCode 1`, that is:
 
 - **`com.notebox@1.0+1`**
 
@@ -74,7 +76,7 @@ Aligning these is a **follow-up code/CI change** (separate from this doc).
 
 ## Local release builds without a token
 
-This repository intentionally allows **release builds to succeed** when no Sentry auth is configured: the Gradle logic in `android/app/build.gradle` skips the Sentry upload task unless `SENTRY_AUTH_TOKEN` or `auth.token` is present.
+This repository intentionally allows **release builds to succeed** when no Sentry auth is configured: the Gradle logic in `apps/mobile/android/app/build.gradle` skips the Sentry upload task unless `SENTRY_AUTH_TOKEN` or `auth.token` is present.
 
 In that situation:
 

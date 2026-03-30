@@ -1,0 +1,17 @@
+import {StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
+
+import 'material-icons/iconfont/filled.css';
+
+import {AppRoot} from './Root.tsx';
+import {ErrorBoundary} from './ErrorBoundary';
+
+import './index.css';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ErrorBoundary>
+      <AppRoot />
+    </ErrorBoundary>
+  </StrictMode>,
+);
