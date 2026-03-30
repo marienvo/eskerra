@@ -12,7 +12,7 @@
   <developer id="com.notebox">
     <name>Notebox</name>
   </developer>
-  <launchable type="desktop-id">eskerra</launchable>
+  <launchable type="desktop-id">eskerra.desktop</launchable>
   <url type="homepage">https://github.com/marienvo/notebox</url>
   <url type="bugtracker">https://github.com/marienvo/notebox/issues</url>
   <content_rating type="oars-1.1"/>
