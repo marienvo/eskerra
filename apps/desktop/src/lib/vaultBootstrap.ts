@@ -305,8 +305,7 @@ export async function writePlaylistEntry(
   fs: VaultFilesystem,
   entry: PlaylistEntry,
   // Retained for API parity (`{mode: 'progress' | 'control'}`); merge path does not branch on mode.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- see above
-  options?: {mode?: PlaylistWriteMode},
+  _options?: {mode?: PlaylistWriteMode},
 ): Promise<PlaylistWriteResult> {
   let localMeta = await readVaultLocalSettings(root, fs);
   const ensured = ensureDeviceInstanceId(localMeta);
