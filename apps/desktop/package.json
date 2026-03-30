@@ -13,7 +13,7 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:icons": "tauri icon ../../assets/brand/logo-eskerra.svg",
-    "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/Eskerra.metainfo.xml"
+    "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml"
   },
   "dependencies": {
     "@notebox/core": "*",

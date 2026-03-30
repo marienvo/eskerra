@@ -1,6 +1,7 @@
 {
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Eskerra",
+  "productName": "eskerra",
+  "mainBinaryName": "eskerra",
   "version": "0.1.0",
   "identifier": "com.notebox.desktop",
   "build": {
@@ -45,9 +46,10 @@
     ],
     "linux": {
       "rpm": {
+        "desktopTemplate": "linux/eskerra.desktop.hbs",
         "files": {
-          "/usr/share/metainfo/Eskerra.metainfo.xml": "metainfo/Eskerra.metainfo.xml",
-          "/usr/share/Eskerra/screenshot.png": "../../../assets/screenshot.png"
+          "/usr/share/metainfo/eskerra.metainfo.xml": "metainfo/eskerra.metainfo.xml",
+          "/usr/share/eskerra/screenshot.png": "../../../assets/screenshot.png"
         }
       }
     }
