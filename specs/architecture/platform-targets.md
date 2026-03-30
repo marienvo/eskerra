@@ -19,6 +19,11 @@ This document records product and engineering decisions about which platforms No
 - The **primary** engineering and manual testing target is **Linux** (**Fedora Workstation**, **GNOME**). Builds may work on other OSes when upstream Tauri/tooling allows it; product commitments stay Linux-first.
 - OS media integration on Linux uses **MPRIS** (for example via **souvlaki**) so GNOME shell and hardware media keys can control playback.
 
+## Shipping artifacts: Android + Fedora RPM
+
+- **Mobile:** ship **Android** builds (APK / Play track) per [`apps/mobile`](../../apps/mobile); iOS is not a target (see above).
+- **Desktop:** ship **RPM packages for Fedora** (and RPM-based derivatives that accept the same package). **Debian packages (.deb), AppImage, and other Linux bundle formats are not product commitments** for this project; the Tauri Linux bundle config limits targets to **rpm** only in [`apps/desktop/src-tauri/tauri.linux.conf.json`](../../apps/desktop/src-tauri/tauri.linux.conf.json).
+
 ## Summary
 
 | Platform              | Status                                      |
@@ -26,3 +31,4 @@ This document records product and engineering decisions about which platforms No
 | Android (mobile)      | In scope — current focus                    |
 | iOS / iPhone / iPad   | Out of scope permanently — do not pursue    |
 | Desktop Linux (Fedora / GNOME) | In scope — companion app (vault + notes + playback MVP); Linux-first |
+| Desktop Linux packages | **RPM only** (Fedora); not .deb / AppImage as shipping targets |
