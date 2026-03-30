@@ -17,6 +17,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      - name: Install AppStream CLI (metainfo validation)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y appstream
+      - run: npm run validate-metainfo -w @notebox/desktop
       - run: npm run desktop:build
 
   desktop-rust:

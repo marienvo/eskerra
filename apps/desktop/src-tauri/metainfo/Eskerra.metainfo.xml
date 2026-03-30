@@ -2,19 +2,26 @@
 <component type="desktop-application">
   <id>Eskerra</id>
   <metadata_license>CC0-1.0</metadata_license>
-  <project_license>LicenseRef-Proprietary</project_license>
+  <project_license>AGPL-3.0-only</project_license>
   <name>Eskerra</name>
   <summary>Desktop companion for your local Notebox vault — notes, podcasts, and playback</summary>
   <description>
     <p>Eskerra opens a folder-based Notebox vault on your machine: markdown in Inbox, podcast notes from General, and MP3 streaming with playlist state.</p>
     <p>On Fedora and GNOME, playback integrates with the shell via MPRIS (media keys and system controls). RSS sync and some mobile-only accelerations are not required for this desktop release; the vault layout stays compatible with the Android app.</p>
   </description>
+  <developer id="com.notebox">
+    <name>Notebox</name>
+  </developer>
   <launchable type="desktop-id">Eskerra</launchable>
   <url type="homepage">https://github.com/marienvo/notebox</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-03-30"/>
+  </releases>
   <screenshots>
     <screenshot type="default">
       <caption>Main window</caption>
-      <image>file:///usr/share/Eskerra/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/marienvo/notebox/main/assets/screenshot.png</image>
     </screenshot>
   </screenshots>
 </component>

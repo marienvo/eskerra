@@ -165,6 +165,20 @@ npm run lint
 
 ---
 
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0 only** (**AGPL-3.0-only**). See the [`LICENSE`](LICENSE) file in the repository root for the full license text.
+
+In practical terms:
+
+- **Sharing copies (binaries, APKs, RPMs, etc.):** If you give others a copy of this program or a work based on it, AGPL requires that you also give them the **corresponding source code** under the same license (and preserve license/copyright notices), in the ways described in the license.
+- **Network / “as-a-service” use:** AGPL adds a specific rule for **modified** versions you **run** as a service: if users interact with your modified version **remotely through a network**, you must offer them the **corresponding source** of your version, in line with section 13 of the license. (This is the main difference from GPLv3: it is meant to cover “users get the functionality over the network” the same way GPLv3 covers “users get a binary on their machine.”)
+- **Dependencies:** This repository also uses third-party libraries under their own licenses (see each package and lockfile). Your obligations under AGPL apply to **this project’s code** and how you convey or operate modified versions of it as described above.
+
+This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LICENSE) and consider consulting a lawyer for your situation.
+
+---
+
 ## Known limitations
 
 - **Mobile:** Android only (see [`specs/architecture/platform-targets.md`](specs/architecture/platform-targets.md)).
