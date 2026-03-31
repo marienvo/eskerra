@@ -12,6 +12,7 @@ import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
+import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {
@@ -55,7 +56,27 @@ type MainTab = 'podcasts' | 'inbox';
 
 export default function App() {
   const {maximized, refresh: refreshWindowMaximized} = useTauriWindowMaximized();
-  const appRootClassName = maximized ? 'app-root app-root--maximized' : 'app-root';
+  const {tiling, tilingDebug, refresh: refreshWindowTiling} = useTauriWindowTiling();
+  const refreshWindowChrome = useCallback(() => {
+    refreshWindowMaximized();
+    refreshWindowTiling();
+  }, [refreshWindowMaximized, refreshWindowTiling]);
+  const appRootClassName = useMemo(() => {
+    const parts = ['app-root'];
+    if (maximized) {
+      parts.push('app-root--maximized');
+    }
+    if (tiling === 'left') {
+      parts.push('app-root--tiled-left');
+    }
+    if (tiling === 'right') {
+      parts.push('app-root--tiled-right');
+    }
+    if (tilingDebug) {
+      parts.push('app-root--tiling-debug');
+    }
+    return parts.join(' ');
+  }, [maximized, tiling, tilingDebug]);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
@@ -378,8 +399,9 @@ export default function App() {
       <div className={appRootClassName}>
         <WindowTitleBar
           maximized={maximized}
-          onMaximizedRefresh={refreshWindowMaximized}
+          onMaximizedRefresh={refreshWindowChrome}
           onOpenSettings={() => void openSettingsWindow()}
+          tiling={tiling}
         />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
@@ -398,8 +420,9 @@ export default function App() {
       <div className={appRootClassName}>
         <WindowTitleBar
           maximized={maximized}
-          onMaximizedRefresh={refreshWindowMaximized}
+          onMaximizedRefresh={refreshWindowChrome}
           onOpenSettings={() => void openSettingsWindow()}
+          tiling={tiling}
         />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
@@ -412,8 +435,9 @@ export default function App() {
     <div className={appRootClassName}>
       <WindowTitleBar
         maximized={maximized}
-        onMaximizedRefresh={refreshWindowMaximized}
+        onMaximizedRefresh={refreshWindowChrome}
         onOpenSettings={() => void openSettingsWindow()}
+        tiling={tiling}
       />
 
       {err ? (

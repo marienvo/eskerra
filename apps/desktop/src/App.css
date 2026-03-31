@@ -23,9 +23,29 @@
   -webkit-user-select: none;
 }
 
+/* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
 .app-root--maximized {
   border: none;
   border-radius: 0;
+}
+
+/* Tiled: no border on screen edges; only the split seam with the other half. */
+.app-root--tiled-left:not(.app-root--maximized) {
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--color-window-border);
+}
+
+.app-root--tiled-right:not(.app-root--maximized) {
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--color-window-border);
+}
+
+/* Dev: sessionStorage noteboxDebugTiling=1 — see windowTiling.ts */
+.app-root.app-root--tiling-debug {
+  outline: 2px dashed rgba(220, 90, 0, 0.55);
+  outline-offset: -2px;
 }
 
 button:focus-visible,

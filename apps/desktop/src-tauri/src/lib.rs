@@ -1,5 +1,9 @@
 mod media;
 mod r2_http;
+mod tiling;
+mod tiling_score;
+#[cfg(target_os = "linux")]
+mod tiling_gdk;
 mod vault;
 mod vault_watch;
 
@@ -22,6 +26,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tiling::get_window_tiling_detection,
             r2_http::r2_signed_fetch,
             vault::vault_set_session,
             vault::vault_get_session,

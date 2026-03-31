@@ -3,18 +3,22 @@ import {getCurrentWindow} from '@tauri-apps/api/window';
 
 import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
 
+import type {WindowTilingState} from '../lib/windowTiling';
+
 import {DemoMenuBar} from './DemoMenuBar';
 
 type WindowTitleBarProps = {
   onOpenSettings: () => void;
   maximized: boolean;
   onMaximizedRefresh: () => void;
+  tiling?: WindowTilingState;
 };
 
 export function WindowTitleBar({
   onOpenSettings,
   maximized,
   onMaximizedRefresh,
+  tiling = 'none',
 }: WindowTitleBarProps) {
   const tauri = isTauri();
 
@@ -40,7 +44,7 @@ export function WindowTitleBar({
   };
 
   return (
-    <header className="window-title-bar">
+    <header className="window-title-bar" data-window-tiling={tiling}>
       <div className="window-title-bar-leading">
         <img
           className="window-title-bar-icon"

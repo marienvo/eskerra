@@ -2,6 +2,12 @@
 
 Shell UX conventions for this app (including hover tooltips for icon actions) are documented in [`specs/design/desktop-tooltips.md`](../../specs/design/desktop-tooltips.md). Implementation details live in `src/App.css`.
 
+## Window tiling (Linux)
+
+Half-tile left/right detection for seam styling uses native geometry plus, on Linux, **GDK `WindowState`** edge flags (`LEFT_TILED` / `RIGHT_TILED`) when the WebKitGTK toplevel reports them. On **Wayland**, `outer_position()` is often not meaningful; if GDK does not classify the window and the platform reports `(0, 0)` for a non–nearly-full window, detection returns `none` instead of guessing.
+
+**Manual check (Fedora GNOME):** Run the app with `NOTEBOX_DEBUG_TILING=1` and watch stderr while snapping left/right and floating a half-width window; optionally set `sessionStorage.setItem('noteboxDebugTiling', '1')` before reload for front-end layout debug.
+
 ---
 
 # React + TypeScript + Vite
