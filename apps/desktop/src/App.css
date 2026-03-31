@@ -126,7 +126,7 @@ a:focus:not(:focus-visible) {
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, calc(-50% + 2px));
   pointer-events: none;
 }
 
