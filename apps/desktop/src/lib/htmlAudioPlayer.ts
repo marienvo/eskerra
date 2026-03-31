@@ -43,6 +43,16 @@ function mapAudioPaused(audio: HTMLAudioElement, ended: boolean): PlayerState {
   if (!audio.src) {
     return 'idle';
   }
+  // Do not treat an explicit pause as `loading` only because readyState fell below
+  // HAVE_FUTURE_DATA (WebKit can report that after pause while buffered data is still valid).
+  if (
+    audio.paused &&
+    (audio.readyState >= HTMLMediaElement.HAVE_METADATA ||
+      audio.currentTime > 0 ||
+      audio.played.length > 0)
+  ) {
+    return 'paused';
+  }
   if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) {
     return 'loading';
   }

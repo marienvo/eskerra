@@ -659,12 +659,9 @@ export function useDesktopPodcastPlayback({
         if (latestProgress.positionMs < MIN_PLAYLIST_PERSIST_POSITION_MS) {
           await clearPlaylistEntry(vaultRoot, fs);
           setDiskPlaylist(null);
-          setActiveEpisode(null);
-          playbackRef.current = null;
-          setPositionMs(0);
-          setDurationMs(null);
-          lastPrimedPlaylistKeyRef.current = null;
           onPlaylistDiskUpdated?.();
+          // Keep the dock and loaded audio: no playlist on disk under the threshold, but
+          // the user can still resume in this session without restarting playback.
           return;
         }
 
