@@ -6,6 +6,14 @@ import {vaultDirname, vaultJoinSimple, vaultResolveRelativeToDir} from './vaultF
 
 const INBOX_DIR = 'Inbox';
 
+function decodeAttachmentSrcForFilesystem(src: string): string {
+  try {
+    return decodeURIComponent(src);
+  } catch {
+    return src;
+  }
+}
+
 function inboxNoteBaseDir(
   vaultRoot: string,
   activeNotePath: string | null,
@@ -43,7 +51,8 @@ export function resolveVaultImagePreviewUrl(
   if (!unixRel) {
     return trimmed;
   }
+  const pathForResolve = decodeAttachmentSrcForFilesystem(trimmed);
   const noteDir = inboxNoteBaseDir(vaultRoot, activeNotePath);
-  const absolute = vaultResolveRelativeToDir(noteDir, trimmed);
+  const absolute = vaultResolveRelativeToDir(noteDir, pathForResolve);
   return convertFileSrc(absolute);
 }
