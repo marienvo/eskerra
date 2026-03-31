@@ -318,6 +318,11 @@ export class HtmlAudioPlayer implements AudioPlayer {
     this.endedFlag = false;
     this.audio.currentTime = positionMs / 1000;
     this.emitState();
+    const positionOut = clampMs(this.audio.currentTime * 1000);
+    await invoke('media_set_playback', {
+      playing: !this.audio.paused,
+      positionMs: positionOut,
+    }).catch(() => undefined);
   }
 
   async stop(): Promise<void> {

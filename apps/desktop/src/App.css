@@ -62,11 +62,12 @@ a:focus:not(:focus-visible) {
 }
 
 .window-title-bar {
+  position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   flex-shrink: 0;
-  min-height: 32px;
-  height: 32px;
+  min-height: 40px;
+  height: 40px;
   padding: 0 0.3rem 0 0.42rem;
   box-sizing: border-box;
   border-bottom: none;
@@ -95,7 +96,49 @@ a:focus:not(:focus-visible) {
 .window-title-bar-drag {
   flex: 1;
   min-width: 2rem;
+  min-height: 1.5rem;
   cursor: default;
+}
+
+.window-title-bar-transport {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.titlebar-transport-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.titlebar-transport-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.titlebar-transport-btn:not(:disabled):hover {
+  background: var(--color-titlebar-hover);
+  color: var(--color-text);
+}
+
+.titlebar-transport-btn--play {
+  border-radius: 8px;
 }
 
 .window-title-bar-trailing {

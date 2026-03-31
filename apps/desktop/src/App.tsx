@@ -9,6 +9,7 @@ import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
 import {AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
+import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
@@ -54,6 +55,8 @@ const STORE_KEY_VAULT = 'vaultRoot';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 type MainTab = 'podcasts' | 'inbox';
+
+const TITLE_BAR_SKIP_MS = 10_000;
 
 export default function App() {
   const {maximized, refresh: refreshWindowMaximized} = useTauriWindowMaximized();
@@ -129,6 +132,16 @@ export default function App() {
     playlistRevision,
     vaultRoot,
   });
+
+  const titleBarTransport: TitleBarTransportProps = {
+    disabled:
+      desktopPlayback.activeEpisode == null ||
+      desktopPlayback.playerLabel === 'loading',
+    isPlaying: desktopPlayback.playerLabel === 'playing',
+    onSeekBack: () => void desktopPlayback.seekBy(-TITLE_BAR_SKIP_MS),
+    onTogglePlay: () => void desktopPlayback.togglePause(),
+    onSeekForward: () => void desktopPlayback.seekBy(TITLE_BAR_SKIP_MS),
+  };
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: desktopPlayback.playerLabel !== 'playing',
@@ -402,6 +415,7 @@ export default function App() {
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
           tiling={tiling}
+          transport={titleBarTransport}
         />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
@@ -423,6 +437,7 @@ export default function App() {
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
           tiling={tiling}
+          transport={titleBarTransport}
         />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
@@ -438,6 +453,7 @@ export default function App() {
         maximized={maximized}
         onMaximizedRefresh={refreshWindowChrome}
         tiling={tiling}
+        transport={titleBarTransport}
       />
 
       {err ? (

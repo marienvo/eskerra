@@ -5,16 +5,20 @@ import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 
+import {TitleBarTransport, type TitleBarTransportProps} from './TitleBarTransport';
+
 type WindowTitleBarProps = {
   maximized: boolean;
   onMaximizedRefresh: () => void;
   tiling?: WindowTilingState;
+  transport?: TitleBarTransportProps;
 };
 
 export function WindowTitleBar({
   maximized,
   onMaximizedRefresh,
   tiling = 'none',
+  transport,
 }: WindowTitleBarProps) {
   const tauri = isTauri();
 
@@ -52,6 +56,7 @@ export function WindowTitleBar({
         />
       </div>
       <div className="window-title-bar-drag" data-tauri-drag-region />
+      {transport ? <TitleBarTransport {...transport} /> : null}
       <div className="window-title-bar-trailing">
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">
