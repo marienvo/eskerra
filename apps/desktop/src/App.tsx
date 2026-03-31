@@ -90,6 +90,7 @@ export default function App() {
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [selectedUri, setSelectedUri] = useState<string | null>(null);
   const [editorBody, setEditorBody] = useState('');
+  const [inboxEditorResetNonce, setInboxEditorResetNonce] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -310,6 +311,7 @@ export default function App() {
         const raw = await fs.readFile(selectedUri, {encoding: 'utf8'});
         if (!cancelled) {
           setEditorBody(raw.replace(/\n$/, ''));
+          setInboxEditorResetNonce(n => n + 1);
         }
       } catch (e) {
         if (!cancelled) {
@@ -357,11 +359,13 @@ export default function App() {
     setComposingNewEntry(true);
     setSelectedUri(null);
     setEditorBody('');
+    setInboxEditorResetNonce(n => n + 1);
   }, []);
 
   const cancelNewEntry = useCallback(() => {
     setComposingNewEntry(false);
     setEditorBody('');
+    setInboxEditorResetNonce(n => n + 1);
   }, []);
 
   const selectNote = useCallback((uri: string) => {
@@ -464,6 +468,7 @@ export default function App() {
           <main className="main-stage">
             <div className="tab-panel" hidden={mainTab !== 'inbox'}>
               <InboxTab
+                vaultRoot={vaultRoot}
                 defaultLayout={layouts.inbox}
                 onLayoutChanged={persistInboxLayout}
                 notes={notes}
@@ -475,6 +480,7 @@ export default function App() {
                 onCreateNewEntry={() => void submitNewEntry()}
                 editorBody={editorBody}
                 onEditorChange={setEditorBody}
+                inboxEditorResetNonce={inboxEditorResetNonce}
                 onSaveNote={() => void saveNote()}
                 busy={busy}
               />

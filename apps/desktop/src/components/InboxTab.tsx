@@ -2,11 +2,14 @@ import {useMemo} from 'react';
 import {Group, Panel, Separator} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
 
+import {NoteMarkdownEditor} from '../editor/noteEditor/NoteMarkdownEditor';
+
 import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
 type InboxTabProps = {
+  vaultRoot: string;
   defaultLayout: Layout;
   onLayoutChanged: (layout: Layout) => void;
   notes: NoteRow[];
@@ -18,11 +21,13 @@ type InboxTabProps = {
   onCreateNewEntry: () => void;
   editorBody: string;
   onEditorChange: (body: string) => void;
+  inboxEditorResetNonce: number;
   onSaveNote: () => void;
   busy: boolean;
 };
 
 export function InboxTab({
+  vaultRoot,
   defaultLayout,
   onLayoutChanged,
   notes,
@@ -34,6 +39,7 @@ export function InboxTab({
   onCreateNewEntry,
   editorBody,
   onEditorChange,
+  inboxEditorResetNonce,
   onSaveNote,
   busy,
 }: InboxTabProps) {
@@ -117,12 +123,19 @@ export function InboxTab({
           </div>
           {editorOpen ? (
             <>
-              <textarea
-                value={editorBody}
-                onChange={e => onEditorChange(e.target.value)}
-                spellCheck={false}
-                placeholder={composingNewEntry ? 'First line is title (H1)…' : 'Markdown'}
-              />
+              <div className="editor note-markdown-editor-wrap">
+                <NoteMarkdownEditor
+                  vaultRoot={vaultRoot}
+                  activeNotePath={composingNewEntry ? null : selectedUri}
+                  initialMarkdown={editorBody}
+                  sessionKey={inboxEditorResetNonce}
+                  onMarkdownChange={onEditorChange}
+                  placeholder={
+                    composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                  }
+                  busy={busy}
+                />
+              </div>
               <div className="pane-footer">
                 <button
                   type="button"

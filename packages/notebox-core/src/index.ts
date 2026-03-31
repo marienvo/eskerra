@@ -1,4 +1,13 @@
 export type {AudioPlayer, AudioTrack, PlayerProgress, PlayerState, Unsubscribe} from './audioPlayerTypes';
+export {
+  ATTACHMENT_IMAGE_EXTENSIONS,
+  buildAttachmentFileName,
+  buildInboxRelativeAttachmentMarkdownPath,
+  imageMimeToExtension,
+  inboxNoteRelativeAttachmentDir,
+  normalizeImageFileExtension,
+  sanitizeAttachmentBaseName,
+} from './attachments/attachmentPaths';
 export {initNoteboxVault} from './initNoteboxVault';
 export {
   buildInboxMarkdownIndexContent,
@@ -70,7 +79,11 @@ export {
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
 export {
+  ASSETS_DIRECTORY_NAME,
+  ATTACHMENTS_DIRECTORY_NAME,
   GENERAL_DIRECTORY_NAME,
+  getAssetsAttachmentsDirectoryUri,
+  getAssetsDirectoryUri,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,

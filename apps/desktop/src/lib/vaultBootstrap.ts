@@ -5,6 +5,7 @@ import {
   defaultNoteboxLocalSettings,
   deleteR2PlaylistObject,
   ensureDeviceInstanceId,
+  getAssetsAttachmentsDirectoryUri,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,
@@ -53,6 +54,10 @@ export async function bootstrapVaultLayout(
   }
   if (!(await fs.exists(general))) {
     await fs.mkdir(general);
+  }
+  const attachments = getAssetsAttachmentsDirectoryUri(base);
+  if (!(await fs.exists(attachments))) {
+    await fs.mkdir(attachments);
   }
 }
 

@@ -16,8 +16,12 @@
     "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml"
   },
   "dependencies": {
+    "@milkdown/crepe": "^7.20.0",
+    "@milkdown/kit": "^7.20.0",
+    "@milkdown/react": "^7.20.0",
     "@notebox/core": "*",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-window-state": "^2.4.1",

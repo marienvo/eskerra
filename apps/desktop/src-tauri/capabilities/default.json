@@ -12,6 +12,7 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "store:default",
-    "dialog:default"
+    "dialog:default",
+    "clipboard-manager:default"
   ]
 }

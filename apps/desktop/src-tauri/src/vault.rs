@@ -1,10 +1,16 @@
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
+use base64::Engine;
 use serde::Serialize;
 use tauri::State;
+
+const ASSETS_DIR: &str = "Assets";
+const ATTACHMENTS_DIR: &str = "Attachments";
+const MARKDOWN_REL_ATTACHMENTS_PREFIX: &str = "../Assets/Attachments";
 
 #[derive(Default)]
 pub struct VaultRootState(pub Mutex<Option<PathBuf>>);
@@ -48,6 +54,79 @@ fn assert_in_vault(vault: Option<&PathBuf>, target: &Path) -> Result<(), String>
     };
     if !is_subpath(root, target) {
         return Err("path is outside the selected vault".into());
+    }
+    Ok(())
+}
+
+fn vault_attachments_dir(root: &Path) -> PathBuf {
+    root.join(ASSETS_DIR).join(ATTACHMENTS_DIR)
+}
+
+fn sanitize_attachment_stem(raw: &str) -> String {
+    let base: String = raw.chars().filter(|c| *c != '/' && *c != '\\').collect();
+    let stem = base
+        .rsplit_once('.')
+        .map(|(s, _)| s)
+        .unwrap_or(base.as_str());
+    let mut normalized = String::new();
+    for c in stem.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            normalized.push(c);
+        } else if c.is_whitespace() {
+            normalized.push('-');
+        }
+    }
+    while normalized.contains("--") {
+        normalized = normalized.replace("--", "-");
+    }
+    let trimmed = normalized.trim_matches(|c| c == '-' || c == '_');
+    if trimmed.is_empty() {
+        "image".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn image_ext_from_path(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_string_lossy();
+    let lower = name.to_lowercase();
+    let ext = lower.rsplit_once('.')?.1;
+    match ext {
+        "png" => Some("png".into()),
+        "jpg" | "jpeg" => Some("jpg".into()),
+        "gif" => Some("gif".into()),
+        "webp" => Some("webp".into()),
+        "svg" => Some("svg".into()),
+        _ => None,
+    }
+}
+
+fn sniff_image_matches_extension(buf: &[u8], ext: &str) -> bool {
+    let trimmed: &[u8] = buf.strip_prefix(b"\xef\xbb\xbf").unwrap_or(buf);
+    match ext {
+        "png" => buf.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "jpg" => buf.len() >= 3 && buf[0] == 0xff && buf[1] == 0xd8 && buf[2] == 0xff,
+        "gif" => buf.starts_with(b"GIF87a") || buf.starts_with(b"GIF89a"),
+        "webp" => buf.len() >= 12 && buf.starts_with(b"RIFF") && buf[8..12].eq_ignore_ascii_case(b"WEBP"),
+        "svg" => {
+            let prefix = String::from_utf8_lossy(trimmed);
+            let p = prefix.trim_start();
+            p.starts_with("<svg") || p.starts_with("<?xml") || p.contains("<svg")
+        }
+        _ => false,
+    }
+}
+
+fn validate_source_image_file(path: &Path, ext: &str) -> Result<(), String> {
+    let mut f = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut buf = [0u8; 64];
+    let n = f.read(&mut buf).map_err(|e| e.to_string())?;
+    if !sniff_image_matches_extension(&buf[..n], ext) {
+        return Err(format!(
+            "file does not look like a {} image: {}",
+            ext,
+            path.display()
+        ));
     }
     Ok(())
 }
@@ -114,6 +193,88 @@ pub fn vault_write_file(
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     fs::write(&target, contents.as_bytes()).map_err(|e| e.to_string())
+}
+
+/// Writes raw file bytes (for example pasted images). `contents_base64` is standard Base64.
+#[tauri::command]
+pub fn vault_write_file_bytes(
+    state: State<'_, VaultRootState>,
+    path: String,
+    contents_base64: String,
+) -> Result<(), String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(contents_base64.trim().as_bytes())
+        .map_err(|e| format!("invalid base64: {e}"))?;
+    let target = PathBuf::from(path);
+    let vault = state.0.lock().map_err(|e| e.to_string())?;
+    assert_in_vault(vault.as_ref(), &target)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&target, bytes).map_err(|e| e.to_string())
+}
+
+/// Copies image files from arbitrary OS paths into `Assets/Attachments/` inside the vault.
+/// Returns relative Markdown paths from an `Inbox/*.md` note (for example `../Assets/Attachments/x.png`).
+#[tauri::command]
+pub fn vault_import_files_into_attachments(
+    state: State<'_, VaultRootState>,
+    sources: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let vault_root = {
+        let vault = state.0.lock().map_err(|e| e.to_string())?;
+        let Some(root) = vault.as_ref() else {
+            return Err("no vault session; pick a folder first".into());
+        };
+        root.clone()
+    };
+    let dest_dir = vault_attachments_dir(&vault_root);
+    assert_in_vault(Some(&vault_root), &dest_dir)?;
+    fs::create_dir_all(&dest_dir).map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis();
+
+    for (i, src_str) in sources.into_iter().enumerate() {
+        let src = PathBuf::from(src_str.trim());
+        let meta = fs::metadata(&src).map_err(|e| e.to_string())?;
+        if !meta.is_file() {
+            return Err(format!("not a file: {}", src.display()));
+        }
+        let Some(ext) = image_ext_from_path(&src) else {
+            return Err(format!(
+                "unsupported image type (extension): {}",
+                src.display()
+            ));
+        };
+        validate_source_image_file(&src, &ext)?;
+        let stem = sanitize_attachment_stem(
+            src.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("image"),
+        );
+        let mut n: u32 = 0;
+        loop {
+            let dest_name = if n == 0 {
+                format!("{stem}-{ts}-{i}.{ext}")
+            } else {
+                format!("{stem}-{ts}-{i}-{n}.{ext}")
+            };
+            let dest_path = dest_dir.join(&dest_name);
+            if dest_path.exists() {
+                n = n.saturating_add(1);
+                continue;
+            }
+            fs::copy(&src, &dest_path).map_err(|e| e.to_string())?;
+            out.push(format!("{MARKDOWN_REL_ATTACHMENTS_PREFIX}/{dest_name}"));
+            break;
+        }
+    }
+
+    Ok(out)
 }
 
 #[tauri::command]
