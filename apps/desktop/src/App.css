@@ -16,6 +16,7 @@
   height: 100vh;
   overflow: hidden;
   border: 1px solid var(--color-window-border);
+  border-radius: var(--window-radius);
   background: var(--color-bg);
   color: var(--color-text);
   user-select: none;
@@ -24,6 +25,7 @@
 
 .app-root--maximized {
   border: none;
+  border-radius: 0;
 }
 
 button:focus-visible,

@@ -36,6 +36,7 @@ html {
 
   /* Window chrome (frameless webview edge) */
   --color-window-border: #1a1c1e;
+  --window-radius: 10px;
 
   /* Chrome (rail strip uses shell background — no separate rail fill) */
   --color-rail: var(--color-brand-bg);
@@ -99,6 +100,15 @@ body {
   text-rendering: auto;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Transparent shell behind rounded .app-root (Tauri main window only; see Root.tsx). */
+html.tauri-main-chrome {
+  background: transparent;
+}
+
+html.tauri-main-chrome body {
+  background: transparent;
 }
 
 #root {
