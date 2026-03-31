@@ -36,6 +36,8 @@ html {
 
   /* Window chrome (frameless webview edge) */
   --color-window-border: #1a1c1e;
+  /* Floating window: blends with shell background (stronger seam when tiled uses --color-window-border). */
+  --color-window-border-floating: color-mix(in srgb, var(--color-text) 11%, var(--color-bg));
   --window-radius: 10px;
 
   /* Chrome (rail strip uses shell background — no separate rail fill) */
@@ -87,7 +89,7 @@ html {
 
   /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
   --panel-grid-gap: 8px;
-  --panel-grid-padding: 6px;
+  --panel-grid-padding: 5px;
 
   color: var(--color-text);
   background: var(--color-bg);

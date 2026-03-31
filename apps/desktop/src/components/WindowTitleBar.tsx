@@ -5,17 +5,13 @@ import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 
-import {DemoMenuBar} from './DemoMenuBar';
-
 type WindowTitleBarProps = {
-  onOpenSettings: () => void;
   maximized: boolean;
   onMaximizedRefresh: () => void;
   tiling?: WindowTilingState;
 };
 
 export function WindowTitleBar({
-  onOpenSettings,
   maximized,
   onMaximizedRefresh,
   tiling = 'none',
@@ -54,7 +50,6 @@ export function WindowTitleBar({
           height={29}
           {...(tauri ? {'data-tauri-drag-region': true} : {})}
         />
-        <DemoMenuBar onOpenSettings={onOpenSettings} />
       </div>
       <div className="window-title-bar-drag" data-tauri-drag-region />
       <div className="window-title-bar-trailing">

@@ -7,6 +7,7 @@ import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react'
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
+import {AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
@@ -400,7 +401,6 @@ export default function App() {
         <WindowTitleBar
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
-          onOpenSettings={() => void openSettingsWindow()}
           tiling={tiling}
         />
         <div className="shell setup-shell">
@@ -411,6 +411,7 @@ export default function App() {
           </button>
           {err ? <p className="error">{err}</p> : null}
         </div>
+        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
       </div>
     );
   }
@@ -421,12 +422,12 @@ export default function App() {
         <WindowTitleBar
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
-          onOpenSettings={() => void openSettingsWindow()}
           tiling={tiling}
         />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
         </div>
+        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
       </div>
     );
   }
@@ -436,7 +437,6 @@ export default function App() {
       <WindowTitleBar
         maximized={maximized}
         onMaximizedRefresh={refreshWindowChrome}
-        onOpenSettings={() => void openSettingsWindow()}
         tiling={tiling}
       />
 
@@ -504,6 +504,7 @@ export default function App() {
         </div>
       </div>
 
+      <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
     </div>
   );
 }
