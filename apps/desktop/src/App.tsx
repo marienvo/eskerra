@@ -26,6 +26,12 @@ import {
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
+import {
+  loadMainWindowUi,
+  saveMainWindowUi,
+  type MainTabId,
+  type StoredMainWindowInbox,
+} from './lib/mainWindowUiStore';
 import {persistTransientMarkdownImages} from './lib/persistTransientMarkdownImages';
 import {
   bootstrapVaultLayout,
@@ -59,7 +65,7 @@ const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
-type MainTab = 'podcasts' | 'inbox';
+type MainTab = MainTabId;
 
 const TITLE_BAR_SKIP_MS = 10_000;
 
@@ -109,6 +115,13 @@ export default function App() {
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
+  const [mainShellRestored, setMainShellRestored] = useState(false);
+
+  const inboxShellRestorePendingRef = useRef<{
+    vaultRoot: string;
+    inbox: StoredMainWindowInbox;
+  } | null>(null);
+  const inboxShellAppliedRef = useRef<string | null>(null);
 
   const appShellRemountKey = `${vaultRoot ?? 'setup'}-${layoutsReady}`;
   useTauriShellWindowDrag(appRootRef, appShellRemountKey);
@@ -191,6 +204,10 @@ export default function App() {
         const label = local.displayName.trim();
         setSettingsName(label !== '' ? label : 'Notebox');
         await refreshNotes(root);
+        setSelectedUri(null);
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
         setVaultRoot(root);
         const store = await load(STORE_PATH);
         await store.set(STORE_KEY_VAULT, root);
@@ -213,16 +230,59 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void loadStoredLayouts().then(loaded => {
-      if (!cancelled) {
-        setLayouts(loaded);
+    void Promise.all([loadStoredLayouts(), loadMainWindowUi()]).then(
+      ([loadedLayouts, ui]) => {
+        if (cancelled) {
+          return;
+        }
+        setLayouts(loadedLayouts);
+        if (ui) {
+          setMainTab(ui.mainTab);
+          setPlayerDockVisible(ui.playerDockVisible);
+          inboxShellRestorePendingRef.current = {
+            vaultRoot: ui.vaultRoot,
+            inbox: ui.inbox,
+          };
+        }
         setLayoutsReady(true);
-      }
-    });
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    inboxShellAppliedRef.current = null;
+    setMainShellRestored(false);
+  }, [vaultRoot]);
+
+  useEffect(() => {
+    if (!vaultRoot || !layoutsReady) {
+      return;
+    }
+    if (inboxShellAppliedRef.current === vaultRoot) {
+      return;
+    }
+    const pending = inboxShellRestorePendingRef.current;
+    if (pending && pending.vaultRoot === vaultRoot) {
+      if (pending.inbox.composingNewEntry) {
+        setComposingNewEntry(true);
+        setSelectedUri(null);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      } else if (pending.inbox.selectedUri) {
+        const uri = pending.inbox.selectedUri;
+        if (notes.some(n => n.uri === uri)) {
+          setComposingNewEntry(false);
+          setSelectedUri(uri);
+        }
+      }
+      inboxShellRestorePendingRef.current = null;
+    }
+    inboxShellAppliedRef.current = vaultRoot;
+    setMainShellRestored(true);
+  }, [vaultRoot, notes, layoutsReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,6 +387,34 @@ export default function App() {
       cancelled = true;
     };
   }, [vaultRoot, selectedUri, fs]);
+
+  useEffect(() => {
+    if (!vaultRoot || !mainShellRestored) {
+      return;
+    }
+    const payload = {
+      vaultRoot,
+      mainTab,
+      playerDockVisible,
+      inbox: {
+        composingNewEntry,
+        selectedUri,
+      },
+    };
+    const t = window.setTimeout(() => {
+      void saveMainWindowUi(payload);
+    }, 200);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [
+    vaultRoot,
+    mainTab,
+    playerDockVisible,
+    selectedUri,
+    composingNewEntry,
+    mainShellRestored,
+  ]);
 
   const pickFolder = async () => {
     setErr(null);
