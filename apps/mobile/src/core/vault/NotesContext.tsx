@@ -41,7 +41,11 @@ const NotesContext = createContext<NotesContextValue | null>(null);
 function sortByLastModifiedDesc(left: NoteSummary, right: NoteSummary): number {
   const leftLastModified = left.lastModified ?? 0;
   const rightLastModified = right.lastModified ?? 0;
-  return rightLastModified - leftLastModified;
+  const delta = rightLastModified - leftLastModified;
+  if (delta !== 0) {
+    return delta;
+  }
+  return left.name.localeCompare(right.name);
 }
 
 function getUriFileName(uri: string): string {

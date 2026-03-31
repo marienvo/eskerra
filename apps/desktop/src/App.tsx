@@ -37,6 +37,7 @@ import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
   listInboxNotes,
+  prefetchInboxMarkdownBodies,
   readVaultLocalSettings,
   readVaultSettings,
   saveNoteMarkdown,
@@ -122,6 +123,10 @@ export default function App() {
     inbox: StoredMainWindowInbox;
   } | null>(null);
   const inboxShellAppliedRef = useRef<string | null>(null);
+  const inboxBodyPrefetchGenRef = useRef(0);
+  const [inboxContentByUri, setInboxContentByUri] = useState<
+    Record<string, string>
+  >({});
 
   const appShellRemountKey = `${vaultRoot ?? 'setup'}-${layoutsReady}`;
   useTauriShellWindowDrag(appRootRef, appShellRemountKey);
@@ -176,9 +181,18 @@ export default function App() {
 
   const refreshNotes = useCallback(
     async (root: string) => {
+      const gen = ++inboxBodyPrefetchGenRef.current;
       const list = await listInboxNotes(root, fs);
+      if (gen !== inboxBodyPrefetchGenRef.current) {
+        return;
+      }
       setNotes(list);
       bumpPlaylistRevision();
+      const bodies = await prefetchInboxMarkdownBodies(list, fs);
+      if (gen !== inboxBodyPrefetchGenRef.current) {
+        return;
+      }
+      setInboxContentByUri(bodies);
     },
     [bumpPlaylistRevision, fs],
   );
@@ -374,7 +388,9 @@ export default function App() {
       try {
         const raw = await fs.readFile(selectedUri, {encoding: 'utf8'});
         if (!cancelled) {
-          setEditorBody(raw.replace(/\n$/, ''));
+          const normalized = raw.replace(/\n$/, '');
+          setEditorBody(normalized);
+          setInboxContentByUri(prev => ({...prev, [selectedUri]: normalized}));
           setInboxEditorResetNonce(n => n + 1);
         }
       } catch (e) {
@@ -596,6 +612,7 @@ export default function App() {
                 defaultLayout={layouts.inbox}
                 onLayoutChanged={persistInboxLayout}
                 notes={notes}
+                inboxContentByUri={inboxContentByUri}
                 selectedUri={selectedUri}
                 onSelectNote={selectNote}
                 onAddEntry={startNewEntry}

@@ -1,8 +1,10 @@
+import {describe, expect, test} from 'vitest';
+
 import {
-  NEUTRAL_GRAY,
   getInboxTileBackgroundColor,
   mixHex,
-} from '../src/features/vault/utils/inboxTileColor';
+  NEUTRAL_GRAY,
+} from './inboxTileColor';
 
 const MS_PER_DAY = 86_400_000;
 
@@ -68,13 +70,13 @@ describe('getInboxTileBackgroundColor', () => {
 
   test('maps each weekday to the correct base color when under 7 days old', () => {
     const cases: Array<[Date, string]> = [
-      [new Date(2020, 0, 19, 12, 0, 0), '#73c6b6'], // Sunday
-      [new Date(2020, 0, 20, 12, 0, 0), '#5dade2'], // Monday
-      [new Date(2020, 0, 21, 12, 0, 0), '#58d68d'], // Tuesday
-      [new Date(2020, 0, 22, 11, 0, 0), '#f4d03f'], // Wednesday (1h before now)
-      [new Date(2020, 0, 16, 12, 0, 0), '#eb984e'], // Thursday
-      [new Date(2020, 0, 17, 12, 0, 0), '#ec7063'], // Friday
-      [new Date(2020, 0, 18, 12, 0, 0), '#af7ac5'], // Saturday
+      [new Date(2020, 0, 19, 12, 0, 0), '#73c6b6'],
+      [new Date(2020, 0, 20, 12, 0, 0), '#5dade2'],
+      [new Date(2020, 0, 21, 12, 0, 0), '#58d68d'],
+      [new Date(2020, 0, 22, 11, 0, 0), '#f4d03f'],
+      [new Date(2020, 0, 16, 12, 0, 0), '#eb984e'],
+      [new Date(2020, 0, 17, 12, 0, 0), '#ec7063'],
+      [new Date(2020, 0, 18, 12, 0, 0), '#af7ac5'],
     ];
 
     for (const [lastModifiedDate, expectedLowercase] of cases) {

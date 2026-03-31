@@ -29,6 +29,18 @@ export {
   type ParsedComposeInput,
 } from './inboxComposeNote';
 export {
+  calendarDaysFromTargetToReference,
+  formatRelativeCalendarLabel,
+  formatRelativeCalendarLabelFromIsoDate,
+  startOfLocalDayMs,
+} from './datetime/relativeCalendarLabel';
+export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export {
+  getInboxTileBackgroundColor,
+  mixHex,
+  NEUTRAL_GRAY,
+} from './inbox/inboxTileColor';
+export {
   defaultNoteboxLocalSettings,
   ensureDeviceInstanceId,
   newDeviceInstanceId,

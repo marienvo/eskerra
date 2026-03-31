@@ -655,6 +655,50 @@ a:focus:not(:focus-visible) {
   font-synthesis: none;
 }
 
+.note-list button.note-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.38rem;
+}
+
+.note-list-row__accent {
+  width: 4px;
+  flex-shrink: 0;
+  align-self: stretch;
+  border-radius: 3px;
+}
+
+.note-list-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  text-align: left;
+}
+
+.note-list-row__title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.28;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-list-row__filename,
+.note-list-row__meta {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Capture / Inbox: opaque row matches pane — see specs/design/desktop-text-rendering.md */
 [data-app-surface='capture'] .note-list button {
   background: var(--color-capture-panel);

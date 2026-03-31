@@ -126,7 +126,11 @@ async function listMarkdownFilesViaSaf(
     .sort((a, b) => {
       const left = a.lastModified ?? 0;
       const right = b.lastModified ?? 0;
-      return right - left;
+      const delta = right - left;
+      if (delta !== 0) {
+        return delta;
+      }
+      return a.name.localeCompare(b.name);
     });
 }
 

@@ -4,6 +4,13 @@ import {Group, Panel, Separator} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
 
 import {
+  extractFirstMarkdownH1,
+  formatRelativeCalendarLabel,
+  getInboxTileBackgroundColor,
+  getNoteTitle,
+} from '@notebox/core';
+
+import {
   NoteMarkdownEditor,
   type NoteMarkdownEditorHandle,
 } from '../editor/noteEditor/NoteMarkdownEditor';
@@ -18,6 +25,7 @@ type InboxTabProps = {
   defaultLayout: Layout;
   onLayoutChanged: (layout: Layout) => void;
   notes: NoteRow[];
+  inboxContentByUri: Record<string, string>;
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
   onAddEntry: () => void;
@@ -38,6 +46,7 @@ export function InboxTab({
   defaultLayout,
   onLayoutChanged,
   notes,
+  inboxContentByUri,
   selectedUri,
   onSelectNote,
   onAddEntry,
@@ -94,17 +103,43 @@ export function InboxTab({
             </button>
           </div>
           <ul className="note-list">
-            {notes.map(n => (
-              <li key={n.uri}>
-                <button
-                  type="button"
-                  className={n.uri === selectedUri ? 'active' : ''}
-                  onClick={() => onSelectNote(n.uri)}
-                >
-                  {n.name}
-                </button>
-              </li>
-            ))}
+            {notes.map(n => {
+              const markdownSource =
+                !composingNewEntry && n.uri === selectedUri
+                  ? editorBody
+                  : inboxContentByUri[n.uri];
+              const listTitle =
+                markdownSource !== undefined
+                  ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(n.name)
+                  : getNoteTitle(n.name);
+              const tileColor = getInboxTileBackgroundColor(n.lastModified);
+              return (
+                <li key={n.uri}>
+                  <button
+                    type="button"
+                    className={
+                      n.uri === selectedUri
+                        ? 'note-list-row active'
+                        : 'note-list-row'
+                    }
+                    onClick={() => onSelectNote(n.uri)}
+                  >
+                    <span
+                      className="note-list-row__accent"
+                      style={{backgroundColor: tileColor}}
+                      aria-hidden
+                    />
+                    <span className="note-list-row__body">
+                      <span className="note-list-row__title">{listTitle}</span>
+                      <span className="note-list-row__filename">{n.name}</span>
+                      <span className="note-list-row__meta">
+                        {formatRelativeCalendarLabel(n.lastModified)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </Panel>
         <Separator className="resize-sep" />

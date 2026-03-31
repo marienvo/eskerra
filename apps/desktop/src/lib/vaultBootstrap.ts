@@ -195,7 +195,38 @@ export async function listInboxNotes(root: string, fs: VaultFilesystem) {
       name: r.name,
       uri: r.uri,
     }))
-    .sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0));
+    .sort((a, b) => {
+      // Most recently modified first (same comparator as mobile sortByLastModifiedDesc).
+      const delta = (b.lastModified ?? 0) - (a.lastModified ?? 0);
+      if (delta !== 0) {
+        return delta;
+      }
+      return a.name.localeCompare(b.name);
+    });
+}
+
+/** Reads markdown bodies for list preview (H1 extraction). Failed reads are omitted. */
+export async function prefetchInboxMarkdownBodies(
+  notes: ReadonlyArray<{uri: string}>,
+  fs: VaultFilesystem,
+): Promise<Record<string, string>> {
+  const entries = await Promise.all(
+    notes.map(async n => {
+      try {
+        const text = await fs.readFile(n.uri, {encoding: 'utf8'});
+        return [n.uri, text.replace(/\n$/, '')] as const;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const map: Record<string, string> = {};
+  for (const e of entries) {
+    if (e) {
+      map[e[0]] = e[1];
+    }
+  }
+  return map;
 }
 
 async function readLocalPlaylistFileOnly(
