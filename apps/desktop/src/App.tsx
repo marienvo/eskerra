@@ -61,12 +61,8 @@ type MainTab = 'podcasts' | 'inbox';
 const TITLE_BAR_SKIP_MS = 10_000;
 
 export default function App() {
-  const {maximized, refresh: refreshWindowMaximized} = useTauriWindowMaximized();
-  const {tiling, tilingDebug, refresh: refreshWindowTiling} = useTauriWindowTiling();
-  const refreshWindowChrome = useCallback(() => {
-    refreshWindowMaximized();
-    refreshWindowTiling();
-  }, [refreshWindowMaximized, refreshWindowTiling]);
+  const {maximized} = useTauriWindowMaximized();
+  const {tiling, tilingDebug} = useTauriWindowTiling();
   const appRootClassName = useMemo(() => {
     const parts = ['app-root'];
     if (isTauri()) {
@@ -420,12 +416,7 @@ export default function App() {
   if (!vaultRoot) {
     return (
       <div ref={appRootRef} className={appRootClassName}>
-        <WindowTitleBar
-          maximized={maximized}
-          onMaximizedRefresh={refreshWindowChrome}
-          tiling={tiling}
-          transport={titleBarTransport}
-        />
+        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
           <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
@@ -442,12 +433,7 @@ export default function App() {
   if (!layoutsReady) {
     return (
       <div ref={appRootRef} className={appRootClassName}>
-        <WindowTitleBar
-          maximized={maximized}
-          onMaximizedRefresh={refreshWindowChrome}
-          tiling={tiling}
-          transport={titleBarTransport}
-        />
+        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
         </div>
@@ -458,12 +444,7 @@ export default function App() {
 
   return (
     <div ref={appRootRef} className={appRootClassName}>
-      <WindowTitleBar
-        maximized={maximized}
-        onMaximizedRefresh={refreshWindowChrome}
-        tiling={tiling}
-        transport={titleBarTransport}
-      />
+      <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
 
       {err ? (
         <div className="error-banner" role="alert">
