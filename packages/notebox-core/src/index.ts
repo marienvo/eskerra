@@ -8,6 +8,12 @@ export {
   normalizeImageFileExtension,
   sanitizeAttachmentBaseName,
 } from './attachments/attachmentPaths';
+export {
+  imageSniffFormatToDotExtension,
+  markdownContainsTransientImageUrls,
+  sniffImageFormatFromBytes,
+  type ImageSniffFormat,
+} from './attachments/imageSniff';
 export {initNoteboxVault} from './initNoteboxVault';
 export {
   buildInboxMarkdownIndexContent,

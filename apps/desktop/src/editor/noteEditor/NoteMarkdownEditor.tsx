@@ -1,7 +1,9 @@
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/nord.css';
 
-import {Crepe, CrepeFeature} from '@milkdown/crepe';
+import {Crepe, CrepeFeature, useCrepeFeatures} from '@milkdown/crepe';
+import {imageBlockConfig} from '@milkdown/kit/component/image-block';
+import {uploadConfig} from '@milkdown/kit/plugin/upload';
 import {insertImageCommand} from '@milkdown/kit/preset/commonmark';
 import {callCommand, getMarkdown, replaceAll} from '@milkdown/kit/utils';
 import {Milkdown, MilkdownProvider, useEditor} from '@milkdown/react';
@@ -17,6 +19,13 @@ import {
   useState,
 } from 'react';
 
+import {
+  clipboardDataProbablyHasVaultImage,
+  collectClipboardImageFilesFromDataTransfer,
+  collectClipboardImageFilesFromFileList,
+  dotExtensionForClipboardBytes,
+  extractClipboardImageUrlsFromHtml,
+} from '../../lib/clipboardImageFiles';
 import {rgbaImageToPngBytes} from '../../lib/clipboardImagePng';
 import {
   extensionFromFileNameOrMime,
@@ -33,6 +42,8 @@ export type NoteMarkdownEditorProps = {
   /** Bumped when the document should reload from `initialMarkdown` (note switch or new entry). */
   sessionKey: number;
   onMarkdownChange: (markdown: string) => void;
+  /** Shown when image paste or drop fails; also used when not running inside Tauri. */
+  onEditorError?: (message: string) => void;
   placeholder: string;
   busy: boolean;
 };
@@ -66,6 +77,26 @@ function clipboardTypesHintImage(types: readonly string[]): boolean {
   );
 }
 
+/** `blob:` or `data:image/...` URLs from the clipboard HTML path. */
+async function saveFetchedImageUrlToVault(
+  vaultRoot: string,
+  url: string,
+): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Could not read pasted image (${res.status})`);
+  }
+  const blob = await res.blob();
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const ext = dotExtensionForClipboardBytes(buf, blob.type, 'paste');
+  return saveVaultImageBytes({
+    vaultRoot,
+    bytes: buf,
+    suggestedBaseName: 'paste',
+    extensionWithDot: ext,
+  });
+}
+
 const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps>(
   function InnerEditor(props, ref) {
     const {
@@ -74,6 +105,7 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
       initialMarkdown,
       sessionKey,
       onMarkdownChange,
+      onEditorError,
       placeholder,
       busy,
     } = props;
@@ -82,6 +114,16 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
     useEffect(() => {
       onMarkdownChangeRef.current = onMarkdownChange;
     }, [onMarkdownChange]);
+
+    const onEditorErrorRef = useRef(onEditorError);
+    useEffect(() => {
+      onEditorErrorRef.current = onEditorError;
+    }, [onEditorError]);
+
+    const reportEditorError = useCallback((message: string) => {
+      console.error(message);
+      onEditorErrorRef.current?.(message);
+    }, []);
 
     const {get} = useEditor(
       root => {
@@ -103,7 +145,12 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
               onUpload: async file => {
                 const buf = new Uint8Array(await file.arrayBuffer());
                 const ext =
-                  extensionFromFileNameOrMime(file.name, file.type) ?? '.png';
+                  extensionFromFileNameOrMime(file.name, file.type) ??
+                  dotExtensionForClipboardBytes(
+                    buf,
+                    file.type,
+                    file.name || 'image',
+                  );
                 return saveVaultImageBytes({
                   vaultRoot,
                   bytes: buf,
@@ -113,6 +160,43 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
               },
             },
           },
+        });
+
+        crepe.editor.config(ctx => {
+          ctx.update(uploadConfig.key, prev => ({
+            ...prev,
+            enableHtmlFileUploader: true,
+            uploader: async (files, schema, ctxIn, _insertPos) => {
+              // Milkdown slice accessor named "use*" is not a React hook.
+              // eslint-disable-next-line react-hooks/rules-of-hooks -- useCrepeFeatures reads ctx slice
+              const features = useCrepeFeatures(ctxIn).get();
+              const hasImageBlock = features.includes(CrepeFeature.ImageBlock);
+              const nodeType = hasImageBlock
+                ? schema.nodes['image-block']
+                : schema.nodes['image'];
+
+              if (!nodeType) {
+                return [];
+              }
+
+              const onUpload = hasImageBlock
+                ? ctxIn.get(imageBlockConfig.key).onUpload
+                : undefined;
+
+              const images = await collectClipboardImageFilesFromFileList(files);
+
+              const nodes = await Promise.all(
+                images.map(async file => {
+                  const src = onUpload
+                    ? await onUpload(file)
+                    : URL.createObjectURL(file);
+                  return nodeType.createAndFill({src})!;
+                }),
+              );
+
+              return nodes;
+            },
+          }));
         });
 
         crepe.on(listen => {
@@ -174,63 +258,101 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
     const hostRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-      if (!isTauri()) {
-        return;
-      }
       const el = hostRef.current;
       if (!el) {
         return;
       }
 
       const onPaste = (e: ClipboardEvent) => {
-        if (busy) {
+        if (!e.clipboardData) {
           return;
         }
         const dt = e.clipboardData;
-        const types = dt ? Array.from(dt.types) : [];
+        const types = Array.from(dt.types);
 
-        const fileList = dt?.files;
-        if (fileList && fileList.length > 0) {
-          const f = fileList.item(0);
-          if (f && f.type.startsWith('image/')) {
-            e.preventDefault();
-            void (async () => {
-              try {
-                const buf = new Uint8Array(await f.arrayBuffer());
-                const ext =
-                  extensionFromFileNameOrMime(f.name, f.type) ?? '.png';
-                const rel = await saveVaultImageBytes({
+        if (!clipboardDataProbablyHasVaultImage(dt)) {
+          return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (busy) {
+          reportEditorError(
+            'Please wait until the current operation finishes before pasting an image.',
+          );
+          return;
+        }
+
+        if (!isTauri()) {
+          reportEditorError(
+            'Pasting images into the vault requires the Notebox desktop app. Use `tauri dev` or the packaged app instead of a plain browser tab.',
+          );
+          return;
+        }
+
+        const html = dt.getData('text/html') ?? '';
+
+        void (async () => {
+          const relPaths: string[] = [];
+
+          try {
+            const files = await collectClipboardImageFilesFromDataTransfer(dt);
+            for (const f of files) {
+              const buf = new Uint8Array(await f.arrayBuffer());
+              const ext =
+                extensionFromFileNameOrMime(f.name, f.type) ??
+                dotExtensionForClipboardBytes(
+                  buf,
+                  f.type,
+                  f.name || 'paste',
+                );
+              relPaths.push(
+                await saveVaultImageBytes({
                   vaultRoot,
                   bytes: buf,
                   suggestedBaseName: f.name || 'paste',
                   extensionWithDot: ext,
-                });
-                insertRelativePaths([rel]);
-              } catch {
-                // Ignore failed saves
-              }
-            })();
-            return;
-          }
-        }
+                }),
+              );
+            }
 
-        if (!clipboardTypesHintImage(types)) {
-          return;
-        }
-        e.preventDefault();
-        void (async () => {
-          try {
-            const image = await readImage();
-            const png = await rgbaImageToPngBytes(image);
-            const rel = await saveVaultImageBytes({
-              vaultRoot,
-              bytes: png,
-              suggestedBaseName: 'paste',
-              extensionWithDot: '.png',
-            });
-            insertRelativePaths([rel]);
-          } catch {
-            // Not an image or read failed
+            if (relPaths.length === 0) {
+              const {blobUrls, dataImageUrls} =
+                extractClipboardImageUrlsFromHtml(html);
+              for (const url of blobUrls) {
+                relPaths.push(await saveFetchedImageUrlToVault(vaultRoot, url));
+              }
+              for (const url of dataImageUrls) {
+                relPaths.push(await saveFetchedImageUrlToVault(vaultRoot, url));
+              }
+            }
+
+            if (relPaths.length === 0 && clipboardTypesHintImage(types)) {
+              const image = await readImage();
+              const png = await rgbaImageToPngBytes(image);
+              relPaths.push(
+                await saveVaultImageBytes({
+                  vaultRoot,
+                  bytes: png,
+                  suggestedBaseName: 'paste',
+                  extensionWithDot: '.png',
+                }),
+              );
+            }
+
+            if (relPaths.length === 0) {
+              reportEditorError(
+                'Could not import the pasted content as a vault image.',
+              );
+              return;
+            }
+
+            insertRelativePaths(relPaths);
+          } catch (err) {
+            reportEditorError(
+              err instanceof Error ? err.message : String(err),
+            );
           }
         })();
       };
@@ -239,7 +361,7 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
       return () => {
         el.removeEventListener('paste', onPaste, {capture: true});
       };
-    }, [busy, insertRelativePaths, vaultRoot]);
+    }, [busy, insertRelativePaths, vaultRoot, reportEditorError]);
 
     useEffect(() => {
       if (!isTauri()) {
@@ -267,8 +389,10 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
               try {
                 const relPaths = await vaultImportFilesIntoAttachments(paths);
                 insertRelativePaths(relPaths);
-              } catch {
-                // User-visible errors can be added later
+              } catch (err) {
+                reportEditorError(
+                  err instanceof Error ? err.message : String(err),
+                );
               }
             })();
           }
@@ -285,7 +409,7 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
         cancelled = true;
         unlisten?.();
       };
-    }, [busy, insertRelativePaths]);
+    }, [busy, insertRelativePaths, reportEditorError]);
 
     const rootClass =
       dropActive

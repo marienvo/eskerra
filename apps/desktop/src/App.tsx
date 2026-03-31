@@ -7,6 +7,7 @@ import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from
 
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
+import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
 import {AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
@@ -25,6 +26,7 @@ import {
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
+import {persistTransientMarkdownImages} from './lib/persistTransientMarkdownImages';
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
@@ -44,6 +46,7 @@ import {
 import {
   buildInboxMarkdownFromCompose,
   ensureDeviceInstanceId,
+  markdownContainsTransientImageUrls,
   parseComposeInput,
   type NoteboxSettings,
 } from '@notebox/core';
@@ -91,6 +94,7 @@ export default function App() {
   const [selectedUri, setSelectedUri] = useState<string | null>(null);
   const [editorBody, setEditorBody] = useState('');
   const [inboxEditorResetNonce, setInboxEditorResetNonce] = useState(0);
+  const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -373,27 +377,58 @@ export default function App() {
     setSelectedUri(uri);
   }, []);
 
-  const submitNewEntry = useCallback(() => {
-    const {titleLine, bodyAfterBlank} = parseComposeInput(editorBody);
+  const submitNewEntry = useCallback(async () => {
+    if (!vaultRoot) {
+      return;
+    }
+    setErr(null);
+    const rawBody = inboxEditorRef.current?.getMarkdown() ?? editorBody;
+    let body = rawBody;
+    try {
+      body = await persistTransientMarkdownImages(body, vaultRoot);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    if (markdownContainsTransientImageUrls(body)) {
+      setErr(
+        'Cannot create this note: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+      );
+      return;
+    }
+    if (body !== rawBody) {
+      inboxEditorRef.current?.loadMarkdown(body);
+      setEditorBody(body);
+    }
+    const {titleLine, bodyAfterBlank} = parseComposeInput(body);
     if (!titleLine.trim()) {
       setErr('First line is required.');
       return;
     }
     const fullMarkdown = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     void addNote(titleLine, fullMarkdown);
-  }, [addNote, editorBody]);
+  }, [addNote, editorBody, vaultRoot]);
 
   const saveNote = async () => {
-    if (!selectedUri) {
+    if (!selectedUri || !vaultRoot) {
       return;
     }
     setBusy(true);
     setErr(null);
     try {
-      await saveNoteMarkdown(selectedUri, fs, editorBody);
-      if (vaultRoot) {
-        await refreshNotes(vaultRoot);
+      const raw = inboxEditorRef.current?.getMarkdown() ?? editorBody;
+      const md = await persistTransientMarkdownImages(raw, vaultRoot);
+      if (markdownContainsTransientImageUrls(md)) {
+        throw new Error(
+          'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+        );
       }
+      if (md !== raw) {
+        inboxEditorRef.current?.loadMarkdown(md);
+        setEditorBody(md);
+      }
+      await saveNoteMarkdown(selectedUri, fs, md);
+      await refreshNotes(vaultRoot);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -469,6 +504,7 @@ export default function App() {
             <div className="tab-panel" hidden={mainTab !== 'inbox'}>
               <InboxTab
                 vaultRoot={vaultRoot}
+                inboxEditorRef={inboxEditorRef}
                 defaultLayout={layouts.inbox}
                 onLayoutChanged={persistInboxLayout}
                 notes={notes}
@@ -481,6 +517,7 @@ export default function App() {
                 editorBody={editorBody}
                 onEditorChange={setEditorBody}
                 inboxEditorResetNonce={inboxEditorResetNonce}
+                onEditorError={setErr}
                 onSaveNote={() => void saveNote()}
                 busy={busy}
               />

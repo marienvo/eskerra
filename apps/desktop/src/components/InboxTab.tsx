@@ -1,8 +1,12 @@
+import type {RefObject} from 'react';
 import {useMemo} from 'react';
 import {Group, Panel, Separator} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
 
-import {NoteMarkdownEditor} from '../editor/noteEditor/NoteMarkdownEditor';
+import {
+  NoteMarkdownEditor,
+  type NoteMarkdownEditorHandle,
+} from '../editor/noteEditor/NoteMarkdownEditor';
 
 import {MaterialIcon} from './MaterialIcon';
 
@@ -10,6 +14,7 @@ type NoteRow = {lastModified: number | null; name: string; uri: string};
 
 type InboxTabProps = {
   vaultRoot: string;
+  inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   defaultLayout: Layout;
   onLayoutChanged: (layout: Layout) => void;
   notes: NoteRow[];
@@ -22,12 +27,14 @@ type InboxTabProps = {
   editorBody: string;
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
+  onEditorError: (message: string) => void;
   onSaveNote: () => void;
   busy: boolean;
 };
 
 export function InboxTab({
   vaultRoot,
+  inboxEditorRef,
   defaultLayout,
   onLayoutChanged,
   notes,
@@ -40,6 +47,7 @@ export function InboxTab({
   editorBody,
   onEditorChange,
   inboxEditorResetNonce,
+  onEditorError,
   onSaveNote,
   busy,
 }: InboxTabProps) {
@@ -125,11 +133,13 @@ export function InboxTab({
             <>
               <div className="editor note-markdown-editor-wrap">
                 <NoteMarkdownEditor
+                  ref={inboxEditorRef}
                   vaultRoot={vaultRoot}
                   activeNotePath={composingNewEntry ? null : selectedUri}
                   initialMarkdown={editorBody}
                   sessionKey={inboxEditorResetNonce}
                   onMarkdownChange={onEditorChange}
+                  onEditorError={onEditorError}
                   placeholder={
                     composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
                   }
