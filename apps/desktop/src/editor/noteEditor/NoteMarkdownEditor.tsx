@@ -1,3 +1,4 @@
+import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/nord.css';
 
 import {Crepe, CrepeFeature} from '@milkdown/crepe';
