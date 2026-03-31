@@ -1,8 +1,9 @@
+import {isTauri} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
 import type {Layout} from 'react-resizable-panels';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
@@ -13,6 +14,7 @@ import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
+import {useTauriShellWindowDrag} from './hooks/useTauriShellWindowDrag';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {openSettingsWindow} from './lib/openSettingsWindow';
@@ -67,6 +69,9 @@ export default function App() {
   }, [refreshWindowMaximized, refreshWindowTiling]);
   const appRootClassName = useMemo(() => {
     const parts = ['app-root'];
+    if (isTauri()) {
+      parts.push('app-root--tauri');
+    }
     if (maximized) {
       parts.push('app-root--maximized');
     }
@@ -81,6 +86,7 @@ export default function App() {
     }
     return parts.join(' ');
   }, [maximized, tiling, tilingDebug]);
+  const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
@@ -102,6 +108,9 @@ export default function App() {
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
+
+  const appShellRemountKey = `${vaultRoot ?? 'setup'}-${layoutsReady}`;
+  useTauriShellWindowDrag(appRootRef, appShellRemountKey);
 
   const bumpPlaylistRevision = useCallback(() => {
     setPlaylistRevision(r => r + 1);
@@ -410,7 +419,7 @@ export default function App() {
 
   if (!vaultRoot) {
     return (
-      <div className={appRootClassName}>
+      <div ref={appRootRef} className={appRootClassName}>
         <WindowTitleBar
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
@@ -432,7 +441,7 @@ export default function App() {
 
   if (!layoutsReady) {
     return (
-      <div className={appRootClassName}>
+      <div ref={appRootRef} className={appRootClassName}>
         <WindowTitleBar
           maximized={maximized}
           onMaximizedRefresh={refreshWindowChrome}
@@ -448,7 +457,7 @@ export default function App() {
   }
 
   return (
-    <div className={appRootClassName}>
+    <div ref={appRootRef} className={appRootClassName}>
       <WindowTitleBar
         maximized={maximized}
         onMaximizedRefresh={refreshWindowChrome}

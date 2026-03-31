@@ -55,7 +55,7 @@ export function WindowTitleBar({
           {...(tauri ? {'data-tauri-drag-region': true} : {})}
         />
       </div>
-      <div className="window-title-bar-drag" data-tauri-drag-region />
+      <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
       {transport ? <TitleBarTransport {...transport} /> : null}
       <div className="window-title-bar-trailing">
         {tauri ? (

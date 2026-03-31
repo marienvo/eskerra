@@ -38,7 +38,7 @@ html {
   --color-window-border: #1a1c1e;
   /* Floating window: blends with shell background (stronger seam when tiled uses --color-window-border). */
   --color-window-border-floating: color-mix(in srgb, var(--color-text) 11%, var(--color-bg));
-  --window-radius: 10px;
+  --window-radius: 8px;
 
   /* Chrome (rail strip uses shell background — no separate rail fill) */
   --color-rail: var(--color-brand-bg);

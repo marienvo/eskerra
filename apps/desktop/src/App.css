@@ -48,6 +48,20 @@
   outline-offset: -2px;
 }
 
+/* Tauri frameless: declarative drag on title bar strips uses WebKit regions; keep controls scrollable. */
+.app-root--tauri button,
+.app-root--tauri input,
+.app-root--tauri textarea,
+.app-root--tauri select,
+.app-root--tauri a,
+.app-root--tauri [contenteditable='true'],
+.app-root--tauri .resize-sep,
+.app-root--tauri .note-list,
+.app-root--tauri .episode-scroll,
+.app-root--tauri .playlist-body {
+  -webkit-app-region: no-drag;
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -64,7 +78,7 @@ a:focus:not(:focus-visible) {
 .window-title-bar {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-shrink: 0;
   min-height: 40px;
   height: 40px;
@@ -78,6 +92,7 @@ a:focus:not(:focus-visible) {
 .window-title-bar-leading {
   display: flex;
   align-items: center;
+  align-self: stretch;
   flex-shrink: 0;
   gap: 0.28rem;
 }
@@ -96,7 +111,9 @@ a:focus:not(:focus-visible) {
 .window-title-bar-drag {
   flex: 1;
   min-width: 2rem;
-  min-height: 1.5rem;
+  min-height: 0;
+  display: flex;
+  align-items: center;
   cursor: default;
 }
 
@@ -110,6 +127,10 @@ a:focus:not(:focus-visible) {
   justify-content: center;
   gap: 0.2rem;
   transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.window-title-bar-transport button {
   pointer-events: auto;
 }
 
@@ -144,6 +165,7 @@ a:focus:not(:focus-visible) {
 .window-title-bar-trailing {
   display: flex;
   align-items: center;
+  align-self: stretch;
   flex-shrink: 0;
   gap: 0.15rem;
 }
