@@ -768,6 +768,13 @@ a:focus:not(:focus-visible) {
   line-height: 1.5;
 }
 
+.note-markdown-editor-host a.wiki-link {
+  color: var(--color-accent, #4a90d9);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 .muted {
   color: var(--color-muted);
 }

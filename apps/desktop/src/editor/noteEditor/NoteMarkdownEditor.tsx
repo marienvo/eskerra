@@ -33,6 +33,7 @@ import {
   vaultImportFilesIntoAttachments,
 } from '../../lib/desktopVaultAttachments';
 import {resolveVaultImagePreviewUrl} from '../../lib/resolveVaultImagePreviewUrl';
+import {wikiLinkRemark, wikiLinkSchema} from '../wikiLink';
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -161,6 +162,8 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
             },
           },
         });
+
+        crepe.editor.use([...wikiLinkRemark, ...wikiLinkSchema]);
 
         crepe.editor.config(ctx => {
           ctx.update(uploadConfig.key, prev => ({
