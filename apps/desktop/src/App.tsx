@@ -1,17 +1,22 @@
+import {isTauri} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
 import type {Layout} from 'react-resizable-panels';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
 import {PodcastsTab} from './components/PodcastsTab';
+import {AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
+import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
+import {useTauriShellWindowDrag} from './hooks/useTauriShellWindowDrag';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
+import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {
@@ -53,9 +58,31 @@ const STORE_KEY_VAULT = 'vaultRoot';
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 type MainTab = 'podcasts' | 'inbox';
 
+const TITLE_BAR_SKIP_MS = 10_000;
+
 export default function App() {
-  const {maximized, refresh: refreshWindowMaximized} = useTauriWindowMaximized();
-  const appRootClassName = maximized ? 'app-root app-root--maximized' : 'app-root';
+  const {maximized} = useTauriWindowMaximized();
+  const {tiling, tilingDebug} = useTauriWindowTiling();
+  const appRootClassName = useMemo(() => {
+    const parts = ['app-root'];
+    if (isTauri()) {
+      parts.push('app-root--tauri');
+    }
+    if (maximized) {
+      parts.push('app-root--maximized');
+    }
+    if (tiling === 'left') {
+      parts.push('app-root--tiled-left');
+    }
+    if (tiling === 'right') {
+      parts.push('app-root--tiled-right');
+    }
+    if (tilingDebug) {
+      parts.push('app-root--tiling-debug');
+    }
+    return parts.join(' ');
+  }, [maximized, tiling, tilingDebug]);
+  const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
@@ -77,6 +104,9 @@ export default function App() {
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
+
+  const appShellRemountKey = `${vaultRoot ?? 'setup'}-${layoutsReady}`;
+  useTauriShellWindowDrag(appRootRef, appShellRemountKey);
 
   const bumpPlaylistRevision = useCallback(() => {
     setPlaylistRevision(r => r + 1);
@@ -107,6 +137,16 @@ export default function App() {
     playlistRevision,
     vaultRoot,
   });
+
+  const titleBarTransport: TitleBarTransportProps = {
+    disabled:
+      desktopPlayback.activeEpisode == null ||
+      desktopPlayback.playerLabel === 'loading',
+    isPlaying: desktopPlayback.playerLabel === 'playing',
+    onSeekBack: () => void desktopPlayback.seekBy(-TITLE_BAR_SKIP_MS),
+    onTogglePlay: () => void desktopPlayback.togglePause(),
+    onSeekForward: () => void desktopPlayback.seekBy(TITLE_BAR_SKIP_MS),
+  };
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: desktopPlayback.playerLabel !== 'playing',
@@ -375,12 +415,8 @@ export default function App() {
 
   if (!vaultRoot) {
     return (
-      <div className={appRootClassName}>
-        <WindowTitleBar
-          maximized={maximized}
-          onMaximizedRefresh={refreshWindowMaximized}
-          onOpenSettings={() => void openSettingsWindow()}
-        />
+      <div ref={appRootRef} className={appRootClassName}>
+        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
         <div className="shell setup-shell">
           <h1>{settingsName}</h1>
           <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
@@ -389,32 +425,26 @@ export default function App() {
           </button>
           {err ? <p className="error">{err}</p> : null}
         </div>
+        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
       </div>
     );
   }
 
   if (!layoutsReady) {
     return (
-      <div className={appRootClassName}>
-        <WindowTitleBar
-          maximized={maximized}
-          onMaximizedRefresh={refreshWindowMaximized}
-          onOpenSettings={() => void openSettingsWindow()}
-        />
+      <div ref={appRootRef} className={appRootClassName}>
+        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
         <div className="shell setup-shell">
           <p className="muted">Loading…</p>
         </div>
+        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
       </div>
     );
   }
 
   return (
-    <div className={appRootClassName}>
-      <WindowTitleBar
-        maximized={maximized}
-        onMaximizedRefresh={refreshWindowMaximized}
-        onOpenSettings={() => void openSettingsWindow()}
-      />
+    <div ref={appRootRef} className={appRootClassName}>
+      <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
 
       {err ? (
         <div className="error-banner" role="alert">
@@ -480,6 +510,7 @@ export default function App() {
         </div>
       </div>
 
+      <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
     </div>
   );
 }

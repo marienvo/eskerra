@@ -3,19 +3,16 @@ import {getCurrentWindow} from '@tauri-apps/api/window';
 
 import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
 
-import {DemoMenuBar} from './DemoMenuBar';
+import type {WindowTilingState} from '../lib/windowTiling';
+
+import {TitleBarTransport, type TitleBarTransportProps} from './TitleBarTransport';
 
 type WindowTitleBarProps = {
-  onOpenSettings: () => void;
-  maximized: boolean;
-  onMaximizedRefresh: () => void;
+  tiling?: WindowTilingState;
+  transport?: TitleBarTransportProps;
 };
 
-export function WindowTitleBar({
-  onOpenSettings,
-  maximized,
-  onMaximizedRefresh,
-}: WindowTitleBarProps) {
+export function WindowTitleBar({tiling = 'none', transport}: WindowTitleBarProps) {
   const tauri = isTauri();
 
   const onMinimize = () => {
@@ -23,13 +20,6 @@ export function WindowTitleBar({
       return;
     }
     void getCurrentWindow().minimize();
-  };
-
-  const onToggleMaximize = () => {
-    if (!tauri) {
-      return;
-    }
-    void getCurrentWindow().toggleMaximize().then(() => onMaximizedRefresh());
   };
 
   const onClose = () => {
@@ -40,7 +30,7 @@ export function WindowTitleBar({
   };
 
   return (
-    <header className="window-title-bar">
+    <header className="window-title-bar" data-window-tiling={tiling}>
       <div className="window-title-bar-leading">
         <img
           className="window-title-bar-icon"
@@ -50,9 +40,9 @@ export function WindowTitleBar({
           height={29}
           {...(tauri ? {'data-tauri-drag-region': true} : {})}
         />
-        <DemoMenuBar onOpenSettings={onOpenSettings} />
       </div>
-      <div className="window-title-bar-drag" data-tauri-drag-region />
+      <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
+      {transport ? <TitleBarTransport {...transport} /> : null}
       <div className="window-title-bar-trailing">
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">
@@ -67,25 +57,6 @@ export function WindowTitleBar({
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
                 <rect x="3" y="7.5" width="10" height="1.5" rx="0.5" fill="currentColor" />
               </svg>
-            </button>
-            <button
-              type="button"
-              className="window-ctrl app-tooltip-trigger window-ctrl-maximize"
-              aria-label={maximized ? 'Restore' : 'Maximize'}
-              data-tooltip={maximized ? 'Restore' : 'Maximize'}
-              data-tooltip-placement="inline-start"
-              onClick={onToggleMaximize}
-            >
-              {maximized ? (
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-                  <rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.25" />
-                  <rect x="2.5" y="2.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" strokeWidth="1.25" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-                  <rect x="3.5" y="3.5" width="9" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.25" />
-                </svg>
-              )}
             </button>
             <button
               type="button"

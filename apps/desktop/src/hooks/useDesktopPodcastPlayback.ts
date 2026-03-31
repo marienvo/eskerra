@@ -15,6 +15,21 @@ import {
   writePlaylistEntry,
 } from '../lib/vaultBootstrap';
 
+function clampSeekMs(
+  positionMs: number,
+  durationMs: number | null,
+  deltaMs: number,
+): number {
+  const next = positionMs + deltaMs;
+  if (next < 0) {
+    return 0;
+  }
+  if (durationMs != null && durationMs > 0) {
+    return Math.min(durationMs, next);
+  }
+  return next;
+}
+
 export type DesktopPlayerLabel =
   | 'ended'
   | 'error'
@@ -48,6 +63,7 @@ export type UseDesktopPodcastPlaybackResult = {
   durationMs: number | null;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
   resumeFromVault: () => Promise<void>;
+  seekBy: (deltaMs: number) => Promise<void>;
   togglePause: () => Promise<void>;
 };
 
@@ -532,6 +548,91 @@ export function useDesktopPodcastPlayback({
     onPlaylistDiskUpdated,
   ]);
 
+  const seekBy = useCallback(
+    async (deltaMs: number) => {
+      const active = activeEpisodeRef.current;
+      if (!active) {
+        return;
+      }
+      const p = getDesktopAudioPlayer();
+      const progress = await p.getProgress();
+      const next = clampSeekMs(
+        progress.positionMs,
+        progress.durationMs,
+        deltaMs,
+      );
+      await p.seekTo(next);
+      const latest = await p.getProgress();
+      setPositionMs(latest.positionMs);
+      setDurationMs(latest.durationMs);
+
+      if (!vaultRoot) {
+        return;
+      }
+      const deviceId = deviceInstanceId.trim();
+      if (!deviceId) {
+        onError('Device id missing from local settings.');
+        return;
+      }
+
+      try {
+        if (latest.positionMs < MIN_PLAYLIST_PERSIST_POSITION_MS) {
+          await p.stop();
+          await clearPlaylistEntry(vaultRoot, fs);
+          setDiskPlaylist(null);
+          setActiveEpisode(null);
+          playbackRef.current = null;
+          setPositionMs(0);
+          setDurationMs(null);
+          lastPrimedPlaylistKeyRef.current = null;
+          onPlaylistDiskUpdated?.();
+          return;
+        }
+
+        const prior = diskPlaylistRef.current;
+        const base: PlaylistEntry =
+          prior?.episodeId === active.id
+            ? prior
+            : {
+                durationMs: latest.durationMs,
+                episodeId: active.id,
+                mp3Url: active.mp3Url,
+                positionMs: 0,
+                updatedAt: 0,
+                playbackOwnerId: '',
+                controlRevision: 0,
+              };
+        const entry = buildPlaylistEntryForWrite(
+          base,
+          {
+            durationMs: latest.durationMs,
+            episodeId: active.id,
+            mp3Url: active.mp3Url,
+            positionMs: latest.positionMs,
+          },
+          deviceId,
+          'control',
+          Date.now(),
+        );
+        const wr = await writePlaylistEntry(vaultRoot, fs, entry, {
+          mode: 'control',
+        });
+        if (wr.kind === 'superseded') {
+          setDiskPlaylist(wr.entry);
+          onPlaylistDiskUpdated?.();
+        } else if (wr.kind === 'saved') {
+          setDiskPlaylist(wr.entry);
+          onPlaylistDiskUpdated?.();
+        }
+      } catch (e) {
+        onError(
+          e instanceof Error ? e.message : 'Could not save playback position.',
+        );
+      }
+    },
+    [vaultRoot, deviceInstanceId, fs, onError, onPlaylistDiskUpdated],
+  );
+
   const togglePause = useCallback(async () => {
     const p = getDesktopAudioPlayer();
     const st = await p.getState();
@@ -558,12 +659,9 @@ export function useDesktopPodcastPlayback({
         if (latestProgress.positionMs < MIN_PLAYLIST_PERSIST_POSITION_MS) {
           await clearPlaylistEntry(vaultRoot, fs);
           setDiskPlaylist(null);
-          setActiveEpisode(null);
-          playbackRef.current = null;
-          setPositionMs(0);
-          setDurationMs(null);
-          lastPrimedPlaylistKeyRef.current = null;
           onPlaylistDiskUpdated?.();
+          // Keep the dock and loaded audio: no playlist on disk under the threshold, but
+          // the user can still resume in this session without restarting playback.
           return;
         }
 
@@ -691,6 +789,7 @@ export function useDesktopPodcastPlayback({
     playerLabel,
     positionMs,
     resumeFromVault,
+    seekBy,
     togglePause,
   };
 }

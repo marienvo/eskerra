@@ -1,6 +1,6 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {WebviewWindow} from '@tauri-apps/api/webviewWindow';
-import {useState} from 'react';
+import {useLayoutEffect, useState} from 'react';
 
 import App from './App.tsx';
 import {SettingsWindowApp} from './components/SettingsWindowApp';
@@ -19,5 +19,18 @@ function initialRootView(): 'main' | 'settings' {
 
 export function AppRoot() {
   const [view] = useState(initialRootView);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const useTransparentChrome = isTauri() && view === 'main';
+    if (useTransparentChrome) {
+      root.classList.add('tauri-main-chrome');
+      return () => {
+        root.classList.remove('tauri-main-chrome');
+      };
+    }
+    root.classList.remove('tauri-main-chrome');
+  }, [view]);
+
   return view === 'settings' ? <SettingsWindowApp /> : <App />;
 }
