@@ -22,6 +22,28 @@ const INTERACTIVE_DRAG_EXCLUSION = [
  */
 const DECLARATIVE_TITLEBAR_DRAG = '.window-title-bar-drag,.window-title-bar-icon';
 
+/** `react-resizable-panels` sets `data-separator` on the splitter div (`inactive` / `active` / `disabled`). */
+function pointerDownOnResizableSeparator(
+  shell: HTMLElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const stack = document.elementsFromPoint(clientX, clientY);
+  for (const node of stack) {
+    if (!(node instanceof HTMLElement)) {
+      continue;
+    }
+    if (!shell.contains(node)) {
+      continue;
+    }
+    const ds = node.getAttribute('data-separator');
+    if (ds !== null && ds !== 'disabled') {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Frameless window: primary-click on inert shell starts a native move via startDragging (Linux-safe).
  * `remountKey` must change when a different `.app-root` node mounts (setup vs main) so the listener rebinds.
@@ -42,6 +64,9 @@ export function useTauriShellWindowDrag(
       if (e.button !== 0) {
         return;
       }
+      if (e.defaultPrevented) {
+        return;
+      }
       const t = e.target;
       if (!(t instanceof Element)) {
         return;
@@ -53,6 +78,9 @@ export function useTauriShellWindowDrag(
         return;
       }
       if (t.closest(DECLARATIVE_TITLEBAR_DRAG)) {
+        return;
+      }
+      if (pointerDownOnResizableSeparator(el, e.clientX, e.clientY)) {
         return;
       }
       void getCurrentWindow().startDragging();
