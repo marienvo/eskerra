@@ -748,14 +748,56 @@ a:focus:not(:focus-visible) {
   color: var(--color-editor-text);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-wrap {
+  background: #faf8f5;
+  color: #141312;
+}
+
 .note-markdown-editor-host {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: auto;
-  padding: 0.5rem 0.6rem;
+  padding: 0;
   outline: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host [data-milkdown-root] {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 43.75rem;
+  margin-inline: auto;
+  padding: 2.75rem clamp(1rem, 4vw, 2rem) 3.5rem;
+  box-sizing: border-box;
+}
+
+/* Crepe theme tokens: warm neutral prose surface (no Nord import). */
+[data-app-surface='capture'] .note-markdown-editor-host .milkdown,
+[data-app-surface='capture'] .note-markdown-editor-host [data-milkdown-root] {
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: #141312;
+  --crepe-color-surface: transparent;
+  --crepe-color-surface-low: transparent;
+  --crepe-color-on-surface: #141312;
+  --crepe-color-on-surface-variant: #3d3a36;
+  --crepe-color-outline: color-mix(in srgb, #141312 26%, transparent);
+  --crepe-color-primary: var(--color-accent, #4fafe6);
+  --crepe-color-secondary: color-mix(in srgb, var(--color-accent, #4fafe6) 16%, transparent);
+  --crepe-color-on-secondary: #141312;
+  --crepe-color-inverse: #2a2826;
+  --crepe-color-on-inverse: #f5f3f0;
+  --crepe-color-inline-code: #6b2f2f;
+  --crepe-color-error: var(--color-error, #a23f3f);
+  --crepe-color-hover: color-mix(in srgb, #141312 6%, transparent);
+  --crepe-color-selected: color-mix(in srgb, #141312 9%, transparent);
+  --crepe-color-inline-area: color-mix(in srgb, #141312 10%, transparent);
+  --crepe-font-default: system-ui, "Segoe UI", Roboto, sans-serif;
+  --crepe-font-title: system-ui, "Segoe UI", Roboto, sans-serif;
+  --crepe-font-code: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+  background: transparent;
+  color: inherit;
+  min-height: 100%;
 }
 
 .note-markdown-editor-host--drop-target {
@@ -764,12 +806,49 @@ a:focus:not(:focus-visible) {
 
 .note-markdown-editor-host .ProseMirror {
   min-height: 6rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror {
+  font-size: clamp(16px, 0.2vw + 15.2px, 18px);
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror h1 {
+  font-size: 1.85em;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin-block: 0 0.55em;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror h2 {
+  font-size: 1.35em;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  margin-block: 1.15em 0.45em;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror h3 {
+  font-size: 1.12em;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-block: 1em 0.35em;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror p {
+  margin-block: 0 0.65em;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror ul,
+[data-app-surface='capture'] .note-markdown-editor-host .ProseMirror ol {
+  margin-block: 0.35em 0.65em;
+  padding-inline-start: 1.35em;
 }
 
 .note-markdown-editor-host a.wiki-link {
-  color: var(--color-accent, #4a90d9);
+  color: var(--color-accent, #4fafe6);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;

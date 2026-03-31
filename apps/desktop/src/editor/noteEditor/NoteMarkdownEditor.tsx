@@ -1,5 +1,4 @@
 import '@milkdown/crepe/theme/common/style.css';
-import '@milkdown/crepe/theme/nord.css';
 
 import {Crepe, CrepeFeature, useCrepeFeatures} from '@milkdown/crepe';
 import {imageBlockConfig} from '@milkdown/kit/component/image-block';
@@ -132,8 +131,12 @@ const InnerEditor = forwardRef<NoteMarkdownEditorHandle, NoteMarkdownEditorProps
           root,
           defaultValue: initialMarkdown,
           features: {
+            [CrepeFeature.BlockEdit]: false,
+            [CrepeFeature.CodeMirror]: false,
             [CrepeFeature.Latex]: false,
+            [CrepeFeature.LinkTooltip]: false,
             [CrepeFeature.Table]: false,
+            [CrepeFeature.Toolbar]: false,
           },
           featureConfigs: {
             [CrepeFeature.Placeholder]: {
