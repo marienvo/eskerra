@@ -840,6 +840,20 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
+  max-width: 100%;
+  margin: 0.5rem 0;
+  box-sizing: border-box;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview__img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
 .muted {
   color: var(--color-muted);
 }

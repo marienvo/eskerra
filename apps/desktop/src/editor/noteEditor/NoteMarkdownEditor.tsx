@@ -35,6 +35,7 @@ import {
   vaultImportFilesIntoAttachments,
 } from '../../lib/desktopVaultAttachments';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
 
 export type NoteMarkdownEditorProps = {
@@ -123,6 +124,8 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const vaultRootRef = useRef(vaultRoot);
   vaultRootRef.current = vaultRoot;
+  const activeNotePathRef = useRef(props.activeNotePath);
+  activeNotePathRef.current = props.activeNotePath;
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
@@ -355,6 +358,10 @@ const NoteMarkdownEditorImpl = forwardRef<
       EditorView.lineWrapping,
       placeholder(placeholderText),
       wikiLinkHighlight,
+      ...vaultImagePreviewExtension({
+        vaultRoot: vaultRootRef,
+        activeNotePath: activeNotePathRef,
+      }),
       EditorView.domEventHandlers({
         paste(event, view) {
           return onEditorPaste(event, view);

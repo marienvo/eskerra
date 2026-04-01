@@ -49,7 +49,7 @@ export async function rgbaImageToPngBytes(image: Image): Promise<Uint8Array> {
     throw new Error('Could not get canvas context');
   }
   const clamped = rgbaOrRgbToImageDataPixels(rgba, width, height);
-  const imageData = new ImageData(clamped, width, height);
+  const imageData = new ImageData(new Uint8ClampedArray(clamped), width, height);
   ctx.putImageData(imageData, 0, 0);
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(result => {
