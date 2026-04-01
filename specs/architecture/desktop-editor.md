@@ -29,7 +29,7 @@ CodeMirror 6 derives vertical layout from DOM measurements (for example line and
 - Line-level classes under `[data-app-surface='capture'] .note-markdown-editor-host` (for example fenced code: `cm-md-fence-line`, and heading line decorations).
 - Vault image preview wrappers: [`cm-vault-image-preview`](../../apps/desktop/src/App.css) in `App.css`, and the widget root in [`vaultImagePreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewCodemirror.ts).
 
-Horizontal margin on unrelated containers (for example centering the editor column) is unaffected.
+Horizontal padding on the pane-level editor container (around the CodeMirror root) is fine; only vertical **margin** on measured line/block DOM is disallowed. The inbox editor uses the **full width** of the editor pane (no max-width column).
 
 ## Security and filesystem discipline
 

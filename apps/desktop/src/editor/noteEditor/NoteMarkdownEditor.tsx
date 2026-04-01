@@ -373,6 +373,9 @@ const NoteMarkdownEditorImpl = forwardRef<
         '&': {
           height: '100%',
         },
+        '&.cm-focused': {
+          outline: 'none',
+        },
         '.cm-scroller': {
           fontFamily: 'inherit',
         },
