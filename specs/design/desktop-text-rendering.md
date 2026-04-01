@@ -13,14 +13,19 @@ This note documents **intentional CSS choices** for the Linux desktop app ([`app
 
 3. **Global `text-rendering: optimizeLegibility` on `:root`:** Can make **small UI** type and caps look uneven next to `text-rendering: auto` regions.
 
-4. **Heavy weight on tiny uppercase group captions** (`.section-heading`): `font-weight: 700` at very small sizes often looks **muddy** on non-retina displays.
+4. **Inbox CodeMirror editor (right pane):** `text-rendering: optimizeLegibility` on `.cm-scroller` (and plain `.panel-surface textarea`) made glyphs look **uneven or heavier on one edge** next to the left-pane list, which uses `text-rendering: auto`. **Fix:** use `text-rendering: auto` on those editor surfaces to match `body` and `.note-list`.
+
+5. **Inbox CodeMirror root (`.cm-editor`):** Same transparency pattern as list rows: `background: transparent` over the editor chrome could make WebKitGTK text look **thicker or fuzzier** than opaque UI. **Fix:** `background: var(--color-editor-bg)` on `[data-app-surface='capture'] .note-markdown-editor-host .cm-editor` so the text layer matches the filled wrap/panel.
+
+6. **Heavy weight on tiny uppercase group captions** (`.section-heading`): `font-weight: 700` at very small sizes often looks **muddy** on non-retina displays.
 
 ## Rules (keep these unless you measure a regression)
 
 | Area | Rule | Where |
 | --- | --- | --- |
 | Default UI chrome | `text-rendering: auto` on `body` | [`apps/desktop/src/index.css`](../../apps/desktop/src/index.css) |
-| Long-form editor | `text-rendering: optimizeLegibility` on markdown `textarea` only | [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) (`.panel-surface textarea`) |
+| Long-form editor | `text-rendering: auto` on `.panel-surface textarea` and capture inbox `.cm-scroller` (parity with list/body; WebKitGTK) | [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) |
+| Inbox markdown editor surface | Opaque `.cm-editor`: `background: var(--color-editor-bg)` under capture (not `transparent` over the panel) | `App.css` |
 | Episode list rows | **Opaque** row background matching the pane: `background: var(--color-consume-surface)` (not `transparent`) | `.episode-row` in `App.css` |
 | Episode row buttons | Explicit `font-weight: 400` and `font-synthesis: none` on `.episode-row` and `.ep-title` | `App.css` |
 | Episodes scroll region | `text-rendering: auto` on `.episode-scroll` (redundant with `body` but documents intent) | `App.css` |

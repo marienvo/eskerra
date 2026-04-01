@@ -1,6 +1,6 @@
 /* Calm Editorial Blue — see specs/design/design-system-calm-editorial.md.
    Desktop brand: specs/design/brand-tokens-desktop.md.
-   Typography / WebKit: see specs/design/desktop-text-rendering.md (body uses text-rendering: auto). */
+   Typography / WebKit: see specs/design/desktop-text-rendering.md (body and long-form editor use text-rendering: auto). */
 html {
   color-scheme: light;
 }

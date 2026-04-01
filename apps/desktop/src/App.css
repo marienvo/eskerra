@@ -757,7 +757,8 @@ a:focus:not(:focus-visible) {
   resize: none;
   background: var(--color-editor-bg);
   color: var(--color-editor-text);
-  text-rendering: optimizeLegibility;
+  /* Match body / .note-list: optimizeLegibility can make WebKitGTK editor glyphs uneven vs list text. */
+  text-rendering: auto;
 }
 
 .panel-surface .editor {
@@ -803,7 +804,8 @@ a:focus:not(:focus-visible) {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-editor {
-  background: transparent;
+  /* Opaque layer: WebKitGTK text over transparency can look thicker/fuzzier than the pane (see desktop-text-rendering.md). */
+  background: var(--color-editor-bg);
   color: inherit;
   min-height: 100%;
 }
@@ -813,7 +815,7 @@ a:focus:not(:focus-visible) {
   /* Fixed size: fluid clamp with vw made text feel like it “zoomed” when resizing the window. */
   font-size: 16px;
   line-height: 1.6;
-  text-rendering: optimizeLegibility;
+  text-rendering: auto;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
