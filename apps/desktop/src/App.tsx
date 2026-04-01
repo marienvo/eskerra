@@ -15,7 +15,6 @@ import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
-import {useTauriShellWindowDrag} from './hooks/useTauriShellWindowDrag';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {openSettingsWindow} from './lib/openSettingsWindow';
@@ -127,9 +126,6 @@ export default function App() {
   const [inboxContentByUri, setInboxContentByUri] = useState<
     Record<string, string>
   >({});
-
-  const appShellRemountKey = `${vaultRoot ?? 'setup'}-${layoutsReady}`;
-  useTauriShellWindowDrag(appRootRef, appShellRemountKey);
 
   const bumpPlaylistRevision = useCallback(() => {
     setPlaylistRevision(r => r + 1);
