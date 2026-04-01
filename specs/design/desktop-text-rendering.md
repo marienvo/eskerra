@@ -1,6 +1,6 @@
 # Desktop text rendering (WebKit / Tauri)
 
-This note documents **intentional CSS choices** for the Linux desktop app ([`apps/desktop`](../../apps/desktop)) so we do not regress on blurry or “fake bold” text, especially in **list rows** and **small uppercase labels**.
+This note documents **intentional CSS choices** for the Linux desktop app ([`apps/desktop`](../../apps/desktop)) so we do not regress on blurry or “fake bold” text, especially in **list rows**, **small uppercase labels**, and the **inbox markdown editor** (CodeMirror on WebKitGTK).
 
 **Engine:** The desktop shell uses **WebKit** (e.g. WebKitGTK / WKWebView via Tauri). Subpixel antialiasing and compositing behave differently than Chromium-only stacks.
 
@@ -19,12 +19,14 @@ This note documents **intentional CSS choices** for the Linux desktop app ([`app
 
 6. **Heavy weight on tiny uppercase group captions** (`.section-heading`): `font-weight: 700` at very small sizes often looks **muddy** on non-retina displays.
 
+7. **Inbox editor (scroll / compositing):** After fixing `text-rendering`, opaque `.cm-editor`, and related layout, text could still look **uneven or heavier on one edge**, especially **when scrolling**. **Cause:** WebKitGTK often paints scrolling text with **subpixel LCD antialiasing** in a way that interacts badly with CodeMirror’s scroll layer. **Fix:** **`-webkit-font-smoothing: antialiased`** on capture **`[data-app-surface='capture'] .note-markdown-editor-host .cm-scroller`** (grayscale AA; same tradeoff as `.playlist-body`: slightly lighter strokes, more stable appearance). **Do not remove** this without re-checking on Linux WebKitGTK at fractional UI scale.
+
 ## Rules (keep these unless you measure a regression)
 
 | Area | Rule | Where |
 | --- | --- | --- |
 | Default UI chrome | `text-rendering: auto` on `body` | [`apps/desktop/src/index.css`](../../apps/desktop/src/index.css) |
-| Long-form editor | `text-rendering: auto` on `.panel-surface textarea` and capture inbox `.cm-scroller` (parity with list/body; WebKitGTK) | [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) |
+| Long-form editor | `text-rendering: auto` on `.panel-surface textarea` and capture inbox `.cm-scroller`; **keep** **`-webkit-font-smoothing: antialiased`** on that `.cm-scroller` for WebKitGTK scroll stability | [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) |
 | Inbox markdown editor surface | Opaque `.cm-editor`: `background: var(--color-editor-bg)` under capture (not `transparent` over the panel) | `App.css` |
 | Episode list rows | **Opaque** row background matching the pane: `background: var(--color-consume-surface)` (not `transparent`) | `.episode-row` in `App.css` |
 | Episode row buttons | Explicit `font-weight: 400` and `font-synthesis: none` on `.episode-row` and `.ep-title` | `App.css` |
