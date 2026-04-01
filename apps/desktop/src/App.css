@@ -842,7 +842,7 @@ a:focus:not(:focus-visible) {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
   max-width: 100%;
-  margin: 0.5rem 0;
+  padding: 0.5rem 0;
   box-sizing: border-box;
 }
 
