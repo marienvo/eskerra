@@ -35,6 +35,7 @@ import {
   vaultImportFilesIntoAttachments,
 } from '../../lib/desktopVaultAttachments';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
 
@@ -352,6 +353,7 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const extensions = [
       markdown(),
+      ...noteMarkdownEditorAppearance,
       history(),
       drawSelection(),
       keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
