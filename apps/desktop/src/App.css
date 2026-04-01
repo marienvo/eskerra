@@ -145,11 +145,11 @@ a:focus:not(:focus-visible) {
   border-radius: 6px;
   background: transparent;
   color: var(--color-muted);
-  cursor: pointer;
+  cursor: default;
 }
 
 .titlebar-transport-btn:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.42;
 }
 
@@ -223,7 +223,7 @@ a:focus:not(:focus-visible) {
   padding: 0;
   border-radius: 6px;
   color: var(--color-muted);
-  cursor: pointer;
+  cursor: default;
 }
 
 .app-status-bar-settings:hover:not(:disabled) {
@@ -249,7 +249,7 @@ a:focus:not(:focus-visible) {
   border-radius: 4px;
   background: transparent;
   color: var(--color-muted);
-  cursor: pointer;
+  cursor: default;
 }
 
 .window-ctrl:hover {
@@ -273,7 +273,7 @@ a:focus:not(:focus-visible) {
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-text);
-  cursor: pointer;
+  cursor: default;
   font-size: 1.1rem;
 }
 
@@ -399,7 +399,7 @@ a:focus:not(:focus-visible) {
   border-radius: 6px;
   background: transparent;
   color: var(--color-muted);
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   box-shadow: none;
 }
@@ -428,7 +428,7 @@ a:focus:not(:focus-visible) {
 
 .rail-tab:disabled,
 .rail-tab.active:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 0.55;
   background: transparent;
   color: var(--color-muted);
@@ -678,7 +678,7 @@ a:focus:not(:focus-visible) {
   border: none;
   background: transparent;
   border-radius: 6px;
-  cursor: pointer;
+  cursor: default;
   color: var(--color-text);
   font: inherit;
   font-synthesis: none;
@@ -845,7 +845,7 @@ a:focus:not(:focus-visible) {
   max-width: 100%;
   height: auto;
   display: block;
-  cursor: pointer;
+  cursor: default;
   border-radius: 4px;
 }
 
@@ -1009,7 +1009,7 @@ button {
   border: 1px solid var(--color-border);
   background: var(--color-button-secondary-bg);
   color: var(--color-text);
-  cursor: pointer;
+  cursor: default;
   font: inherit;
 }
 
@@ -1025,7 +1025,7 @@ button.ghost {
 
 button:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .empty-hint {
@@ -1076,7 +1076,7 @@ button:disabled {
   border-radius: 6px;
   /* Opaque layer matching the pane (not transparent) so WebKit text AA matches hover. */
   background: var(--color-consume-surface);
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   font-weight: 400;
   font-synthesis: none;
@@ -1211,7 +1211,7 @@ button:disabled {
   padding: 0;
   border-radius: 3px;
   color: var(--color-muted);
-  cursor: pointer;
+  cursor: default;
   font: inherit;
 }
 
@@ -1235,7 +1235,7 @@ button:disabled {
 
 .pane-header-add-btn:disabled {
   opacity: 0.55;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 [data-app-surface='capture'] .pane-footer {

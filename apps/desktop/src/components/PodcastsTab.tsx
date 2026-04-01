@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Group, Panel, Separator} from 'react-resizable-panels';
+import {Group, Panel, Separator, usePanelRef} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
 import type {VaultFilesystem} from '@notebox/core';
 import type {PlaylistEntry} from '@notebox/core';
@@ -8,12 +8,13 @@ import {runPodcastPhase1Desktop} from '../lib/podcasts/podcastPhase1Desktop';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
 import {readPlaylistEntry} from '../lib/vaultBootstrap';
 import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
+import {PODCASTS_LEFT_PANEL} from '../lib/layoutStore';
 
 type PodcastsTabProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
-  defaultMainLayout: Layout;
-  onMainLayoutChanged: (layout: Layout) => void;
+  leftWidthPx: number;
+  onLeftWidthPxChanged: (px: number) => void;
   onConsumeCatalogState?: (s: {catalogLoading: boolean; episodes: PodcastEpisode[]}) => void;
   onError: (msg: string | null) => void;
   /** Increments when the filesystem watcher reports changes; triggers a rescan. */
@@ -44,8 +45,8 @@ function episodeListLabel(text: string): string {
 export function PodcastsTab({
   vaultRoot,
   fs,
-  defaultMainLayout,
-  onMainLayoutChanged,
+  leftWidthPx,
+  onLeftWidthPxChanged,
   onConsumeCatalogState,
   onError,
   fsRefreshNonce,
@@ -54,6 +55,15 @@ export function PodcastsTab({
   resumeFromVault,
   episodeSelectLocked = false,
 }: PodcastsTabProps) {
+  const episodesPanelRef = usePanelRef();
+
+  const handleLayoutChanged = (_layout: Layout) => {
+    const px = episodesPanelRef.current?.getSize().inPixels;
+    if (px !== undefined && Number.isFinite(px)) {
+      onLeftWidthPxChanged(Math.round(px));
+    }
+  };
+
   const [sections, setSections] = useState<PodcastSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [playlistFile, setPlaylistFile] = useState<PlaylistEntry | null>(null);
@@ -115,19 +125,22 @@ export function PodcastsTab({
     void loadPlaylistSnapshot();
   }, [playlistRevision, loadPlaylistSnapshot]);
 
-  const onMainLayout = (layout: Layout) => {
-    onMainLayoutChanged(layout);
-  };
-
   return (
     <div className="consume-root" data-app-surface="consume">
       <Group
         className="panel-group fill"
         orientation="horizontal"
-        defaultLayout={defaultMainLayout}
-        onLayoutChanged={onMainLayout}
+        onLayoutChanged={handleLayoutChanged}
       >
-        <Panel id="episodes" className="panel-surface" minSize={12} defaultSize="38%">
+        <Panel
+          id="episodes"
+          panelRef={episodesPanelRef}
+          className="panel-surface"
+          minSize={PODCASTS_LEFT_PANEL.minPx}
+          maxSize={PODCASTS_LEFT_PANEL.maxPx}
+          defaultSize={leftWidthPx}
+          groupResizeBehavior="preserve-pixel-size"
+        >
           <div className="pane-header">
             <span className="pane-title">Episodes</span>
           </div>
@@ -166,7 +179,12 @@ export function PodcastsTab({
           </div>
         </Panel>
         <Separator className="resize-sep" />
-        <Panel id="rightCol" className="panel-nested podcasts-right-col" minSize={22} defaultSize="62%">
+        <Panel
+          id="rightCol"
+          className="panel-nested podcasts-right-col"
+          minSize="28%"
+          groupResizeBehavior="preserve-relative-size"
+        >
           <div className="podcasts-right-stack">
             <section className="podcasts-playlist panel-surface" aria-label="Playlist">
               <div className="pane-header">

@@ -2,7 +2,6 @@ import {isTauri} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
-import type {Layout} from 'react-resizable-panels';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
@@ -536,17 +535,17 @@ export default function App() {
     }
   };
 
-  const persistInboxLayout = useCallback((layout: Layout) => {
+  const persistInboxLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
-      const next = {...prev, inbox: layout};
+      const next = {...prev, inbox: {leftWidthPx}};
       void saveStoredLayouts(next);
       return next;
     });
   }, []);
 
-  const persistPodcastsMainLayout = useCallback((layout: Layout) => {
+  const persistPodcastsLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
-      const next = {...prev, podcastsMain: layout};
+      const next = {...prev, podcastsMain: {leftWidthPx}};
       void saveStoredLayouts(next);
       return next;
     });
@@ -605,8 +604,8 @@ export default function App() {
               <InboxTab
                 vaultRoot={vaultRoot}
                 inboxEditorRef={inboxEditorRef}
-                defaultLayout={layouts.inbox}
-                onLayoutChanged={persistInboxLayout}
+                leftWidthPx={layouts.inbox.leftWidthPx}
+                onLeftWidthPxChanged={persistInboxLeftWidthPx}
                 notes={notes}
                 inboxContentByUri={inboxContentByUri}
                 selectedUri={selectedUri}
@@ -629,8 +628,8 @@ export default function App() {
                   key={vaultRoot}
                   vaultRoot={vaultRoot}
                   fs={fs}
-                  defaultMainLayout={layouts.podcastsMain}
-                  onMainLayoutChanged={persistPodcastsMainLayout}
+                  leftWidthPx={layouts.podcastsMain.leftWidthPx}
+                  onLeftWidthPxChanged={persistPodcastsLeftWidthPx}
                   onConsumeCatalogState={onConsumeCatalogState}
                   onError={setErr}
                   fsRefreshNonce={fsRefreshNonce}

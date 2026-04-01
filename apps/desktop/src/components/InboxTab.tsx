@@ -1,7 +1,9 @@
 import type {RefObject} from 'react';
 import {useMemo} from 'react';
-import {Group, Panel, Separator} from 'react-resizable-panels';
+import {Group, Panel, Separator, usePanelRef} from 'react-resizable-panels';
 import type {Layout} from 'react-resizable-panels';
+
+import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
 
 import {
   extractFirstMarkdownH1,
@@ -22,8 +24,8 @@ type NoteRow = {lastModified: number | null; name: string; uri: string};
 type InboxTabProps = {
   vaultRoot: string;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
-  defaultLayout: Layout;
-  onLayoutChanged: (layout: Layout) => void;
+  leftWidthPx: number;
+  onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
   inboxContentByUri: Record<string, string>;
   selectedUri: string | null;
@@ -43,8 +45,8 @@ type InboxTabProps = {
 export function InboxTab({
   vaultRoot,
   inboxEditorRef,
-  defaultLayout,
-  onLayoutChanged,
+  leftWidthPx,
+  onLeftWidthPxChanged,
   notes,
   inboxContentByUri,
   selectedUri,
@@ -60,6 +62,15 @@ export function InboxTab({
   onSaveNote,
   busy,
 }: InboxTabProps) {
+  const filesPanelRef = usePanelRef();
+
+  const handleLayoutChanged = (_layout: Layout) => {
+    const px = filesPanelRef.current?.getSize().inPixels;
+    if (px !== undefined && Number.isFinite(px)) {
+      onLeftWidthPxChanged(Math.round(px));
+    }
+  };
+
   const editorPaneTitle = useMemo(() => {
     if (composingNewEntry) {
       return 'New entry';
@@ -82,10 +93,17 @@ export function InboxTab({
       <Group
         className="panel-group fill"
         orientation="horizontal"
-        defaultLayout={defaultLayout}
-        onLayoutChanged={onLayoutChanged}
+        onLayoutChanged={handleLayoutChanged}
       >
-        <Panel id="files" className="panel-surface" minSize={10} defaultSize="30%">
+        <Panel
+          id="files"
+          panelRef={filesPanelRef}
+          className="panel-surface"
+          minSize={INBOX_LEFT_PANEL.minPx}
+          maxSize={INBOX_LEFT_PANEL.maxPx}
+          defaultSize={leftWidthPx}
+          groupResizeBehavior="preserve-pixel-size"
+        >
           <div className="pane-header">
             <span className="pane-title">Log</span>
             <button
@@ -143,7 +161,7 @@ export function InboxTab({
           </ul>
         </Panel>
         <Separator className="resize-sep" />
-        <Panel id="editor" className="panel-surface" minSize={18} defaultSize="70%">
+        <Panel id="editor" className="panel-surface" minSize="22%" groupResizeBehavior="preserve-relative-size">
           <div className="pane-header">
             <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
               {editorPaneTitle}
