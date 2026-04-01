@@ -22,7 +22,7 @@ Creating a new inbox note uses the **same Editor pane UI** as editing (single mu
 
 ## Resizable main splits (Inbox, Podcasts)
 
-Horizontal **`react-resizable-panels`** groups use a **fixed pixel width for the left column** (Log, Episodes), measured from the **inline-start** edge of the group. The right column **fills the remainder** and uses **`preserve-relative-size`** so its **percentage share** updates when the window is resized; the left column uses **`preserve-pixel-size`** so its **width in pixels** stays stable across window resizes (until the user drags the separator).
+The main **horizontal** split is **app-owned** (see **`DesktopHorizontalSplit`** in **`apps/desktop/src/components/DesktopHorizontalSplit.tsx`**), not `react-resizable-panels`: the **left column** uses a **fixed width in CSS pixels** (`flex: 0 0 Npx`); the **right column** uses **`flex: 1`** and absorbs all window-resize remainder. The **separator** uses pointer-drag to change **`leftWidthPx`**, clamped between **`layoutStore`** min/max and the current container width (minimum reserve for the right column via **`minRightPx`**). **`clampSplitLeftWidthPx`** in **`apps/desktop/src/lib/desktopHorizontalSplitClamp.ts`** centralizes that math.
 
 - **Persistence** lives in the Tauri store under **`layoutPanelsV4`** as JSON: `{ "inbox": { "leftWidthPx": number }, "podcastsMain": { "leftWidthPx": number } }`. Older **`layoutPanelsV3`** percentage layouts are **migrated once** on load (approximate conversion using a fixed assumed width), then removed.
 - **Defaults and clamps** are defined next to persistence in **`apps/desktop/src/lib/layoutStore.ts`** (`INBOX_LEFT_PANEL`, `PODCASTS_LEFT_PANEL`).

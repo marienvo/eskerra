@@ -1,6 +1,4 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Group, Panel, Separator, usePanelRef} from 'react-resizable-panels';
-import type {Layout} from 'react-resizable-panels';
 import type {VaultFilesystem} from '@notebox/core';
 import type {PlaylistEntry} from '@notebox/core';
 
@@ -9,6 +7,8 @@ import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes'
 import {readPlaylistEntry} from '../lib/vaultBootstrap';
 import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
 import {PODCASTS_LEFT_PANEL} from '../lib/layoutStore';
+
+import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 
 type PodcastsTabProps = {
   vaultRoot: string;
@@ -55,15 +55,6 @@ export function PodcastsTab({
   resumeFromVault,
   episodeSelectLocked = false,
 }: PodcastsTabProps) {
-  const episodesPanelRef = usePanelRef();
-
-  const handleLayoutChanged = (_layout: Layout) => {
-    const px = episodesPanelRef.current?.getSize().inPixels;
-    if (px !== undefined && Number.isFinite(px)) {
-      onLeftWidthPxChanged(Math.round(px));
-    }
-  };
-
   const [sections, setSections] = useState<PodcastSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [playlistFile, setPlaylistFile] = useState<PlaylistEntry | null>(null);
@@ -127,96 +118,92 @@ export function PodcastsTab({
 
   return (
     <div className="consume-root" data-app-surface="consume">
-      <Group
-        className="panel-group fill"
-        orientation="horizontal"
-        onLayoutChanged={handleLayoutChanged}
-      >
-        <Panel
-          id="episodes"
-          panelRef={episodesPanelRef}
-          className="panel-surface"
-          minSize={PODCASTS_LEFT_PANEL.minPx}
-          maxSize={PODCASTS_LEFT_PANEL.maxPx}
-          defaultSize={leftWidthPx}
-          groupResizeBehavior="preserve-pixel-size"
-        >
-          <div className="pane-header">
-            <span className="pane-title">Episodes</span>
+      <DesktopHorizontalSplit
+        leftWidthPx={leftWidthPx}
+        minLeftPx={PODCASTS_LEFT_PANEL.minPx}
+        maxLeftPx={PODCASTS_LEFT_PANEL.maxPx}
+        minRightPx={240}
+        onLeftWidthPxChanged={onLeftWidthPxChanged}
+        left={
+          <div className="panel-surface">
+            <div className="pane-header">
+              <span className="pane-title">Episodes</span>
+            </div>
+            <div
+              className={
+                episodesRefreshVisible
+                  ? 'episodes-refresh-strip episodes-refresh-strip--active'
+                  : 'episodes-refresh-strip'
+              }
+              aria-hidden
+            >
+              {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
+            </div>
+            <div className="episode-scroll">
+              {sections.map(section => (
+                <section key={section.title} className="episode-section">
+                  <h3 className="section-heading">{section.title}</h3>
+                  <ul className="episode-list">
+                    {section.episodes.map(ep => (
+                      <li key={ep.id}>
+                        <button
+                          type="button"
+                          className="episode-row"
+                          disabled={episodeSelectLocked}
+                          onClick={() => void playEpisode(ep)}
+                        >
+                          <span className="ep-date">{ep.date}</span>
+                          <span className="ep-title">{episodeListLabel(ep.title)}</span>
+                          <span className="ep-series muted small">
+                            {episodeListLabel(ep.seriesName)}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+              {!loading && sections.length === 0 ? (
+                <p className="muted empty-hint">No episodes found in vault General/ podcast markdown.</p>
+              ) : null}
+            </div>
           </div>
-          <div
-            className={
-              episodesRefreshVisible ? 'episodes-refresh-strip episodes-refresh-strip--active' : 'episodes-refresh-strip'
-            }
-            aria-hidden
-          >
-            {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
-          </div>
-          <div className="episode-scroll">
-            {sections.map(section => (
-              <section key={section.title} className="episode-section">
-                <h3 className="section-heading">{section.title}</h3>
-                <ul className="episode-list">
-                  {section.episodes.map(ep => (
-                    <li key={ep.id}>
-                      <button
-                        type="button"
-                        className="episode-row"
-                        disabled={episodeSelectLocked}
-                        onClick={() => void playEpisode(ep)}>
-                        <span className="ep-date">{ep.date}</span>
-                        <span className="ep-title">{episodeListLabel(ep.title)}</span>
-                        <span className="ep-series muted small">{episodeListLabel(ep.seriesName)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+        }
+        right={
+          <div className="panel-nested podcasts-right-col">
+            <div className="podcasts-right-stack">
+              <section className="podcasts-playlist panel-surface" aria-label="Playlist">
+                <div className="pane-header">
+                  <span className="pane-title">Playlist</span>
+                </div>
+                <div className="playlist-body">
+                  <p className="muted small">
+                    Resume pointer and playback state sync to <code>.notebox/playlist.json</code> for
+                    cross-device resume.
+                  </p>
+                  {playlistFile ? (
+                    <dl className="playlist-dl">
+                      <dt>Episode ID</dt>
+                      <dd className="mono small">{playlistFile.episodeId}</dd>
+                      <dt>MP3 URL</dt>
+                      <dd className="mono small wrap">{playlistFile.mp3Url}</dd>
+                      <dt>Position</dt>
+                      <dd>{formatMs(playlistFile.positionMs)}</dd>
+                      <dt>Duration</dt>
+                      <dd>{playlistFile.durationMs === null ? '—' : formatMs(playlistFile.durationMs)}</dd>
+                    </dl>
+                  ) : (
+                    <p className="muted">No playlist entry yet. Play an episode to create one.</p>
+                  )}
+                  <button type="button" onClick={() => void resumeFromVault()}>
+                    Resume from vault playlist
+                  </button>
+                </div>
               </section>
-            ))}
-            {!loading && sections.length === 0 ? (
-              <p className="muted empty-hint">No episodes found in vault General/ podcast markdown.</p>
-            ) : null}
+            </div>
           </div>
-        </Panel>
-        <Separator className="resize-sep" />
-        <Panel
-          id="rightCol"
-          className="panel-nested podcasts-right-col"
-          minSize="28%"
-          groupResizeBehavior="preserve-relative-size"
-        >
-          <div className="podcasts-right-stack">
-            <section className="podcasts-playlist panel-surface" aria-label="Playlist">
-              <div className="pane-header">
-                <span className="pane-title">Playlist</span>
-              </div>
-              <div className="playlist-body">
-                <p className="muted small">
-                  Resume pointer and playback state sync to <code>.notebox/playlist.json</code> for cross-device
-                  resume.
-                </p>
-                {playlistFile ? (
-                  <dl className="playlist-dl">
-                    <dt>Episode ID</dt>
-                    <dd className="mono small">{playlistFile.episodeId}</dd>
-                    <dt>MP3 URL</dt>
-                    <dd className="mono small wrap">{playlistFile.mp3Url}</dd>
-                    <dt>Position</dt>
-                    <dd>{formatMs(playlistFile.positionMs)}</dd>
-                    <dt>Duration</dt>
-                    <dd>{playlistFile.durationMs === null ? '—' : formatMs(playlistFile.durationMs)}</dd>
-                  </dl>
-                ) : (
-                  <p className="muted">No playlist entry yet. Play an episode to create one.</p>
-                )}
-                <button type="button" onClick={() => void resumeFromVault()}>
-                  Resume from vault playlist
-                </button>
-              </div>
-            </section>
-          </div>
-        </Panel>
-      </Group>
+        }
+      />
     </div>
   );
 }

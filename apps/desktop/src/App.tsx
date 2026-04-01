@@ -602,6 +602,7 @@ export default function App() {
           <main className="main-stage">
             <div className="tab-panel" hidden={mainTab !== 'inbox'}>
               <InboxTab
+                key={vaultRoot}
                 vaultRoot={vaultRoot}
                 inboxEditorRef={inboxEditorRef}
                 leftWidthPx={layouts.inbox.leftWidthPx}

@@ -1,0 +1,19 @@
+---
+description: Desktop (Tauri) shell UI — panels, cursors, app-vs-web behavior
+globs: apps/desktop/**/*
+alwaysApply: false
+---
+
+# Desktop shell UI
+
+Authoritative detail: `specs/design/desktop-shell-patterns.md`.
+
+## Resizable columns
+
+- Main **Inbox** and **Podcasts** horizontal splits: implement with **`DesktopHorizontalSplit`** — **left column** is a **fixed pixel width**; **right column** is **`flex: 1`**. Do **not** reintroduce **`react-resizable-panels`** for this main split without a spec update (it used percentage remapping and caused visible **1px jitter** on window resize). Persist **`leftWidthPx`** via **`layoutStore`** (`layoutPanelsV4`).
+
+## Cursors
+
+- Treat the desktop UI as a **desktop app**: **`cursor: default`** on **buttons**, **rail tabs**, **list rows**, and similar chrome. **Do not** use **`cursor: pointer`** for those.
+- **Disabled** elements: **no** **`cursor: not-allowed`**; keep **`cursor: default`** with existing opacity / color disabled styling.
+- **Exception:** **Panel separators** keep **`col-resize` / `row-resize`** (and any other explicit resize affordances).
