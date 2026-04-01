@@ -816,6 +816,11 @@ a:focus:not(:focus-visible) {
   font-size: 16px;
   line-height: 1.6;
   text-rendering: auto;
+  /* Parity with .note-list button / .episode-row: avoid faux-bold synthesis on WebKitGTK. */
+  font-synthesis: none;
+  /* Same WebKit tradeoff as .playlist-body / .section-heading: grayscale AA can look more even when
+   * scrolling/compositing would otherwise muddle subpixel LCD antialiasing. */
+  -webkit-font-smoothing: antialiased;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {

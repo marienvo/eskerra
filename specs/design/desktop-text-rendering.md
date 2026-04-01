@@ -32,6 +32,8 @@ This note documents **intentional CSS choices** for the Linux desktop app ([`app
 | Inbox note list | **Opaque** default row: `[data-app-surface='capture'] .note-list button` uses `background: var(--color-capture-panel)` — not `transparent` over the warm panel | `App.css` |
 | Inbox list scroll | `text-rendering: auto` on `.note-list` (parity with `.episode-scroll`) | `App.css` |
 | Inbox row buttons | `font-synthesis: none` on `.note-list button` | `App.css` |
+| Inbox editor scroll surface | `font-synthesis: none` on capture `.cm-scroller` (same rationale as list rows) | `App.css` |
+| Inbox editor WebKit smoothing | **`-webkit-font-smoothing: antialiased`** on capture `.cm-scroller` (same idea as `.playlist-body`; tradeoff: slightly lighter strokes vs more even AA when scrolling) | `App.css` |
 | Podcasts playlist body | Dense metadata / monospace: `-webkit-font-smoothing: antialiased` and `text-rendering: geometricPrecision` on `.playlist-body` | `App.css` |
 
 ## Fractional UI scale (GNOME / Wayland)
