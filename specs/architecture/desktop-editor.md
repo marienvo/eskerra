@@ -20,6 +20,17 @@
 - **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, and a small view plugin to highlight `[[wiki-style]]` spans in the source. Optional styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
 - **Wiki links** in files remain plain `[[...]]` text; see [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts) for the mdast shape used in tooling/tests.
 
+## Vertical layout and click coordinates
+
+CodeMirror 6 derives vertical layout from DOM measurements (for example line and block heights). Those measurements use the element border box: **`padding` and border count toward the measured height; CSS `margin` does not.** If vertical spacing is expressed only as margin on a `.cm-line`, a line decoration, or a block widget DOM node, the editor’s internal height map can be shorter than the visible layout. Clicks and cursor placement below that content then map to the wrong document positions (offset “phantom zone”).
+
+**Rule:** For the inbox markdown editor, do not use vertical **margin** on anything that defines how tall a logical line or block widget appears in the editor. Use **padding** (or other in-box spacing) instead. This applies at least to:
+
+- Line-level classes under `[data-app-surface='capture'] .note-markdown-editor-host` (for example fenced code: `cm-md-fence-line`, and heading line decorations).
+- Vault image preview wrappers: [`cm-vault-image-preview`](../../apps/desktop/src/App.css) in `App.css`, and the widget root in [`vaultImagePreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewCodemirror.ts).
+
+Horizontal margin on unrelated containers (for example centering the editor column) is unaffected.
+
 ## Security and filesystem discipline
 
 - All writes under the vault still go through existing `vault_*` commands and `assert_in_vault`.
