@@ -1,4 +1,4 @@
-import type {Root} from 'mdast';
+import type {Parent, Root, Text} from 'mdast';
 import type {Handlers} from 'mdast-util-to-markdown';
 import type {Plugin, Processor} from 'unified';
 import {visit} from 'unist-util-visit';
@@ -55,7 +55,7 @@ export const remarkWikiLink: Plugin<[], Root> = function remarkWikiLink(
   toMarkdownExtensions.push({handlers: wikiLinkHandlers});
 
   return function transformer(tree: Root) {
-    visit(tree, 'text', (node, index, parent) => {
+    visit(tree, 'text', (node: Text, index, parent: Parent | undefined) => {
       if (
         parent === undefined ||
         typeof index !== 'number' ||

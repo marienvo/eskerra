@@ -1,4 +1,4 @@
-import type {Root} from 'mdast';
+import type {Root, Text} from 'mdast';
 import remarkParse from 'remark-parse';
 import remarkStringify from 'remark-stringify';
 import {unified} from 'unified';
@@ -28,7 +28,7 @@ describe('remarkWikiLink', () => {
     expect(links.map(l => l.value)).toEqual(['My Note']);
 
     const texts: string[] = [];
-    visit(tree, 'text', n => {
+    visit(tree, 'text', (n: Text) => {
       texts.push(n.value);
     });
     expect(texts).toEqual(['Hello ', ' world']);

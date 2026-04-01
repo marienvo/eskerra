@@ -31,6 +31,68 @@ function dedupeFileKey(file: File): string {
   return `${file.name}\0${file.size}\0${file.lastModified}`;
 }
 
+/** Synchronously copy clipboard strings and file references before any `await` (WebKit/Tauri). */
+export type ClipboardImageSnapshot = {
+  types: string[];
+  html: string;
+  /** File refs from `items` + `files` matching `fileMightBeClipboardImageByMeta`; deduped. */
+  candidateFiles: File[];
+};
+
+export function snapshotClipboardImagePayload(dt: DataTransfer): ClipboardImageSnapshot {
+  const types = Array.from(dt.types);
+  const html = dt.getData('text/html') ?? '';
+  const seen = new Set<string>();
+  const candidateFiles: File[] = [];
+
+  const add = (file: File | null) => {
+    if (!file || !fileMightBeClipboardImageByMeta(file)) {
+      return;
+    }
+    const key = dedupeFileKey(file);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    candidateFiles.push(file);
+  };
+
+  if (dt.items && dt.items.length > 0) {
+    for (let i = 0; i < dt.items.length; i++) {
+      const item = dt.items[i];
+      if (item.kind === 'file') {
+        add(item.getAsFile());
+      }
+    }
+  }
+
+  for (let i = 0; i < dt.files.length; i++) {
+    add(dt.files.item(i));
+  }
+
+  return {types, html, candidateFiles};
+}
+
+/** Async validate snapshot candidates (sniff bytes when MIME is ambiguous). */
+export async function filterClipboardImageCandidateFiles(
+  candidateFiles: readonly File[],
+): Promise<File[]> {
+  const out: File[] = [];
+  const seen = new Set<string>();
+  for (const file of candidateFiles) {
+    if (!(await isProbablyClipboardImageFile(file))) {
+      continue;
+    }
+    const key = dedupeFileKey(file);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
+}
+
 export async function collectClipboardImageFilesFromFileList(
   files: FileList,
 ): Promise<File[]> {
@@ -57,51 +119,80 @@ export async function collectClipboardImageFilesFromFileList(
 export async function collectClipboardImageFilesFromDataTransfer(
   dt: DataTransfer,
 ): Promise<File[]> {
-  const seen = new Set<string>();
-  const fromItems: File[] = [];
-
-  if (dt.items && dt.items.length > 0) {
-    for (let i = 0; i < dt.items.length; i++) {
-      const item = dt.items[i];
-      if (item.kind !== 'file') {
-        continue;
-      }
-      const file = item.getAsFile();
-      if (!file) {
-        continue;
-      }
-      if (!(await isProbablyClipboardImageFile(file))) {
-        continue;
-      }
-      const key = dedupeFileKey(file);
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      fromItems.push(file);
-    }
-  }
-
-  if (fromItems.length > 0) {
-    return fromItems;
-  }
-
-  return collectClipboardImageFilesFromFileList(dt.files);
+  const {candidateFiles} = snapshotClipboardImagePayload(dt);
+  return filterClipboardImageCandidateFiles(candidateFiles);
 }
 
-/** Synchronous: should we take over paste before ProseMirror ingests `blob:` HTML? */
+function textUriListLineLooksLikeLocalImageFile(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.toLowerCase().startsWith('file://')) {
+    return false;
+  }
+  try {
+    const noHashOrQuery = trimmed.replace(/[?#].*$/, '');
+    const path = decodeURIComponent(noHashOrQuery.slice('file://'.length));
+    return /\.(png|jpe?g|gif|webp|svg)$/i.test(path);
+  } catch {
+    return /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(trimmed);
+  }
+}
+
+function fileUriToLocalPath(uri: string): string | null {
+  try {
+    const u = new URL(uri.trim());
+    if (u.protocol !== 'file:') {
+      return null;
+    }
+    let p = decodeURIComponent(u.pathname);
+    if (/^\/[A-Za-z]:/.test(p)) {
+      p = p.slice(1);
+    }
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+/** Absolute paths from `text/uri-list` entries that look like local image files (GNOME / file manager copy). */
+export function absoluteImagePathsFromClipboardUriList(dt: DataTransfer): string[] {
+  const uriList = dt.getData('text/uri-list')?.trim();
+  if (!uriList) {
+    return [];
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of uriList.split(/\r?\n/)) {
+    if (!textUriListLineLooksLikeLocalImageFile(raw)) {
+      continue;
+    }
+    const baseUri = raw.trim().replace(/[?#].*$/, '');
+    const abs = fileUriToLocalPath(baseUri);
+    if (abs && !seen.has(abs)) {
+      seen.add(abs);
+      out.push(abs);
+    }
+  }
+  return out;
+}
+
+/** Synchronous: should we take over paste before the editor ingests `blob:` HTML? */
 export function clipboardDataProbablyHasVaultImage(dt: DataTransfer): boolean {
   const types = Array.from(dt.types);
   if (
-    types.some(
-      t =>
-        t === 'image/png' ||
-        t === 'image/jpeg' ||
-        t === 'image/jpg' ||
-        t === 'image/gif' ||
-        t === 'image/webp' ||
-        t.startsWith('image/'),
-    )
+    types.some(t => {
+      const x = t.trim().toLowerCase();
+      return (
+        x === 'image/png' ||
+        x === 'image/jpeg' ||
+        x === 'image/jpg' ||
+        x === 'image/gif' ||
+        x === 'image/webp' ||
+        x === 'image/bmp' ||
+        x === 'image/x-png' ||
+        x === 'image/x-ms-bmp' ||
+        x.startsWith('image/')
+      );
+    })
   ) {
     return true;
   }
@@ -119,6 +210,14 @@ export function clipboardDataProbablyHasVaultImage(dt: DataTransfer): boolean {
       }
     }
   }
+  const uriList = dt.getData('text/uri-list')?.trim();
+  if (uriList) {
+    for (const raw of uriList.split(/\r?\n/)) {
+      if (textUriListLineLooksLikeLocalImageFile(raw)) {
+        return true;
+      }
+    }
+  }
   for (let i = 0; i < dt.files.length; i++) {
     const f = dt.files.item(i);
     if (f && fileMightBeClipboardImageByMeta(f)) {
@@ -127,9 +226,21 @@ export function clipboardDataProbablyHasVaultImage(dt: DataTransfer): boolean {
   }
   if (dt.items) {
     for (let i = 0; i < dt.items.length; i++) {
-      const ty = dt.items[i].type;
-      if (ty.startsWith('image/')) {
+      const item = dt.items[i];
+      const ty = item.type.trim().toLowerCase();
+      if (
+        ty.startsWith('image/') ||
+        ty === 'image/bmp' ||
+        ty === 'image/x-png' ||
+        ty === 'image/x-ms-bmp'
+      ) {
         return true;
+      }
+      if (item.kind === 'file') {
+        const f = item.getAsFile();
+        if (f && fileMightBeClipboardImageByMeta(f)) {
+          return true;
+        }
       }
     }
   }
