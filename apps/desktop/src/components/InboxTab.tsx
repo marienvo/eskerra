@@ -41,7 +41,7 @@ type InboxTabProps = {
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string}) => void;
-  onSaveNote: () => void;
+  onSaveShortcut: () => void;
   busy: boolean;
 };
 
@@ -63,7 +63,7 @@ export function InboxTab({
   inboxEditorResetNonce,
   onEditorError,
   onWikiLinkActivate,
-  onSaveNote,
+  onSaveShortcut,
   busy,
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
@@ -186,22 +186,25 @@ export function InboxTab({
                     onMarkdownChange={onEditorChange}
                     onEditorError={onEditorError}
                     onWikiLinkActivate={onWikiLinkActivate}
+                    onSaveShortcut={onSaveShortcut}
                     placeholder={
                       composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
                     }
                     busy={busy}
                   />
                 </div>
-                <div className="pane-footer">
-                  <button
-                    type="button"
-                    className="primary"
-                    onClick={composingNewEntry ? onCreateNewEntry : () => void onSaveNote()}
-                    disabled={busy}
-                  >
-                    {composingNewEntry ? 'Create note' : 'Save note'}
-                  </button>
-                </div>
+                {composingNewEntry ? (
+                  <div className="pane-footer">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void onCreateNewEntry()}
+                      disabled={busy}
+                    >
+                      Create note
+                    </button>
+                  </div>
+                ) : null}
               </>
             ) : (
               <p className="muted empty-hint">Select a note from the log or use Add entry.</p>

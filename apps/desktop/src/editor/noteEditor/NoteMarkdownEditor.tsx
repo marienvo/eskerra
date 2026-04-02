@@ -39,6 +39,8 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string}) => void;
+  /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
+  onSaveShortcut?: () => void;
   placeholder: string;
   busy: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
@@ -80,6 +82,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onMarkdownChange,
     onEditorError,
     onWikiLinkActivate,
+    onSaveShortcut,
     placeholder: placeholderText,
     busy,
   } = props;
@@ -103,6 +106,9 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onWikiLinkActivateRef.current = onWikiLinkActivate;
   }, [onWikiLinkActivate]);
+
+  const onSaveShortcutRef = useRef(onSaveShortcut);
+  onSaveShortcutRef.current = onSaveShortcut;
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -329,6 +335,13 @@ const NoteMarkdownEditorImpl = forwardRef<
       history(),
       drawSelection(),
       keymap.of([
+        {
+          key: 'Mod-s',
+          run: () => {
+            onSaveShortcutRef.current?.();
+            return true;
+          },
+        },
         {
           key: '[',
           run: runWikiLinkOpenAssist,

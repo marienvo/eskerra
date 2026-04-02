@@ -13,6 +13,10 @@ import {
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
 import {openOrCreateInboxWikiLinkTarget} from '../lib/inboxWikiLinkNavigation';
+import {
+  createInboxAutosaveScheduler,
+  INBOX_AUTOSAVE_DEBOUNCE_MS,
+} from '../lib/inboxAutosaveScheduler';
 import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownImages';
 import {
   bootstrapVaultLayout,
@@ -36,6 +40,8 @@ const STORE_KEY_VAULT = 'vaultRoot';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
+type LastPersisted = {uri: string; markdown: string};
+
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
   vaultSettings: NoteboxSettings | null;
@@ -58,7 +64,10 @@ export type UseMainWindowWorkspaceResult = {
   cancelNewEntry: () => void;
   selectNote: (uri: string) => void;
   submitNewEntry: () => Promise<void>;
+  /** Persists the open inbox note if needed (Ctrl/Cmd+S, same as auto-save flush). Does not set `busy`. */
   saveNote: () => Promise<void>;
+  /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
+  flushInboxSave: () => Promise<void>;
   onWikiLinkActivate: (payload: {inner: string}) => Promise<void>;
 };
 
@@ -82,6 +91,21 @@ export function useMainWindowWorkspace(options: {
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
 
   const inboxBodyPrefetchGenRef = useRef(0);
+  const vaultRootRef = useRef<string | null>(null);
+  const selectedUriRef = useRef<string | null>(null);
+  const composingNewEntryRef = useRef(false);
+  const editorBodyRef = useRef('');
+  const lastPersistedRef = useRef<LastPersisted | null>(null);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const autosaveSchedulerRef = useRef(
+    createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
+  );
+  const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
+
+  vaultRootRef.current = vaultRoot;
+  selectedUriRef.current = selectedUri;
+  composingNewEntryRef.current = composingNewEntry;
+  editorBodyRef.current = editorBody;
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -100,8 +124,58 @@ export function useMainWindowWorkspace(options: {
     [fs],
   );
 
+  const enqueueInboxPersist = useCallback(async (): Promise<void> => {
+    const run = async (): Promise<void> => {
+      const root = vaultRootRef.current;
+      const uri = selectedUriRef.current;
+      if (!root || !uri || composingNewEntryRef.current) {
+        return;
+      }
+      const raw =
+        inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+      const prev = lastPersistedRef.current;
+      if (prev && prev.uri === uri && prev.markdown === raw) {
+        return;
+      }
+      try {
+        setErr(null);
+        const md = await persistTransientMarkdownImages(raw, root);
+        if (markdownContainsTransientImageUrls(md)) {
+          setErr(
+            'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+          );
+          return;
+        }
+        if (md !== raw) {
+          inboxEditorRef.current?.loadMarkdown(md);
+          setEditorBody(md);
+        }
+        await saveNoteMarkdown(uri, fs, md);
+        await refreshNotes(root);
+        if (selectedUriRef.current !== uri || composingNewEntryRef.current) {
+          return;
+        }
+        lastPersistedRef.current = {uri, markdown: md};
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      }
+    };
+
+    const next = saveChainRef.current.then(run);
+    saveChainRef.current = next.catch(() => undefined);
+    await next;
+  }, [fs, refreshNotes, inboxEditorRef]);
+
+  const flushInboxSave = useCallback(async () => {
+    autosaveSchedulerRef.current.cancel();
+    await enqueueInboxPersist();
+  }, [enqueueInboxPersist]);
+
+  flushInboxSaveRef.current = flushInboxSave;
+
   const hydrateVault = useCallback(
     async (root: string) => {
+      await flushInboxSaveRef.current();
       setBusy(true);
       setErr(null);
       setVaultSettings(null);
@@ -124,6 +198,7 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(null);
         setComposingNewEntry(false);
         setEditorBody('');
+        lastPersistedRef.current = null;
         setInboxEditorResetNonce(n => n + 1);
         setVaultRoot(root);
         const store = await load(STORE_PATH);
@@ -197,11 +272,12 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const raw = await fs.readFile(selectedUri, {encoding: 'utf8'});
         if (!cancelled) {
           const normalized = raw.replace(/\n$/, '');
+          lastPersistedRef.current = {uri: selectedUri, markdown: normalized};
           setEditorBody(normalized);
           setInboxContentByUri(prev => ({...prev, [selectedUri]: normalized}));
           setInboxEditorResetNonce(n => n + 1);
@@ -216,6 +292,28 @@ export function useMainWindowWorkspace(options: {
       cancelled = true;
     };
   }, [vaultRoot, selectedUri, fs]);
+
+  useEffect(() => {
+    if (!vaultRoot || !selectedUri || composingNewEntry) {
+      autosaveSchedulerRef.current.cancel();
+      return;
+    }
+    if (lastPersistedRef.current?.uri !== selectedUri) {
+      autosaveSchedulerRef.current.cancel();
+      return;
+    }
+    const prev = lastPersistedRef.current;
+    if (prev && prev.uri === selectedUri && prev.markdown === editorBody) {
+      return;
+    }
+    const scheduler = autosaveSchedulerRef.current;
+    scheduler.schedule(() => {
+      void enqueueInboxPersist();
+    });
+    return () => {
+      scheduler.cancel();
+    };
+  }, [vaultRoot, selectedUri, composingNewEntry, editorBody, enqueueInboxPersist]);
 
   const addNote = useCallback(
     async (title: string, body: string) => {
@@ -239,22 +337,32 @@ export function useMainWindowWorkspace(options: {
   );
 
   const startNewEntry = useCallback(() => {
-    setErr(null);
-    setComposingNewEntry(true);
-    setSelectedUri(null);
-    setEditorBody('');
-    setInboxEditorResetNonce(n => n + 1);
+    void (async () => {
+      await flushInboxSaveRef.current();
+      setErr(null);
+      setComposingNewEntry(true);
+      setSelectedUri(null);
+      setEditorBody('');
+      lastPersistedRef.current = null;
+      setInboxEditorResetNonce(n => n + 1);
+    })();
   }, []);
 
   const cancelNewEntry = useCallback(() => {
-    setComposingNewEntry(false);
-    setEditorBody('');
-    setInboxEditorResetNonce(n => n + 1);
+    void (async () => {
+      await flushInboxSaveRef.current();
+      setComposingNewEntry(false);
+      setEditorBody('');
+      setInboxEditorResetNonce(n => n + 1);
+    })();
   }, []);
 
   const selectNote = useCallback((uri: string) => {
-    setComposingNewEntry(false);
-    setSelectedUri(uri);
+    void (async () => {
+      await flushInboxSaveRef.current();
+      setComposingNewEntry(false);
+      setSelectedUri(uri);
+    })();
   }, []);
 
   const submitNewEntry = useCallback(async () => {
@@ -289,38 +397,14 @@ export function useMainWindowWorkspace(options: {
     await addNote(titleLine, fullMarkdown);
   }, [addNote, editorBody, inboxEditorRef, vaultRoot]);
 
-  const saveNote = useCallback(async () => {
-    if (!selectedUri || !vaultRoot) {
-      return;
-    }
-    setBusy(true);
-    setErr(null);
-    try {
-      const raw = inboxEditorRef.current?.getMarkdown() ?? editorBody;
-      const md = await persistTransientMarkdownImages(raw, vaultRoot);
-      if (markdownContainsTransientImageUrls(md)) {
-        throw new Error(
-          'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
-        );
-      }
-      if (md !== raw) {
-        inboxEditorRef.current?.loadMarkdown(md);
-        setEditorBody(md);
-      }
-      await saveNoteMarkdown(selectedUri, fs, md);
-      await refreshNotes(vaultRoot);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }, [selectedUri, vaultRoot, inboxEditorRef, editorBody, fs, refreshNotes]);
+  const saveNote = flushInboxSave;
 
   const onWikiLinkActivate = useCallback(
     async ({inner}: {inner: string}) => {
       if (!vaultRoot) {
         return;
       }
+      await flushInboxSaveRef.current();
       try {
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
@@ -380,6 +464,7 @@ export function useMainWindowWorkspace(options: {
     selectNote,
     submitNewEntry,
     saveNote,
+    flushInboxSave,
     onWikiLinkActivate,
   };
 }

@@ -1,4 +1,5 @@
 import {isTauri} from '@tauri-apps/api/core';
+import {getCurrentWindow} from '@tauri-apps/api/window';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -87,6 +88,7 @@ export default function App() {
     selectNote,
     submitNewEntry,
     saveNote,
+    flushInboxSave,
     onWikiLinkActivate,
   } = useMainWindowWorkspace({fs, inboxEditorRef});
 
@@ -289,6 +291,60 @@ export default function App() {
     });
   }, []);
 
+  const onInboxSaveShortcut = useCallback(() => {
+    if (composingNewEntry) {
+      void submitNewEntry();
+    } else {
+      void saveNote();
+    }
+  }, [composingNewEntry, submitNewEntry, saveNote]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    let cancelled = false;
+    let unlistenClose: (() => void) | undefined;
+    let unlistenFocus: (() => void) | undefined;
+    const win = getCurrentWindow();
+    void win
+      .onCloseRequested(async event => {
+        event.preventDefault();
+        try {
+          await flushInboxSave();
+        } finally {
+          await win.destroy();
+        }
+      })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlistenClose = fn;
+        }
+      })
+      .catch(() => undefined);
+    void win
+      .onFocusChanged(({payload: focused}) => {
+        if (!focused) {
+          void flushInboxSave();
+        }
+      })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlistenFocus = fn;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlistenClose?.();
+      unlistenFocus?.();
+    };
+  }, [flushInboxSave]);
+
   if (!vaultRoot) {
     return (
       <div ref={appRootRef} className={appRootClassName}>
@@ -365,7 +421,7 @@ export default function App() {
                 onWikiLinkActivate={payload => {
                   void onWikiLinkActivate(payload);
                 }}
-                onSaveNote={() => void saveNote()}
+                onSaveShortcut={onInboxSaveShortcut}
                 busy={busy}
               />
             </div>
