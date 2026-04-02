@@ -30,6 +30,11 @@ tauri-plugin-store = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-prevent-default = { version = "4", default-features = false }
 
+# Vendored patch: persist size/position when WM reports maximized but geometry is not fullscreen
+# (tiling / Wayland false positives). See vendor/tauri-plugin-window-state/src/lib.rs.
+[patch.crates-io]
+tauri-plugin-window-state = { path = "vendor/tauri-plugin-window-state" }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 souvlaki = { version = "0.7", default-features = false, features = ["use_zbus"] }
 # Align with webkit2gtk / Tauri Linux stack for GDK window state (tiling flags).

@@ -1,7 +1,7 @@
 import './DesktopStartupSplash.css';
 
-/** Placeholder art: replace `public/startup-splash-placeholder.png` (640×400). */
-const SPLASH_SRC = '/startup-splash-placeholder.png';
+/** Placeholder art: replace `public/splash.png` (640×400). */
+const SPLASH_SRC = '/splash.png';
 
 export function DesktopStartupSplash() {
   return (

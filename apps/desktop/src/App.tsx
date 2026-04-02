@@ -1,5 +1,5 @@
-import {isTauri} from '@tauri-apps/api/core';
-import {getCurrentWindow} from '@tauri-apps/api/window';
+import {invoke, isTauri} from '@tauri-apps/api/core';
+import {getCurrentWindow, PhysicalSize} from '@tauri-apps/api/window';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {
@@ -325,6 +325,23 @@ export default function App() {
     }
     let cancelled = false;
     void (async () => {
+      const win = getCurrentWindow();
+      let diskMainW: number | undefined;
+      let diskMainH: number | undefined;
+      try {
+        const v = await invoke<{
+          pathExists: boolean;
+          mainWidth?: number;
+          mainHeight?: number;
+        }>('notebox_peek_window_state_file');
+        if (v.pathExists) {
+          diskMainW = v.mainWidth;
+          diskMainH = v.mainHeight;
+        }
+      } catch {
+        /* ignore: fallback only when peek succeeds */
+      }
+
       try {
         await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
       } catch (e) {
@@ -335,6 +352,7 @@ export default function App() {
           );
         }
       }
+
       try {
         await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
       } catch (e) {
@@ -344,10 +362,40 @@ export default function App() {
             e,
           );
         }
-      } finally {
-        if (!cancelled) {
-          setStartupSplashDismissed(true);
+      }
+
+      let sizeAfterRestore: {width: number; height: number} | null = null;
+      try {
+        const s = await win.innerSize();
+        sizeAfterRestore = {width: s.width, height: s.height};
+      } catch {
+        sizeAfterRestore = null;
+      }
+
+      const dw = diskMainW;
+      const dh = diskMainH;
+      if (
+        dw != null &&
+        dh != null &&
+        dw > 0 &&
+        dh > 0 &&
+        sizeAfterRestore != null &&
+        (sizeAfterRestore.width !== dw || sizeAfterRestore.height !== dh)
+      ) {
+        try {
+          await win.setSize(new PhysicalSize(dw, dh));
+        } catch (e) {
+          if (import.meta.env.DEV) {
+            console.error(
+              '[eskerra] window restore: setSize from persisted file failed',
+              e,
+            );
+          }
         }
+      }
+
+      if (!cancelled) {
+        setStartupSplashDismissed(true);
       }
     })();
     return () => {
@@ -401,7 +449,13 @@ export default function App() {
         event.preventDefault();
         try {
           await flushInboxSave();
-          await saveWindowState(StateFlags.ALL);
+          try {
+            await saveWindowState(StateFlags.ALL);
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error('[eskerra] saveWindowState failed', e);
+            }
+          }
         } finally {
           /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
           void win.destroy();

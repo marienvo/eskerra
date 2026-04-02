@@ -12,6 +12,7 @@
     "core:webview:allow-create-webview-window",
     "core:window:allow-show",
     "core:window:allow-set-focus",
+    "core:window:allow-set-size",
     "store:default",
     "dialog:default",
     "clipboard-manager:default",

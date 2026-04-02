@@ -6,6 +6,7 @@ mod tiling_score;
 mod tiling_gdk;
 mod vault;
 mod vault_watch;
+mod window_state_disk;
 
 use vault::VaultRootState;
 
@@ -69,6 +70,7 @@ pub fn run() {
             vault::vault_remove_file,
             vault::vault_list_dir,
             vault_watch::vault_start_watch,
+            window_state_disk::notebox_peek_window_state_file,
             media::media_set_metadata,
             media::media_set_playback,
             media::media_clear_session,
