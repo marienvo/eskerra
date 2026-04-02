@@ -21,7 +21,7 @@ type PodcastsTabProps = {
   fsRefreshNonce: number;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
   resumeFromVault: () => Promise<void>;
-  /** Incremented when vault playlist file is updated from playback (not every progress tick). */
+  /** Incremented only by playlist-relevant flows (playback writes or remote playlist changes). */
   playlistRevision: number;
   /** When true, episode rows do not start or switch playback (an episode is already playing). */
   episodeSelectLocked?: boolean;

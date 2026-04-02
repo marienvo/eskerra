@@ -110,7 +110,7 @@ export default function App() {
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);
-  const [playlistRevision, setPlaylistRevision] = useState(0);
+  const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
@@ -126,8 +126,8 @@ export default function App() {
     Record<string, string>
   >({});
 
-  const bumpPlaylistRevision = useCallback(() => {
-    setPlaylistRevision(r => r + 1);
+  const bumpPlaylistDiskRevision = useCallback(() => {
+    setPlaylistDiskRevision(r => r + 1);
   }, []);
 
   const onAutoShowPlayerDock = useCallback(() => {
@@ -151,8 +151,8 @@ export default function App() {
     fs,
     onAutoShowPlayerDock,
     onError: setErr,
-    onPlaylistDiskUpdated: bumpPlaylistRevision,
-    playlistRevision,
+    onPlaylistDiskUpdated: bumpPlaylistDiskRevision,
+    playlistRevision: playlistDiskRevision,
     vaultRoot,
   });
 
@@ -169,7 +169,7 @@ export default function App() {
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: desktopPlayback.playerLabel !== 'playing',
     deviceInstanceId,
-    onRemotePlaylistChanged: bumpPlaylistRevision,
+    onRemotePlaylistChanged: bumpPlaylistDiskRevision,
     vaultRoot,
     vaultSettings,
   });
@@ -182,14 +182,13 @@ export default function App() {
         return;
       }
       setNotes(list);
-      bumpPlaylistRevision();
       const bodies = await prefetchInboxMarkdownBodies(list, fs);
       if (gen !== inboxBodyPrefetchGenRef.current) {
         return;
       }
       setInboxContentByUri(bodies);
     },
-    [bumpPlaylistRevision, fs],
+    [fs],
   );
 
   const hydrateVault = useCallback(
@@ -635,7 +634,7 @@ export default function App() {
                   onError={setErr}
                   fsRefreshNonce={fsRefreshNonce}
                   playEpisode={desktopPlayback.playEpisode}
-                  playlistRevision={playlistRevision}
+                  playlistRevision={playlistDiskRevision}
                   resumeFromVault={desktopPlayback.resumeFromVault}
                   episodeSelectLocked={desktopPlayback.playerLabel === 'playing'}
                 />

@@ -34,15 +34,13 @@
 
 ## Phase 3 — Inbox refresh vs playlist invalidation
 
+**Status (implemented):** [`App.tsx`](../../apps/desktop/src/App.tsx) no longer bumps playlist revision inside `refreshNotes`. The local state is now named `playlistDiskRevision` to make ownership explicit. Increment sources are playlist-relevant only: `useDesktopPodcastPlayback` (`onPlaylistDiskUpdated`) and remote playlist polling (`onRemotePlaylistChanged`).
+
 **Goal:** Inbox filesystem refresh must not **implicitly** reload podcast playlist state unless playlist-relevant data changed.
 
-**Why:** [`App.tsx`](../../apps/desktop/src/App.tsx) `refreshNotes` calls `bumpPlaylistRevision()` after listing notes, coupling inbox to playback.
+**Acceptance:** Listing/prefetching inbox does not bump playlist reload generation by default.
 
-**Scope:** Split counters or gate playlist bumps on events that touch playlist files or defined rules; document the contract in code comments + architecture spec if needed.
-
-**Acceptance:** Listing/prefetching inbox without playlist disk changes does not spuriously bump playlist consumers (define observable in PR).
-
-**Risks:** Playback desync if gating is wrong—add targeted checks around playlist reads after note save.
+**Known tradeoff:** generic `vault-files-changed` has no file-path payload, so external edits to `.notebox/playlist.json` by other tools are not singled out here; keep for a later targeted watcher/event payload improvement if needed.
 
 ---
 
