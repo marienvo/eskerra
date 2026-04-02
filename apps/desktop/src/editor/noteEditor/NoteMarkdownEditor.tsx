@@ -23,6 +23,7 @@ import {
   type NoteInboxAttachmentHost,
 } from '../../lib/noteInboxAttachmentHost';
 import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
+import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
 
@@ -40,6 +41,8 @@ export type NoteMarkdownEditorProps = {
   busy: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
   attachmentHost: NoteInboxAttachmentHost;
+  /** Shell-owned: Markdown image src → preview URL (for example `lib/resolveVaultImagePreviewUrl`). */
+  resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -54,6 +57,7 @@ const NoteMarkdownEditorImpl = forwardRef<
   const {
     vaultRoot,
     attachmentHost,
+    resolveVaultImagePreviewUrl,
     initialMarkdown,
     onMarkdownChange,
     onEditorError,
@@ -90,6 +94,9 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const attachmentHostRef = useRef(attachmentHost);
   attachmentHostRef.current = attachmentHost;
+
+  const resolveVaultImagePreviewUrlRef = useRef(resolveVaultImagePreviewUrl);
+  resolveVaultImagePreviewUrlRef.current = resolveVaultImagePreviewUrl;
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -262,6 +269,8 @@ const NoteMarkdownEditorImpl = forwardRef<
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
         activeNotePath: activeNotePathRef,
+        resolvePreviewUrl: (vr, ap, src) =>
+          resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       EditorView.domEventHandlers({
         paste(event, view) {

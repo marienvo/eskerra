@@ -24,13 +24,11 @@
 
 ## Phase 2 — Media preview URL owner
 
-**Goal:** One owner converts Markdown image references to **webview-safe** preview URLs; CodeMirror stays ignorant of Tauri.
+**Status (implemented):** [`vaultImagePreviewTypes.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewTypes.ts) defines `VaultImagePreviewUrlResolver`; [`vaultImagePreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewCodemirror.ts) takes `resolvePreviewUrl` on refs and does **not** import `lib/`. [`InboxTab.tsx`](../../apps/desktop/src/components/InboxTab.tsx) passes [`resolveVaultImagePreviewUrl`](../../apps/desktop/src/lib/resolveVaultImagePreviewUrl.ts) into [`NoteMarkdownEditor`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx). Tauri `convertFileSrc` stays in `lib/` only.
 
-**Why:** [`vaultImagePreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewCodemirror.ts) depends on [`resolveVaultImagePreviewUrl.ts`](../../apps/desktop/src/lib/resolveVaultImagePreviewUrl.ts) (`convertFileSrc`).
+**Goal:** One owner converts Markdown image references to **webview-safe** preview URLs; the editor depends only on a **function type**.
 
-**Scope:** Inject a resolver function (or factory) into the preview extension; centralize `convertFileSrc` and path policy in `lib/`.
-
-**Acceptance:** No `@tauri-apps/api/core` import from `editor/noteEditor/*` for previews.
+**Acceptance:** No `resolveVaultImagePreviewUrl` / `@tauri-apps/*` imports under `editor/` for image preview (ESLint already blocks `@tauri-apps/*` in `editor/`).
 
 ---
 

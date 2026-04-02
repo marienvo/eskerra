@@ -26,8 +26,8 @@ function inboxNoteBaseDir(
 }
 
 /**
- * Resolves a Markdown image `src` (relative to an inbox note) to a Webview-safe URL.
- * HTTP(S) and data URLs are returned unchanged.
+ * Desktop shell: implements the editor’s `VaultImagePreviewUrlResolver`—inbox-relative
+ * image paths → Tauri `convertFileSrc` URL. HTTP(S) and data URLs pass through unchanged.
  */
 
 export function resolveVaultImagePreviewUrl(

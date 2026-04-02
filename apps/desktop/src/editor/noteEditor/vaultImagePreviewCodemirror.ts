@@ -16,15 +16,12 @@ import {
   type DecorationSet,
 } from '@codemirror/view';
 
-import {resolveVaultImagePreviewUrl} from '../../lib/resolveVaultImagePreviewUrl';
 import {parseLoneMarkdownImageLine} from './loneMarkdownImageLine';
+import type {VaultImagePreviewRefs} from './vaultImagePreviewTypes';
 
 export const toggleVaultImageExpand = StateEffect.define<{lineFrom: number}>();
 
-export type VaultImagePreviewRefs = {
-  vaultRoot: {current: string};
-  activeNotePath: {current: string | null};
-};
+export type {VaultImagePreviewRefs} from './vaultImagePreviewTypes';
 
 /** Marker value for [`EditorView.atomicRanges`](https://codemirror.net/docs/ref/#view.EditorView^atomicRanges). */
 class VaultImageAtomicSpan extends RangeValue {
@@ -164,7 +161,7 @@ class VaultImageBlockWidget extends WidgetType {
     img.alt = this.alt;
     img.className = 'cm-vault-image-preview__img';
     img.decoding = 'async';
-    img.src = resolveVaultImagePreviewUrl(
+    img.src = this.refs.resolvePreviewUrl(
       this.refs.vaultRoot.current,
       this.refs.activeNotePath.current,
       this.src,

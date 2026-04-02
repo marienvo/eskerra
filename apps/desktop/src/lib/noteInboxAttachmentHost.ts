@@ -1,6 +1,7 @@
 /**
- * Shell-owned adapter: Tauri clipboard, OS file drop, and vault image persistence
- * for the inbox Markdown editor. Keeps `@tauri-apps/*` out of `editor/`.
+ * Shell-owned adapter: **inbox attachment import only** (clipboard, drag/drop, vault bytes).
+ * Do not add unrelated concerns here—keep ownership narrow so this file does not become a
+ * general desktop integration dumping ground.
  */
 
 import {isTauri} from '@tauri-apps/api/core';

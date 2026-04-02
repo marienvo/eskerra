@@ -2,6 +2,7 @@ import type {RefObject} from 'react';
 import {useMemo} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
+import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
   extractFirstMarkdownH1,
@@ -175,6 +176,7 @@ export function InboxTab({
                   <NoteMarkdownEditor
                     ref={inboxEditorRef}
                     attachmentHost={inboxAttachmentHost}
+                    resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
                     vaultRoot={vaultRoot}
                     activeNotePath={composingNewEntry ? null : selectedUri}
                     initialMarkdown={editorBody}
