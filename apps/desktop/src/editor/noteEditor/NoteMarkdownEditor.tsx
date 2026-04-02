@@ -37,6 +37,8 @@ export type NoteMarkdownEditorProps = {
   onMarkdownChange: (markdown: string) => void;
   /** Shown when image paste or drop fails; also used when vault image import is unavailable. */
   onEditorError?: (message: string) => void;
+  /** Shell-owned wiki-link action handler. */
+  onWikiLinkActivate: (payload: {inner: string}) => void;
   placeholder: string;
   busy: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
@@ -50,6 +52,22 @@ export type NoteMarkdownEditorHandle = {
   loadMarkdown: (markdown: string) => void;
 };
 
+const WIKI_LINK_REGEX = /\[\[([^[\]]+)\]\]/g;
+
+function wikiLinkInnerAtLineColumn(lineText: string, column: number): string | null {
+  WIKI_LINK_REGEX.lastIndex = 0;
+  let match = WIKI_LINK_REGEX.exec(lineText);
+  while (match) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (column >= start && column < end) {
+      return match[1];
+    }
+    match = WIKI_LINK_REGEX.exec(lineText);
+  }
+  return null;
+}
+
 const NoteMarkdownEditorImpl = forwardRef<
   NoteMarkdownEditorHandle,
   NoteMarkdownEditorProps
@@ -61,6 +79,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     initialMarkdown,
     onMarkdownChange,
     onEditorError,
+    onWikiLinkActivate,
     placeholder: placeholderText,
     busy,
   } = props;
@@ -79,6 +98,11 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onEditorErrorRef.current = onEditorError;
   }, [onEditorError]);
+
+  const onWikiLinkActivateRef = useRef(onWikiLinkActivate);
+  useEffect(() => {
+    onWikiLinkActivateRef.current = onWikiLinkActivate;
+  }, [onWikiLinkActivate]);
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -257,12 +281,62 @@ const NoteMarkdownEditorImpl = forwardRef<
       return runNativeClipboardPasteWhenWebDataEmpty(view);
     };
 
+    const onEditorClick = (e: MouseEvent, view: EditorView): boolean => {
+      if (e.button !== 0) {
+        return false;
+      }
+      const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+      if (pos == null) {
+        return false;
+      }
+      const line = view.state.doc.lineAt(pos);
+      const column = pos - line.from;
+      const lineText = view.state.doc.sliceString(line.from, line.to);
+      const inner = wikiLinkInnerAtLineColumn(lineText, column);
+      if (!inner) {
+        return false;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onWikiLinkActivateRef.current({inner});
+      return true;
+    };
+
+    const runWikiLinkOpenAssist = (view: EditorView): boolean => {
+      const sel = view.state.selection.main;
+      if (!sel.empty) {
+        return false;
+      }
+      const pos = sel.head;
+      if (pos < 1) {
+        return false;
+      }
+      const prev = view.state.doc.sliceString(pos - 1, pos);
+      if (prev !== '[') {
+        return false;
+      }
+      view.dispatch({
+        changes: {from: pos, to: pos, insert: '[]]'},
+        // Keep caret between opening and closing wiki brackets: [[|]]
+        selection: EditorSelection.cursor(pos + 1),
+      });
+      return true;
+    };
+
     const extensions = [
       markdown(),
       ...noteMarkdownEditorAppearance,
       history(),
       drawSelection(),
-      keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
+      keymap.of([
+        {
+          key: '[',
+          run: runWikiLinkOpenAssist,
+        },
+        indentWithTab,
+        ...defaultKeymap,
+        ...historyKeymap,
+      ]),
       EditorView.lineWrapping,
       placeholder(placeholderText),
       wikiLinkHighlight,
@@ -275,6 +349,9 @@ const NoteMarkdownEditorImpl = forwardRef<
       EditorView.domEventHandlers({
         paste(event, view) {
           return onEditorPaste(event, view);
+        },
+        click(event, view) {
+          return onEditorClick(event, view);
         },
       }),
       EditorView.theme({

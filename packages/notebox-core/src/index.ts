@@ -23,6 +23,12 @@ export {
   stemFromMarkdownFileName,
 } from './inboxMarkdown';
 export {
+  resolveInboxWikiLinkTarget,
+  type InboxWikiLinkNoteRef,
+  type InboxWikiLinkResolveResult,
+  type ParsedWikiLinkInner,
+} from './wikiLinkInbox';
+export {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,

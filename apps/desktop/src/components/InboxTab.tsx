@@ -40,6 +40,7 @@ type InboxTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
+  onWikiLinkActivate: (payload: {inner: string}) => void;
   onSaveNote: () => void;
   busy: boolean;
 };
@@ -61,6 +62,7 @@ export function InboxTab({
   onEditorChange,
   inboxEditorResetNonce,
   onEditorError,
+  onWikiLinkActivate,
   onSaveNote,
   busy,
 }: InboxTabProps) {
@@ -183,6 +185,7 @@ export function InboxTab({
                     sessionKey={inboxEditorResetNonce}
                     onMarkdownChange={onEditorChange}
                     onEditorError={onEditorError}
+                    onWikiLinkActivate={onWikiLinkActivate}
                     placeholder={
                       composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
                     }

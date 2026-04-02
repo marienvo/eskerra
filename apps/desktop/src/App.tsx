@@ -31,6 +31,7 @@ import {
   type StoredMainWindowInbox,
 } from './lib/mainWindowUiStore';
 import {persistTransientMarkdownImages} from './lib/persistTransientMarkdownImages';
+import {openOrCreateInboxWikiLinkTarget} from './lib/inboxWikiLinkNavigation';
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
@@ -534,6 +535,47 @@ export default function App() {
     }
   };
 
+  const onWikiLinkActivate = useCallback(
+    async ({inner}: {inner: string}) => {
+      if (!vaultRoot) {
+        return;
+      }
+      try {
+        const result = await openOrCreateInboxWikiLinkTarget({
+          inner,
+          notes: notes.map(n => ({name: n.name, uri: n.uri})),
+          vaultRoot,
+          fs,
+        });
+        if (result.kind === 'open' || result.kind === 'created') {
+          if (result.kind === 'created') {
+            await refreshNotes(vaultRoot);
+          }
+          setComposingNewEntry(false);
+          setSelectedUri(result.uri);
+          return;
+        }
+        if (result.kind === 'ambiguous') {
+          const names = result.notes.map(n => n.name).join(', ');
+          setErr(
+            `Ambiguous wiki link target: "${inner}" matches multiple notes (${names}).`,
+          );
+          return;
+        }
+        if (result.reason === 'path_not_supported') {
+          setErr(
+            `Wiki link "${inner}" is outside Inbox scope for now. Only Inbox targets are supported in this MVP.`,
+          );
+        } else {
+          setErr('Wiki link target is empty.');
+        }
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [vaultRoot, notes, fs, refreshNotes],
+  );
+
   const persistInboxLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
       const next = {...prev, inbox: {leftWidthPx}};
@@ -618,6 +660,9 @@ export default function App() {
                 onEditorChange={setEditorBody}
                 inboxEditorResetNonce={inboxEditorResetNonce}
                 onEditorError={setErr}
+                onWikiLinkActivate={payload => {
+                  void onWikiLinkActivate(payload);
+                }}
                 onSaveNote={() => void saveNote()}
                 busy={busy}
               />

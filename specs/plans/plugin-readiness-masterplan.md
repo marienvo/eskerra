@@ -74,6 +74,12 @@
 
 ## Phase 6 — Wiki resolution and indexing owner
 
+**Status (partially implemented as 6A):**
+- Core inbox-only wiki-link resolver in [`wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) with explicit `ambiguous` result.
+- Shell-owned open/create flow in [`inboxWikiLinkNavigation.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts), reusing existing inbox creation policy (`buildInboxMarkdownFromCompose` + `createInboxMarkdownNote`).
+- Editor activation + basic typing UX in [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx): click handler delegates to injected shell callback and `]]` close assist.
+- Minimal `Inbox/` prefix support only (case-insensitive strip); no broader path semantics.
+
 **Goal:** Wiki links move from syntax-only to resolvable paths with a **single index owner**; editor asks a service, does not walk the vault.
 
 **Why:** Avoid ownership spread across editor, inbox, and ad hoc FS scans.
@@ -81,6 +87,8 @@
 **Scope:** Incremental read-only index, debounced rebuild, off startup critical path per performance rules.
 
 **Acceptance:** No direct vault directory walks for wiki targets inside `editor/`.
+
+**Still deferred after 6A:** backlinks, global indexing framework, fuzzy/ranked matching, ambiguity picker UI, command-palette integration.
 
 **Defer:** Full-text search product.
 

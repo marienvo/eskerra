@@ -839,7 +839,7 @@ a:focus:not(:focus-visible) {
   color: var(--color-accent, #4fafe6);
   text-decoration: underline;
   text-underline-offset: 2px;
-  cursor: default;
+  cursor: pointer;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
