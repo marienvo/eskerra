@@ -2,7 +2,7 @@
   "name": "@notebox/desktop",
   "private": true,
   "license": "AGPL-3.0-only",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build",
+    "desktop:build": "node ../../scripts/tauri-desktop-build.mjs",
     "desktop:icons": "tauri icon ../../assets/brand/logo-eskerra.svg",
     "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml"
   },
