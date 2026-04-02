@@ -338,7 +338,8 @@ export default function App() {
         try {
           await flushInboxSave();
         } finally {
-          await win.destroy();
+          /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
+          void win.destroy();
         }
       })
       .then(fn => {
