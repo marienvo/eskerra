@@ -1,6 +1,13 @@
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
-import {useCallback, useEffect, useRef, useState, type RefObject} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 
 import {
   buildInboxMarkdownFromCompose,
@@ -103,11 +110,13 @@ export function useMainWindowWorkspace(options: {
     createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
   );
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
+  const inboxContentByUriRef = useRef<Record<string, string>>({});
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
   composingNewEntryRef.current = composingNewEntry;
   editorBodyRef.current = editorBody;
+  inboxContentByUriRef.current = inboxContentByUri;
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -269,6 +278,20 @@ export function useMainWindowWorkspace(options: {
     };
   }, [vaultRoot, refreshNotes, fs]);
 
+  useLayoutEffect(() => {
+    if (!vaultRoot || !selectedUri) {
+      return;
+    }
+    const cached = inboxContentByUriRef.current[selectedUri];
+    if (cached !== undefined) {
+      setEditorBody(cached);
+      lastPersistedRef.current = {uri: selectedUri, markdown: cached};
+    } else {
+      setEditorBody('');
+    }
+    setInboxEditorResetNonce(n => n + 1);
+  }, [vaultRoot, selectedUri]);
+
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {
       return;
@@ -280,9 +303,16 @@ export function useMainWindowWorkspace(options: {
         if (!cancelled) {
           const normalized = raw.replace(/\n$/, '');
           lastPersistedRef.current = {uri: selectedUri, markdown: normalized};
-          setEditorBody(normalized);
-          setInboxContentByUri(prev => ({...prev, [selectedUri]: normalized}));
-          setInboxEditorResetNonce(n => n + 1);
+          setInboxContentByUri(prev => {
+            if (prev[selectedUri] === normalized) {
+              return prev;
+            }
+            return {...prev, [selectedUri]: normalized};
+          });
+          if (normalized !== editorBodyRef.current) {
+            setEditorBody(normalized);
+            setInboxEditorResetNonce(n => n + 1);
+          }
         }
       } catch (e) {
         if (!cancelled) {
