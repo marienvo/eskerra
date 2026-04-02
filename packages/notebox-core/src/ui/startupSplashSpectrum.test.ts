@@ -1,10 +1,12 @@
+import {describe, expect, it} from 'vitest';
+
 import {
   computeStartupBarDisplayGain,
   computeStartupSpectrumSample,
   logoSpatialEnvelope,
   MIDDLE_STARTUP_BARS_FULL,
   smoothSpectrumLevelsInPlace,
-} from '../src/core/ui/startupSplashSpectrum';
+} from './startupSplashSpectrum';
 
 const BAR_COUNT = 30;
 
@@ -63,11 +65,9 @@ describe('startupSplashSpectrum', () => {
   it('when active, white-bin argmax clusters near the logo peak (time aggregate)', () => {
     const split = Math.ceil(BAR_COUNT / 2);
     const expectedPeak = Math.round(0.6 * (split - 1));
-    const aroundPeak = new Set([
-      expectedPeak - 1,
-      expectedPeak,
-      expectedPeak + 1,
-    ].filter(i => i >= 0 && i < split));
+    const aroundPeak = new Set(
+      [expectedPeak - 1, expectedPeak, expectedPeak + 1].filter(i => i >= 0 && i < split),
+    );
 
     let hitsNearPeak = 0;
     let activeFrames = 0;

@@ -78,6 +78,8 @@ export type UseMainWindowWorkspaceResult = {
   flushInboxSave: () => Promise<void>;
   onWikiLinkActivate: (payload: {inner: string}) => Promise<void>;
   deleteNote: (uri: string) => Promise<void>;
+  /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
+  initialVaultHydrateAttemptDone: boolean;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -98,6 +100,8 @@ export function useMainWindowWorkspace(options: {
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
+  const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
+    useState(false);
 
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRootRef = useRef<string | null>(null);
@@ -239,6 +243,10 @@ export function useMainWindowWorkspace(options: {
         }
       } catch {
         // first launch
+      } finally {
+        if (!cancelled) {
+          setInitialVaultHydrateAttemptDone(true);
+        }
       }
     })();
     return () => {
@@ -536,5 +544,6 @@ export function useMainWindowWorkspace(options: {
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
+    initialVaultHydrateAttemptDone,
   };
 }

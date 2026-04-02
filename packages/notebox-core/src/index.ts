@@ -42,6 +42,16 @@ export {
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
 export {
+  computeStartupBarDisplayGain,
+  computeStartupSpectrumSample,
+  logoSpatialEnvelope,
+  MIDDLE_STARTUP_BARS_FULL,
+  smoothSpectrumLevelsInPlace,
+  STARTUP_SPECTRUM_SPATIAL_SMOOTH,
+  STARTUP_SPECTRUM_TIME_SCALE,
+  LOGO_ENVELOPE_BLEND,
+} from './ui/startupSplashSpectrum';
+export {
   getInboxTileBackgroundColor,
   mixHex,
   NEUTRAL_GRAY,

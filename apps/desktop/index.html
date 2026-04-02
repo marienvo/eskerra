@@ -3,8 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preload" as="image" href="/startup-splash-placeholder.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Eskerra</title>
+    <style>
+      html,
+      body,
+      #root {
+        margin: 0;
+        min-height: 100%;
+        background: #f5f5f5;
+      }
+      html.tauri-main-chrome,
+      html.tauri-main-chrome body {
+        background: transparent;
+      }
+    </style>
+    <script>
+      (function () {
+        if (typeof window.__TAURI__ !== 'undefined') {
+          document.documentElement.classList.add('tauri-main-chrome');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

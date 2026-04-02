@@ -1,6 +1,6 @@
 /**
  * Speech-like startup spectrum: phrase/syllable envelopes, formant lobes, sparse frication.
- * Used from Reanimated UI worklet and from Jest (directive string is inert in Node).
+ * Used from Reanimated UI worklet and from Vitest (directive string is inert in Node).
  */
 
 /** Wall-clock to animation time (speech-like syllable rate). */
@@ -26,7 +26,7 @@ const LOGO_CYAN_DECAY_GAMMA = 1.18;
 const PHRASE_OMEGA = (2 * Math.PI) / 3.2;
 
 /**
- * Deterministic “jitter”: incommensurate sines → non-repeating micro-variation (not one smooth arc).
+ * Deterministic "jitter": incommensurate sines → non-repeating micro-variation (not one smooth arc).
  */
 function irregular01(tau: number, seed: number): number {
   'worklet';

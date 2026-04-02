@@ -3,6 +3,11 @@ import {getCurrentWindow} from '@tauri-apps/api/window';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
 import {
+  restoreState,
+  saveWindowState,
+  StateFlags,
+} from '@tauri-apps/plugin-window-state';
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -11,6 +16,7 @@ import {
   useState,
 } from 'react';
 
+import {DesktopStartupSplash} from './components/DesktopStartupSplash';
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
@@ -47,6 +53,10 @@ import './App.css';
 type MainTab = MainTabId;
 
 const TITLE_BAR_SKIP_MS = 10_000;
+const MAIN_WINDOW_LABEL = 'main';
+
+/** Wayland often fails `set_position` inside window-state; plugin aborts before `set_size` if POSITION runs first. */
+const WINDOW_RESTORE_FLAGS_NO_POSITION = StateFlags.ALL & ~StateFlags.POSITION;
 
 export default function App() {
   const {maximized} = useTauriWindowMaximized();
@@ -115,6 +125,7 @@ export default function App() {
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
+    initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({fs, inboxEditorRef});
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
@@ -126,6 +137,22 @@ export default function App() {
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [mainShellRestored, setMainShellRestored] = useState(false);
+  const [startupSplashDismissed, setStartupSplashDismissed] = useState(
+    () => !isTauri(),
+  );
+
+  const appStartupReady = useMemo(
+    () =>
+      initialVaultHydrateAttemptDone &&
+      layoutsReady &&
+      (vaultRoot ? mainShellRestored : true),
+    [
+      initialVaultHydrateAttemptDone,
+      layoutsReady,
+      vaultRoot,
+      mainShellRestored,
+    ],
+  );
 
   const inboxShellRestorePendingRef = useRef<{
     vaultRoot: string;
@@ -207,7 +234,6 @@ export default function App() {
 
   useEffect(() => {
     inboxShellAppliedRef.current = null;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- state intentionally resets when vault context changes
     setMainShellRestored(false);
   }, [vaultRoot]);
 
@@ -231,7 +257,6 @@ export default function App() {
       inboxShellRestorePendingRef.current = null;
     }
     inboxShellAppliedRef.current = vaultRoot;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reflects completion of restore side effect
     setMainShellRestored(true);
   }, [vaultRoot, notes, layoutsReady, startNewEntry, selectNote]);
 
@@ -291,6 +316,45 @@ export default function App() {
     mainShellRestored,
   ]);
 
+  useEffect(() => {
+    if (!isTauri() || startupSplashDismissed) {
+      return;
+    }
+    if (!appStartupReady) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.error(
+            '[eskerra] window-state restore (size, maximized, visible, …) failed',
+            e,
+          );
+        }
+      }
+      try {
+        await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.error(
+            '[eskerra] window-state restore (position) failed; size already applied',
+            e,
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setStartupSplashDismissed(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [appStartupReady, startupSplashDismissed]);
+
   const pickFolder = async () => {
     setErr(null);
     const dir = await open({directory: true, multiple: false});
@@ -337,6 +401,7 @@ export default function App() {
         event.preventDefault();
         try {
           await flushInboxSave();
+          await saveWindowState(StateFlags.ALL);
         } finally {
           /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
           void win.destroy();
@@ -371,37 +436,50 @@ export default function App() {
     };
   }, [flushInboxSave]);
 
+  const startupOverlay =
+    isTauri() && !startupSplashDismissed ? (
+      <DesktopStartupSplash />
+    ) : null;
+
   if (!vaultRoot) {
     return (
-      <div ref={appRootRef} className={appRootClassName}>
-        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
-        <div className="shell setup-shell">
-          <h1>{settingsName}</h1>
-          <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
-          <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
-            Choose folder…
-          </button>
-          {err ? <p className="error">{err}</p> : null}
+      <>
+        {startupOverlay}
+        <div ref={appRootRef} className={appRootClassName}>
+          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+          <div className="shell setup-shell">
+            <h1>{settingsName}</h1>
+            <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
+            <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
+              Choose folder…
+            </button>
+            {err ? <p className="error">{err}</p> : null}
+          </div>
+          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
         </div>
-        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
-      </div>
+      </>
     );
   }
 
   if (!layoutsReady) {
     return (
-      <div ref={appRootRef} className={appRootClassName}>
-        <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
-        <div className="shell setup-shell">
-          <p className="muted">Loading…</p>
+      <>
+        {startupOverlay}
+        <div ref={appRootRef} className={appRootClassName}>
+          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+          <div className="shell setup-shell">
+            <p className="muted">Loading…</p>
+          </div>
+          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
         </div>
-        <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
-      </div>
+      </>
     );
   }
 
   return (
-    <div ref={appRootRef} className={appRootClassName}>
+    <>
+      {startupOverlay}
+      <div ref={appRootRef} className={appRootClassName}>
       <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
 
       {err ? (
@@ -487,5 +565,6 @@ export default function App() {
 
       <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
     </div>
+    </>
   );
 }

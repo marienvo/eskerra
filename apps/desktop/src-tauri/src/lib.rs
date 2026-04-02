@@ -45,7 +45,11 @@ pub fn run() {
             tauri_plugin_store::Builder::default()
                 .build(),
         )
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .skip_initial_state("main")
+                .build(),
+        )
         .setup(|app| {
             media::init_media_session(app)?;
             vault_watch::setup_vault_watch(app)?;

@@ -10,14 +10,14 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import {ACCENT_COLOR} from './accentColor';
 import {
   computeStartupBarDisplayGain,
   computeStartupSpectrumSample,
   MIDDLE_STARTUP_BARS_FULL,
   smoothSpectrumLevelsInPlace,
   STARTUP_SPECTRUM_SPATIAL_SMOOTH,
-} from './startupSplashSpectrum';
+} from '@notebox/core';
+import {ACCENT_COLOR} from './accentColor';
 
 /** Startup spectrum: speech-like formants, phrase gaps (frame callback). */
 const BAR_COUNT = 10;
