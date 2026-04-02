@@ -9,11 +9,36 @@ mod vault_watch;
 
 use vault::VaultRootState;
 
+#[cfg(all(not(mobile), debug_assertions))]
+fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_prevent_default::Flags;
+
+    tauri_plugin_prevent_default::Builder::new()
+        .with_flags(Flags::all().difference(Flags::DEV_TOOLS | Flags::RELOAD))
+        .build()
+}
+
+#[cfg(all(not(mobile), not(debug_assertions)))]
+fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    use tauri_plugin_prevent_default::Flags;
+
+    tauri_plugin_prevent_default::Builder::new()
+        .with_flags(Flags::CONTEXT_MENU)
+        .build()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .manage(VaultRootState::default())
-        .manage(media::MediaSessionState::default())
+        .manage(media::MediaSessionState::default());
+
+    #[cfg(not(mobile))]
+    {
+        builder = builder.plugin(prevent_default_plugin());
+    }
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(

@@ -1,5 +1,7 @@
+import * as AlertDialog from '@radix-ui/react-alert-dialog';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import type {RefObject} from 'react';
-import {useMemo} from 'react';
+import {useMemo, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
@@ -43,6 +45,7 @@ type InboxTabProps = {
   onWikiLinkActivate: (payload: {inner: string}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
+  onDeleteNote: (uri: string) => void | Promise<void>;
 };
 
 export function InboxTab({
@@ -65,8 +68,10 @@ export function InboxTab({
   onWikiLinkActivate,
   onSaveShortcut,
   busy,
+  onDeleteNote,
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
+  const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
 
   const editorPaneTitle = useMemo(() => {
     if (composingNewEntry) {
@@ -87,6 +92,47 @@ export function InboxTab({
 
   return (
     <div className="inbox-root" data-app-surface="capture">
+      <AlertDialog.Root
+        open={confirmDeleteUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setConfirmDeleteUri(null);
+          }
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">Delete note</AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              Delete this note? This cannot be undone.
+            </AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  type="button"
+                  className="primary destructive"
+                  disabled={busy}
+                  onClick={() => {
+                    const uri = confirmDeleteUri;
+                    if (uri) {
+                      void onDeleteNote(uri);
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+
       <DesktopHorizontalSplit
         leftWidthPx={leftWidthPx}
         minLeftPx={INBOX_LEFT_PANEL.minPx}
@@ -124,26 +170,49 @@ export function InboxTab({
                 const tileColor = getInboxTileBackgroundColor(n.lastModified);
                 return (
                   <li key={n.uri}>
-                    <button
-                      type="button"
-                      className={
-                        n.uri === selectedUri ? 'note-list-row active' : 'note-list-row'
-                      }
-                      onClick={() => onSelectNote(n.uri)}
-                    >
-                      <span
-                        className="note-list-row__accent"
-                        style={{backgroundColor: tileColor}}
-                        aria-hidden
-                      />
-                      <span className="note-list-row__body">
-                        <span className="note-list-row__title">{listTitle}</span>
-                        <span className="note-list-row__filename">{n.name}</span>
-                        <span className="note-list-row__meta">
-                          {formatRelativeCalendarLabel(n.lastModified)}
-                        </span>
-                      </span>
-                    </button>
+                    <ContextMenu.Root>
+                      <ContextMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          className={
+                            n.uri === selectedUri
+                              ? 'note-list-row active'
+                              : 'note-list-row'
+                          }
+                          onClick={() => onSelectNote(n.uri)}
+                        >
+                          <span
+                            className="note-list-row__accent"
+                            style={{backgroundColor: tileColor}}
+                            aria-hidden
+                          />
+                          <span className="note-list-row__body">
+                            <span className="note-list-row__title">{listTitle}</span>
+                            <span className="note-list-row__filename">{n.name}</span>
+                            <span className="note-list-row__meta">
+                              {formatRelativeCalendarLabel(n.lastModified)}
+                            </span>
+                          </span>
+                        </button>
+                      </ContextMenu.Trigger>
+                      <ContextMenu.Portal>
+                        <ContextMenu.Content
+                          className="note-list-context-menu"
+                          alignOffset={4}
+                          collisionPadding={8}
+                        >
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item note-list-context-menu__item--danger"
+                            disabled={busy}
+                            onSelect={() => {
+                              setConfirmDeleteUri(n.uri);
+                            }}
+                          >
+                            Delete
+                          </ContextMenu.Item>
+                        </ContextMenu.Content>
+                      </ContextMenu.Portal>
+                    </ContextMenu.Root>
                   </li>
                 );
               })}

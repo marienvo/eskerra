@@ -2,7 +2,14 @@ import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 import {open} from '@tauri-apps/plugin-dialog';
 import {listen} from '@tauri-apps/api/event';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {InboxTab} from './components/InboxTab';
@@ -63,6 +70,23 @@ export default function App() {
     }
     return parts.join(' ');
   }, [maximized, tiling, tilingDebug]);
+
+  /* Modal dim: match the frameless window’s rounded mask (--window-radius), not the webview rectangle. */
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    const rounded =
+      !maximized && tiling !== 'left' && tiling !== 'right';
+    document.documentElement.style.setProperty(
+      '--shell-overlay-radius',
+      rounded ? 'var(--window-radius)' : '0px',
+    );
+    return () => {
+      document.documentElement.style.removeProperty('--shell-overlay-radius');
+    };
+  }, [maximized, tiling]);
+
   const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
@@ -90,6 +114,7 @@ export default function App() {
     saveNote,
     flushInboxSave,
     onWikiLinkActivate,
+    deleteNote,
   } = useMainWindowWorkspace({fs, inboxEditorRef});
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
@@ -423,6 +448,9 @@ export default function App() {
                 }}
                 onSaveShortcut={onInboxSaveShortcut}
                 busy={busy}
+                onDeleteNote={uri => {
+                  void deleteNote(uri);
+                }}
               />
             </div>
             {podcastsTabMounted ? (

@@ -443,6 +443,32 @@ export async function createInboxMarkdownNote(
   return {lastModified: Date.now(), name: fileName, uri};
 }
 
+export async function deleteInboxMarkdownNote(
+  root: string,
+  noteUri: string,
+  fs: VaultFilesystem,
+): Promise<void> {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  const normalizedNote = noteUri.trim();
+  const inboxPrefix = `${inbox}/`;
+  if (!normalizedNote.startsWith(inboxPrefix)) {
+    throw new Error('Note is not in the vault Inbox folder.');
+  }
+  const relative = normalizedNote.slice(inboxPrefix.length);
+  if (!relative || relative.includes('/') || relative.includes('\\')) {
+    throw new Error('Invalid inbox note path.');
+  }
+  if (!relative.endsWith(MARKDOWN_EXTENSION)) {
+    throw new Error('Only inbox markdown notes can be deleted here.');
+  }
+  if (isSyncConflictFileName(relative)) {
+    throw new Error('Cannot delete sync conflict notes with this action.');
+  }
+  await fs.unlink(normalizedNote);
+  await syncInboxMarkdownIndex(root, fs);
+}
+
 export async function saveNoteMarkdown(
   noteUri: string,
   fs: VaultFilesystem,

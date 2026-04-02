@@ -746,6 +746,92 @@ a:focus:not(:focus-visible) {
   background: var(--color-accent-subtle-bg);
 }
 
+/* Radix context menu + alert dialog: above tooltip pseudo-elements (z-index 60).
+ * Delete overlay: under html.tauri-main-chrome, radius follows --shell-overlay-radius (set in App.tsx from maximize/tiling). */
+.note-list-context-menu {
+  z-index: 100;
+  min-width: 9rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.note-list-context-menu__item {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: default;
+  outline: none;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.note-list-context-menu__item[data-highlighted] {
+  background: var(--color-row-hover);
+}
+
+.note-list-context-menu__item--danger[data-highlighted] {
+  background: var(--color-error-banner-bg);
+  color: var(--color-error);
+}
+
+.alert-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+/* Rounded translucent window corners: dim only inside the same round-rect as .app-root (not the sharp webview). */
+html.tauri-main-chrome .alert-dialog-overlay {
+  border-radius: var(--shell-overlay-radius, var(--window-radius));
+}
+
+.alert-dialog-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 201;
+  transform: translate(-50%, -50%);
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.2);
+  outline: none;
+}
+
+.alert-dialog-title {
+  margin: 0 0 0.45rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.alert-dialog-description {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+
+.alert-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+button.primary.destructive {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: #fff;
+}
+
 .panel-surface textarea {
   flex: 1;
   min-height: 120px;

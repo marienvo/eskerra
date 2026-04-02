@@ -21,6 +21,7 @@ import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownIma
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
+  deleteInboxMarkdownNote,
   listInboxNotes,
   prefetchInboxMarkdownBodies,
   readVaultLocalSettings,
@@ -69,6 +70,7 @@ export type UseMainWindowWorkspaceResult = {
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   onWikiLinkActivate: (payload: {inner: string}) => Promise<void>;
+  deleteNote: (uri: string) => Promise<void>;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -399,6 +401,43 @@ export function useMainWindowWorkspace(options: {
 
   const saveNote = flushInboxSave;
 
+  const deleteNote = useCallback(
+    async (uri: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      const wasOpen = selectedUri === uri;
+      if (wasOpen) {
+        selectedUriRef.current = null;
+        composingNewEntryRef.current = false;
+        lastPersistedRef.current = null;
+        setSelectedUri(null);
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      }
+      await saveChainRef.current.catch(() => undefined);
+
+      setBusy(true);
+      setErr(null);
+      try {
+        await deleteInboxMarkdownNote(vaultRoot, uri, fs);
+        setInboxContentByUri(prev => {
+          const next = {...prev};
+          delete next[uri];
+          return next;
+        });
+        await refreshNotes(vaultRoot);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes, selectedUri],
+  );
+
   const onWikiLinkActivate = useCallback(
     async ({inner}: {inner: string}) => {
       if (!vaultRoot) {
@@ -466,5 +505,6 @@ export function useMainWindowWorkspace(options: {
     saveNote,
     flushInboxSave,
     onWikiLinkActivate,
+    deleteNote,
   };
 }
