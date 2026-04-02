@@ -90,6 +90,8 @@
 
 **Still deferred after 6A:** backlinks, global indexing framework, fuzzy/ranked matching, ambiguity picker UI, command-palette integration.
 
+**Detailed phased plan (wiki-only):** [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md).
+
 **Defer:** Full-text search product.
 
 ---
@@ -124,3 +126,4 @@ After Phase 1 (or in parallel if low conflict):
 | [extension-readiness.md](../architecture/extension-readiness.md) | Principles, `.notebox` rules, layers |
 | [extension-readiness-pr.md](../review-checklists/extension-readiness-pr.md) | PR checklist |
 | [desktop-import-boundaries.md](../rules/desktop-import-boundaries.md) | Future ESLint zones |
+| [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md) | Wiki links: phases WL-0–WL-6, ownership, ordering |
