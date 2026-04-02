@@ -8,15 +8,15 @@
 
 ## Phase 1 — Attachment and clipboard seam
 
+**Status (implemented):** [`noteInboxAttachmentHost.ts`](../../apps/desktop/src/lib/noteInboxAttachmentHost.ts) defines `NoteInboxAttachmentHost` + `createNoteInboxAttachmentHost()`; [`InboxTab.tsx`](../../apps/desktop/src/components/InboxTab.tsx) constructs it with `useMemo` and passes `attachmentHost` into [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx). ESLint `no-restricted-imports` blocks `@tauri-apps/*` under `apps/desktop/src/editor/` ([`eslint.config.js`](../../apps/desktop/eslint.config.js)).
+
 **Goal:** The editor is a **text surface**; vault writes and Tauri clipboard/drag-drop live behind shell-owned adapters.
 
-**Why:** [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) currently couples paste/drop, PNG conversion, and attachment persistence to the editor package.
+**Remaining / later:** Preview widgets still use [`resolveVaultImagePreviewUrl`](../../apps/desktop/src/lib/resolveVaultImagePreviewUrl.ts) via CodeMirror (Phase 2).
 
-**Scope (suggested):** Introduce a narrow interface (names TBD) implemented in `apps/desktop/src/lib/`, passed into the editor via props or a shell-owned context. Move Tauri `plugin-clipboard-manager` usage out of `editor/`.
+**Acceptance:** Editor does not import `@tauri-apps/*`; manual smoke on paste, drop, save, and OS file drop.
 
-**Acceptance:** Editor code under `editor/` does not import `@tauri-apps/*` for attachments; manual smoke on paste, drop, and save.
-
-**Risks:** Clipboard edge cases; mitigate with existing behavior baseline + small pure tests where possible.
+**Risks:** Clipboard edge cases; regressions caught by manual smoke.
 
 **Defer:** A full DI framework.
 

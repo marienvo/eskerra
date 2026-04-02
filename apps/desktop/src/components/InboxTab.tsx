@@ -1,6 +1,8 @@
 import type {RefObject} from 'react';
 import {useMemo} from 'react';
 
+import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
+
 import {
   extractFirstMarkdownH1,
   formatRelativeCalendarLabel,
@@ -61,6 +63,8 @@ export function InboxTab({
   onSaveNote,
   busy,
 }: InboxTabProps) {
+  const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
+
   const editorPaneTitle = useMemo(() => {
     if (composingNewEntry) {
       return 'New entry';
@@ -170,6 +174,7 @@ export function InboxTab({
                 <div className="editor note-markdown-editor-wrap">
                   <NoteMarkdownEditor
                     ref={inboxEditorRef}
+                    attachmentHost={inboxAttachmentHost}
                     vaultRoot={vaultRoot}
                     activeNotePath={composingNewEntry ? null : selectedUri}
                     initialMarkdown={editorBody}

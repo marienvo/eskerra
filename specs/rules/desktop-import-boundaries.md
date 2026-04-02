@@ -29,8 +29,8 @@ Goal: make **layer violations detectable** over time—without blocking day-one 
 
 ## Rollout
 
-1. Use the PR checklist until lint rules land.
-2. Add ESLint `no-restricted-imports` for `@tauri-apps/*` under `apps/desktop/src/editor/**` as a first automated gate when Phase 1 attachment decoupling is done or in parallel if low conflict.
+1. Use the PR checklist for risky PRs.
+2. **Active:** ESLint `no-restricted-imports` for `@tauri-apps/*` under `apps/desktop/src/editor/**` ([`eslint.config.js`](../../apps/desktop/eslint.config.js) — landed with Phase 1 attachment host).
 3. Expand path-based `eslint-plugin-import` boundaries when churn allows.
 
 ## Non-goals

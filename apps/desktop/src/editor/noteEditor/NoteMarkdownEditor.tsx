@@ -7,9 +7,6 @@ import {
   keymap,
   placeholder,
 } from '@codemirror/view';
-import {isTauri} from '@tauri-apps/api/core';
-import {getCurrentWindow} from '@tauri-apps/api/window';
-import {readImage, readText} from '@tauri-apps/plugin-clipboard-manager';
 import {
   forwardRef,
   useCallback,
@@ -19,22 +16,12 @@ import {
   useState,
 } from 'react';
 
-import {
-  absoluteImagePathsFromClipboardUriList,
-  clipboardDataProbablyHasVaultImage,
-  collectClipboardImageFilesFromFileList,
-  dotExtensionForClipboardBytes,
-  extractClipboardImageUrlsFromHtml,
-  filterClipboardImageCandidateFiles,
-  snapshotClipboardImagePayload,
-} from '../../lib/clipboardImageFiles';
-import {rgbaImageToPngBytes} from '../../lib/clipboardImagePng';
-import {
-  extensionFromFileNameOrMime,
-  saveVaultImageBytes,
-  vaultImportFilesIntoAttachments,
-} from '../../lib/desktopVaultAttachments';
+import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {
+  isNoteAttachmentImageFilePath,
+  type NoteInboxAttachmentHost,
+} from '../../lib/noteInboxAttachmentHost';
 import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
@@ -47,10 +34,12 @@ export type NoteMarkdownEditorProps = {
   /** Bumped when the document should reload from `initialMarkdown` (note switch or new entry). */
   sessionKey: number;
   onMarkdownChange: (markdown: string) => void;
-  /** Shown when image paste or drop fails; also used when not running inside Tauri. */
+  /** Shown when image paste or drop fails; also used when vault image import is unavailable. */
   onEditorError?: (message: string) => void;
   placeholder: string;
   busy: boolean;
+  /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
+  attachmentHost: NoteInboxAttachmentHost;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -58,44 +47,13 @@ export type NoteMarkdownEditorHandle = {
   loadMarkdown: (markdown: string) => void;
 };
 
-function isImageFilePath(filePath: string): boolean {
-  const lower = filePath.toLowerCase();
-  return (
-    lower.endsWith('.png') ||
-    lower.endsWith('.jpg') ||
-    lower.endsWith('.jpeg') ||
-    lower.endsWith('.gif') ||
-    lower.endsWith('.webp') ||
-    lower.endsWith('.svg')
-  );
-}
-
-/** `blob:` or `data:image/...` URLs from the clipboard HTML path. */
-async function saveFetchedImageUrlToVault(
-  vaultRoot: string,
-  url: string,
-): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Could not read pasted image (${res.status})`);
-  }
-  const blob = await res.blob();
-  const buf = new Uint8Array(await blob.arrayBuffer());
-  const ext = dotExtensionForClipboardBytes(buf, blob.type, 'paste');
-  return saveVaultImageBytes({
-    vaultRoot,
-    bytes: buf,
-    suggestedBaseName: 'paste',
-    extensionWithDot: ext,
-  });
-}
-
 const NoteMarkdownEditorImpl = forwardRef<
   NoteMarkdownEditorHandle,
   NoteMarkdownEditorProps
 >(function NoteMarkdownEditorImpl(props, ref) {
   const {
     vaultRoot,
+    attachmentHost,
     initialMarkdown,
     onMarkdownChange,
     onEditorError,
@@ -130,6 +88,9 @@ const NoteMarkdownEditorImpl = forwardRef<
   const busyRef = useRef(busy);
   busyRef.current = busy;
 
+  const attachmentHostRef = useRef(attachmentHost);
+  attachmentHostRef.current = attachmentHost;
+
   useEffect(() => {
     const parent = parentRef.current;
     if (!parent) {
@@ -144,8 +105,6 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
 
-      const snapshot = snapshotClipboardImagePayload(dt);
-      const {html, candidateFiles} = snapshot;
       const sel = viewForPaste.state.selection.main;
       const anchor = sel.anchor;
       const head = sel.head;
@@ -153,62 +112,11 @@ const NoteMarkdownEditorImpl = forwardRef<
       const insertTo = Math.max(anchor, head);
 
       void (async () => {
-        const relPaths: string[] = [];
         const vr = vaultRootRef.current;
+        const host = attachmentHostRef.current;
 
         try {
-          const files = await filterClipboardImageCandidateFiles(candidateFiles);
-          for (const f of files) {
-            const buf = new Uint8Array(await f.arrayBuffer());
-            const ext =
-              extensionFromFileNameOrMime(f.name, f.type) ??
-              dotExtensionForClipboardBytes(buf, f.type, f.name || 'paste');
-            relPaths.push(
-              await saveVaultImageBytes({
-                vaultRoot: vr,
-                bytes: buf,
-                suggestedBaseName: f.name || 'paste',
-                extensionWithDot: ext,
-              }),
-            );
-          }
-
-          if (relPaths.length === 0) {
-            const {blobUrls, dataImageUrls} =
-              extractClipboardImageUrlsFromHtml(html);
-            for (const url of blobUrls) {
-              relPaths.push(await saveFetchedImageUrlToVault(vr, url));
-            }
-            for (const url of dataImageUrls) {
-              relPaths.push(await saveFetchedImageUrlToVault(vr, url));
-            }
-          }
-
-          if (relPaths.length === 0 && isTauri()) {
-            try {
-              const image = await readImage();
-              const png = await rgbaImageToPngBytes(image);
-              relPaths.push(
-                await saveVaultImageBytes({
-                  vaultRoot: vr,
-                  bytes: png,
-                  suggestedBaseName: 'paste',
-                  extensionWithDot: '.png',
-                }),
-              );
-            } catch {
-              /* no raster image on native clipboard */
-            }
-          }
-
-          if (relPaths.length === 0 && isTauri()) {
-            const fromUris = absoluteImagePathsFromClipboardUriList(dt);
-            if (fromUris.length > 0) {
-              relPaths.push(
-                ...(await vaultImportFilesIntoAttachments(fromUris)),
-              );
-            }
-          }
+          const relPaths = await host.importPastedImages(dt, vr);
 
           if (relPaths.length === 0) {
             reportEditorError(
@@ -236,7 +144,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
-    const runTauriNativePasteWhenWebClipboardEmpty = (
+    const runNativeClipboardPasteWhenWebDataEmpty = (
       viewForPaste: EditorView,
     ): boolean => {
       const sel = viewForPaste.state.selection.main;
@@ -245,43 +153,33 @@ const NoteMarkdownEditorImpl = forwardRef<
 
       void (async () => {
         const vr = vaultRootRef.current;
-        let nativeImage: Awaited<ReturnType<typeof readImage>> | undefined;
-        try {
-          nativeImage = await readImage();
-        } catch (readImgErr) {
-          try {
-            const text = await readText();
-            if (
-              text.length > 0 &&
-              viewRef.current === viewForPaste
-            ) {
-              viewForPaste.dispatch({
-                changes: {from: insertFrom, to: insertTo, insert: text},
-                selection: EditorSelection.cursor(insertFrom + text.length),
-                scrollIntoView: true,
-              });
-            } else {
-              reportEditorError(
-                readImgErr instanceof Error
-                  ? readImgErr.message
-                  : String(readImgErr),
-              );
-            }
-          } catch {
-            reportEditorError('Could not read clipboard content.');
+        const host = attachmentHostRef.current;
+        const result = await host.readNativeClipboardPaste(vr);
+
+        if (result.kind === 'text') {
+          if (viewRef.current === viewForPaste) {
+            viewForPaste.dispatch({
+              changes: {
+                from: insertFrom,
+                to: insertTo,
+                insert: result.text,
+              },
+              selection: EditorSelection.cursor(
+                insertFrom + result.text.length,
+              ),
+              scrollIntoView: true,
+            });
           }
           return;
         }
 
+        if (result.kind === 'fail') {
+          reportEditorError(result.message);
+          return;
+        }
+
         try {
-          const png = await rgbaImageToPngBytes(nativeImage);
-          const relPath = await saveVaultImageBytes({
-            vaultRoot: vr,
-            bytes: png,
-            suggestedBaseName: 'paste',
-            extensionWithDot: '.png',
-          });
-          const insert = formatVaultImageMarkdownForInsert([relPath]);
+          const insert = formatVaultImageMarkdownForInsert(result.paths);
           if (viewRef.current !== viewForPaste) {
             return;
           }
@@ -315,7 +213,8 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
 
-      if (!isTauri()) {
+      const host = attachmentHostRef.current;
+      if (!host.isVaultImageImportAvailable) {
         if (
           e.clipboardData &&
           clipboardDataProbablyHasVaultImage(e.clipboardData)
@@ -341,14 +240,14 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (plainTrimmed === '' && !probablyImage) {
           e.preventDefault();
           e.stopPropagation();
-          return runTauriNativePasteWhenWebClipboardEmpty(view);
+          return runNativeClipboardPasteWhenWebDataEmpty(view);
         }
         return false;
       }
 
       e.preventDefault();
       e.stopPropagation();
-      return runTauriNativePasteWhenWebClipboardEmpty(view);
+      return runNativeClipboardPasteWhenWebDataEmpty(view);
     };
 
     const extensions = [
@@ -447,7 +346,7 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   useEffect(() => {
     const el = hostRef.current;
-    if (!el || !isTauri()) {
+    if (!el || !attachmentHost.isVaultImageImportAvailable) {
       return;
     }
 
@@ -473,7 +372,8 @@ const NoteMarkdownEditorImpl = forwardRef<
         const f = dt.files.item(i);
         if (
           f &&
-          (f.type.startsWith('image/') || isImageFilePath(f.name))
+          (f.type.startsWith('image/') ||
+            isNoteAttachmentImageFilePath(f.name))
         ) {
           maybeImage = true;
           break;
@@ -487,24 +387,12 @@ const NoteMarkdownEditorImpl = forwardRef<
 
       void (async () => {
         try {
-          const files = await collectClipboardImageFilesFromFileList(dt.files);
-          if (files.length === 0) {
+          const markdownPaths = await attachmentHost.importDroppedFiles(
+            dt.files,
+            vaultRoot,
+          );
+          if (markdownPaths.length === 0) {
             return;
-          }
-          const markdownPaths: string[] = [];
-          for (const f of files) {
-            const buf = new Uint8Array(await f.arrayBuffer());
-            const ext =
-              extensionFromFileNameOrMime(f.name, f.type) ??
-              dotExtensionForClipboardBytes(buf, f.type, f.name || 'drop');
-            markdownPaths.push(
-              await saveVaultImageBytes({
-                vaultRoot,
-                bytes: buf,
-                suggestedBaseName: f.name || 'drop',
-                extensionWithDot: ext,
-              }),
-            );
           }
           insertRelativePaths(markdownPaths);
         } catch (err) {
@@ -521,33 +409,32 @@ const NoteMarkdownEditorImpl = forwardRef<
       el.removeEventListener('dragover', onDragOver);
       el.removeEventListener('drop', onDrop);
     };
-  }, [busy, insertRelativePaths, vaultRoot, reportEditorError]);
+  }, [attachmentHost, busy, insertRelativePaths, vaultRoot, reportEditorError]);
 
   useEffect(() => {
-    if (!isTauri()) {
+    if (!attachmentHost.isVaultImageImportAvailable) {
       return;
     }
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    void getCurrentWindow()
-      .onDragDropEvent(event => {
-        if (busy) {
-          return;
-        }
-        const payload = event.payload;
-        if (payload.type === 'enter' || payload.type === 'over') {
-          setDropActive(true);
-        } else if (payload.type === 'leave') {
+    void attachmentHost
+      .subscribeWindowFileDragDrop({
+        onDragHover: () => {
+          if (!busy) {
+            setDropActive(true);
+          }
+        },
+        onDragLeave: () => {
           setDropActive(false);
-        } else if (payload.type === 'drop') {
-          setDropActive(false);
-          const paths = payload.paths.filter(isImageFilePath);
-          if (paths.length === 0) {
+        },
+        onDropPaths: paths => {
+          if (busy) {
             return;
           }
           void (async () => {
             try {
-              const relPaths = await vaultImportFilesIntoAttachments(paths);
+              const relPaths =
+                await attachmentHost.importDroppedAbsolutePaths(paths);
               insertRelativePaths(relPaths);
             } catch (err) {
               reportEditorError(
@@ -555,7 +442,7 @@ const NoteMarkdownEditorImpl = forwardRef<
               );
             }
           })();
-        }
+        },
       })
       .then(fn => {
         if (cancelled) {
@@ -569,7 +456,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       cancelled = true;
       unlisten?.();
     };
-  }, [busy, insertRelativePaths, reportEditorError]);
+  }, [attachmentHost, busy, insertRelativePaths, reportEditorError]);
 
   const rootClass = dropActive
     ? 'note-markdown-editor-host note-markdown-editor-host--drop-target'
