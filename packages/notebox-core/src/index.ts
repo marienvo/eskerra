@@ -24,8 +24,11 @@ export {
   stemFromMarkdownFileName,
 } from './inboxMarkdown';
 export {
+  buildInboxWikiLinkResolveLookup,
   resolveInboxWikiLinkTarget,
+  resolveInboxWikiLinkTargetWithLookup,
   type InboxWikiLinkNoteRef,
+  type InboxWikiLinkResolveLookup,
   type InboxWikiLinkResolveResult,
   type ParsedWikiLinkInner,
 } from './wikiLinkInbox';

@@ -96,6 +96,131 @@ function buildSanitizedStemKey(rawStem: string): string | null {
   return sanitized.toLowerCase();
 }
 
+function pushNoteRefBucket(
+  map: Map<string, InboxWikiLinkNoteRef[]>,
+  key: string,
+  note: InboxWikiLinkNoteRef,
+) {
+  const existing = map.get(key);
+  if (existing) {
+    existing.push(note);
+  } else {
+    map.set(key, [note]);
+  }
+}
+
+/**
+ * Precomputed stem buckets for inbox wiki-link resolution.
+ * Built once per backlinks scan; per-link lookup is then O(1) map access.
+ */
+export type InboxWikiLinkResolveLookup = {
+  byExactStem: ReadonlyMap<string, readonly InboxWikiLinkNoteRef[]>;
+  byFoldedStem: ReadonlyMap<string, readonly InboxWikiLinkNoteRef[]>;
+  bySanitizedKey: ReadonlyMap<string, readonly InboxWikiLinkNoteRef[]>;
+};
+
+export function buildInboxWikiLinkResolveLookup(
+  notes: ReadonlyArray<InboxWikiLinkNoteRef>,
+): InboxWikiLinkResolveLookup {
+  const byExactStem = new Map<string, InboxWikiLinkNoteRef[]>();
+  const byFoldedStem = new Map<string, InboxWikiLinkNoteRef[]>();
+  const bySanitizedKey = new Map<string, InboxWikiLinkNoteRef[]>();
+
+  for (const n of notes) {
+    const stem = stemFromMarkdownFileName(n.name);
+    pushNoteRefBucket(byExactStem, stem, n);
+    pushNoteRefBucket(byFoldedStem, stem.toLowerCase(), n);
+    const sk = buildSanitizedStemKey(stem);
+    if (sk) {
+      pushNoteRefBucket(bySanitizedKey, sk, n);
+    }
+  }
+
+  return {byExactStem, byFoldedStem, bySanitizedKey};
+}
+
+/**
+ * Same semantics as {@link resolveInboxWikiLinkTarget}, using a precomputed lookup.
+ * Intended for batch workloads (e.g. backlinks extraction); single-call sites keep using
+ * `resolveInboxWikiLinkTarget` to avoid map setup cost.
+ */
+export function resolveInboxWikiLinkTargetWithLookup(
+  lookup: InboxWikiLinkResolveLookup,
+  inner: string,
+): InboxWikiLinkResolveResult {
+  const parsed = splitWikiLinkInner(inner);
+  const normalized = normalizeTargetToStem(parsed.targetText);
+  if (normalized.kind === 'unsupported') {
+    return {kind: 'unsupported', reason: normalized.reason};
+  }
+
+  const {pathlessTarget, stem, hadInboxPrefix} = normalized;
+  const exactMatches = [...(lookup.byExactStem.get(stem) ?? [])];
+  if (exactMatches.length === 1) {
+    return {kind: 'open', note: exactMatches[0]};
+  }
+
+  const title = parsed.displayText ?? pathlessTarget;
+  if (exactMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      notes: exactMatches,
+      targetStem: stem,
+      title,
+    };
+  }
+
+  const foldedStem = stem.toLowerCase();
+  const foldedMatches = [...(lookup.byFoldedStem.get(foldedStem) ?? [])];
+  if (foldedMatches.length === 1) {
+    const canonicalStem = stemFromMarkdownFileName(foldedMatches[0].name);
+    return {
+      kind: 'open',
+      note: foldedMatches[0],
+      canonicalInner: buildCanonicalInnerForOpen({
+        parsed,
+        canonicalStem,
+        hadInboxPrefix,
+      }),
+    };
+  }
+  if (foldedMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      notes: foldedMatches,
+      targetStem: stem,
+      title,
+    };
+  }
+
+  const linkStemKey = buildSanitizedStemKey(stem);
+  if (linkStemKey) {
+    const sanitizedMatches = [...(lookup.bySanitizedKey.get(linkStemKey) ?? [])];
+    if (sanitizedMatches.length === 1) {
+      const canonicalStem = stemFromMarkdownFileName(sanitizedMatches[0].name);
+      return {
+        kind: 'open',
+        note: sanitizedMatches[0],
+        canonicalInner: buildCanonicalInnerForOpen({
+          parsed,
+          canonicalStem,
+          hadInboxPrefix,
+        }),
+      };
+    }
+    if (sanitizedMatches.length > 1) {
+      return {
+        kind: 'ambiguous',
+        notes: sanitizedMatches,
+        targetStem: stem,
+        title,
+      };
+    }
+  }
+
+  return {kind: 'create', title};
+}
+
 /**
  * Inbox-only resolver for `[[...]]` links.
  * - Supports `[[target]]` and `[[target|display]]`.

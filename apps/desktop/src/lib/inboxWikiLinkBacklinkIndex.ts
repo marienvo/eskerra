@@ -1,17 +1,25 @@
 import {
+  buildInboxWikiLinkResolveLookup,
   extractWikiLinkInnersFromMarkdown,
-  resolveInboxWikiLinkTarget,
+  resolveInboxWikiLinkTargetWithLookup,
   type InboxWikiLinkNoteRef,
 } from '@notebox/core';
 
-export function buildInboxWikiLinkBacklinkIndex(options: {
+/**
+ * Lists inbox notes whose bodies contain a wiki link that resolves to `targetUri`
+ * (same policy as navigation: open + ambiguous; self-links excluded).
+ * Scans all inbox bodies once; uses a single O(N) stem lookup table for resolutions.
+ */
+export function listInboxWikiLinkBacklinkReferrersForTarget(options: {
+  targetUri: string;
   notes: ReadonlyArray<InboxWikiLinkNoteRef>;
   contentByUri: Readonly<Record<string, string>>;
   activeUri: string | null;
   activeBody: string;
-}): ReadonlyMap<string, readonly string[]> {
-  const {notes, contentByUri, activeUri, activeBody} = options;
-  const byTarget = new Map<string, Set<string>>();
+}): readonly string[] {
+  const {targetUri, notes, contentByUri, activeUri, activeBody} = options;
+  const lookup = buildInboxWikiLinkResolveLookup(notes);
+  const referrers = new Set<string>();
 
   for (const source of notes) {
     const sourceBody =
@@ -20,32 +28,26 @@ export function buildInboxWikiLinkBacklinkIndex(options: {
         : (contentByUri[source.uri] ?? '');
     const inners = extractWikiLinkInnersFromMarkdown(sourceBody);
     for (const inner of inners) {
-      const resolved = resolveInboxWikiLinkTarget(notes, inner);
+      const resolved = resolveInboxWikiLinkTargetWithLookup(lookup, inner);
       if (resolved.kind === 'open') {
         if (resolved.note.uri === source.uri) {
           continue;
         }
-        const refs = byTarget.get(resolved.note.uri) ?? new Set<string>();
-        refs.add(source.uri);
-        byTarget.set(resolved.note.uri, refs);
+        if (resolved.note.uri === targetUri) {
+          referrers.add(source.uri);
+        }
         continue;
       }
       if (resolved.kind === 'ambiguous') {
-        for (const target of resolved.notes) {
-          if (target.uri === source.uri) {
-            continue;
-          }
-          const refs = byTarget.get(target.uri) ?? new Set<string>();
-          refs.add(source.uri);
-          byTarget.set(target.uri, refs);
+        const linksToTarget = resolved.notes.some(
+          t => t.uri === targetUri && t.uri !== source.uri,
+        );
+        if (linksToTarget) {
+          referrers.add(source.uri);
         }
       }
     }
   }
 
-  const out = new Map<string, readonly string[]>();
-  for (const [targetUri, refSet] of byTarget) {
-    out.set(targetUri, [...refSet].sort((a, b) => a.localeCompare(b)));
-  }
-  return out;
+  return [...referrers].sort((a, b) => a.localeCompare(b));
 }

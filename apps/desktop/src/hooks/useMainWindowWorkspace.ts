@@ -43,10 +43,13 @@ import {
   setVaultSession,
   startVaultWatch,
 } from '../lib/tauriVault';
-import {buildInboxWikiLinkBacklinkIndex} from '../lib/inboxWikiLinkBacklinkIndex';
+import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
+
+/** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
+const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -114,6 +117,7 @@ export function useMainWindowWorkspace(options: {
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
     useState(false);
   const [inboxShellRestored, setInboxShellRestored] = useState(true);
+  const [backlinksActiveBody, setBacklinksActiveBody] = useState('');
 
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRootRef = useRef<string | null>(null);
@@ -138,20 +142,14 @@ export function useMainWindowWorkspace(options: {
     if (composingNewEntry || !selectedUri) {
       return [] as const;
     }
-    const t0 = performance.now();
-    const backlinksByTarget = buildInboxWikiLinkBacklinkIndex({
+    return listInboxWikiLinkBacklinkReferrersForTarget({
+      targetUri: selectedUri,
       notes: notes.map(n => ({name: n.name, uri: n.uri})),
       contentByUri: inboxContentByUri,
       activeUri: selectedUri,
-      activeBody: editorBody,
+      activeBody: backlinksActiveBody,
     });
-    const elapsedMs = performance.now() - t0;
-    // WL-4 benchmark gates are validated with reference vault runs; keep runtime timing visible.
-    console.debug(
-      `[wl-4] rebuilt backlink read model in ${elapsedMs.toFixed(1)}ms for ${notes.length} notes`,
-    );
-    return backlinksByTarget.get(selectedUri) ?? [];
-  }, [composingNewEntry, selectedUri, notes, inboxContentByUri, editorBody]);
+  }, [composingNewEntry, selectedUri, notes, inboxContentByUri, backlinksActiveBody]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -330,6 +328,25 @@ export function useMainWindowWorkspace(options: {
     }
     setInboxEditorResetNonce(n => n + 1);
   }, [vaultRoot, selectedUri]);
+
+  useLayoutEffect(() => {
+    if (composingNewEntry || !selectedUri) {
+      setBacklinksActiveBody('');
+      return;
+    }
+    const snap = inboxContentByUriRef.current[selectedUri];
+    setBacklinksActiveBody(snap ?? '');
+  }, [selectedUri, composingNewEntry, vaultRoot]);
+
+  useEffect(() => {
+    if (composingNewEntry || !selectedUri) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setBacklinksActiveBody(editorBody);
+    }, INBOX_BACKLINK_BODY_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [editorBody, selectedUri, composingNewEntry]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {

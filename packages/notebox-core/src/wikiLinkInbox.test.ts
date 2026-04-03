@@ -1,6 +1,10 @@
 import {describe, expect, it} from 'vitest';
 
-import {resolveInboxWikiLinkTarget} from './wikiLinkInbox';
+import {
+  buildInboxWikiLinkResolveLookup,
+  resolveInboxWikiLinkTarget,
+  resolveInboxWikiLinkTargetWithLookup,
+} from './wikiLinkInbox';
 
 const NOTES = [
   {name: 'alpha-note.md', uri: '/vault/Inbox/alpha-note.md'},
@@ -127,5 +131,51 @@ describe('resolveInboxWikiLinkTarget', () => {
       kind: 'unsupported',
       reason: 'path_not_supported',
     });
+  });
+});
+
+describe('resolveInboxWikiLinkTargetWithLookup', () => {
+  it('matches resolveInboxWikiLinkTarget for the same fixtures', () => {
+    const alphaNote = [{name: 'Alpha Note.md', uri: '/vault/Inbox/Alpha Note.md'}];
+    const dupRows = [
+      {name: 'dup.md', uri: '/vault/Inbox/dup.md'},
+      {name: 'dup.md', uri: '/vault/Inbox/archive/dup.md'},
+    ];
+    const caseRows = [
+      {name: 'Alpha.md', uri: '/vault/Inbox/Alpha.md'},
+      {name: 'alpha.md', uri: '/vault/Inbox/alpha.md'},
+    ];
+    const sanitizedRows = [
+      {name: 'a?.md', uri: '/vault/Inbox/a?.md'},
+      {name: 'a*.md', uri: '/vault/Inbox/a*.md'},
+    ];
+    const testMd = [{name: 'Test.md', uri: '/vault/Inbox/Test.md'}];
+
+    const cases: Array<{
+      notes: ReadonlyArray<{name: string; uri: string}>;
+      inner: string;
+    }> = [
+      {notes: NOTES, inner: 'alpha-note'},
+      {notes: alphaNote, inner: 'Alpha Note'},
+      {notes: alphaNote, inner: 'alpha note'},
+      {notes: alphaNote, inner: 'inbox/alpha note|Label'},
+      {notes: NOTES, inner: 'InBoX/beta'},
+      {notes: NOTES, inner: 'New Page'},
+      {notes: testMd, inner: 'test?'},
+      {notes: testMd, inner: 'test?|Label'},
+      {notes: NOTES, inner: 'new-page|My Display'},
+      {notes: dupRows, inner: 'dup'},
+      {notes: caseRows, inner: 'ALPHA'},
+      {notes: sanitizedRows, inner: 'a:'},
+      {notes: NOTES, inner: '   '},
+      {notes: NOTES, inner: 'foo/bar'},
+    ];
+
+    for (const {notes, inner} of cases) {
+      const lookup = buildInboxWikiLinkResolveLookup(notes);
+      expect(resolveInboxWikiLinkTargetWithLookup(lookup, inner)).toEqual(
+        resolveInboxWikiLinkTarget(notes, inner),
+      );
+    }
   });
 });
