@@ -1,0 +1,58 @@
+import {convertFileSrc} from '@tauri-apps/api/core';
+
+import {ASSETS_DIRECTORY_NAME, ATTACHMENTS_DIRECTORY_NAME} from '@notebox/core';
+
+import {vaultDirname, vaultJoinSimple, vaultResolveRelativeToDir} from './vaultFsPaths';
+
+const INBOX_DIR = 'Inbox';
+
+function decodeAttachmentSrcForFilesystem(src: string): string {
+  try {
+    return decodeURIComponent(src);
+  } catch {
+    return src;
+  }
+}
+
+function inboxNoteBaseDir(
+  vaultRoot: string,
+  activeNotePath: string | null,
+): string {
+  const root = vaultRoot.trim();
+  if (activeNotePath !== null && activeNotePath.trim() !== '') {
+    return vaultDirname(activeNotePath.trim());
+  }
+  return vaultJoinSimple(root, INBOX_DIR);
+}
+
+/**
+ * Desktop shell: implements the editor’s `VaultImagePreviewUrlResolver`—inbox-relative
+ * image paths → Tauri `convertFileSrc` URL. HTTP(S) and data URLs pass through unchanged.
+ */
+
+export function resolveVaultImagePreviewUrl(
+  vaultRoot: string,
+  activeNotePath: string | null,
+  src: string,
+): string {
+  const trimmed = src.trim();
+  if (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed;
+  }
+  const unixRel =
+    trimmed.startsWith('../') ||
+    trimmed.startsWith(`..\\`) ||
+    trimmed.includes(`${ASSETS_DIRECTORY_NAME}/${ATTACHMENTS_DIRECTORY_NAME}`) ||
+    trimmed.includes(`${ASSETS_DIRECTORY_NAME}\\${ATTACHMENTS_DIRECTORY_NAME}`);
+  if (!unixRel) {
+    return trimmed;
+  }
+  const pathForResolve = decodeAttachmentSrcForFilesystem(trimmed);
+  const noteDir = inboxNoteBaseDir(vaultRoot, activeNotePath);
+  const absolute = vaultResolveRelativeToDir(noteDir, pathForResolve);
+  return convertFileSrc(absolute);
+}

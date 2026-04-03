@@ -1,6 +1,6 @@
 /* Calm Editorial Blue — see specs/design/design-system-calm-editorial.md.
    Desktop brand: specs/design/brand-tokens-desktop.md.
-   Typography / WebKit: see specs/design/desktop-text-rendering.md (body uses text-rendering: auto). */
+   Typography / WebKit: see specs/design/desktop-text-rendering.md (body and long-form editor use text-rendering: auto). */
 html {
   color-scheme: light;
 }
@@ -12,12 +12,12 @@ html {
   /* Brand (desktop) — see specs/design/brand-tokens-desktop.md */
   /* Shell: soft gray; panels use bright surface (inverted vs. earlier soft-white shell + gray panels). */
   --color-brand-bg: #f2f2f2;
-  --color-brand-surface-bright: #ffffff;
+  --color-brand-surface-bright: rgb(250, 250, 250);
   --color-interactive-text: rgb(203, 77, 73);
 
-  /* Foundation — app shell uses soft gray; panels use white surfaces */
+  /* Foundation — app shell uses soft gray; panels use near-white surfaces */
   --color-bg: var(--color-brand-bg);
-  --color-surface: #ffffff;
+  --color-surface: rgb(250, 250, 250);
   --color-text: #111418;
   --color-muted: #66707a;
   --color-border: #e2e0e0;
@@ -31,7 +31,7 @@ html {
   --color-accent-subtle-bg: #e8f5fc;
 
   /* Editor */
-  --color-editor-bg: #ffffff;
+  --color-editor-bg: rgb(250, 250, 250);
   --color-editor-text: #111418;
 
   /* Window chrome (frameless webview edge) */
@@ -47,7 +47,7 @@ html {
   --color-titlebar-hover: rgba(17, 20, 24, 0.06);
 
   /* Capture */
-  --color-capture-panel: #ffffff;
+  --color-capture-panel: rgb(250, 250, 250);
   /* Pane title bars / footers: darker gray than white panel body */
   --color-pane-chrome: #e6e6e6;
   --color-capture-chrome: var(--color-pane-chrome);
@@ -72,7 +72,7 @@ html {
   --color-focus-ring: #4fafe6;
 
   /* Consume surface */
-  --color-consume-surface: #ffffff;
+  --color-consume-surface: rgb(250, 250, 250);
   --color-consume-inner: #f7f7f7;
   --color-consume-border: #d8d8d8;
   --color-consume-hover: #e4e4e4;
@@ -109,7 +109,8 @@ html.tauri-main-chrome {
   background: transparent;
 }
 
-html.tauri-main-chrome body {
+html.tauri-main-chrome body,
+html.tauri-main-chrome #root {
   background: transparent;
 }
 

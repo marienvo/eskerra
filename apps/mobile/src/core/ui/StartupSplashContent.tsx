@@ -1,5 +1,6 @@
 import {memo, useEffect, useMemo} from 'react';
-import {StyleSheet, useWindowDimensions, View} from 'react-native';
+import {StyleSheet, Text, useWindowDimensions, View} from 'react-native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -10,14 +11,15 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import {ACCENT_COLOR} from './accentColor';
 import {
   computeStartupBarDisplayGain,
   computeStartupSpectrumSample,
   MIDDLE_STARTUP_BARS_FULL,
   smoothSpectrumLevelsInPlace,
   STARTUP_SPECTRUM_SPATIAL_SMOOTH,
-} from './startupSplashSpectrum';
+} from '@notebox/core';
+import {ACCENT_COLOR} from './accentColor';
+import packageJson from '../../../package.json';
 
 /** Startup spectrum: speech-like formants, phrase gaps (frame callback). */
 const BAR_COUNT = 10;
@@ -39,7 +41,8 @@ type SpectrumPack = {
 };
 
 type Props = {
-  isDarkMode: boolean;
+  /** When false, spectrum uses accent-only bars (light-style). Default true for dark splash. */
+  isDarkMode?: boolean;
 };
 
 type BarPlacement = 'up' | 'down';
@@ -143,7 +146,8 @@ const WaveColumn = memo(function WaveColumn({
   );
 });
 
-export function StartupSplashContent({isDarkMode}: Props) {
+export function StartupSplashContent({isDarkMode = true}: Props) {
+  const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const {width: windowWidth} = useWindowDimensions();
   const {barGapPx, barWidthPx, minBarH} = useMemo(
@@ -239,13 +243,26 @@ export function StartupSplashContent({isDarkMode}: Props) {
 
   return (
     <Animated.View style={[styles.root, enterStyle]}>
-      <View style={waveBlockStyle}>
-        <View style={spectrumClusterUpStyle}>
-          <View style={rowStyle('up')}>{column('up', 'up')}</View>
+      <View
+        style={[styles.brandTop, {paddingTop: insets.top + 24}]}
+        pointerEvents="none">
+        <Text style={styles.brandTitle}>Eskerra</Text>
+        <Text style={styles.brandVersion}>{packageJson.version}</Text>
+      </View>
+      <View style={styles.waveArea}>
+        <View style={waveBlockStyle}>
+          <View style={spectrumClusterUpStyle}>
+            <View style={rowStyle('up')}>{column('up', 'up')}</View>
+          </View>
+          <View style={spectrumClusterDownStyle}>
+            <View style={rowStyle('down')}>{column('down', 'down')}</View>
+          </View>
         </View>
-        <View style={spectrumClusterDownStyle}>
-          <View style={rowStyle('down')}>{column('down', 'down')}</View>
-        </View>
+      </View>
+      <View
+        style={[styles.brandBottom, {paddingBottom: insets.bottom + 20}]}
+        pointerEvents="none">
+        <Text style={styles.brandFooter}>Made in Rotterdam</Text>
       </View>
     </Animated.View>
   );
@@ -254,6 +271,46 @@ export function StartupSplashContent({isDarkMode}: Props) {
 const styles = StyleSheet.create({
   root: {
     alignSelf: 'stretch',
+    flex: 1,
+    position: 'relative',
+    width: '100%',
+  },
+  brandTop: {
+    left: 0,
+    paddingHorizontal: 24,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 2,
+  },
+  brandBottom: {
+    bottom: 0,
+    left: 0,
+    paddingHorizontal: 24,
+    position: 'absolute',
+    right: 0,
+    zIndex: 2,
+  },
+  brandTitle: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.35,
+  },
+  brandVersion: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginTop: 4,
+  },
+  brandFooter: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  waveArea: {
+    flex: 1,
+    justifyContent: 'center',
     width: '100%',
   },
   waveBlock: {

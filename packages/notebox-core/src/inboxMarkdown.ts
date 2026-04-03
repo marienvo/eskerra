@@ -18,16 +18,19 @@ export function getNoteTitle(noteName: string): string {
   return titleFromNoteName(noteName);
 }
 
-export function sanitizeFileName(rawName: string): string {
-  const normalized = rawName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_ ]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '');
+export function sanitizeInboxNoteStem(rawName: string): string | null {
+  const withoutControlChars = Array.from(rawName.trim())
+    .filter(ch => ch >= ' ' && ch !== '\u007f')
+    .join('');
+  const normalized = withoutControlChars
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. ]+|[. ]+$/g, '');
+  return normalized === '' ? null : normalized;
+}
 
-  return normalized || `note-${Date.now()}`;
+export function sanitizeFileName(rawName: string): string {
+  return sanitizeInboxNoteStem(rawName) ?? `note-${Date.now()}`;
 }
 
 export function pickNextInboxMarkdownFileName(

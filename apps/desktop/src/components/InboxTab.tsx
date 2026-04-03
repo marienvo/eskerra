@@ -1,15 +1,50 @@
-import {useMemo} from 'react';
-import {Group, Panel, Separator} from 'react-resizable-panels';
-import type {Layout} from 'react-resizable-panels';
+import * as AlertDialog from '@radix-ui/react-alert-dialog';
+import * as ContextMenu from '@radix-ui/react-context-menu';
+import * as Dialog from '@radix-ui/react-dialog';
+import type {RefObject} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 
+import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
+import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
+import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
+
+import {
+  buildInboxWikiLinkCompletionCandidates,
+  extractFirstMarkdownH1,
+  formatRelativeCalendarLabel,
+  getInboxTileBackgroundColor,
+  getNoteTitle,
+  stemFromMarkdownFileName,
+} from '@notebox/core';
+
+import {
+  NoteMarkdownEditor,
+  type NoteMarkdownEditorHandle,
+} from '../editor/noteEditor/NoteMarkdownEditor';
+
+import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
+
+import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
+type WikiLinkAmbiguityRenamePrompt = {
+  scannedFileCount: number;
+  touchedFileCount: number;
+  touchedBytes: number;
+  updatedLinkCount: number;
+  skippedAmbiguousLinkCount: number;
+};
+
 type InboxTabProps = {
-  defaultLayout: Layout;
-  onLayoutChanged: (layout: Layout) => void;
+  vaultRoot: string;
+  inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  leftWidthPx: number;
+  onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
+  inboxContentByUri: Record<string, string>;
+  backlinkUris: readonly string[];
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
   onAddEntry: () => void;
@@ -18,14 +53,26 @@ type InboxTabProps = {
   onCreateNewEntry: () => void;
   editorBody: string;
   onEditorChange: (body: string) => void;
-  onSaveNote: () => void;
+  inboxEditorResetNonce: number;
+  onEditorError: (message: string) => void;
+  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onSaveShortcut: () => void;
   busy: boolean;
+  onDeleteNote: (uri: string) => void | Promise<void>;
+  onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
+  wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
+  onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
+  onCancelWikiLinkAmbiguityRename: () => void;
 };
 
 export function InboxTab({
-  defaultLayout,
-  onLayoutChanged,
+  vaultRoot,
+  inboxEditorRef,
+  leftWidthPx,
+  onLeftWidthPxChanged,
   notes,
+  inboxContentByUri,
+  backlinkUris,
   selectedUri,
   onSelectNote,
   onAddEntry,
@@ -34,9 +81,69 @@ export function InboxTab({
   onCreateNewEntry,
   editorBody,
   onEditorChange,
-  onSaveNote,
+  inboxEditorResetNonce,
+  onEditorError,
+  onWikiLinkActivate,
+  onSaveShortcut,
   busy,
+  onDeleteNote,
+  onRenameNote,
+  wikiLinkAmbiguityRenamePrompt,
+  onConfirmWikiLinkAmbiguityRename,
+  onCancelWikiLinkAmbiguityRename,
 }: InboxTabProps) {
+  const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
+  const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
+  const [renameTargetUri, setRenameTargetUri] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openRenameDialog = (uri: string) => {
+    const row = notes.find(n => n.uri === uri);
+    if (!row) {
+      return;
+    }
+    setRenameTargetUri(uri);
+    setRenameDraft(stemFromMarkdownFileName(row.name));
+  };
+
+  const submitRename = () => {
+    const uri = renameTargetUri;
+    if (!uri || busy) {
+      return;
+    }
+    void onRenameNote(uri, renameDraft);
+    setRenameTargetUri(null);
+  };
+
+  useEffect(() => {
+    if (!renameTargetUri) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [renameTargetUri]);
+
+  const wikiLinkTargetIsResolved = useMemo(
+    () => (inner: string) =>
+      inboxWikiLinkTargetIsResolved(
+        notes.map(n => ({name: n.name, uri: n.uri})),
+        inner,
+      ),
+    [notes],
+  );
+
+  const wikiLinkCompletionCandidates = useMemo(
+    () =>
+      buildInboxWikiLinkCompletionCandidates(
+        notes.map(n => ({name: n.name, uri: n.uri})),
+      ),
+    [notes],
+  );
+
   const editorPaneTitle = useMemo(() => {
     if (composingNewEntry) {
       return 'New entry';
@@ -52,93 +159,369 @@ export function InboxTab({
     return tail || 'Editor';
   }, [composingNewEntry, notes, selectedUri]);
 
+  const backlinkRows = useMemo(
+    () =>
+      backlinkUris
+        .map(uri => {
+          const row = notes.find(n => n.uri === uri);
+          if (!row) {
+            return null;
+          }
+          const markdownSource =
+            !composingNewEntry && row.uri === selectedUri
+              ? editorBody
+              : inboxContentByUri[row.uri];
+          const title =
+            markdownSource !== undefined
+              ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(row.name)
+              : getNoteTitle(row.name);
+          return {uri: row.uri, fileName: row.name, title};
+        })
+        .filter((row): row is {uri: string; fileName: string; title: string} => row != null),
+    [backlinkUris, notes, composingNewEntry, selectedUri, editorBody, inboxContentByUri],
+  );
+
   const editorOpen = composingNewEntry || Boolean(selectedUri);
 
   return (
     <div className="inbox-root" data-app-surface="capture">
-      <Group
-        className="panel-group fill"
-        orientation="horizontal"
-        defaultLayout={defaultLayout}
-        onLayoutChanged={onLayoutChanged}
+      <AlertDialog.Root
+        open={confirmDeleteUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setConfirmDeleteUri(null);
+          }
+        }}
       >
-        <Panel id="files" className="panel-surface" minSize={10} defaultSize="30%">
-          <div className="pane-header">
-            <span className="pane-title">Log</span>
-            <button
-              type="button"
-              className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-              onClick={onAddEntry}
-              disabled={busy}
-              aria-label="Add entry"
-              data-tooltip="Add entry"
-              data-tooltip-placement="inline-start"
-            >
-              <span className="pane-header-add-btn__glyph" aria-hidden>
-                <MaterialIcon name="add" size={12} />
-              </span>
-            </button>
-          </div>
-          <ul className="note-list">
-            {notes.map(n => (
-              <li key={n.uri}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">Delete note</AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              Delete this note? This cannot be undone.
+            </AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
                 <button
                   type="button"
-                  className={n.uri === selectedUri ? 'active' : ''}
-                  onClick={() => onSelectNote(n.uri)}
+                  className="primary destructive"
+                  disabled={busy}
+                  onClick={() => {
+                    const uri = confirmDeleteUri;
+                    if (uri) {
+                      void onDeleteNote(uri);
+                    }
+                  }}
                 >
-                  {n.name}
+                  Delete
                 </button>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-        <Separator className="resize-sep" />
-        <Panel id="editor" className="panel-surface" minSize={18} defaultSize="70%">
-          <div className="pane-header">
-            <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
-              {editorPaneTitle}
-            </span>
-            {composingNewEntry ? (
-              <button
-                type="button"
-                className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                onClick={onCancelNewEntry}
-                disabled={busy}
-                aria-label="Cancel new entry"
-                data-tooltip="Cancel"
-                data-tooltip-placement="inline-start"
-              >
-                <span className="pane-header-add-btn__glyph" aria-hidden>
-                  <MaterialIcon name="clear" size={12} />
-                </span>
-              </button>
-            ) : null}
-          </div>
-          {editorOpen ? (
-            <>
-              <textarea
-                value={editorBody}
-                onChange={e => onEditorChange(e.target.value)}
-                spellCheck={false}
-                placeholder={composingNewEntry ? 'First line is title (H1)…' : 'Markdown'}
-              />
-              <div className="pane-footer">
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <AlertDialog.Root
+        open={wikiLinkAmbiguityRenamePrompt !== null}
+        onOpenChange={open => {
+          if (!open) {
+            onCancelWikiLinkAmbiguityRename();
+          }
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">
+              Ambiguous wiki links found
+            </AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              {wikiLinkAmbiguityRenamePrompt ? (
+                <>
+                  This rename can safely update{' '}
+                  {wikiLinkAmbiguityRenamePrompt.updatedLinkCount} link(s) across{' '}
+                  {wikiLinkAmbiguityRenamePrompt.touchedFileCount} note(s), but{' '}
+                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} link(s) are
+                  ambiguous and will be skipped.
+                </>
+              ) : null}
+            </AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
                 <button
                   type="button"
                   className="primary"
-                  onClick={composingNewEntry ? onCreateNewEntry : () => void onSaveNote()}
                   disabled={busy}
+                  onClick={() => {
+                    void onConfirmWikiLinkAmbiguityRename();
+                  }}
                 >
-                  {composingNewEntry ? 'Create note' : 'Save note'}
+                  Continue
                 </button>
-              </div>
-            </>
-          ) : (
-            <p className="muted empty-hint">Select a note from the log or use Add entry.</p>
-          )}
-        </Panel>
-      </Group>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <Dialog.Root
+        open={renameTargetUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setRenameTargetUri(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="alert-dialog-overlay" />
+          <Dialog.Content className="alert-dialog-content">
+            <Dialog.Title className="alert-dialog-title">Rename note</Dialog.Title>
+            <Dialog.Description className="alert-dialog-description">
+              Choose a new name for this note.
+            </Dialog.Description>
+            <label className="rename-note-field">
+              <span className="rename-note-field__label">File name</span>
+              <input
+                ref={renameInputRef}
+                type="text"
+                className="rename-note-field__input"
+                value={renameDraft}
+                disabled={busy}
+                onChange={event => setRenameDraft(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitRename();
+                  }
+                }}
+              />
+            </label>
+            <div className="alert-dialog-actions">
+              <Dialog.Close asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </Dialog.Close>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={() => {
+                  submitRename();
+                }}
+              >
+                Rename
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <DesktopHorizontalSplit
+        leftWidthPx={leftWidthPx}
+        minLeftPx={INBOX_LEFT_PANEL.minPx}
+        maxLeftPx={INBOX_LEFT_PANEL.maxPx}
+        minRightPx={220}
+        onLeftWidthPxChanged={onLeftWidthPxChanged}
+        left={
+          <div className="panel-surface">
+            <div className="pane-header">
+              <span className="pane-title">Log</span>
+              <button
+                type="button"
+                className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                onClick={onAddEntry}
+                disabled={busy}
+                aria-label="Add entry"
+                data-tooltip="Add entry"
+                data-tooltip-placement="inline-start"
+              >
+                <span className="pane-header-add-btn__glyph" aria-hidden>
+                  <MaterialIcon name="add" size={12} />
+                </span>
+              </button>
+            </div>
+            <ul className="note-list">
+              {notes.map(n => {
+                const markdownSource =
+                  !composingNewEntry && n.uri === selectedUri
+                    ? editorBody
+                    : inboxContentByUri[n.uri];
+                const listTitle =
+                  markdownSource !== undefined
+                    ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(n.name)
+                    : getNoteTitle(n.name);
+                const tileColor = getInboxTileBackgroundColor(n.lastModified);
+                return (
+                  <li key={n.uri}>
+                    <ContextMenu.Root>
+                      <ContextMenu.Trigger asChild>
+                        <button
+                          type="button"
+                          className={
+                            n.uri === selectedUri
+                              ? 'note-list-row active'
+                              : 'note-list-row'
+                          }
+                          onClick={() => onSelectNote(n.uri)}
+                        >
+                          <span
+                            className="note-list-row__accent"
+                            style={{backgroundColor: tileColor}}
+                            aria-hidden
+                          />
+                          <span className="note-list-row__body">
+                            <span className="note-list-row__title">{listTitle}</span>
+                            <span className="note-list-row__filename">{n.name}</span>
+                            <span className="note-list-row__meta">
+                              {formatRelativeCalendarLabel(n.lastModified)}
+                            </span>
+                          </span>
+                        </button>
+                      </ContextMenu.Trigger>
+                      <ContextMenu.Portal>
+                        <ContextMenu.Content
+                          className="note-list-context-menu"
+                          alignOffset={4}
+                          collisionPadding={8}
+                        >
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item"
+                            disabled={busy}
+                            onSelect={() => {
+                              openRenameDialog(n.uri);
+                            }}
+                          >
+                            Rename
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item note-list-context-menu__item--danger"
+                            disabled={busy}
+                            onSelect={() => {
+                              setConfirmDeleteUri(n.uri);
+                            }}
+                          >
+                            Delete
+                          </ContextMenu.Item>
+                        </ContextMenu.Content>
+                      </ContextMenu.Portal>
+                    </ContextMenu.Root>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        }
+        right={
+          <div className="panel-surface">
+            <div className="pane-header">
+              <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
+                {editorPaneTitle}
+              </span>
+              {!composingNewEntry && selectedUri ? (
+                <button
+                  type="button"
+                  className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                  onClick={() => openRenameDialog(selectedUri)}
+                  disabled={busy}
+                  aria-label="Rename note"
+                  data-tooltip="Rename note"
+                  data-tooltip-placement="inline-start"
+                >
+                  <span className="pane-header-add-btn__glyph" aria-hidden>
+                    <MaterialIcon name="drive_file_rename_outline" size={12} />
+                  </span>
+                </button>
+              ) : null}
+              {composingNewEntry ? (
+                <button
+                  type="button"
+                  className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                  onClick={onCancelNewEntry}
+                  disabled={busy}
+                  aria-label="Cancel new entry"
+                  data-tooltip="Cancel"
+                  data-tooltip-placement="inline-start"
+                >
+                  <span className="pane-header-add-btn__glyph" aria-hidden>
+                    <MaterialIcon name="clear" size={12} />
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            {editorOpen ? (
+              <>
+                <div className="editor note-markdown-editor-wrap">
+                  <NoteMarkdownEditor
+                    ref={inboxEditorRef}
+                    attachmentHost={inboxAttachmentHost}
+                    resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                    vaultRoot={vaultRoot}
+                    activeNotePath={composingNewEntry ? null : selectedUri}
+                    initialMarkdown={editorBody}
+                    sessionKey={inboxEditorResetNonce}
+                    onMarkdownChange={onEditorChange}
+                    onEditorError={onEditorError}
+                    onWikiLinkActivate={onWikiLinkActivate}
+                    wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                    wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                    onSaveShortcut={onSaveShortcut}
+                    placeholder={
+                      composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                    }
+                    busy={busy}
+                  />
+                </div>
+                {!composingNewEntry && selectedUri ? (
+                  <section className="inbox-backlinks" aria-label="Backlinks">
+                    <div className="inbox-backlinks__header">Linked from</div>
+                    {backlinkRows.length === 0 ? (
+                      <p className="muted inbox-backlinks__empty">No incoming links.</p>
+                    ) : (
+                      <ul className="inbox-backlinks__list">
+                        {backlinkRows.map(row => (
+                          <li key={row.uri}>
+                            <button
+                              type="button"
+                              className="inbox-backlinks__row"
+                              onClick={() => onSelectNote(row.uri)}
+                            >
+                              <span className="inbox-backlinks__title">{row.title}</span>
+                              <span className="inbox-backlinks__filename">{row.fileName}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ) : null}
+                {composingNewEntry ? (
+                  <div className="pane-footer">
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => void onCreateNewEntry()}
+                      disabled={busy}
+                    >
+                      Create note
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <p className="muted empty-hint">Select a note from the log or use Add entry.</p>
+            )}
+          </div>
+        }
+      />
     </div>
   );
 }

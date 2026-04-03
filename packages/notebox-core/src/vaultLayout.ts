@@ -1,6 +1,8 @@
 export const NOTEBOX_DIRECTORY_NAME = '.notebox';
 export const GENERAL_DIRECTORY_NAME = 'General';
 export const INBOX_DIRECTORY_NAME = 'Inbox';
+export const ASSETS_DIRECTORY_NAME = 'Assets';
+export const ATTACHMENTS_DIRECTORY_NAME = 'Attachments';
 export const PLAYLIST_FILE_NAME = 'playlist.json';
 export const SETTINGS_SHARED_FILE_NAME = 'settings-shared.json';
 /** Legacy filename; read-only for migration. */
@@ -38,6 +40,14 @@ export function getInboxDirectoryUri(baseUri: string): string {
 
 export function getGeneralDirectoryUri(baseUri: string): string {
   return `${baseUri}/${GENERAL_DIRECTORY_NAME}`;
+}
+
+export function getAssetsDirectoryUri(baseUri: string): string {
+  return `${baseUri}/${ASSETS_DIRECTORY_NAME}`;
+}
+
+export function getAssetsAttachmentsDirectoryUri(baseUri: string): string {
+  return `${getAssetsDirectoryUri(baseUri)}/${ATTACHMENTS_DIRECTORY_NAME}`;
 }
 
 export function getInboxIndexUri(baseUri: string): string {

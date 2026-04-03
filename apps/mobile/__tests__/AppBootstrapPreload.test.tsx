@@ -28,10 +28,6 @@ jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: ({children}: {children: React.ReactNode}) => <>{children}</>,
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaProvider: ({children}: {children: React.ReactNode}) => <>{children}</>,
-}));
-
 jest.mock('../src/core/bootstrap/resolveInitialRoute', () => ({
   resolveInitialRoute: jest.fn(),
 }));

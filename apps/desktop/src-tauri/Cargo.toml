@@ -21,11 +21,19 @@ tauri-build = { version = "2.5.6", features = [] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
-tauri = { version = "2.10.3", features = ["macos-private-api"] }
+tauri = { version = "2.10.3", features = ["macos-private-api", "protocol-asset"] }
 notify = "6"
+base64 = "0.22"
+tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-store = "2"
 tauri-plugin-window-state = "2"
+tauri-plugin-prevent-default = { version = "4", default-features = false }
+
+# Vendored patch: persist size/position when WM reports maximized but geometry is not fullscreen
+# (tiling / Wayland false positives). See vendor/tauri-plugin-window-state/src/lib.rs.
+[patch.crates-io]
+tauri-plugin-window-state = { path = "vendor/tauri-plugin-window-state" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 souvlaki = { version = "0.7", default-features = false, features = ["use_zbus"] }

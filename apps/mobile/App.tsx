@@ -166,15 +166,19 @@ function App() {
     <GluestackUIProvider colorMode={isDarkMode ? 'dark' : 'light'} config={config}>
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
-          <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+          <StatusBar
+            barStyle={
+              initialRoute === null
+                ? 'light-content'
+                : isDarkMode
+                  ? 'light-content'
+                  : 'dark-content'
+            }
+          />
           {initialRoute === null ? (
-            <View
-              accessibilityLabel="Loading"
-              style={[
-                styles.loadingContainer,
-                isDarkMode ? styles.loadingContainerDark : styles.loadingContainerLight,
-              ]}>
-              <StartupSplashContent isDarkMode={isDarkMode} />
+            <View accessibilityLabel="Loading" style={styles.loadingContainerSplash}>
+              {/* Dark splash so white branding matches desktop / reference artwork. */}
+              <StartupSplashContent />
             </View>
           ) : (
             <KeyboardProvider>
@@ -195,16 +199,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingContainer: {
+  loadingContainerSplash: {
     alignItems: 'stretch',
+    backgroundColor: '#121212',
     flex: 1,
     justifyContent: 'center',
-  },
-  loadingContainerDark: {
-    backgroundColor: '#121212',
-  },
-  loadingContainerLight: {
-    backgroundColor: '#FFFFFF',
   },
 });
 

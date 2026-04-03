@@ -19,7 +19,7 @@ import java.util.concurrent.Executors
 
 /**
  * Lists .md files under a SAF directory URI on a background thread, matching JS filter/sort in
- * noteboxStorage (markdown only, exclude sync-conflict names, sort by lastModified desc).
+ * noteboxStorage (markdown only, exclude sync-conflict names, sort by lastModified desc, then name).
  *
  * Session prepare batches settings init/read, Inbox listing, and General/Inbox.md sync in one
  * executor job to cut bridge round-trips and duplicate SAF work on cold start.
@@ -165,7 +165,12 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
       val lm = child.lastModified()
       rows.add(MarkdownRow(uri = child.uri.toString(), name = name, lastModified = lm))
     }
-    rows.sortWith { a, b -> compareDescendingLastModified(a.lastModified, b.lastModified) }
+    rows.sortWith(
+      compareByDescending<MarkdownRow> { row ->
+        val lm = row.lastModified
+        if (lm > 0L) lm else 0L
+      }.thenBy { it.name },
+    )
     return rows
   }
 
@@ -255,12 +260,6 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
       Log.w(TAG, "readInboxMarkdownContentForPrepare failed for $uriString", e)
       null
     }
-  }
-
-  private fun compareDescendingLastModified(left: Long, right: Long): Int {
-    val l = if (left > 0L) left else 0L
-    val r = if (right > 0L) right else 0L
-    return r.compareTo(l)
   }
 
   /** Matches JS `generalDirectoryUri + "/" + fileName` for tree document URIs. */

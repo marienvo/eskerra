@@ -14,8 +14,8 @@
     "desktop": "npm run desktop:dev -w @notebox/desktop",
     "desktop:build": "npm run desktop:build -w @notebox/desktop",
     "lint": "npm run lint -w @notebox/mobile && npm run lint -w @notebox/desktop",
-    "test": "npm run test -w @notebox/core && npm run test -w @notebox/mobile && node --test scripts/bump-release-version-lib.test.mjs",
-    "test:scripts": "node --test scripts/bump-release-version-lib.test.mjs",
+    "test": "npm run test -w @notebox/core && npm run test -w @notebox/mobile && node --test scripts/bump-release-version-lib.test.mjs && node --test scripts/tauri-desktop-build.test.mjs",
+    "test:scripts": "node --test scripts/bump-release-version-lib.test.mjs scripts/tauri-desktop-build.test.mjs",
     "prepare": "husky"
   },
   "dependencies": {

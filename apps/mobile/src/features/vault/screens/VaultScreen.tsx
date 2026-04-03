@@ -24,10 +24,12 @@ import {
   LIST_HORIZONTAL_INSET,
 } from '../../../core/ui/listMetrics';
 import {getNoteTitle} from '../../../core/storage/noteboxStorage';
-import {extractFirstMarkdownH1} from '../../../core/utils/extractFirstMarkdownH1';
-import {formatRelativeCalendarLabel} from '../../../core/utils/relativeCalendarLabel';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {getInboxTileBackgroundColor} from '../utils/inboxTileColor';
+import {
+  extractFirstMarkdownH1,
+  formatRelativeCalendarLabel,
+  getInboxTileBackgroundColor,
+} from '@notebox/core';
 import {MainTabParamList, VaultStackParamList} from '../../../navigation/types';
 import {useNotes} from '../hooks/useNotes';
 

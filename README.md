@@ -191,3 +191,21 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 
 - Architecture: [`specs/architecture/`](specs/architecture/)
 - Desktop vs mobile contract: [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)
+
+---
+
+## Comparison: This app vs others
+
+I want a Markdown app that is fast, predictable, and works out of the box. 
+No plugins required for the basics, no waiting, no hidden complexity.
+
+This project is built around that idea.
+
+| Tool | Core Idea | Strength | Trade-off |
+|------|----------|----------|-----------|
+| **This App**  | Markdown runtime | **Fast, predictable, no setup** | Fewer features |
+| **Obsidian**  | Knowledge system | Flexible, huge plugin ecosystem | Complexity & inconsistency |
+| **Joplin**  | Open notebook | Fully FOSS, reliable sync | Clunky UX |
+| **Logseq**  | Outliner / graph | Powerful linking & structure | Performance, learning curve |
+| **iA Writer** ️ | Writing tool | Clean, focused experience | Limited features |
+| **Zettlr**  | Academic editor | Strong for long-form & research | Heavy, slower UI |

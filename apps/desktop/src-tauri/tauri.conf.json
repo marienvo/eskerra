@@ -2,7 +2,7 @@
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "eskerra",
   "mainBinaryName": "eskerra",
-  "version": "0.1.0",
+  "version": "../package.json",
   "identifier": "com.notebox.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -12,12 +12,13 @@
   },
   "app": {
     "macOSPrivateApi": true,
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
         "title": "Eskerra",
-        "width": 800,
-        "height": 600,
+        "width": 640,
+        "height": 400,
         "minWidth": 520,
         "minHeight": 380,
         "resizable": true,
@@ -27,7 +28,25 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPCONFIG/**",
+          "$APPDATA/**",
+          "$APPLOCALDATA/**",
+          "$DATA/**",
+          "$DESKTOP/**",
+          "$DOCUMENT/**",
+          "$DOWNLOAD/**",
+          "$HOME/**",
+          "$PICTURE/**",
+          "$PUBLIC/**",
+          "/media/**",
+          "/mnt/**",
+          "/run/media/**"
+        ]
+      }
     }
   },
   "bundle": {

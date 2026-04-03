@@ -1,4 +1,6 @@
-import {extractFirstMarkdownH1} from '../src/core/utils/extractFirstMarkdownH1';
+import {describe, expect, test} from 'vitest';
+
+import {extractFirstMarkdownH1} from './extractFirstMarkdownH1';
 
 describe('extractFirstMarkdownH1', () => {
   test('returns null for empty input', () => {

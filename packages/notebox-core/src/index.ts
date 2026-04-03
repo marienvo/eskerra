@@ -1,18 +1,81 @@
 export type {AudioPlayer, AudioTrack, PlayerProgress, PlayerState, Unsubscribe} from './audioPlayerTypes';
+export {
+  ATTACHMENT_IMAGE_EXTENSIONS,
+  buildAttachmentFileName,
+  buildInboxRelativeAttachmentMarkdownPath,
+  imageMimeToExtension,
+  inboxNoteRelativeAttachmentDir,
+  normalizeImageFileExtension,
+  sanitizeAttachmentBaseName,
+} from './attachments/attachmentPaths';
+export {
+  imageSniffFormatToDotExtension,
+  markdownContainsTransientImageUrls,
+  sniffImageFormatFromBytes,
+  type ImageSniffFormat,
+} from './attachments/imageSniff';
 export {initNoteboxVault} from './initNoteboxVault';
 export {
   buildInboxMarkdownIndexContent,
   getNoteTitle,
   pickNextInboxMarkdownFileName,
   sanitizeFileName,
+  sanitizeInboxNoteStem,
   stemFromMarkdownFileName,
 } from './inboxMarkdown';
+export {
+  buildInboxWikiLinkResolveLookup,
+  resolveInboxWikiLinkTarget,
+  resolveInboxWikiLinkTargetWithLookup,
+  type InboxWikiLinkNoteRef,
+  type InboxWikiLinkResolveLookup,
+  type InboxWikiLinkResolveResult,
+  type ParsedWikiLinkInner,
+} from './wikiLinkInbox';
+export {
+  extractWikiLinkInnerMatchesFromMarkdown,
+  extractWikiLinkInnersFromMarkdown,
+  type WikiLinkInnerMatch,
+} from './wikiLinkExtract';
+export {
+  planInboxWikiLinkRenameInMarkdown,
+  type InboxWikiLinkRenameMarkdownPlan,
+  type InboxWikiLinkRenameSkippedReason,
+} from './wikiLinkRename';
+export {
+  buildInboxWikiLinkCompletionCandidates,
+  filterInboxWikiLinkCompletionCandidates,
+  WIKI_LINK_COMPLETION_MAX_OPTIONS,
+  type InboxWikiLinkCompletionCandidate,
+} from './wikiLinkInboxCompletion';
 export {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
   type ParsedComposeInput,
 } from './inboxComposeNote';
+export {
+  calendarDaysFromTargetToReference,
+  formatRelativeCalendarLabel,
+  formatRelativeCalendarLabelFromIsoDate,
+  startOfLocalDayMs,
+} from './datetime/relativeCalendarLabel';
+export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export {
+  computeStartupBarDisplayGain,
+  computeStartupSpectrumSample,
+  logoSpatialEnvelope,
+  MIDDLE_STARTUP_BARS_FULL,
+  smoothSpectrumLevelsInPlace,
+  STARTUP_SPECTRUM_SPATIAL_SMOOTH,
+  STARTUP_SPECTRUM_TIME_SCALE,
+  LOGO_ENVELOPE_BLEND,
+} from './ui/startupSplashSpectrum';
+export {
+  getInboxTileBackgroundColor,
+  mixHex,
+  NEUTRAL_GRAY,
+} from './inbox/inboxTileColor';
 export {
   defaultNoteboxLocalSettings,
   ensureDeviceInstanceId,
@@ -70,7 +133,11 @@ export {
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
 export {
+  ASSETS_DIRECTORY_NAME,
+  ATTACHMENTS_DIRECTORY_NAME,
   GENERAL_DIRECTORY_NAME,
+  getAssetsAttachmentsDirectoryUri,
+  getAssetsDirectoryUri,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getInboxIndexUri,

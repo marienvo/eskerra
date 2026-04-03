@@ -1,9 +1,11 @@
+import {describe, expect, test} from 'vitest';
+
 import {
   calendarDaysFromTargetToReference,
   formatRelativeCalendarLabel,
   formatRelativeCalendarLabelFromIsoDate,
   startOfLocalDayMs,
-} from '../src/core/utils/relativeCalendarLabel';
+} from './relativeCalendarLabel';
 
 /** Wednesday, Jan 22, 2020 12:00 local */
 const now = new Date(2020, 0, 22, 12, 0, 0).getTime();
@@ -43,7 +45,6 @@ describe('formatRelativeCalendarLabel', () => {
   });
 
   test('returns weekday for 2–6 calendar days ago', () => {
-    // Monday Jan 20, 2020 — two days before Wednesday Jan 22
     const monday = new Date(2020, 0, 20, 12, 0, 0).getTime();
     expect(formatRelativeCalendarLabel(monday, now)).toBe('Monday');
   });
