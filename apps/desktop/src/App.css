@@ -977,7 +977,6 @@ button.primary.destructive {
   flex: 1;
   width: 100%;
   min-height: 0;
-  padding: 0.5rem 0.6rem;
   box-sizing: border-box;
 }
 
@@ -1003,6 +1002,9 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
   min-height: 6rem;
+  /* Inset for text only: padding on the root wrapped .cm-scroller and pushed the scrollbar inward. */
+  padding: 0.5rem 0.6rem;
+  box-sizing: border-box;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-line {
