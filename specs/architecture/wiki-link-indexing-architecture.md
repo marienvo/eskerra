@@ -1,12 +1,12 @@
 # Wiki link indexing architecture
 
-**Status:** Directional architecture note for WL-4 and WL-5. This document sets boundaries and decision gates; it is not an implementation commitment.
+**Status:** Directional architecture note for wiki link indexing and rename-adjacent read paths. This document sets boundaries and decision gates; it is not an implementation commitment.
 
-Related plans: [wiki-links-phased-roadmap.md](../plans/wiki-links-phased-roadmap.md), [plugin-readiness-masterplan.md](../plans/plugin-readiness-masterplan.md), [extension-readiness.md](./extension-readiness.md).
+Related plans: [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backlog.md), [extension-readiness.md](./extension-readiness.md).
 
 ## Scope and non-scope
 
-- **In scope:** seam boundaries for backlinks/read indexing (WL-4), rename planning support (WL-5), and benchmark-gated acceleration decisions.
+- **In scope:** seam boundaries for backlinks/read indexing, rename planning support, and benchmark-gated acceleration decisions.
 - **Out of scope:** full-text search product, global ranked search platform, plugin host design.
 
 ## Ownership boundaries
@@ -51,6 +51,6 @@ All benchmark results must record reference hardware and reference vault composi
 
 ## Sequencing constraints
 
-- WL-1 to WL-3 remain intentionally non-native.
-- WL-4 introduces a seam boundary, not a full indexing subsystem commitment.
-- WL-5 is an incremental extension of WL-4; do not expand into broad architectural rewrites without new product approval.
+- Wiki authoring features (gestures, highlights, target autocomplete) stay intentionally non-native.
+- Backlinks and rename maintenance may introduce or extend a seam boundary; do not commit to a full indexing subsystem without benchmark evidence.
+- Rename propagation builds on the same link semantics and read patterns as backlinks; do not expand into broad architectural rewrites without new product approval.

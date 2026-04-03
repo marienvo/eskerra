@@ -33,4 +33,4 @@ Use for changes that touch the vault, editor, desktop shell, podcast/playlist, o
 ## Authority
 
 Principles and layers: [extension-readiness.md](../architecture/extension-readiness.md).  
-Phased follow-ups: [plugin-readiness-masterplan.md](../plans/plugin-readiness-masterplan.md).
+Phased follow-ups: [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backlog.md).

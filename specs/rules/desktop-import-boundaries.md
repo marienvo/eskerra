@@ -2,7 +2,7 @@
 
 Goal: make **layer violations detectable** over time—without blocking day-one velocity. Ratchet strictness upward.
 
-**Not in scope yet:** automated enforcement is optional until Phase 1+ in [plugin-readiness-masterplan.md](../plans/plugin-readiness-masterplan.md).
+**Not in scope yet:** broader path-based enforcement is optional until Phase P3 in [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backlog.md) (after the initial editor Tauri ban).
 
 ## Zones
 

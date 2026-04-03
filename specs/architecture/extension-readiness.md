@@ -4,7 +4,7 @@ This document keeps the codebase **internally extensible** without building a pl
 
 Authoritative stacks and mobile constraints elsewhere: [app-architecture.md](./app-architecture.md), [stack-and-constraints.md](./stack-and-constraints.md), [platform-targets.md](./platform-targets.md).
 
-Follow-on work is tracked in [plugin-readiness-masterplan.md](../plans/plugin-readiness-masterplan.md).
+Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backlog.md).
 
 ## Product core
 
@@ -64,7 +64,7 @@ Follow-on work is tracked in [plugin-readiness-masterplan.md](../plans/plugin-re
 
 **Owns:** CodeMirror setup, selection, editing gestures, decorations driven by **document text** (wiki highlight, image line widgets).
 
-**Must not own:** broad vault orchestration, playlist policy, or unconstrained filesystem walks. Side effects from editing should be **user-gesture-driven** and wired through **shell-owned services** (see masterplan).
+**Must not own:** broad vault orchestration, playlist policy, or unconstrained filesystem walks. Side effects from editing should be **user-gesture-driven** and wired through **shell-owned services** (see [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backlog.md)).
 
 ### `apps/desktop/src/components/` and `hooks/`
 
