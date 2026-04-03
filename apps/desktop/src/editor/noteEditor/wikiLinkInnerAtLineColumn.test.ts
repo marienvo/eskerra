@@ -1,6 +1,9 @@
 import {describe, expect, it} from 'vitest';
 
-import {wikiLinkInnerAtLineColumn} from './wikiLinkInnerAtLineColumn';
+import {
+  wikiLinkInnerAtLineColumn,
+  wikiLinkMatchAtLineColumn,
+} from './wikiLinkInnerAtLineColumn';
 
 describe('wikiLinkInnerAtLineColumn', () => {
   it('returns inner when caret is inside one link on the line', () => {
@@ -33,5 +36,15 @@ describe('wikiLinkInnerAtLineColumn', () => {
     const after = line.indexOf(']]') + 2;
     expect(wikiLinkInnerAtLineColumn(line, after - 1)).toBe('x');
     expect(wikiLinkInnerAtLineColumn(line, after)).toBeNull();
+  });
+
+  it('returns inner range when matching a link', () => {
+    const line = 'x [[target|Label]] y';
+    const col = line.indexOf('target');
+    expect(wikiLinkMatchAtLineColumn(line, col)).toEqual({
+      inner: 'target|Label',
+      innerFrom: line.indexOf('target'),
+      innerTo: line.indexOf(']]'),
+    });
   });
 });

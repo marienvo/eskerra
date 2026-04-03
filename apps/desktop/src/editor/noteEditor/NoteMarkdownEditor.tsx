@@ -29,7 +29,10 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
-import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {
+  wikiLinkInnerAtDocPosition,
+  wikiLinkMatchAtDocPosition,
+} from './wikiLinkInnerAtDocPosition';
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
@@ -45,7 +48,7 @@ export type NoteMarkdownEditorProps = {
   /** Shown when image paste or drop fails; also used when vault image import is unavailable. */
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
-  onWikiLinkActivate: (payload: {inner: string}) => void;
+  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one inbox note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Shell-provided inbox notes for `[[` autocomplete (WL-3). */
@@ -63,6 +66,11 @@ export type NoteMarkdownEditorProps = {
 export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
   loadMarkdown: (markdown: string) => void;
+  replaceWikiLinkInnerAt: (options: {
+    at: number;
+    expectedInner: string;
+    replacementInner: string;
+  }) => boolean;
 };
 
 const NoteMarkdownEditorImpl = forwardRef<
@@ -310,7 +318,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       }
       e.preventDefault();
       e.stopPropagation();
-      onWikiLinkActivateRef.current({inner});
+      onWikiLinkActivateRef.current({inner, at: pos});
       return true;
     };
 
@@ -341,7 +349,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (inner == null) {
         return false;
       }
-      onWikiLinkActivateRef.current({inner});
+      onWikiLinkActivateRef.current({inner, at: sel.head});
       return true;
     };
 
@@ -471,6 +479,27 @@ const NoteMarkdownEditorImpl = forwardRef<
           },
           selection: EditorSelection.cursor(markdown.length),
         });
+      },
+      replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
+        if (replacementInner === expectedInner) {
+          return true;
+        }
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        const match = wikiLinkMatchAtDocPosition(view.state.doc, at);
+        if (!match || match.inner !== expectedInner) {
+          return false;
+        }
+        view.dispatch({
+          changes: {
+            from: match.innerFrom,
+            to: match.innerTo,
+            insert: replacementInner,
+          },
+        });
+        return true;
       },
     }),
     [],

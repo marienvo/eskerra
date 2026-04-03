@@ -44,7 +44,7 @@ type InboxTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
-  onWikiLinkActivate: (payload: {inner: string}) => void;
+  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;

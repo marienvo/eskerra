@@ -11,7 +11,7 @@ export type ParsedWikiLinkInner = {
 };
 
 export type InboxWikiLinkResolveResult =
-  | {kind: 'open'; note: InboxWikiLinkNoteRef}
+  | {kind: 'open'; note: InboxWikiLinkNoteRef; canonicalInner?: string}
   | {kind: 'create'; title: string}
   | {
       kind: 'ambiguous';
@@ -45,15 +45,22 @@ function stripInboxPrefixCaseInsensitive(target: string): string {
   return target;
 }
 
+function hasInboxPrefixCaseInsensitive(target: string): boolean {
+  return target.length >= 6 && target.slice(0, 6).toLowerCase() === 'inbox/';
+}
+
 function normalizeTargetToStem(targetText: string): {
   kind: 'ok';
   pathlessTarget: string;
   stem: string;
+  hadInboxPrefix: boolean;
 } | {
   kind: 'unsupported';
   reason: 'empty_target' | 'path_not_supported';
 } {
-  const pathlessTarget = stripInboxPrefixCaseInsensitive(targetText.trim());
+  const trimmedTarget = targetText.trim();
+  const hadInboxPrefix = hasInboxPrefixCaseInsensitive(trimmedTarget);
+  const pathlessTarget = stripInboxPrefixCaseInsensitive(trimmedTarget);
   if (pathlessTarget === '') {
     return {kind: 'unsupported', reason: 'empty_target'};
   }
@@ -64,7 +71,21 @@ function normalizeTargetToStem(targetText: string): {
     kind: 'ok',
     pathlessTarget,
     stem: pathlessTarget,
+    hadInboxPrefix,
   };
+}
+
+function buildCanonicalInnerForOpen(options: {
+  parsed: ParsedWikiLinkInner;
+  canonicalStem: string;
+  hadInboxPrefix: boolean;
+}): string {
+  const {parsed, canonicalStem, hadInboxPrefix} = options;
+  const targetText = hadInboxPrefix ? `Inbox/${canonicalStem}` : canonicalStem;
+  if (parsed.displayText == null) {
+    return targetText;
+  }
+  return `${targetText}|${parsed.displayText}`;
 }
 
 /**
@@ -83,17 +104,42 @@ export function resolveInboxWikiLinkTarget(
     return {kind: 'unsupported', reason: normalized.reason};
   }
 
-  const {pathlessTarget, stem} = normalized;
-  const matches = notes.filter(n => stemFromMarkdownFileName(n.name) === stem);
-  if (matches.length === 1) {
-    return {kind: 'open', note: matches[0]};
+  const {pathlessTarget, stem, hadInboxPrefix} = normalized;
+  const exactMatches = notes.filter(n => stemFromMarkdownFileName(n.name) === stem);
+  if (exactMatches.length === 1) {
+    return {kind: 'open', note: exactMatches[0]};
   }
 
   const title = parsed.displayText ?? pathlessTarget;
-  if (matches.length > 1) {
+  if (exactMatches.length > 1) {
     return {
       kind: 'ambiguous',
-      notes: matches,
+      notes: exactMatches,
+      targetStem: stem,
+      title,
+    };
+  }
+
+  const foldedStem = stem.toLowerCase();
+  const foldedMatches = notes.filter(
+    n => stemFromMarkdownFileName(n.name).toLowerCase() === foldedStem,
+  );
+  if (foldedMatches.length === 1) {
+    const canonicalStem = stemFromMarkdownFileName(foldedMatches[0].name);
+    return {
+      kind: 'open',
+      note: foldedMatches[0],
+      canonicalInner: buildCanonicalInnerForOpen({
+        parsed,
+        canonicalStem,
+        hadInboxPrefix,
+      }),
+    };
+  }
+  if (foldedMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      notes: foldedMatches,
       targetStem: stem,
       title,
     };

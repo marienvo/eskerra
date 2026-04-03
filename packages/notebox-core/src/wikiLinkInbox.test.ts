@@ -16,15 +16,29 @@ describe('resolveInboxWikiLinkTarget', () => {
     });
   });
 
-  it('matches case-sensitively against the exact stem', () => {
+  it('opens exact stem match without canonical rewrite metadata', () => {
     const rows = [{name: 'Alpha Note.md', uri: '/vault/Inbox/Alpha Note.md'}];
     expect(resolveInboxWikiLinkTarget(rows, 'Alpha Note')).toEqual({
       kind: 'open',
       note: rows[0],
     });
+  });
+
+  it('opens unique case-insensitive stem match and returns canonical inner', () => {
+    const rows = [{name: 'Alpha Note.md', uri: '/vault/Inbox/Alpha Note.md'}];
     expect(resolveInboxWikiLinkTarget(rows, 'alpha note')).toEqual({
-      kind: 'create',
-      title: 'alpha note',
+      kind: 'open',
+      note: rows[0],
+      canonicalInner: 'Alpha Note',
+    });
+  });
+
+  it('preserves display text and explicit Inbox/ prefix in canonical inner', () => {
+    const rows = [{name: 'Alpha Note.md', uri: '/vault/Inbox/Alpha Note.md'}];
+    expect(resolveInboxWikiLinkTarget(rows, 'inbox/alpha note|Label')).toEqual({
+      kind: 'open',
+      note: rows[0],
+      canonicalInner: 'Inbox/Alpha Note|Label',
     });
   });
 
@@ -57,6 +71,19 @@ describe('resolveInboxWikiLinkTarget', () => {
       notes: rows,
       targetStem: 'dup',
       title: 'dup',
+    });
+  });
+
+  it('returns ambiguous when multiple stems match case-insensitively', () => {
+    const rows = [
+      {name: 'Alpha.md', uri: '/vault/Inbox/Alpha.md'},
+      {name: 'alpha.md', uri: '/vault/Inbox/alpha.md'},
+    ];
+    expect(resolveInboxWikiLinkTarget(rows, 'ALPHA')).toEqual({
+      kind: 'ambiguous',
+      notes: rows,
+      targetStem: 'ALPHA',
+      title: 'ALPHA',
     });
   });
 

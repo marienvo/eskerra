@@ -9,7 +9,7 @@ import {
 import {createInboxMarkdownNote} from './vaultBootstrap';
 
 export type InboxWikiLinkNavigationResult =
-  | {kind: 'open'; uri: string}
+  | {kind: 'open'; uri: string; canonicalInner?: string}
   | {kind: 'created'; uri: string}
   | {
       kind: 'ambiguous';
@@ -37,7 +37,11 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   );
 
   if (resolved.kind === 'open') {
-    return {kind: 'open', uri: resolved.note.uri};
+    return {
+      kind: 'open',
+      uri: resolved.note.uri,
+      canonicalInner: resolved.canonicalInner,
+    };
   }
   if (resolved.kind === 'ambiguous') {
     return {

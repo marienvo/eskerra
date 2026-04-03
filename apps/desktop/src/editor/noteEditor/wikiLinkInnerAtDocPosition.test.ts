@@ -1,7 +1,10 @@
 import {EditorState, Text} from '@codemirror/state';
 import {describe, expect, it} from 'vitest';
 
-import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {
+  wikiLinkInnerAtDocPosition,
+  wikiLinkMatchAtDocPosition,
+} from './wikiLinkInnerAtDocPosition';
 
 describe('wikiLinkInnerAtDocPosition', () => {
   it('returns inner when position is inside a wiki link on that line', () => {
@@ -22,5 +25,16 @@ describe('wikiLinkInnerAtDocPosition', () => {
   it('returns null when position is outside any wiki link', () => {
     const doc = Text.of(['no link here']);
     expect(wikiLinkInnerAtDocPosition(doc, 3)).toBeNull();
+  });
+
+  it('returns absolute inner range for a match at doc position', () => {
+    const doc = Text.of(['x [[first]]', 'y [[second|Label]] z']);
+    const line = doc.line(2);
+    const pos = line.from + line.text.indexOf('second');
+    expect(wikiLinkMatchAtDocPosition(doc, pos)).toEqual({
+      inner: 'second|Label',
+      innerFrom: line.from + line.text.indexOf('second'),
+      innerTo: line.from + line.text.indexOf(']]'),
+    });
   });
 });

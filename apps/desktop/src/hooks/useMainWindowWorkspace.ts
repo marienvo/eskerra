@@ -76,7 +76,7 @@ export type UseMainWindowWorkspaceResult = {
   saveNote: () => Promise<void>;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
-  onWikiLinkActivate: (payload: {inner: string}) => Promise<void>;
+  onWikiLinkActivate: (payload: {inner: string; at: number}) => Promise<void>;
   deleteNote: (uri: string) => Promise<void>;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
@@ -477,7 +477,7 @@ export function useMainWindowWorkspace(options: {
   );
 
   const onWikiLinkActivate = useCallback(
-    async ({inner}: {inner: string}) => {
+    async ({inner, at}: {inner: string; at: number}) => {
       if (!vaultRoot) {
         return;
       }
@@ -492,6 +492,12 @@ export function useMainWindowWorkspace(options: {
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
             await refreshNotes(vaultRoot);
+          } else if (result.canonicalInner) {
+            inboxEditorRef.current?.replaceWikiLinkInnerAt({
+              at,
+              expectedInner: inner,
+              replacementInner: result.canonicalInner,
+            });
           }
           setComposingNewEntry(false);
           setSelectedUri(result.uri);
@@ -515,7 +521,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, notes, fs, refreshNotes],
+    [vaultRoot, notes, fs, refreshNotes, inboxEditorRef],
   );
 
   return {

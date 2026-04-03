@@ -146,6 +146,28 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
     expect(result).toEqual({kind: 'open', uri: noteUri});
   });
 
+  it('returns open with canonical inner when match only differs by casing', async () => {
+    const noteUri = `${vaultRoot}/Inbox/Alpha Note.md`;
+    const {fs, writes} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [noteUri, '# Alpha\n'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'alpha note',
+      notes: [{name: 'Alpha Note.md', uri: noteUri}],
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({
+      kind: 'open',
+      uri: noteUri,
+      canonicalInner: 'Alpha Note',
+    });
+    expect(writes).toEqual([]);
+  });
+
   it('creates a new inbox note when target does not exist', async () => {
     const {fs, writes} = createMemoryVaultFs([
       [vaultRoot, 'dir'],
