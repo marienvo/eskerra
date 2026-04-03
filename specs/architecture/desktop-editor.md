@@ -25,16 +25,21 @@
 - **On disk:** `[[...]]` stays plain Markdown. Tooling may parse to mdast via [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts).
 - **Scope:** Inbox targets only (resolver and navigation in `@notebox/core` + shell). The editor does not scan the vault; it calls `onWikiLinkActivate({ inner })`, implemented in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) (flush, then [`openOrCreateInboxWikiLinkTarget`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts)).
 - **Activate (same shell path):**
-  - **Click** a wiki link in the source.
+  - **Click** a wiki link in the source (primary button).
+  - **Ctrl+click** (Linux/Windows) or **Cmd+click** (macOS) on the link span uses the same activation path (parity with common desktop “modifier + click” patterns).
+  - **Shift+click** is intentionally not handled by the wiki-link hook so CodeMirror can extend the selection across link text.
   - **Ctrl+Enter** on Linux/Windows or **Cmd+Enter** on macOS (**`Mod-Enter`** in CodeMirror), with the caret anywhere inside the `[[...]]` span on that line.
 - **Typing assist:** Typing `[` immediately after `[` inserts `[]]` and leaves the caret between the inner brackets (`[[|]]`).
-- **Caret / hit testing:** [`apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts) maps a line text + column to the raw link inner (including `target|display`).
+- **Caret / hit testing:** [`apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts) maps a line text + column to the raw link inner (including `target|display`). Document positions use [`wikiLinkInnerAtDocPosition.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtDocPosition.ts) (keyboard activation and click hit testing).
+- **IME:** If an input method editor is composing text inside `[[...]]`, **`Mod-Enter`** may be consumed by the IME instead of activating the link. Verify with a manual spot check when changing editor or platform input stacks; file a follow-up if activation fails under IME.
 
 **Manual smoke (desktop inbox):**
 
-- From an open note, activate the same link via click and via **Mod-Enter**; both should open or create the same target.
+- From an open note, activate the same link via plain click, **Ctrl/Cmd+click**, and **Mod-Enter**; all should open or create the same target.
+- **Shift+click** across a link should extend the selection without navigating.
 - While composing a new entry, activating a link still flushes through the workspace path above.
 - Ambiguous or unsupported targets continue to surface via the existing error banner (no picker yet).
+- Optional: with an IME enabled, caret inside `[[...]]`, confirm whether **Mod-Enter** still activates or is captured by the IME.
 
 ## Vertical layout and click coordinates
 
@@ -57,4 +62,4 @@ Horizontal padding on the pane-level editor container (around the CodeMirror roo
 
 - Pure path/filename rules and layout constants are covered in `@notebox/core` (`attachmentPaths.test.ts`).
 - Markdown image line formatting is covered in `apps/desktop` (`formatVaultImageMarkdown.test.ts`).
-- Wiki link helpers: `apps/desktop` — `wikiLinkInnerAtLineColumn.test.ts`, [`inboxWikiLinkNavigation.test.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.test.ts); core resolver — `wikiLinkInbox.test.ts`.
+- Wiki link helpers: `apps/desktop` — `wikiLinkInnerAtLineColumn.test.ts`, `wikiLinkInnerAtDocPosition.test.ts`, [`inboxWikiLinkNavigation.test.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.test.ts); core resolver — `wikiLinkInbox.test.ts`.

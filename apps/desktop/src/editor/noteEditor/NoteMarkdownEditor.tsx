@@ -26,7 +26,7 @@ import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
-import {wikiLinkInnerAtLineColumn} from './wikiLinkInnerAtLineColumn';
+import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -272,18 +272,19 @@ const NoteMarkdownEditorImpl = forwardRef<
       return runNativeClipboardPasteWhenWebDataEmpty(view);
     };
 
+    // Plain or Ctrl/Cmd+primary follows the link; Shift+primary is left to CodeMirror for selection extension.
     const onEditorClick = (e: MouseEvent, view: EditorView): boolean => {
       if (e.button !== 0) {
+        return false;
+      }
+      if (e.shiftKey) {
         return false;
       }
       const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
       if (pos == null) {
         return false;
       }
-      const line = view.state.doc.lineAt(pos);
-      const column = pos - line.from;
-      const lineText = view.state.doc.sliceString(line.from, line.to);
-      const inner = wikiLinkInnerAtLineColumn(lineText, column);
+      const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
       if (!inner) {
         return false;
       }
@@ -316,11 +317,7 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
       const sel = view.state.selection.main;
-      const head = sel.head;
-      const line = view.state.doc.lineAt(head);
-      const column = head - line.from;
-      const lineText = view.state.doc.sliceString(line.from, line.to);
-      const inner = wikiLinkInnerAtLineColumn(lineText, column);
+      const inner = wikiLinkInnerAtDocPosition(view.state.doc, sel.head);
       if (inner == null) {
         return false;
       }

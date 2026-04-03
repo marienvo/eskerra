@@ -77,7 +77,7 @@
 **Status (6A—desktop inbox MVP + keyboard parity):**
 - Core inbox-only wiki-link resolver in [`wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) with explicit `ambiguous` result.
 - Shell-owned open/create flow in [`inboxWikiLinkNavigation.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts), reusing existing inbox creation policy (`buildInboxMarkdownFromCompose` + `createInboxMarkdownNote`).
-- Editor in [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx): click and **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) activate the wiki link under the caret via the same callback as click; `[` close assist for `[[...]]`; highlights in source.
+- Editor in [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx): plain click, **Ctrl/Cmd+click**, and **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) activate the wiki link (caret inside `[[...]]` for the chord) via the same callback; **Shift+click** does not activate; `[` close assist for `[[...]]`; highlights in source.
 - Minimal `Inbox/` prefix support only (case-insensitive strip); no broader path semantics.
 
 **Goal:** Wiki links move from syntax-only to resolvable paths with a **single index owner**; editor asks a service, does not walk the vault.
@@ -88,7 +88,7 @@
 
 **Acceptance:** No direct vault directory walks for wiki targets inside `editor/`.
 
-**Still deferred after 6A:** backlinks, global indexing framework, fuzzy/ranked matching, ambiguity picker UI, optional mod+click policy, command-palette integration.
+**Still deferred after 6A:** backlinks, global indexing framework, fuzzy/ranked matching, ambiguity picker UI, command-palette integration.
 
 **Detailed phased plan (wiki-only):** [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md).
 
