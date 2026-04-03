@@ -19,7 +19,22 @@
 ## CodeMirror choices
 
 - **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, and a small view plugin to highlight `[[wiki-style]]` spans in the source. Optional styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
-- **Wiki links** in files remain plain `[[...]]` text; see [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts) for the mdast shape used in tooling/tests.
+
+### Wiki links (inbox, WL-0 / WL-1)
+
+- **On disk:** `[[...]]` stays plain Markdown. Tooling may parse to mdast via [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts).
+- **Scope:** Inbox targets only (resolver and navigation in `@notebox/core` + shell). The editor does not scan the vault; it calls `onWikiLinkActivate({ inner })`, implemented in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) (flush, then [`openOrCreateInboxWikiLinkTarget`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts)).
+- **Activate (same shell path):**
+  - **Click** a wiki link in the source.
+  - **Ctrl+Enter** on Linux/Windows or **Cmd+Enter** on macOS (**`Mod-Enter`** in CodeMirror), with the caret anywhere inside the `[[...]]` span on that line.
+- **Typing assist:** Typing `[` immediately after `[` inserts `[]]` and leaves the caret between the inner brackets (`[[|]]`).
+- **Caret / hit testing:** [`apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts) maps a line text + column to the raw link inner (including `target|display`).
+
+**Manual smoke (desktop inbox):**
+
+- From an open note, activate the same link via click and via **Mod-Enter**; both should open or create the same target.
+- While composing a new entry, activating a link still flushes through the workspace path above.
+- Ambiguous or unsupported targets continue to surface via the existing error banner (no picker yet).
 
 ## Vertical layout and click coordinates
 
@@ -42,3 +57,4 @@ Horizontal padding on the pane-level editor container (around the CodeMirror roo
 
 - Pure path/filename rules and layout constants are covered in `@notebox/core` (`attachmentPaths.test.ts`).
 - Markdown image line formatting is covered in `apps/desktop` (`formatVaultImageMarkdown.test.ts`).
+- Wiki link helpers: `apps/desktop` — `wikiLinkInnerAtLineColumn.test.ts`, [`inboxWikiLinkNavigation.test.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.test.ts); core resolver — `wikiLinkInbox.test.ts`.

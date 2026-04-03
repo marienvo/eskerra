@@ -1,0 +1,170 @@
+import {describe, expect, it} from 'vitest';
+
+import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
+
+import {openOrCreateInboxWikiLinkTarget} from './inboxWikiLinkNavigation';
+
+function createMemoryVaultFs(
+  seed: Array<[string, 'dir' | string]>,
+): {fs: VaultFilesystem; writes: Array<{uri: string; content: string}>} {
+  const dirs = new Set<string>();
+  const files = new Map<string, string>();
+  const writes: Array<{uri: string; content: string}> = [];
+
+  for (const [path, val] of seed) {
+    if (val === 'dir') {
+      dirs.add(path);
+    } else {
+      files.set(path, val);
+    }
+  }
+
+  const listFiles = async (directoryUri: string): Promise<VaultDirEntry[]> => {
+    const base = directoryUri.replace(/\/$/, '');
+    const prefix = `${base}/`;
+    const out: VaultDirEntry[] = [];
+    for (const d of dirs) {
+      if (d.startsWith(prefix) && d !== base) {
+        const rest = d.slice(prefix.length);
+        if (rest && !rest.includes('/')) {
+          out.push({
+            name: rest,
+            uri: d,
+            type: 'directory',
+            lastModified: null,
+          });
+        }
+      }
+    }
+    for (const [uri, _content] of files) {
+      if (uri.startsWith(prefix) && uri !== base) {
+        const rest = uri.slice(prefix.length);
+        if (rest && !rest.includes('/')) {
+          out.push({
+            name: rest,
+            uri,
+            type: 'file',
+            lastModified: null,
+          });
+        }
+      }
+    }
+    return out;
+  };
+
+  const fs: VaultFilesystem = {
+    exists: async uri => dirs.has(uri) || files.has(uri),
+    mkdir: async uri => {
+      dirs.add(uri.replace(/\/$/, ''));
+    },
+    readFile: async uri => {
+      const body = files.get(uri);
+      if (body === undefined) {
+        throw new Error(`missing: ${uri}`);
+      }
+      return body;
+    },
+    writeFile: async (uri, content, _opts) => {
+      files.set(uri, content);
+      writes.push({uri, content});
+    },
+    unlink: async uri => {
+      files.delete(uri);
+    },
+    listFiles,
+  };
+
+  return {fs, writes};
+}
+
+describe('openOrCreateInboxWikiLinkTarget', () => {
+  const vaultRoot = '/vault';
+
+  it('returns open when target matches a single inbox note', async () => {
+    const noteUri = `${vaultRoot}/Inbox/alpha-note.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [noteUri, '# Alpha\n'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'alpha note',
+      notes: [{name: 'alpha-note.md', uri: noteUri}],
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({kind: 'open', uri: noteUri});
+  });
+
+  it('creates a new inbox note when target does not exist', async () => {
+    const {fs, writes} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'brand new page',
+      notes: [],
+      vaultRoot,
+      fs,
+    });
+    expect(result.kind).toBe('created');
+    if (result.kind !== 'created') {
+      return;
+    }
+    expect(result.uri).toBe(`${vaultRoot}/Inbox/brand-new-page.md`);
+    expect(writes.some(w => w.uri === result.uri)).toBe(true);
+    expect(writes.some(w => w.uri === `${vaultRoot}/General/Inbox.md`)).toBe(true);
+  });
+
+  it('returns ambiguous when multiple note refs share the same stem', async () => {
+    const noteA = `${vaultRoot}/Inbox/dup.md`;
+    const noteB = `${vaultRoot}/Inbox/legacy/dup.md`;
+    const {fs} = createMemoryVaultFs([[vaultRoot, 'dir']]);
+    const rows = [
+      {name: 'dup.md', uri: noteA},
+      {name: 'dup.md', uri: noteB},
+    ] as const;
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'dup',
+      notes: rows,
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({
+      kind: 'ambiguous',
+      targetStem: 'dup',
+      title: 'dup',
+      notes: rows,
+    });
+  });
+
+  it('returns unsupported for path-like targets', async () => {
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'foo/bar',
+      notes: [],
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({
+      kind: 'unsupported',
+      reason: 'path_not_supported',
+    });
+  });
+
+  it('returns unsupported for empty target', async () => {
+    const {fs} = createMemoryVaultFs([[vaultRoot, 'dir']]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: '  ',
+      notes: [],
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({kind: 'unsupported', reason: 'empty_target'});
+  });
+});

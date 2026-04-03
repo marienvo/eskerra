@@ -25,10 +25,10 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Core:** [`packages/notebox-core/src/wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) — parse `[[target]]` / `[[target|display]]`, optional `Inbox/` prefix strip, stem match via `sanitizeFileName` + `stemFromMarkdownFileName`, explicit `open` / `create` / `ambiguous` / `unsupported`.
 - **Shell:** [`apps/desktop/src/lib/inboxWikiLinkNavigation.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts) — `openOrCreateInboxWikiLinkTarget` delegates creation to existing inbox compose policy.
 - **Workspace:** [`apps/desktop/src/hooks/useMainWindowWorkspace.ts`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) — wires activation, flush-before-navigate, `refreshNotes` after create, error surface for ambiguous and unsupported paths.
-- **Editor:** [`apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) — click-to-activate, `[` typing assist inserting `[]]` with caret between brackets, generic wiki highlight via [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts).
+- **Editor:** [`apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) — click-to-activate, **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) with caret inside `[[...]]`, `[` typing assist inserting `[]]` with caret between brackets, generic wiki highlight via [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts); line/column helper [`wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts).
 - **Tooling:** [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts) — mdast round-trip for tests/tooling.
 
-**Gaps vs stated near-term goals (honest):** `Ctrl+Enter` activation from caret inside a link is not verified as a committed requirement in code at this writing; unresolved vs resolved **distinct** styling is not implemented (single highlight class); `[[` autocomplete against notes is not implemented; backlinks and rename propagation are explicitly deferred in the masterplan.
+**Gaps vs stated near-term goals (honest):** unresolved vs resolved **distinct** styling is not implemented (single highlight class); `[[` autocomplete against notes is not implemented; backlinks and rename propagation are explicitly deferred in the masterplan; optional **mod+click** policy is not implemented.
 
 ---
 
@@ -79,7 +79,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 | Order | Phase id | Short name |
 |------|----------|------------|
 | ✓ done | **WL-0** | Inbox wiki MVP (resolve, open/create, click, `[` assist, highlight) |
-| 1 | **WL-1** | Activation parity (keyboard chord, optional mod+click policy) |
+| ✓ done | **WL-1** | Activation parity — **keyboard** (`Mod-Enter`); optional mod+click still open |
 | 2 | **WL-2** | Resolved vs unresolved styling (data from shell, decoration in editor) |
 | 3 | **WL-3** | `[[` autocomplete (inbox-scoped; candidate list from shell) |
 | 4 | **WL-4** | Backlinks + minimal forward-link **read** model |
@@ -97,6 +97,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 ### WL-1 — Activation parity
 
 - **Goal:** Click and **keyboard** activation behave the same for a wiki link under the caret (e.g. `Ctrl+Enter` on Linux/Windows, consistent with desktop patterns; exact chord can follow platform table in eventual command registry).
+- **Desktop status:** Implemented as **`Mod-Enter`** in [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) (Ctrl+Enter on Linux/Windows, Cmd+Enter on macOS), using the same `onWikiLinkActivate` path as click. Optional **mod+click** remains unspecified.
 - **Why now:** Finishes “first-class” feel before investing in heavier data plumbing.
 - **Scope:** Editor detects “caret inside `[[...]]`” (reuse line/column logic akin to click); dispatch to existing `onWikiLinkActivate`. Document chord in desktop editor spec if stabilized.
 - **Excludes:** New resolve semantics; vault scan; new dependencies.
@@ -158,19 +159,19 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 
 ## Do next / do later (summary)
 
-| Do next (after WL-0) | Do later |
+| Do next (after WL-0 / WL-1 keyboard) | Do later |
 |----------------------|----------|
-| WL-1 keyboard activation | WL-5 rename engine |
-| WL-2 resolved/unresolved | Durable index files in `.notebox` (only with explicit product + retention) |
-| WL-3 autocomplete | Cross-vault or arbitrary path links |
-| WL-4 backlinks | WL-6 path grammar until required |
-| WL-6 ambiguity UX when pain is felt | Full-text search product |
+| WL-2 resolved/unresolved | WL-5 rename engine |
+| WL-3 autocomplete | Durable index files in `.notebox` (only with explicit product + retention) |
+| WL-4 backlinks | Cross-vault or arbitrary path links |
+| WL-6 ambiguity UX when pain is felt | Full-text search product; WL-6 path grammar until required |
+| (optional) WL-1 mod+click policy | — |
 
 ---
 
 ## Recommended next step
 
-- **Immediately after the current wiki-link MVP (WL-0 / masterplan 6A):** **WL-1** (keyboard activation parity with click) and **WL-2** (resolved vs unresolved visuals). Both are low risk, reinforce ownership boundaries, and make the feature feel complete before heavier infrastructure.
+- **After WL-0 + WL-1 keyboard:** **WL-2** (resolved vs unresolved visuals). Low risk relative to indexing; makes the feature easier to scan before autocomplete (**WL-3**).
 
 - **Should “Phase 4A” (first indexing / backlinks, i.e. **WL-4**) come before autocomplete (**WL-3**)?** **Default: no.** Autocomplete can be satisfied with the **existing inbox note list** refreshed by current workspace behavior. **WL-4** introduces recurring extraction/index **read** paths and refresh policy; it is valuable but heavier than WL-3 for incremental product gain. If leadership explicitly prioritizes graph navigation over authoring speed, swap the order.
 

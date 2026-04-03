@@ -26,6 +26,7 @@ import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkHighlight} from './wikiLinkCodemirror';
+import {wikiLinkInnerAtLineColumn} from './wikiLinkInnerAtLineColumn';
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -53,22 +54,6 @@ export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
   loadMarkdown: (markdown: string) => void;
 };
-
-const WIKI_LINK_REGEX = /\[\[([^[\]]+)\]\]/g;
-
-function wikiLinkInnerAtLineColumn(lineText: string, column: number): string | null {
-  WIKI_LINK_REGEX.lastIndex = 0;
-  let match = WIKI_LINK_REGEX.exec(lineText);
-  while (match) {
-    const start = match.index;
-    const end = start + match[0].length;
-    if (column >= start && column < end) {
-      return match[1];
-    }
-    match = WIKI_LINK_REGEX.exec(lineText);
-  }
-  return null;
-}
 
 const NoteMarkdownEditorImpl = forwardRef<
   NoteMarkdownEditorHandle,
@@ -329,6 +314,20 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
+      const sel = view.state.selection.main;
+      const head = sel.head;
+      const line = view.state.doc.lineAt(head);
+      const column = head - line.from;
+      const lineText = view.state.doc.sliceString(line.from, line.to);
+      const inner = wikiLinkInnerAtLineColumn(lineText, column);
+      if (inner == null) {
+        return false;
+      }
+      onWikiLinkActivateRef.current({inner});
+      return true;
+    };
+
     const extensions = [
       markdown(),
       ...noteMarkdownEditorAppearance,
@@ -345,6 +344,10 @@ const NoteMarkdownEditorImpl = forwardRef<
         {
           key: '[',
           run: runWikiLinkOpenAssist,
+        },
+        {
+          key: 'Mod-Enter',
+          run: runWikiLinkActivateFromCaret,
         },
         indentWithTab,
         ...defaultKeymap,
