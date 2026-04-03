@@ -109,7 +109,8 @@ html.tauri-main-chrome {
   background: transparent;
 }
 
-html.tauri-main-chrome body {
+html.tauri-main-chrome body,
+html.tauri-main-chrome #root {
   background: transparent;
 }
 
