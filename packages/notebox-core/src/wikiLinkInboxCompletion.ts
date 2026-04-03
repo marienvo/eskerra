@@ -1,4 +1,4 @@
-import {getNoteTitle, stemFromMarkdownFileName} from './inboxMarkdown';
+import {stemFromMarkdownFileName} from './inboxMarkdown';
 import type {InboxWikiLinkNoteRef} from './wikiLinkInbox';
 
 /** Max wiki-link completions returned for one query (popover size / perf). */
@@ -36,10 +36,9 @@ export function buildInboxWikiLinkCompletionCandidates(
 
   const out = rows.map(note => {
     const stem = stemFromMarkdownFileName(note.name);
-    const insertTarget = getNoteTitle(note.name);
     return {
-      label: insertTarget,
-      insertTarget,
+      label: stem,
+      insertTarget: stem,
       detail: stem,
     };
   });

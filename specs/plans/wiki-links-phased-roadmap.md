@@ -22,7 +22,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 
 **Already in tree (MVP slice “6A” in the masterplan):**
 
-- **Core:** [`packages/notebox-core/src/wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) — parse `[[target]]` / `[[target|display]]`, optional `Inbox/` prefix strip, stem match via `sanitizeFileName` + `stemFromMarkdownFileName`, explicit `open` / `create` / `ambiguous` / `unsupported`.
+- **Core:** [`packages/notebox-core/src/wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) — parse `[[target]]` / `[[target|display]]`, optional `Inbox/` prefix strip, and exact case-sensitive match against `stemFromMarkdownFileName`; explicit `open` / `create` / `ambiguous` / `unsupported`. `sanitizeFileName` is used for create-time filesystem safety only (keeps case and spaces, strips filesystem-dangerous characters).
 - **Shell:** [`apps/desktop/src/lib/inboxWikiLinkNavigation.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts) — `openOrCreateInboxWikiLinkTarget` delegates creation to existing inbox compose policy.
 - **Workspace:** [`apps/desktop/src/hooks/useMainWindowWorkspace.ts`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) — wires activation, flush-before-navigate, `refreshNotes` after create, error surface for ambiguous and unsupported paths.
 - **Editor:** [`apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) — click-to-activate (plain primary or **Ctrl/Cmd+primary**; not **Shift+primary**, reserved for selection), **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) with caret inside `[[...]]`, `[` typing assist inserting `[]]` with caret between brackets, resolved/unresolved wiki highlight via [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts), inbox `[[` autocomplete via [`wikiLinkAutocomplete.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkAutocomplete.ts); line/column helper [`wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts); doc-position helper [`wikiLinkInnerAtDocPosition.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtDocPosition.ts).
@@ -67,7 +67,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 | Topic | What it is | Primary owner | Typical dependency |
 |-------|------------|---------------|---------------------|
 | **Resolve / open / create** | Map `[[inner]]` → existing note URI or create path using **current** naming rules | Shell + core pure resolver | In-memory note list (already refreshed for inbox) |
-| **Autocomplete** | Suggest note titles while typing inside `[[` | Editor UI + shell-provided **candidate list** (or small snapshot) | Same note list as resolve for inbox scope; **does not require** a backlink index |
+| **Autocomplete** | Suggest exact note stems while typing inside `[[` | Editor UI + shell-provided **candidate list** (or small snapshot) | Same note list as resolve for inbox scope; **does not require** a backlink index |
 | **Backlinks** | “Notes that link **to** this note” (reverse direction) | Shell-owned **read** index or on-demand scan **off hot path** | Forward link extract per file or maintained forward map; **read-mostly**, no obligation to rewrite files |
 | **Rename propagation** | When a note **file** changes identity (rename), **mutate** other files’ Markdown to preserve intent | Shell orchestration + core pure rewrite | Reliable **forward** reference map or conservative vault scan; **writes** across many files; ordering and failure handling matter |
 
@@ -121,7 +121,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 
 ### WL-3 — `[[` autocomplete
 
-- **Goal:** After typing `[[`, offer completions against **existing inbox notes** (title/stem match), consistent with create/sanitize rules.
+- **Goal:** After typing `[[`, offer completions against **existing inbox notes** using the exact stored stem so accepted completions resolve case-sensitively.
 - **Why now:** High authoring value; still inbox-scoped like WL-0 resolver.
 - **Scope:** CodeMirror completion source fed by shell-provided list; may include display form `[[stem|label]]` policy documented with core helpers; respect performance (defer population after first paint principles).
 - **Excludes:** Full-text search; fuzzy vault-wide ranking product; plugin extensibility.

@@ -15,7 +15,7 @@ const NOTES = [
 describe('buildInboxWikiLinkCompletionCandidates', () => {
   it('sorts by label and carries stem detail', () => {
     const got = buildInboxWikiLinkCompletionCandidates(NOTES);
-    expect(got.map(c => c.label)).toEqual(['alpha note', 'beta']);
+    expect(got.map(c => c.label)).toEqual(['alpha-note', 'beta']);
     expect(got.map(c => c.detail)).toEqual(['alpha-note', 'beta']);
   });
 
@@ -63,8 +63,8 @@ describe('filterInboxWikiLinkCompletionCandidates', () => {
   });
 
   it('matches label prefix case-insensitively', () => {
-    const got = filterInboxWikiLinkCompletionCandidates(candidates, 'AL');
-    expect(got.map(c => c.label)).toEqual(['alpha note']);
+    const got = filterInboxWikiLinkCompletionCandidates(candidates, 'ALPHA-');
+    expect(got.map(c => c.label)).toEqual(['alpha-note']);
   });
 
   it('matches stem detail prefix', () => {

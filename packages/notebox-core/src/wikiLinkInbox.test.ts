@@ -9,10 +9,22 @@ const NOTES = [
 
 describe('resolveInboxWikiLinkTarget', () => {
   it('opens a single exact stem match', () => {
-    const got = resolveInboxWikiLinkTarget(NOTES, 'alpha note');
+    const got = resolveInboxWikiLinkTarget(NOTES, 'alpha-note');
     expect(got).toEqual({
       kind: 'open',
       note: {name: 'alpha-note.md', uri: '/vault/Inbox/alpha-note.md'},
+    });
+  });
+
+  it('matches case-sensitively against the exact stem', () => {
+    const rows = [{name: 'Alpha Note.md', uri: '/vault/Inbox/Alpha Note.md'}];
+    expect(resolveInboxWikiLinkTarget(rows, 'Alpha Note')).toEqual({
+      kind: 'open',
+      note: rows[0],
+    });
+    expect(resolveInboxWikiLinkTarget(rows, 'alpha note')).toEqual({
+      kind: 'create',
+      title: 'alpha note',
     });
   });
 
@@ -25,8 +37,8 @@ describe('resolveInboxWikiLinkTarget', () => {
   });
 
   it('returns create when no match exists', () => {
-    const got = resolveInboxWikiLinkTarget(NOTES, 'new page');
-    expect(got).toEqual({kind: 'create', title: 'new page'});
+    const got = resolveInboxWikiLinkTarget(NOTES, 'New Page');
+    expect(got).toEqual({kind: 'create', title: 'New Page'});
   });
 
   it('uses display text as title for create', () => {

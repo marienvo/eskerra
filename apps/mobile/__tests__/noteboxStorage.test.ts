@@ -480,12 +480,12 @@ describe('noteboxStorage', () => {
     ] as never);
 
     await expect(createNote(baseUri, ' Team Ideas! ', 'first line')).resolves.toMatchObject({
-      name: 'team-ideas.md',
-      uri: `${baseUri}/Inbox/team-ideas.md`,
+      name: 'Team Ideas!.md',
+      uri: `${baseUri}/Inbox/Team Ideas!.md`,
     });
     expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
     expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/Inbox/team-ideas.md`,
+      `${baseUri}/Inbox/Team Ideas!.md`,
       'first line\n',
       {
         encoding: 'utf8',
@@ -517,21 +517,21 @@ describe('noteboxStorage', () => {
     listFilesMock.mockResolvedValueOnce([
       {
         lastModified: 1,
-        name: 'team-ideas.md',
+        name: 'Team Ideas!.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!.md`,
       },
       {
         lastModified: 2,
-        name: 'team-ideas-2.md',
+        name: 'Team Ideas!-2.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas-2.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!-2.md`,
       },
       {
         lastModified: 3,
-        name: 'team-ideas-3.md',
+        name: 'Team Ideas!-3.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas-3.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!-3.md`,
       },
     ] as never);
 
@@ -540,15 +540,15 @@ describe('noteboxStorage', () => {
         baseUri,
         ' Team Ideas! ',
         'first line',
-        new Set(['team-ideas.md', 'team-ideas-2.md']),
+        new Set(['Team Ideas!.md', 'Team Ideas!-2.md']),
       ),
     ).resolves.toMatchObject({
-      name: 'team-ideas-3.md',
-      uri: `${baseUri}/Inbox/team-ideas-3.md`,
+      name: 'Team Ideas!-3.md',
+      uri: `${baseUri}/Inbox/Team Ideas!-3.md`,
     });
 
     expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/Inbox/team-ideas-3.md`,
+      `${baseUri}/Inbox/Team Ideas!-3.md`,
       'first line\n',
       {
         encoding: 'utf8',
@@ -565,48 +565,48 @@ describe('noteboxStorage', () => {
     listFilesMock.mockResolvedValueOnce([
       {
         lastModified: 2,
-        name: 'team-ideas.md',
+        name: 'Team Ideas!.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!.md`,
       },
       {
         lastModified: 1,
-        name: 'team-ideas-2.md',
+        name: 'Team Ideas!-2.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas-2.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!-2.md`,
       },
     ] as never);
     listFilesMock.mockResolvedValueOnce([
       {
         lastModified: 3,
-        name: 'team-ideas-3.md',
+        name: 'Team Ideas!-3.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas-3.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!-3.md`,
       },
       {
         lastModified: 2,
-        name: 'team-ideas.md',
+        name: 'Team Ideas!.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!.md`,
       },
       {
         lastModified: 1,
-        name: 'team-ideas-2.md',
+        name: 'Team Ideas!-2.md',
         type: 'file',
-        uri: `${baseUri}/Inbox/team-ideas-2.md`,
+        uri: `${baseUri}/Inbox/Team Ideas!-2.md`,
       },
     ] as never);
 
     await expect(
       createNote(baseUri, ' Team Ideas! ', 'first line', new Set()),
     ).resolves.toMatchObject({
-      name: 'team-ideas-3.md',
-      uri: `${baseUri}/Inbox/team-ideas-3.md`,
+      name: 'Team Ideas!-3.md',
+      uri: `${baseUri}/Inbox/Team Ideas!-3.md`,
     });
 
-    expect(existsMock).toHaveBeenCalledWith(`${baseUri}/Inbox/team-ideas.md`);
+    expect(existsMock).toHaveBeenCalledWith(`${baseUri}/Inbox/Team Ideas!.md`);
     expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/Inbox/team-ideas-3.md`,
+      `${baseUri}/Inbox/Team Ideas!-3.md`,
       'first line\n',
       {
         encoding: 'utf8',

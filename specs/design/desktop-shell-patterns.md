@@ -18,7 +18,7 @@ Creating a new inbox note uses the **same Editor pane UI** as editing (single mu
 
 - Pane header title: **New entry**.
 - Trailing control: **Material `clear`**, ghost icon button (same treatment as **Add entry** in the Log header), to **cancel** compose without saving.
-- **Compose model** matches the Android **Add note** screen: the **first line** is the title (drives the **`.md` filename stem** via `sanitizeFileName`); the rest is body. On save, the file is written as `# Title` + body, using **`parseComposeInput`**, **`buildInboxMarkdownFromCompose`**, and related helpers from **`@notebox/core`** (shared with the mobile app).
+- **Compose model** matches the Android **Add note** screen: the **first line** is the title (drives the **`.md` filename stem** via `sanitizeFileName`, which preserves case and spaces but strips filesystem-dangerous characters); the rest is body. On save, the file is written as `# Title` + body, using **`parseComposeInput`**, **`buildInboxMarkdownFromCompose`**, and related helpers from **`@notebox/core`** (shared with the mobile app).
 
 ## Resizable main splits (Inbox, Podcasts)
 

@@ -1,4 +1,4 @@
-import {sanitizeFileName, stemFromMarkdownFileName} from './inboxMarkdown';
+import {stemFromMarkdownFileName} from './inboxMarkdown';
 
 export type InboxWikiLinkNoteRef = {
   name: string;
@@ -63,7 +63,7 @@ function normalizeTargetToStem(targetText: string): {
   return {
     kind: 'ok',
     pathlessTarget,
-    stem: sanitizeFileName(pathlessTarget),
+    stem: pathlessTarget,
   };
 }
 

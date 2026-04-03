@@ -87,7 +87,7 @@ describe('inboxWikiLinkTargetIsResolved', () => {
     expect(
       inboxWikiLinkTargetIsResolved(
         [{name: 'alpha-note.md', uri: noteUri}],
-        'alpha note',
+        'alpha-note',
       ),
     ).toBe(true);
   });
@@ -120,7 +120,7 @@ describe('inboxWikiLinkTargetIsResolved', () => {
     expect(
       inboxWikiLinkTargetIsResolved(
         [{name: 'alpha-note.md', uri: noteUri}],
-        'alpha note|Label',
+        'alpha-note|Label',
       ),
     ).toBe(true);
   });
@@ -138,7 +138,7 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
       [noteUri, '# Alpha\n'],
     ]);
     const result = await openOrCreateInboxWikiLinkTarget({
-      inner: 'alpha note',
+      inner: 'alpha-note',
       notes: [{name: 'alpha-note.md', uri: noteUri}],
       vaultRoot,
       fs,
@@ -162,9 +162,27 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
     if (result.kind !== 'created') {
       return;
     }
-    expect(result.uri).toBe(`${vaultRoot}/Inbox/brand-new-page.md`);
+    expect(result.uri).toBe(`${vaultRoot}/Inbox/brand new page.md`);
     expect(writes.some(w => w.uri === result.uri)).toBe(true);
     expect(writes.some(w => w.uri === `${vaultRoot}/General/Inbox.md`)).toBe(true);
+  });
+
+  it('strips filesystem-dangerous characters when creating files', async () => {
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'Hello: World',
+      notes: [],
+      vaultRoot,
+      fs,
+    });
+    expect(result).toEqual({
+      kind: 'created',
+      uri: `${vaultRoot}/Inbox/Hello World.md`,
+    });
   });
 
   it('returns ambiguous when multiple note refs share the same stem', async () => {

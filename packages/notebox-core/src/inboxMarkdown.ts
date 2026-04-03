@@ -19,13 +19,13 @@ export function getNoteTitle(noteName: string): string {
 }
 
 export function sanitizeFileName(rawName: string): string {
-  const normalized = rawName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_ ]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '');
+  const withoutControlChars = Array.from(rawName.trim())
+    .filter(ch => ch >= ' ' && ch !== '\u007f')
+    .join('');
+  const normalized = withoutControlChars
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[. ]+|[. ]+$/g, '');
 
   return normalized || `note-${Date.now()}`;
 }
