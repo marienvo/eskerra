@@ -25,10 +25,11 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Core:** [`packages/notebox-core/src/wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) — parse `[[target]]` / `[[target|display]]`, optional `Inbox/` prefix strip, stem match via `sanitizeFileName` + `stemFromMarkdownFileName`, explicit `open` / `create` / `ambiguous` / `unsupported`.
 - **Shell:** [`apps/desktop/src/lib/inboxWikiLinkNavigation.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts) — `openOrCreateInboxWikiLinkTarget` delegates creation to existing inbox compose policy.
 - **Workspace:** [`apps/desktop/src/hooks/useMainWindowWorkspace.ts`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) — wires activation, flush-before-navigate, `refreshNotes` after create, error surface for ambiguous and unsupported paths.
-- **Editor:** [`apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) — click-to-activate (plain primary or **Ctrl/Cmd+primary**; not **Shift+primary**, reserved for selection), **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) with caret inside `[[...]]`, `[` typing assist inserting `[]]` with caret between brackets, generic wiki highlight via [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts); line/column helper [`wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts); doc-position helper [`wikiLinkInnerAtDocPosition.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtDocPosition.ts).
+- **Editor:** [`apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) — click-to-activate (plain primary or **Ctrl/Cmd+primary**; not **Shift+primary**, reserved for selection), **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) with caret inside `[[...]]`, `[` typing assist inserting `[]]` with caret between brackets, resolved/unresolved wiki highlight via [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts), inbox `[[` autocomplete via [`wikiLinkAutocomplete.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkAutocomplete.ts); line/column helper [`wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts); doc-position helper [`wikiLinkInnerAtDocPosition.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtDocPosition.ts).
+- **Completion data (WL-3):** [`packages/notebox-core/src/wikiLinkInboxCompletion.ts`](../../packages/notebox-core/src/wikiLinkInboxCompletion.ts) — `buildInboxWikiLinkCompletionCandidates` / `filterInboxWikiLinkCompletionCandidates`; shell supplies candidates from the inbox note list ([`InboxTab.tsx`](../../apps/desktop/src/components/InboxTab.tsx)).
 - **Tooling:** [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts) — mdast round-trip for tests/tooling.
 
-**Gaps vs stated near-term goals (honest):** unresolved vs resolved **distinct** styling is not implemented (single highlight class); `[[` autocomplete against notes is not implemented; backlinks and rename propagation are explicitly deferred in the masterplan.
+**Gaps vs stated near-term goals (honest):** backlinks and rename propagation are explicitly deferred in the masterplan; autocomplete does not yet cover the `target|display` display segment or ambiguous-stem picker UX (WL-6).
 
 **WL-1 closure:** Keyboard (`Mod-Enter`) and **Ctrl/Cmd+click** use the same `onWikiLinkActivate` path as plain click; **Shift+click** does not activate (selection extension). See [`desktop-editor.md`](../architecture/desktop-editor.md).
 
@@ -82,8 +83,8 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 |------|----------|------------|
 | ✓ done | **WL-0** | Inbox wiki MVP (resolve, open/create, click, `[` assist, highlight) |
 | ✓ done | **WL-1** | Activation parity — **keyboard** (`Mod-Enter`); **Ctrl/Cmd+click** same shell path as plain click (`Shift+click` does not activate) |
-| 2 | **WL-2** | Resolved vs unresolved styling (data from shell, decoration in editor) |
-| 3 | **WL-3** | `[[` autocomplete (inbox-scoped; candidate list from shell) |
+| ✓ done | **WL-2** | Resolved vs unresolved styling (data from shell, decoration in editor) |
+| ✓ done | **WL-3** | `[[` autocomplete (inbox-scoped; candidate list from shell) |
 | 4 | **WL-4** | Backlinks + minimal forward-link **read** model |
 | 5 | **WL-5** | Rename-safe link maintenance (vault-wide rewrite engine) |
 | 6 | **WL-6** | Smarter resolution (ambiguity UI, optional path rules—not a global search platform) |
@@ -116,6 +117,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Ownership:** Shell computes truth from **already-maintained** inbox index; editor renders.
 - **Risks / complexity:** **Small–medium**—decoration updates must stay cheap on large notes; avoid running full markdown AST on every keystroke (string/regex-based Decoration is consistent with current `wikiLinkCodemirror` approach, with optional debounced reconcile).
 - **Acceptance:** Creating a note updates unresolved→resolved after the same refresh path used today; purely pathological performance checked on a long note with many `[[` spans (manual or simple benchmark).
+- **Desktop status:** Implemented: [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts), [`InboxTab.tsx`](../../apps/desktop/src/components/InboxTab.tsx) + [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) (`wikiLinkTargetIsResolved`). See [`desktop-editor.md`](../architecture/desktop-editor.md).
 
 ### WL-3 — `[[` autocomplete
 
@@ -126,6 +128,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Ownership:** Editor implements Completion UI; shell passes candidates; core may expose normalize/compare helpers shared with resolver.
 - **Risks / complexity:** **Medium**—UX (trigger characters, merge with Markdown mode), large vault lists (cap, prefix-only first).
 - **Acceptance:** Typing `[[` then a few letters narrows inbox notes; accepting a completion inserts a link that `resolveInboxWikiLinkTarget` would classify as `open` for that note.
+- **Desktop status:** Implemented: `@codemirror/autocomplete` via [`wikiLinkAutocomplete.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkAutocomplete.ts); candidates from [`wikiLinkInboxCompletion.ts`](../../packages/notebox-core/src/wikiLinkInboxCompletion.ts), wired in [`InboxTab.tsx`](../../apps/desktop/src/components/InboxTab.tsx). Completions apply only in the wiki **target** segment (before `|`). Duplicate Markdown stems are skipped so each suggestion resolves uniquely.
 
 ### WL-4 — Backlinks and first forward-link read model
 

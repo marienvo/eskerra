@@ -18,9 +18,9 @@
 
 ## CodeMirror choices
 
-- **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, and a view plugin to highlight `[[wiki-style]]` spans in the source (**resolved** vs **unresolved** inbox targets, WL-2). Styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
+- **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, `@codemirror/autocomplete` for inbox wiki targets (WL-3), and a view plugin to highlight `[[wiki-style]]` spans in the source (**resolved** vs **unresolved** inbox targets, WL-2). Styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
 
-### Wiki links (inbox, WL-0 / WL-1 / WL-2)
+### Wiki links (inbox, WL-0 / WL-1 / WL-2 / WL-3)
 
 - **On disk:** `[[...]]` stays plain Markdown. Tooling may parse to mdast via [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts).
 - **Scope:** Inbox targets only (resolver and navigation in `@notebox/core` + shell). The editor does not scan the vault; it calls `onWikiLinkActivate({ inner })`, implemented in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) (flush, then [`openOrCreateInboxWikiLinkTarget`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts)).
@@ -31,6 +31,7 @@
   - **Shift+click** is intentionally not handled by the wiki-link hook so CodeMirror can extend the selection across link text.
   - **Ctrl+Enter** on Linux/Windows or **Cmd+Enter** on macOS (**`Mod-Enter`** in CodeMirror), with the caret anywhere inside the `[[...]]` span on that line.
 - **Typing assist:** Typing `[` immediately after `[` inserts `[]]` and leaves the caret between the inner brackets (`[[|]]`).
+- **Autocomplete (WL-3):** With the caret in the **target** segment after `[[` (before any `|` or `]`), CodeMirror suggests existing inbox notes. [`InboxTab`](../../apps/desktop/src/components/InboxTab.tsx) builds candidates via [`buildInboxWikiLinkCompletionCandidates`](../../packages/notebox-core/src/wikiLinkInboxCompletion.ts) from the current note list; [`NoteMarkdownEditor`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) passes them into [`wikiLinkAutocomplete.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkAutocomplete.ts). Suggestions are prefix-filtered (case-insensitive) and capped (`WIKI_LINK_COMPLETION_MAX_OPTIONS`). Notes that share the same Markdown stem with another note are omitted so each completion resolves with `resolveInboxWikiLinkTarget` to **`open`** (ambiguous stems have no suggestion until WL-6-style UX).
 - **Caret / hit testing:** [`apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtLineColumn.ts) maps a line text + column to the raw link inner (including `target|display`). Document positions use [`wikiLinkInnerAtDocPosition.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkInnerAtDocPosition.ts) (keyboard activation and click hit testing).
 - **IME:** If an input method editor is composing text inside `[[...]]`, **`Mod-Enter`** may be consumed by the IME instead of activating the link. Verify with a manual spot check when changing editor or platform input stacks; file a follow-up if activation fails under IME.
 
@@ -63,4 +64,4 @@ Horizontal padding on the pane-level editor container (around the CodeMirror roo
 
 - Pure path/filename rules and layout constants are covered in `@notebox/core` (`attachmentPaths.test.ts`).
 - Markdown image line formatting is covered in `apps/desktop` (`formatVaultImageMarkdown.test.ts`).
-- Wiki link helpers: `apps/desktop` — `wikiLinkInnerAtLineColumn.test.ts`, `wikiLinkInnerAtDocPosition.test.ts`, [`inboxWikiLinkNavigation.test.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.test.ts); core resolver — `wikiLinkInbox.test.ts`.
+- Wiki link helpers: `apps/desktop` — `wikiLinkInnerAtLineColumn.test.ts`, `wikiLinkInnerAtDocPosition.test.ts`, [`inboxWikiLinkNavigation.test.ts`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.test.ts); core resolver — `wikiLinkInbox.test.ts`; core completion list — `wikiLinkInboxCompletion.test.ts`.

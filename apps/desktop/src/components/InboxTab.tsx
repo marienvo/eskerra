@@ -8,6 +8,7 @@ import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
+  buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
   formatRelativeCalendarLabel,
   getInboxTileBackgroundColor,
@@ -79,6 +80,14 @@ export function InboxTab({
       inboxWikiLinkTargetIsResolved(
         notes.map(n => ({name: n.name, uri: n.uri})),
         inner,
+      ),
+    [notes],
+  );
+
+  const wikiLinkCompletionCandidates = useMemo(
+    () =>
+      buildInboxWikiLinkCompletionCandidates(
+        notes.map(n => ({name: n.name, uri: n.uri})),
       ),
     [notes],
   );
@@ -266,6 +275,7 @@ export function InboxTab({
                     onEditorError={onEditorError}
                     onWikiLinkActivate={onWikiLinkActivate}
                     wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                    wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                     onSaveShortcut={onSaveShortcut}
                     placeholder={
                       composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'

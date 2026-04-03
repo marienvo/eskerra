@@ -16,6 +16,8 @@ import {
   useState,
 } from 'react';
 
+import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
+
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
 import {
@@ -25,8 +27,12 @@ import {
 import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+
+const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
+  [];
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -42,6 +48,8 @@ export type NoteMarkdownEditorProps = {
   onWikiLinkActivate: (payload: {inner: string}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one inbox note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
+  /** Shell-provided inbox notes for `[[` autocomplete (WL-3). */
+  wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
   placeholder: string;
@@ -70,6 +78,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onEditorError,
     onWikiLinkActivate,
     wikiLinkTargetIsResolved,
+    wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
     placeholder: placeholderText,
     busy,
@@ -115,6 +124,9 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const resolveVaultImagePreviewUrlRef = useRef(resolveVaultImagePreviewUrl);
   resolveVaultImagePreviewUrlRef.current = resolveVaultImagePreviewUrl;
+
+  const wikiLinkCompletionCandidatesRef = useRef(wikiLinkCompletionCandidates);
+  wikiLinkCompletionCandidatesRef.current = wikiLinkCompletionCandidates;
 
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
@@ -368,6 +380,9 @@ const NoteMarkdownEditorImpl = forwardRef<
       wikiLinkCompartment.of(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
       ),
+      wikiLinkAutocompleteExtension(
+        () => wikiLinkCompletionCandidatesRef.current,
+      ),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
         activeNotePath: activeNotePathRef,
@@ -394,6 +409,9 @@ const NoteMarkdownEditorImpl = forwardRef<
         },
         '.cm-content': {
           caretColor: 'inherit',
+        },
+        '.cm-tooltip.cm-tooltip-autocomplete': {
+          fontFamily: 'inherit',
         },
         '&.cm-focused .cm-cursor': {
           borderLeftColor: 'inherit',

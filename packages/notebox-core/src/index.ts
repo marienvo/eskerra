@@ -29,6 +29,12 @@ export {
   type ParsedWikiLinkInner,
 } from './wikiLinkInbox';
 export {
+  buildInboxWikiLinkCompletionCandidates,
+  filterInboxWikiLinkCompletionCandidates,
+  WIKI_LINK_COMPLETION_MAX_OPTIONS,
+  type InboxWikiLinkCompletionCandidate,
+} from './wikiLinkInboxCompletion';
+export {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
