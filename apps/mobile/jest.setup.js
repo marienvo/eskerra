@@ -88,6 +88,11 @@ jest.mock('react-native-keyboard-controller', () => {
   };
 });
 
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({children}) => children,
+  useSafeAreaInsets: () => ({top: 0, right: 0, bottom: 0, left: 0}),
+}));
+
 /**
  * Single AsyncStorage mock for the whole Jest run. Per-file jest.mock factories race for "first
  * registration" across workers; an incomplete mock breaks hooks that need setItem (for example

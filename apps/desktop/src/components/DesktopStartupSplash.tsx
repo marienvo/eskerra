@@ -9,8 +9,13 @@ export function DesktopStartupSplash() {
       className="desktop-startup-splash"
       style={{backgroundImage: `url("${SPLASH_SRC}")`}}
       aria-busy="true"
-      aria-label="Loading"
-      role="img"
-    />
+      aria-live="polite"
+      aria-label="Loading Eskerra">
+      <div className="desktop-startup-splash__brand-top">
+        <div className="desktop-startup-splash__title">Eskerra</div>
+        <div className="desktop-startup-splash__version">{__DESKTOP_APP_VERSION__}</div>
+      </div>
+      <div className="desktop-startup-splash__brand-bottom">Made in Rotterdam</div>
+    </div>
   );
 }
