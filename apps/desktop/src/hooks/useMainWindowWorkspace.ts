@@ -71,11 +71,20 @@ export type UseMainWindowWorkspaceResult = {
   startNewEntry: () => void;
   cancelNewEntry: () => void;
   selectNote: (uri: string) => void;
+  /** Applies persisted inbox shell state after hydration/layout restore. */
+  applyRestoredInboxState: (inbox: {
+    composingNewEntry: boolean;
+    selectedUri: string | null;
+  }) => void;
   submitNewEntry: () => Promise<void>;
   /** Persists the open inbox note if needed (Ctrl/Cmd+S, same as auto-save flush). Does not set `busy`. */
   saveNote: () => Promise<void>;
+  /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
+  onInboxSaveShortcut: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
+  /** Void-returning dispatch wrapper for editor wiring. */
+  dispatchWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => Promise<void>;
   deleteNote: (uri: string) => Promise<void>;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -439,6 +448,14 @@ export function useMainWindowWorkspace(options: {
 
   const saveNote = flushInboxSave;
 
+  const onInboxSaveShortcut = useCallback(() => {
+    if (composingNewEntryRef.current) {
+      void submitNewEntry();
+    } else {
+      void saveNote();
+    }
+  }, [submitNewEntry, saveNote]);
+
   const deleteNote = useCallback(
     async (uri: string) => {
       if (!vaultRoot) {
@@ -524,6 +541,26 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, notes, fs, refreshNotes, inboxEditorRef],
   );
 
+  const dispatchWikiLinkActivate = useCallback(
+    (payload: {inner: string; at: number}) => {
+      void onWikiLinkActivate(payload);
+    },
+    [onWikiLinkActivate],
+  );
+
+  const applyRestoredInboxState = useCallback(
+    (inbox: {composingNewEntry: boolean; selectedUri: string | null}) => {
+      if (inbox.composingNewEntry) {
+        startNewEntry();
+        return;
+      }
+      if (inbox.selectedUri && notes.some(n => n.uri === inbox.selectedUri)) {
+        selectNote(inbox.selectedUri);
+      }
+    },
+    [notes, startNewEntry, selectNote],
+  );
+
   return {
     vaultRoot,
     vaultSettings,
@@ -545,9 +582,12 @@ export function useMainWindowWorkspace(options: {
     startNewEntry,
     cancelNewEntry,
     selectNote,
+    applyRestoredInboxState,
     submitNewEntry,
     saveNote,
+    onInboxSaveShortcut,
     flushInboxSave,
+    dispatchWikiLinkActivate,
     onWikiLinkActivate,
     deleteNote,
     initialVaultHydrateAttemptDone,

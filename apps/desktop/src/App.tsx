@@ -120,10 +120,11 @@ export default function App() {
     startNewEntry,
     cancelNewEntry,
     selectNote,
+    applyRestoredInboxState,
     submitNewEntry,
-    saveNote,
+    onInboxSaveShortcut,
     flushInboxSave,
-    onWikiLinkActivate,
+    dispatchWikiLinkActivate,
     deleteNote,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({fs, inboxEditorRef});
@@ -246,19 +247,12 @@ export default function App() {
     }
     const pending = inboxShellRestorePendingRef.current;
     if (pending && pending.vaultRoot === vaultRoot) {
-      if (pending.inbox.composingNewEntry) {
-        startNewEntry();
-      } else if (pending.inbox.selectedUri) {
-        const uri = pending.inbox.selectedUri;
-        if (notes.some(n => n.uri === uri)) {
-          selectNote(uri);
-        }
-      }
+      applyRestoredInboxState(pending.inbox);
       inboxShellRestorePendingRef.current = null;
     }
     inboxShellAppliedRef.current = vaultRoot;
     setMainShellRestored(true);
-  }, [vaultRoot, notes, layoutsReady, startNewEntry, selectNote]);
+  }, [vaultRoot, layoutsReady, applyRestoredInboxState]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -428,14 +422,6 @@ export default function App() {
     });
   }, []);
 
-  const onInboxSaveShortcut = useCallback(() => {
-    if (composingNewEntry) {
-      void submitNewEntry();
-    } else {
-      void saveNote();
-    }
-  }, [composingNewEntry, submitNewEntry, saveNote]);
-
   useEffect(() => {
     if (!isTauri()) {
       return;
@@ -576,9 +562,7 @@ export default function App() {
                 onEditorChange={setEditorBody}
                 inboxEditorResetNonce={inboxEditorResetNonce}
                 onEditorError={setErr}
-                onWikiLinkActivate={payload => {
-                  void onWikiLinkActivate(payload);
-                }}
+                onWikiLinkActivate={dispatchWikiLinkActivate}
                 onSaveShortcut={onInboxSaveShortcut}
                 busy={busy}
                 onDeleteNote={uri => {

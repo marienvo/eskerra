@@ -46,6 +46,10 @@
 
 ## Phase 4 — Workspace orchestration extraction
 
+**Status (4A — narrow workspace orchestration extraction):**
+- [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) now owns explicit inbox/workspace orchestration handlers for persisted inbox restore, save shortcut dispatch, and wiki-link activation dispatch.
+- [`App.tsx`](../../apps/desktop/src/App.tsx) no longer implements inbox save-shortcut branching or wiki-link dispatch wiring; it calls workspace-owned handlers and stays focused on shell/UI composition.
+
 **Goal:** Shrink [`App.tsx`](../../apps/desktop/src/App.tsx)—vault hydrate, FS watch, note open/save/new, transient images—into a dedicated hook or small module set.
 
 **Why:** Future command palette and features attach to a stable integration layer, not an ever-growing root component.
