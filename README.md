@@ -194,27 +194,18 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 
 ---
 
-## Comparison: This App vs Obsidian
+## Comparison: This app vs others
 
 I want a Markdown app that is fast, predictable, and works out of the box. 
 No plugins required for the basics, no waiting, no hidden complexity.
 
 This project is built around that idea.
 
-| Aspect | Obsidian | This App |
-|--------|----------|----------|
-| **Philosophy** | Knowledge management tool | Markdown runtime / thinking tool |
-| **Open Source** | Closed core, open plugins | **Fully FOSS (core + philosophy)** |
-| **Performance** | Good, can degrade with large vaults | **Instant, regardless of size** |
-| **Startup** | Indexing and scanning required | **Opens immediately, no indexing needed** |
-| **Editor** | Part of a larger system | **Central focus of the app** |
-| **Markdown** | Writing format | **Execution layer (does things)** |
-| **Plugins** | Essential for advanced use | **Optional, not required for core usage** |
-| **UX Consistency** | Varies depending on plugins | **Consistent and predictable** |
-| **Configuration** | Requires setup and tweaking | **Strong defaults, minimal setup** |
-| **Graph / Backlinks** | Core feature | **Optional / secondary** |
-| **Mobile Experience** | Feature-rich but heavy | **Focused and lightweight** |
-| **Determinism** | Depends on setup | **Same input = same behavior** |
-| **Lock-in** | Vault + ecosystem | **Plain files, no hidden machinery** |
-| **AI Integration** | Plugin-based | **Native, built-in understanding (long-term)** |
-| **Podcast Workflow** | Capture notes while listening | **Transform episodes into structured, actionable Markdown (summaries, ideas, tasks)** |
+| Tool | Core Idea | Strength | Trade-off |
+|------|----------|----------|-----------|
+| **This App**  | Markdown runtime | **Fast, predictable, no setup** | Fewer features |
+| **Obsidian**  | Knowledge system | Flexible, huge plugin ecosystem | Complexity & inconsistency |
+| **Joplin**  | Open notebook | Fully FOSS, reliable sync | Clunky UX |
+| **Logseq**  | Outliner / graph | Powerful linking & structure | Performance, learning curve |
+| **iA Writer** ️ | Writing tool | Clean, focused experience | Limited features |
+| **Zettlr**  | Academic editor | Strong for long-form & research | Heavy, slower UI |
