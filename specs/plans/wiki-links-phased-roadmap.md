@@ -44,9 +44,9 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 | **Typing assist** (`]]`, autocomplete UI) | Yes | Supplies **data** (note list, optional index snapshot) via props/callbacks | Optional pure filters/sort if shared |
 | **Resolve** target against vault state | No | Yes | Pure `resolve*` from in-memory lists |
 | **Open / create** note | No | Yes | No I/O |
-| **Vault scans**, debounced rebuild | No | Yes (or delegated Rust later) | No |
+| **Vault scans**, debounced rebuild | No | Yes (may use native-capable seam if benchmarks require it) | No |
 | **Rename propagation** | No | Yes (orchestration, FS writes) | Pure **rewrite** helpers on strings/paths |
-| **Backlinks / forward index** ownership | Renders **provided** summary only | Builds and refreshes index | Pure graph utilities if needed |
+| **Backlinks / forward index** ownership | Renders **provided** summary only | Builds and refreshes runtime index via seam | Pure graph utilities + link identity rules |
 
 **Invariant:** No `editor/` code walks the vault for wiki targets; ESLint continues to keep Tauri out of `editor/` per existing rules.
 
@@ -70,6 +70,8 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 | **Autocomplete** | Suggest exact note stems while typing inside `[[` | Editor UI + shell-provided **candidate list** (or small snapshot) | Same note list as resolve for inbox scope; **does not require** a backlink index |
 | **Backlinks** | “Notes that link **to** this note” (reverse direction) | Shell-owned **read** index or on-demand scan **off hot path** | Forward link extract per file or maintained forward map; **read-mostly**, no obligation to rewrite files |
 | **Rename propagation** | When a note **file** changes identity (rename), **mutate** other files’ Markdown to preserve intent | Shell orchestration + core pure rewrite | Reliable **forward** reference map or conservative vault scan; **writes** across many files; ordering and failure handling matter |
+
+**Rule for native code:** Any Rust/Kotlin path remains mechanics-only (enumeration, batched reads, invalidation, optional caching). Business rules (parse/normalize/identity/ambiguity/rewrite policy) stay in `@notebox/core`.
 
 **Why rename propagation >> basic wiki linking:** Opening or creating follows **one** resolution step and **one** file write. Rename propagation touches **N** files, must respect autosave/concurrency, must align with sanitize/stem rules over time, and mistakes corrupt user-visible Markdown across the vault.
 
@@ -133,22 +135,24 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 ### WL-4 — Backlinks and first forward-link read model
 
 - **Goal:** Show **backlinks** at the bottom of the open note (or adjacent panel per shell UX), derived from vault Markdown, compatible with filesystem-first truth (files are canonical).
-- **Why now:** Establishes the **shell-owned** link graph read path needed later for safer rename decisions—without yet writing back.
+- **Why now:** Establishes the **shell-owned** link graph read path needed later for safer rename decisions—without yet writing back and without committing to a native implementation.
 - **Scope:** Define a minimal **forward link** extraction (wiki links only, inbox scope first): parse text or reuse core/remark pipeline **off** the critical path; build inverted map **keyed** by consistent stem/note identity; refresh on vault fs events / existing `refreshNotes` / explicit triggers per performance rules; UI renders provided list with navigation.
+- **Native-capable seam posture:** Introduce the seam boundary in WL-4; accelerate with Rust/Kotlin only if the TypeScript-first implementation misses explicit performance gates.
 - **Excludes:** Automatic link rewriting; durable `.notebox` cache **unless** product explicitly wants inspectable artifact—if added, must meet `.notebox` rules in extension-readiness (named owner, not ephemeral churn).
-- **Ownership:** Shell builds and stores runtime model; editor/note chrome displays.
+- **Ownership:** Shell builds and stores runtime model; editor/note chrome displays; `@notebox/core` remains owner of link semantics.
 - **Risks / complexity:** **Medium**—first recurring **vault-wide** read pass; must be debounced and measured (see `.cursor/rules/performance.mdc`); stale backlinks acceptable short-term if refresh rules are clear.
-- **Acceptance:** For a vault with known links, opening note B shows note A when A’s body contains `[[B]]`; performance acceptable on realistic vault size (define budget in implementation).
+- **Acceptance:** For a vault with known links, opening note B shows note A when A’s body contains `[[B]]`; performance gates are met or a benchmark-backed decision is documented to introduce native acceleration.
 
 ### WL-5 — Rename-safe link maintenance
 
 - **Goal:** When an inbox note is **renamed** (filename / identity change per product definition), update `[[...]]` references across the vault so links stay coherent and filename-safe.
 - **Why later:** Largest user-data and performance risk; depends on a trustworthy **set of referencing files** (from WL-4-style model or equivalent).
 - **Scope:** Define rename event source (single app rename path); compute affected files; apply pure rewrite from core; transactional story (per-file save order, rollback strategy); explicit user confirmation if needed; **no silent** rewrites outside documented policy (extension invariant).
+- **Scale posture:** Start TypeScript-first for planning/orchestration; only add native acceleration for enumeration/read mechanics if WL-5 benchmarks miss targets after basic optimization.
 - **Excludes:** Merge conflict resolution with git; multi-device real-time sync (unless already product scope); Obsidian-style global fuzzy renames.
-- **Ownership:** Shell orchestrates all FS writes; core supplies deterministic string rewrite.
+- **Ownership:** Shell orchestrates writes and failure handling; core supplies deterministic string rewrite; native code (if introduced) must not own rewrite semantics.
 - **Risks / complexity:** **Large**—incorrect batch edit is catastrophic; must have tests with golden Markdown fixtures and ambiguous stem policy.
-- **Acceptance:** Rename note updates referencing inbox notes; unlinked or ambiguous cases are reported, not silently corrupted; perf measured on N files.
+- **Acceptance:** Rename note updates referencing inbox notes; unlinked or ambiguous cases are reported, not silently corrupted; perf is measured by touched-file scale buckets and documented against WL-5 gates.
 
 ### WL-6 — Smarter resolution (non-search-platform)
 
@@ -159,6 +163,22 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Ownership:** Resolver in core (pure); policy in shell; editor for picker UI only.
 - **Risks / complexity:** **Medium–large** depending on path rules.
 - **Acceptance:** Documented matrix of inputs → `open | create | ambiguous` with tests in core.
+
+---
+
+## Performance gates (WL-4 and WL-5)
+
+Native acceleration is optional and introduced only when a TypeScript-first path misses targets after basic optimization.
+
+- **Reference requirement:** Any benchmark result must record reference hardware and reference vault composition (file count, touched files, touched bytes, large-file distribution) so decisions are repeatable.
+- **Cold start impact:** WL-4 indexing work adds no more than **50 ms** main-thread blocking before first render and no more than **200 ms** to first-screen interactive on the 10k-file reference vault.
+- **Initial background index build:** first backlink-capable runtime index for a 10k-file reference vault completes in **<= 5 s** on reference hardware.
+- **Incremental backlinks recompute:** single-file change updates backlinks within **150 ms p95** and **500 ms p99**.
+- **Rename planning latency:** affected-reference discovery completes within **500 ms** (500 touched files), **2 s** (2k touched files), and **8 s** (10k touched files).
+- **Rename apply measurement:** plan and apply timings are tracked separately; native write-path acceleration is deferred unless TypeScript orchestration misses approved apply targets.
+- **Memory ceiling:** steady-state link-index memory stays under **128 MB** on the 10k-file reference vault unless product requirements explicitly approve a higher ceiling.
+
+**Basic optimization before native:** reduce unnecessary work, batch reads sensibly, defer non-critical work, and improve invalidation quality (current desktop `vault-files-changed` is intentionally coarse and may need better payloads or indexer-managed invalidation).
 
 ---
 
@@ -187,4 +207,5 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 
 - [extension-readiness.md](../architecture/extension-readiness.md) — layers, `.notebox` rules, editor constraints.
 - [plugin-readiness-masterplan.md](./plugin-readiness-masterplan.md) — Phase 6 / 6A status.
+- [wiki-link-indexing-architecture.md](../architecture/wiki-link-indexing-architecture.md) — seam boundaries, storage posture, and benchmark gates.
 - [desktop-editor.md](../architecture/desktop-editor.md) — inbox editor behavior and flush rules.

@@ -75,7 +75,25 @@ Follow-on work is tracked in [plugin-readiness-masterplan.md](../plans/plugin-re
 ## Legitimate internal extension seams (now)
 
 - **Adapters:** `VaultFilesystem`, audio player, future search/sync transports—**one owning module** each.
+- **Indexing seam (when justified):** a shell-owned link/indexing seam may be introduced for scale-sensitive mechanics (discovery, batched reads, invalidation, optional runtime caching), but only when benchmark gates show the TypeScript-first path is insufficient.
 - **Command registration (future):** when a command palette ships, a **single registrar** in the shell enumerates actions; features do not bind keys in isolation.
+
+### `VaultFilesystem` vs indexing seam
+
+- `VaultFilesystem` stays the **primitive file API** (exists/read/write/list/mkdir/unlink).
+- A future indexing seam is **not** required by default; it is an optional boundary for high-scale mechanics if measured need appears.
+- Business rules do not move into native implementations:
+  - parsing/normalization/link identity
+  - ambiguity handling
+  - rewrite policy
+  - any user-visible “what should happen” decisions
+- If native acceleration is introduced behind the seam, it remains replaceable and mechanics-only.
+
+### Runtime-first storage posture
+
+- Default assumption: link/index state is runtime or app-owned cache.
+- Durable `.notebox` index artifacts are allowed only when explicitly productized with named ownership, retention, and user-facing behavior.
+- Do not add durable vault artifacts “just in case” a later feature might need them.
 
 Explicitly **out of scope until needed:** third-party plugin manifests, dynamic loading, sandboxing, alternate pluggable editors.
 

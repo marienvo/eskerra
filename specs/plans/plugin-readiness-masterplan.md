@@ -72,7 +72,7 @@
 
 ---
 
-## Phase 6 — Wiki resolution and indexing owner
+## Phase 6 — Wiki resolution and indexing seam owner
 
 **Status (6A—desktop inbox MVP + keyboard parity):**
 - Core inbox-only wiki-link resolver in [`wikiLinkInbox.ts`](../../packages/notebox-core/src/wikiLinkInbox.ts) with explicit `ambiguous` result.
@@ -80,19 +80,32 @@
 - Editor in [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx): plain click, **Ctrl/Cmd+click**, and **`Mod-Enter`** (Ctrl+Enter / Cmd+Enter) activate the wiki link (caret inside `[[...]]` for the chord) via the same callback; **Shift+click** does not activate; `[` close assist for `[[...]]`; highlights in source.
 - Minimal `Inbox/` prefix support only (case-insensitive strip); no broader path semantics.
 
-**Goal:** Wiki links move from syntax-only to resolvable paths with a **single index owner**; editor asks a service, does not walk the vault.
+**Goal:** Wiki links move from syntax-only to resolvable paths with a **single shell-owned indexing seam**; editor asks a service, does not walk the vault.
 
-**Why:** Avoid ownership spread across editor, inbox, and ad hoc FS scans.
+**Why:** Avoid ownership spread across editor, inbox, and ad hoc FS scans while keeping implementation choices reversible.
 
-**Scope:** Incremental read-only index, debounced rebuild, off startup critical path per performance rules.
+**Scope:** Introduce a narrow indexing seam for read-first workloads (backlinks, referencing-file discovery), keep it off startup critical path, and keep behavior deterministic across platforms.
 
-**Acceptance:** No direct vault directory walks for wiki targets inside `editor/`.
+**Ownership split (explicit):**
+- `@notebox/core` owns link semantics: parsing, normalization, identity rules, ambiguity behavior, rewrite policy.
+- Shell/workspace owns index lifecycle, refresh policy, and feature integration.
+- The indexing seam owns mechanics only: discovery, batched reads, invalidation, optional runtime caching.
+- Native implementations (Rust/Kotlin) are optional and only justified if benchmark gates fail for a TypeScript-first path.
 
-**Still deferred after 6A:** backlinks, global indexing framework, fuzzy/ranked matching, ambiguity picker UI, command-palette integration.
+**Non-goals in this phase:**
+- No required lockstep desktop/mobile native rollout.
+- No durable `.notebox` link index unless productized later with explicit retention/ownership.
+- No full-text search commitments (future compatibility only).
+
+**Acceptance:** No direct vault directory walks for wiki targets inside `editor/`; seam boundaries are explicit; native work is not started unless benchmark gates are missed.
+
+**Still deferred after 6A:** backlinks UI rollout details, broad indexing framework expansion, fuzzy/ranked matching, ambiguity picker UI, command-palette integration.
 
 **Detailed phased plan (wiki-only):** [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md).
 
-**Defer:** Full-text search product.
+**Defer:** Full-text search product (future consumers may reuse the seam later).
+
+**Measurement gate reminder:** Reference hardware and reference vault composition must be documented for WL-4/WL-5 performance decisions (see [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md)).
 
 ---
 
@@ -127,3 +140,4 @@ After Phase 1 (or in parallel if low conflict):
 | [extension-readiness-pr.md](../review-checklists/extension-readiness-pr.md) | PR checklist |
 | [desktop-import-boundaries.md](../rules/desktop-import-boundaries.md) | Future ESLint zones |
 | [wiki-links-phased-roadmap.md](./wiki-links-phased-roadmap.md) | Wiki links: phases WL-0–WL-6, ownership, ordering |
+| [wiki-link-indexing-architecture.md](../architecture/wiki-link-indexing-architecture.md) | Indexing seam boundaries and benchmark gates for WL-4/WL-5 |
