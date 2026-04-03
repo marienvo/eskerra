@@ -250,12 +250,6 @@ export function InboxTab({
                 </>
               ) : null}
             </AlertDialog.Description>
-            {wikiLinkAmbiguityRenamePrompt ? (
-              <p className="muted alert-dialog-description">
-                Scanned {wikiLinkAmbiguityRenamePrompt.scannedFileCount} file(s), touched{' '}
-                {Math.round(wikiLinkAmbiguityRenamePrompt.touchedBytes / 1024)} KiB.
-              </p>
-            ) : null}
             <div className="alert-dialog-actions">
               <AlertDialog.Cancel asChild>
                 <button type="button" className="ghost" disabled={busy}>

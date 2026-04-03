@@ -49,8 +49,7 @@ import {
 import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
 import {
   applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenanceAsync,
-  type InboxWikiLinkRenamePlanResult,
+  planInboxWikiLinkRenameMaintenance,
 } from '../lib/inboxWikiLinkRenameMaintenance';
 
 const STORE_PATH = 'notebox-desktop.json';
@@ -79,7 +78,6 @@ type RenameLinkProgress = {done: number; total: number};
 
 const LARGE_RENAME_MIN_TOUCHED_FILES = 60;
 const LARGE_RENAME_MIN_TOUCHED_BYTES = 768 * 1024;
-const RENAME_PLAN_YIELD_EVERY_NOTES = 80;
 const RENAME_APPLY_YIELD_EVERY_WRITES = 24;
 const RENAME_NOTICE_TTL_MS = 5000;
 
@@ -602,18 +600,6 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, selectedUri],
   );
 
-  const emptyRenamePlan = useCallback(
-    (scannedFileCount: number): InboxWikiLinkRenamePlanResult => ({
-      updates: [],
-      scannedFileCount,
-      touchedFileCount: 0,
-      touchedBytes: 0,
-      updatedLinkCount: 0,
-      skippedAmbiguousLinkCount: 0,
-    }),
-    [],
-  );
-
   const runRenameWithWikiLinkMaintenance = useCallback(
     async (options: {
       uri: string;
@@ -642,16 +628,22 @@ export function useMainWindowWorkspace(options: {
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
-          ? await planInboxWikiLinkRenameMaintenanceAsync({
+          ? planInboxWikiLinkRenameMaintenance({
               oldTargetUri: uri,
               renamedStem: plannedStem,
               notes: preRenameNotes,
               contentByUri: preRenameContent,
               activeUri,
               activeBody,
-              yieldEveryNotes: RENAME_PLAN_YIELD_EVERY_NOTES,
             })
-          : emptyRenamePlan(preRenameNotes.length);
+          : {
+              updates: [],
+              scannedFileCount: preRenameNotes.length,
+              touchedFileCount: 0,
+              touchedBytes: 0,
+              updatedLinkCount: 0,
+              skippedAmbiguousLinkCount: 0,
+            };
         const planDurationMs = performance.now() - planStartedAt;
         if (
           preRenamePlan.skippedAmbiguousLinkCount > 0
@@ -677,14 +669,13 @@ export function useMainWindowWorkspace(options: {
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
         const rewritePlan =
           renamedStem && renamedStem !== plannedStem
-            ? await planInboxWikiLinkRenameMaintenanceAsync({
+            ? planInboxWikiLinkRenameMaintenance({
                 oldTargetUri: uri,
                 renamedStem,
                 notes: preRenameNotes,
                 contentByUri: preRenameContent,
                 activeUri,
                 activeBody,
-                yieldEveryNotes: RENAME_PLAN_YIELD_EVERY_NOTES,
               })
             : preRenamePlan;
         const showLargeImpactProgress =
@@ -777,7 +768,6 @@ export function useMainWindowWorkspace(options: {
       inboxEditorRef,
       clearRenameNotice,
       setTransientRenameNotice,
-      emptyRenamePlan,
     ],
   );
 

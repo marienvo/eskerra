@@ -2,7 +2,6 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {
   applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenanceAsync,
   planInboxWikiLinkRenameMaintenance,
 } from './inboxWikiLinkRenameMaintenance';
 
@@ -73,26 +72,6 @@ describe('planInboxWikiLinkRenameMaintenance', () => {
     });
   });
 
-  it('async planner returns same result as sync planner', async () => {
-    const input = {
-      oldTargetUri: '/vault/Inbox/Old.md',
-      renamedStem: 'Renamed',
-      notes,
-      contentByUri: {
-        '/vault/Inbox/Old.md': 'self [[Old]]',
-        '/vault/Inbox/Ref.md': '',
-        '/vault/Inbox/Other.md': '[[Other]]',
-      },
-      activeUri: '/vault/Inbox/Ref.md',
-      activeBody: 'draft [[Old|Label]]',
-    } as const;
-    const sync = planInboxWikiLinkRenameMaintenance(input);
-    const asyncResult = await planInboxWikiLinkRenameMaintenanceAsync({
-      ...input,
-      yieldEveryNotes: 1,
-    });
-    expect(asyncResult).toEqual(sync);
-  });
 });
 
 describe('applyInboxWikiLinkRenameMaintenance', () => {
