@@ -18,7 +18,7 @@ export function getNoteTitle(noteName: string): string {
   return titleFromNoteName(noteName);
 }
 
-export function sanitizeFileName(rawName: string): string {
+export function sanitizeInboxNoteStem(rawName: string): string | null {
   const withoutControlChars = Array.from(rawName.trim())
     .filter(ch => ch >= ' ' && ch !== '\u007f')
     .join('');
@@ -26,8 +26,11 @@ export function sanitizeFileName(rawName: string): string {
     .replace(/[/\\:*?"<>|]/g, '')
     .replace(/\s+/g, ' ')
     .replace(/^[. ]+|[. ]+$/g, '');
+  return normalized === '' ? null : normalized;
+}
 
-  return normalized || `note-${Date.now()}`;
+export function sanitizeFileName(rawName: string): string {
+  return sanitizeInboxNoteStem(rawName) ?? `note-${Date.now()}`;
 }
 
 export function pickNextInboxMarkdownFileName(

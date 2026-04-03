@@ -20,6 +20,7 @@ export {
   getNoteTitle,
   pickNextInboxMarkdownFileName,
   sanitizeFileName,
+  sanitizeInboxNoteStem,
   stemFromMarkdownFileName,
 } from './inboxMarkdown';
 export {

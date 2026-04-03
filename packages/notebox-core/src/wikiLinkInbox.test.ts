@@ -55,6 +55,24 @@ describe('resolveInboxWikiLinkTarget', () => {
     expect(got).toEqual({kind: 'create', title: 'New Page'});
   });
 
+  it('opens when target matches an existing stem after filename sanitization', () => {
+    const rows = [{name: 'Test.md', uri: '/vault/Inbox/Test.md'}];
+    expect(resolveInboxWikiLinkTarget(rows, 'test?')).toEqual({
+      kind: 'open',
+      note: rows[0],
+      canonicalInner: 'Test',
+    });
+  });
+
+  it('preserves display text on sanitized-stem canonical open', () => {
+    const rows = [{name: 'Test.md', uri: '/vault/Inbox/Test.md'}];
+    expect(resolveInboxWikiLinkTarget(rows, 'test?|Label')).toEqual({
+      kind: 'open',
+      note: rows[0],
+      canonicalInner: 'Test|Label',
+    });
+  });
+
   it('uses display text as title for create', () => {
     const got = resolveInboxWikiLinkTarget(NOTES, 'new-page|My Display');
     expect(got).toEqual({kind: 'create', title: 'My Display'});
@@ -84,6 +102,19 @@ describe('resolveInboxWikiLinkTarget', () => {
       notes: rows,
       targetStem: 'ALPHA',
       title: 'ALPHA',
+    });
+  });
+
+  it('returns ambiguous when multiple stems match after sanitization', () => {
+    const rows = [
+      {name: 'a?.md', uri: '/vault/Inbox/a?.md'},
+      {name: 'a*.md', uri: '/vault/Inbox/a*.md'},
+    ];
+    expect(resolveInboxWikiLinkTarget(rows, 'a:')).toEqual({
+      kind: 'ambiguous',
+      notes: rows,
+      targetStem: 'a:',
+      title: 'a:',
     });
   });
 

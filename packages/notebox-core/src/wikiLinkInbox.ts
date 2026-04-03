@@ -1,4 +1,4 @@
-import {stemFromMarkdownFileName} from './inboxMarkdown';
+import {sanitizeInboxNoteStem, stemFromMarkdownFileName} from './inboxMarkdown';
 
 export type InboxWikiLinkNoteRef = {
   name: string;
@@ -88,6 +88,14 @@ function buildCanonicalInnerForOpen(options: {
   return `${targetText}|${parsed.displayText}`;
 }
 
+function buildSanitizedStemKey(rawStem: string): string | null {
+  const sanitized = sanitizeInboxNoteStem(rawStem);
+  if (!sanitized) {
+    return null;
+  }
+  return sanitized.toLowerCase();
+}
+
 /**
  * Inbox-only resolver for `[[...]]` links.
  * - Supports `[[target]]` and `[[target|display]]`.
@@ -143,6 +151,34 @@ export function resolveInboxWikiLinkTarget(
       targetStem: stem,
       title,
     };
+  }
+
+  const linkStemKey = buildSanitizedStemKey(stem);
+  if (linkStemKey) {
+    const sanitizedMatches = notes.filter(n => {
+      const noteStem = stemFromMarkdownFileName(n.name);
+      return buildSanitizedStemKey(noteStem) === linkStemKey;
+    });
+    if (sanitizedMatches.length === 1) {
+      const canonicalStem = stemFromMarkdownFileName(sanitizedMatches[0].name);
+      return {
+        kind: 'open',
+        note: sanitizedMatches[0],
+        canonicalInner: buildCanonicalInnerForOpen({
+          parsed,
+          canonicalStem,
+          hadInboxPrefix,
+        }),
+      };
+    }
+    if (sanitizedMatches.length > 1) {
+      return {
+        kind: 'ambiguous',
+        notes: sanitizedMatches,
+        targetStem: stem,
+        title,
+      };
+    }
   }
 
   return {kind: 'create', title};
