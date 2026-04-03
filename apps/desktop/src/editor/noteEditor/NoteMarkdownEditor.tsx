@@ -1,6 +1,6 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {markdown} from '@codemirror/lang-markdown';
-import {EditorSelection, EditorState} from '@codemirror/state';
+import {Compartment, EditorSelection, EditorState} from '@codemirror/state';
 import {
   drawSelection,
   EditorView,
@@ -25,7 +25,7 @@ import {
 import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
-import {wikiLinkHighlight} from './wikiLinkCodemirror';
+import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 
 export type NoteMarkdownEditorProps = {
@@ -40,6 +40,8 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string}) => void;
+  /** Shell-owned: `[[inner]]` resolves to exactly one inbox note (for styling). */
+  wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
   placeholder: string;
@@ -67,6 +69,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onMarkdownChange,
     onEditorError,
     onWikiLinkActivate,
+    wikiLinkTargetIsResolved,
     onSaveShortcut,
     placeholder: placeholderText,
     busy,
@@ -112,6 +115,11 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const resolveVaultImagePreviewUrlRef = useRef(resolveVaultImagePreviewUrl);
   resolveVaultImagePreviewUrlRef.current = resolveVaultImagePreviewUrl;
+
+  const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
+  if (wikiLinkCompartmentRef.current === null) {
+    wikiLinkCompartmentRef.current = new Compartment();
+  }
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -325,6 +333,11 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const wikiLinkCompartment = wikiLinkCompartmentRef.current;
+    if (!wikiLinkCompartment) {
+      throw new Error('wikiLinkCompartment must be initialized');
+    }
+
     const extensions = [
       markdown(),
       ...noteMarkdownEditorAppearance,
@@ -352,7 +365,9 @@ const NoteMarkdownEditorImpl = forwardRef<
       ]),
       EditorView.lineWrapping,
       placeholder(placeholderText),
-      wikiLinkHighlight,
+      wikiLinkCompartment.of(
+        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+      ),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
         activeNotePath: activeNotePathRef,
@@ -406,6 +421,19 @@ const NoteMarkdownEditorImpl = forwardRef<
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- remount via `sessionKey` wraps this component
   }, []);
+
+  useEffect(() => {
+    const compartment = wikiLinkCompartmentRef.current;
+    const view = viewRef.current;
+    if (!compartment || !view) {
+      return;
+    }
+    view.dispatch({
+      effects: compartment.reconfigure(
+        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+      ),
+    });
+  }, [wikiLinkTargetIsResolved]);
 
   useImperativeHandle(
     ref,

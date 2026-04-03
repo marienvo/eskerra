@@ -55,3 +55,11 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   const created = await createInboxMarkdownNote(vaultRoot, fs, resolved.title, markdown);
   return {kind: 'created', uri: created.uri};
 }
+
+/** True when `inner` resolves to exactly one existing inbox note (same rule as navigation `open`). */
+export function inboxWikiLinkTargetIsResolved(
+  notes: ReadonlyArray<InboxWikiLinkNoteRef>,
+  inner: string,
+): boolean {
+  return resolveInboxWikiLinkTarget(notes, inner).kind === 'open';
+}

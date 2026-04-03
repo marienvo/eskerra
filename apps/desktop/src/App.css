@@ -922,10 +922,17 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link {
-  color: var(--color-accent, #4fafe6);
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--resolved {
+  color: var(--color-accent, #4fafe6);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--unresolved {
+  color: var(--color-muted);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {

@@ -4,6 +4,7 @@ import type {RefObject} from 'react';
 import {useMemo, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
+import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
@@ -72,6 +73,15 @@ export function InboxTab({
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
+
+  const wikiLinkTargetIsResolved = useMemo(
+    () => (inner: string) =>
+      inboxWikiLinkTargetIsResolved(
+        notes.map(n => ({name: n.name, uri: n.uri})),
+        inner,
+      ),
+    [notes],
+  );
 
   const editorPaneTitle = useMemo(() => {
     if (composingNewEntry) {
@@ -255,6 +265,7 @@ export function InboxTab({
                     onMarkdownChange={onEditorChange}
                     onEditorError={onEditorError}
                     onWikiLinkActivate={onWikiLinkActivate}
+                    wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                     onSaveShortcut={onSaveShortcut}
                     placeholder={
                       composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'

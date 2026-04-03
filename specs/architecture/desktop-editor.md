@@ -18,12 +18,13 @@
 
 ## CodeMirror choices
 
-- **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, and a small view plugin to highlight `[[wiki-style]]` spans in the source. Optional styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
+- **Extensions:** Markdown language support, history, default keymap, line wrapping, placeholder, and a view plugin to highlight `[[wiki-style]]` spans in the source (**resolved** vs **unresolved** inbox targets, WL-2). Styling lives in [`apps/desktop/src/App.css`](../../apps/desktop/src/App.css) under `[data-app-surface='capture']` for the inbox.
 
-### Wiki links (inbox, WL-0 / WL-1)
+### Wiki links (inbox, WL-0 / WL-1 / WL-2)
 
 - **On disk:** `[[...]]` stays plain Markdown. Tooling may parse to mdast via [`apps/desktop/src/editor/wikiLink/remarkWikiLink.ts`](../../apps/desktop/src/editor/wikiLink/remarkWikiLink.ts).
 - **Scope:** Inbox targets only (resolver and navigation in `@notebox/core` + shell). The editor does not scan the vault; it calls `onWikiLinkActivate({ inner })`, implemented in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) (flush, then [`openOrCreateInboxWikiLinkTarget`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts)).
+- **Resolved vs unresolved (WL-2):** [`InboxTab`](../../apps/desktop/src/components/InboxTab.tsx) passes `wikiLinkTargetIsResolved` into the editor, implemented with [`inboxWikiLinkTargetIsResolved`](../../apps/desktop/src/lib/inboxWikiLinkNavigation.ts) over the current inbox note list (true only when the resolver would return `open`, same as navigation). CodeMirror uses [`wikiLinkCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/wikiLinkCodemirror.ts) (`cm-wiki-link--resolved` / `cm-wiki-link--unresolved`). When the note list changes without a note switch, a compartment reconfigure updates link styling.
 - **Activate (same shell path):**
   - **Click** a wiki link in the source (primary button).
   - **Ctrl+click** (Linux/Windows) or **Cmd+click** (macOS) on the link span uses the same activation path (parity with common desktop “modifier + click” patterns).

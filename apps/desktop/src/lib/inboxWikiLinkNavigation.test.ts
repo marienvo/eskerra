@@ -2,7 +2,10 @@ import {describe, expect, it} from 'vitest';
 
 import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
 
-import {openOrCreateInboxWikiLinkTarget} from './inboxWikiLinkNavigation';
+import {
+  inboxWikiLinkTargetIsResolved,
+  openOrCreateInboxWikiLinkTarget,
+} from './inboxWikiLinkNavigation';
 
 function createMemoryVaultFs(
   seed: Array<[string, 'dir' | string]>,
@@ -76,6 +79,52 @@ function createMemoryVaultFs(
 
   return {fs, writes};
 }
+
+describe('inboxWikiLinkTargetIsResolved', () => {
+  const noteUri = '/vault/Inbox/alpha-note.md';
+
+  it('is true when target matches a single inbox note', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'alpha-note.md', uri: noteUri}],
+        'alpha note',
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when target would create a note', () => {
+    expect(inboxWikiLinkTargetIsResolved([], 'brand new page')).toBe(false);
+  });
+
+  it('is false when multiple notes share the same stem', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [
+          {name: 'dup.md', uri: '/a/dup.md'},
+          {name: 'dup.md', uri: '/b/dup.md'},
+        ],
+        'dup',
+      ),
+    ).toBe(false);
+  });
+
+  it('is false for path-like targets', () => {
+    expect(inboxWikiLinkTargetIsResolved([], 'foo/bar')).toBe(false);
+  });
+
+  it('is false for empty target', () => {
+    expect(inboxWikiLinkTargetIsResolved([], '  ')).toBe(false);
+  });
+
+  it('is true for display form when target matches one note', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'alpha-note.md', uri: noteUri}],
+        'alpha note|Label',
+      ),
+    ).toBe(true);
+  });
+});
 
 describe('openOrCreateInboxWikiLinkTarget', () => {
   const vaultRoot = '/vault';
