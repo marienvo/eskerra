@@ -44,9 +44,10 @@ Native acceleration is considered only after a TypeScript-first implementation m
   - 500 ms for 500 touched files
   - 2 s for 2k touched files
   - 8 s for 10k touched files
+- **Rename planning—touched content:** total touched bytes must be measured and reported; file-count targets must be evaluated alongside that byte volume. Meeting file-count targets alone is not enough if large-content workloads produce disproportionately poor performance or UX.
 - **Memory ceiling:** steady-state link-index memory under 128 MB on the reference vault unless explicitly approved.
 
-All benchmark results must record reference hardware and reference vault composition, including touched files and touched bytes for rename measurements.
+All benchmark results must record reference hardware and reference vault composition. Rename planning must account for total touched bytes (no fixed byte limits at this stage).
 
 ## Sequencing constraints
 

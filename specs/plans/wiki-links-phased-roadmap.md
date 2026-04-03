@@ -152,7 +152,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 - **Excludes:** Merge conflict resolution with git; multi-device real-time sync (unless already product scope); Obsidian-style global fuzzy renames.
 - **Ownership:** Shell orchestrates writes and failure handling; core supplies deterministic string rewrite; native code (if introduced) must not own rewrite semantics.
 - **Risks / complexity:** **Large**—incorrect batch edit is catastrophic; must have tests with golden Markdown fixtures and ambiguous stem policy.
-- **Acceptance:** Rename note updates referencing inbox notes; unlinked or ambiguous cases are reported, not silently corrupted; perf is measured by touched-file scale buckets and documented against WL-5 gates.
+- **Acceptance:** Rename note updates referencing inbox notes; unlinked or ambiguous cases are reported, not silently corrupted; perf is measured by touched-file scale buckets, with total touched bytes reported and evaluated alongside, per WL-5 gates.
 
 ### WL-6 — Smarter resolution (non-search-platform)
 
@@ -174,7 +174,8 @@ Native acceleration is optional and introduced only when a TypeScript-first path
 - **Cold start impact:** WL-4 indexing work adds no more than **50 ms** main-thread blocking before first render and no more than **200 ms** to first-screen interactive on the 10k-file reference vault.
 - **Initial background index build:** first backlink-capable runtime index for a 10k-file reference vault completes in **<= 5 s** on reference hardware.
 - **Incremental backlinks recompute:** single-file change updates backlinks within **150 ms p95** and **500 ms p99**.
-- **Rename planning latency:** affected-reference discovery completes within **500 ms** (500 touched files), **2 s** (2k touched files), and **8 s** (10k touched files).
+- **Rename planning latency:** affected-reference discovery completes within **500 ms** (500 touched files), **2 s** (2k touched files), and **8 s** (10k touched files) — the primary numeric gates.
+- **Rename planning and touched content:** total touched bytes must be measured and reported with every run. Hitting file-count targets alone is not sufficient: disproportionate latency or unacceptable UX from large-content workloads fails the gate.
 - **Rename apply measurement:** plan and apply timings are tracked separately; native write-path acceleration is deferred unless TypeScript orchestration misses approved apply targets.
 - **Memory ceiling:** steady-state link-index memory stays under **128 MB** on the 10k-file reference vault unless product requirements explicitly approve a higher ceiling.
 
