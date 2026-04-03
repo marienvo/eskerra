@@ -67,26 +67,19 @@ export type UseMainWindowWorkspaceResult = {
   setErr: (value: string | null) => void;
   setEditorBody: (value: string) => void;
   hydrateVault: (root: string) => Promise<void>;
-  refreshNotes: (root: string) => Promise<void>;
   startNewEntry: () => void;
   cancelNewEntry: () => void;
   selectNote: (uri: string) => void;
-  /** Applies persisted inbox shell state after hydration/layout restore. */
-  applyRestoredInboxState: (inbox: {
-    composingNewEntry: boolean;
-    selectedUri: string | null;
-  }) => void;
   submitNewEntry: () => Promise<void>;
-  /** Persists the open inbox note if needed (Ctrl/Cmd+S, same as auto-save flush). Does not set `busy`. */
-  saveNote: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
-  /** Void-returning dispatch wrapper for editor wiring. */
-  dispatchWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => Promise<void>;
+  /** Editor intent entrypoint for wiki link open/create. */
+  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
+  /** True once persisted inbox shell state has been considered for the current vault. */
+  inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
 };
@@ -94,8 +87,14 @@ export type UseMainWindowWorkspaceResult = {
 export function useMainWindowWorkspace(options: {
   fs: VaultFilesystem;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  restoredInboxState: {
+    vaultRoot: string;
+    composingNewEntry: boolean;
+    selectedUri: string | null;
+  } | null;
+  inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
-  const {fs, inboxEditorRef} = options;
+  const {fs, inboxEditorRef, restoredInboxState, inboxRestoreEnabled} = options;
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
   const [settingsName, setSettingsName] = useState('Notebox');
@@ -111,6 +110,7 @@ export function useMainWindowWorkspace(options: {
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
     useState(false);
+  const [inboxShellRestored, setInboxShellRestored] = useState(true);
 
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRootRef = useRef<string | null>(null);
@@ -446,15 +446,13 @@ export function useMainWindowWorkspace(options: {
     await addNote(titleLine, fullMarkdown);
   }, [addNote, editorBody, inboxEditorRef, vaultRoot]);
 
-  const saveNote = flushInboxSave;
-
   const onInboxSaveShortcut = useCallback(() => {
     if (composingNewEntryRef.current) {
       void submitNewEntry();
     } else {
-      void saveNote();
+      void flushInboxSave();
     }
-  }, [submitNewEntry, saveNote]);
+  }, [submitNewEntry, flushInboxSave]);
 
   const deleteNote = useCallback(
     async (uri: string) => {
@@ -493,7 +491,7 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, selectedUri],
   );
 
-  const onWikiLinkActivate = useCallback(
+  const activateWikiLink = useCallback(
     async ({inner, at}: {inner: string; at: number}) => {
       if (!vaultRoot) {
         return;
@@ -541,25 +539,48 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, notes, fs, refreshNotes, inboxEditorRef],
   );
 
-  const dispatchWikiLinkActivate = useCallback(
+  const onWikiLinkActivate = useCallback(
     (payload: {inner: string; at: number}) => {
-      void onWikiLinkActivate(payload);
+      void activateWikiLink(payload);
     },
-    [onWikiLinkActivate],
+    [activateWikiLink],
   );
 
-  const applyRestoredInboxState = useCallback(
-    (inbox: {composingNewEntry: boolean; selectedUri: string | null}) => {
-      if (inbox.composingNewEntry) {
+  useEffect(() => {
+    if (!vaultRoot) {
+      setInboxShellRestored(true);
+      return;
+    }
+    setInboxShellRestored(false);
+  }, [vaultRoot]);
+
+  useEffect(() => {
+    if (!vaultRoot) {
+      return;
+    }
+    if (!inboxRestoreEnabled || inboxShellRestored) {
+      return;
+    }
+    if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
+      if (restoredInboxState.composingNewEntry) {
         startNewEntry();
-        return;
+      } else if (
+        restoredInboxState.selectedUri &&
+        notes.some(n => n.uri === restoredInboxState.selectedUri)
+      ) {
+        selectNote(restoredInboxState.selectedUri);
       }
-      if (inbox.selectedUri && notes.some(n => n.uri === inbox.selectedUri)) {
-        selectNote(inbox.selectedUri);
-      }
-    },
-    [notes, startNewEntry, selectNote],
-  );
+    }
+    setInboxShellRestored(true);
+  }, [
+    vaultRoot,
+    inboxRestoreEnabled,
+    inboxShellRestored,
+    restoredInboxState,
+    notes,
+    startNewEntry,
+    selectNote,
+  ]);
 
   return {
     vaultRoot,
@@ -578,18 +599,15 @@ export function useMainWindowWorkspace(options: {
     setErr,
     setEditorBody,
     hydrateVault,
-    refreshNotes,
     startNewEntry,
     cancelNewEntry,
     selectNote,
-    applyRestoredInboxState,
     submitNewEntry,
-    saveNote,
     onInboxSaveShortcut,
     flushInboxSave,
-    dispatchWikiLinkActivate,
     onWikiLinkActivate,
     deleteNote,
+    inboxShellRestored,
     initialVaultHydrateAttemptDone,
   };
 }

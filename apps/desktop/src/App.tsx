@@ -42,7 +42,6 @@ import {
   loadMainWindowUi,
   saveMainWindowUi,
   type MainTabId,
-  type StoredMainWindowInbox,
 } from './lib/mainWindowUiStore';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 
@@ -100,6 +99,12 @@ export default function App() {
   const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
+  const [layoutsReady, setLayoutsReady] = useState(false);
+  const [restoredInboxState, setRestoredInboxState] = useState<{
+    vaultRoot: string;
+    composingNewEntry: boolean;
+    selectedUri: string | null;
+  } | null>(null);
   const {
     vaultRoot,
     vaultSettings,
@@ -120,24 +125,27 @@ export default function App() {
     startNewEntry,
     cancelNewEntry,
     selectNote,
-    applyRestoredInboxState,
     submitNewEntry,
     onInboxSaveShortcut,
     flushInboxSave,
-    dispatchWikiLinkActivate,
+    onWikiLinkActivate,
     deleteNote,
+    inboxShellRestored,
     initialVaultHydrateAttemptDone,
-  } = useMainWindowWorkspace({fs, inboxEditorRef});
+  } = useMainWindowWorkspace({
+    fs,
+    inboxEditorRef,
+    restoredInboxState,
+    inboxRestoreEnabled: layoutsReady,
+  });
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
-  const [layoutsReady, setLayoutsReady] = useState(false);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
-  const [mainShellRestored, setMainShellRestored] = useState(false);
   const [startupSplashDismissed, setStartupSplashDismissed] = useState(
     () => !isTauri(),
   );
@@ -146,20 +154,14 @@ export default function App() {
     () =>
       initialVaultHydrateAttemptDone &&
       layoutsReady &&
-      (vaultRoot ? mainShellRestored : true),
+      (vaultRoot ? inboxShellRestored : true),
     [
       initialVaultHydrateAttemptDone,
       layoutsReady,
       vaultRoot,
-      mainShellRestored,
+      inboxShellRestored,
     ],
   );
-
-  const inboxShellRestorePendingRef = useRef<{
-    vaultRoot: string;
-    inbox: StoredMainWindowInbox;
-  } | null>(null);
-  const inboxShellAppliedRef = useRef<string | null>(null);
 
   const bumpPlaylistDiskRevision = useCallback(() => {
     setPlaylistDiskRevision(r => r + 1);
@@ -220,10 +222,11 @@ export default function App() {
         if (ui) {
           setMainTab(ui.mainTab);
           setPlayerDockVisible(ui.playerDockVisible);
-          inboxShellRestorePendingRef.current = {
+          setRestoredInboxState({
             vaultRoot: ui.vaultRoot,
-            inbox: ui.inbox,
-          };
+            composingNewEntry: ui.inbox.composingNewEntry,
+            selectedUri: ui.inbox.selectedUri,
+          });
         }
         setLayoutsReady(true);
       },
@@ -232,27 +235,6 @@ export default function App() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    inboxShellAppliedRef.current = null;
-    setMainShellRestored(false);
-  }, [vaultRoot]);
-
-  useEffect(() => {
-    if (!vaultRoot || !layoutsReady) {
-      return;
-    }
-    if (inboxShellAppliedRef.current === vaultRoot) {
-      return;
-    }
-    const pending = inboxShellRestorePendingRef.current;
-    if (pending && pending.vaultRoot === vaultRoot) {
-      applyRestoredInboxState(pending.inbox);
-      inboxShellRestorePendingRef.current = null;
-    }
-    inboxShellAppliedRef.current = vaultRoot;
-    setMainShellRestored(true);
-  }, [vaultRoot, layoutsReady, applyRestoredInboxState]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -283,7 +265,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!vaultRoot || !mainShellRestored) {
+    if (!vaultRoot || !inboxShellRestored) {
       return;
     }
     const payload = {
@@ -307,7 +289,7 @@ export default function App() {
     playerDockVisible,
     selectedUri,
     composingNewEntry,
-    mainShellRestored,
+    inboxShellRestored,
   ]);
 
   useEffect(() => {
@@ -562,7 +544,7 @@ export default function App() {
                 onEditorChange={setEditorBody}
                 inboxEditorResetNonce={inboxEditorResetNonce}
                 onEditorError={setErr}
-                onWikiLinkActivate={dispatchWikiLinkActivate}
+                onWikiLinkActivate={onWikiLinkActivate}
                 onSaveShortcut={onInboxSaveShortcut}
                 busy={busy}
                 onDeleteNote={uri => {
