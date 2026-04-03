@@ -29,6 +29,14 @@ import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
+type WikiLinkAmbiguityRenamePrompt = {
+  scannedFileCount: number;
+  touchedFileCount: number;
+  touchedBytes: number;
+  updatedLinkCount: number;
+  skippedAmbiguousLinkCount: number;
+};
+
 type InboxTabProps = {
   vaultRoot: string;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
@@ -52,6 +60,9 @@ type InboxTabProps = {
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
+  wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
+  onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
+  onCancelWikiLinkAmbiguityRename: () => void;
 };
 
 export function InboxTab({
@@ -77,6 +88,9 @@ export function InboxTab({
   busy,
   onDeleteNote,
   onRenameNote,
+  wikiLinkAmbiguityRenamePrompt,
+  onConfirmWikiLinkAmbiguityRename,
+  onCancelWikiLinkAmbiguityRename,
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -205,6 +219,59 @@ export function InboxTab({
                   }}
                 >
                   Delete
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <AlertDialog.Root
+        open={wikiLinkAmbiguityRenamePrompt !== null}
+        onOpenChange={open => {
+          if (!open) {
+            onCancelWikiLinkAmbiguityRename();
+          }
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">
+              Ambiguous wiki links found
+            </AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              {wikiLinkAmbiguityRenamePrompt ? (
+                <>
+                  This rename can safely update{' '}
+                  {wikiLinkAmbiguityRenamePrompt.updatedLinkCount} link(s) across{' '}
+                  {wikiLinkAmbiguityRenamePrompt.touchedFileCount} note(s), but{' '}
+                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} link(s) are
+                  ambiguous and will be skipped.
+                </>
+              ) : null}
+            </AlertDialog.Description>
+            {wikiLinkAmbiguityRenamePrompt ? (
+              <p className="muted alert-dialog-description">
+                Scanned {wikiLinkAmbiguityRenamePrompt.scannedFileCount} file(s), touched{' '}
+                {Math.round(wikiLinkAmbiguityRenamePrompt.touchedBytes / 1024)} KiB.
+              </p>
+            ) : null}
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => {
+                    void onConfirmWikiLinkAmbiguityRename();
+                  }}
+                >
+                  Continue
                 </button>
               </AlertDialog.Action>
             </div>

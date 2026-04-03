@@ -2,6 +2,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {
   applyInboxWikiLinkRenameMaintenance,
+  planInboxWikiLinkRenameMaintenanceAsync,
   planInboxWikiLinkRenameMaintenance,
 } from './inboxWikiLinkRenameMaintenance';
 
@@ -71,6 +72,27 @@ describe('planInboxWikiLinkRenameMaintenance', () => {
       skippedAmbiguousLinkCount: 1,
     });
   });
+
+  it('async planner returns same result as sync planner', async () => {
+    const input = {
+      oldTargetUri: '/vault/Inbox/Old.md',
+      renamedStem: 'Renamed',
+      notes,
+      contentByUri: {
+        '/vault/Inbox/Old.md': 'self [[Old]]',
+        '/vault/Inbox/Ref.md': '',
+        '/vault/Inbox/Other.md': '[[Other]]',
+      },
+      activeUri: '/vault/Inbox/Ref.md',
+      activeBody: 'draft [[Old|Label]]',
+    } as const;
+    const sync = planInboxWikiLinkRenameMaintenance(input);
+    const asyncResult = await planInboxWikiLinkRenameMaintenanceAsync({
+      ...input,
+      yieldEveryNotes: 1,
+    });
+    expect(asyncResult).toEqual(sync);
+  });
 });
 
 describe('applyInboxWikiLinkRenameMaintenance', () => {
@@ -134,5 +156,32 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
       succeededUris: ['/vault/Inbox/New.md'],
       failed: [{uri: '/vault/Inbox/Ref.md', reason: 'disk full'}],
     });
+  });
+
+  it('emits apply progress callbacks', async () => {
+    const fs = createFs();
+    const updates = [
+      {uri: '/vault/Inbox/Old.md', markdown: '[[New]]', updatedLinkCount: 1},
+      {uri: '/vault/Inbox/Ref.md', markdown: '[[New]]', updatedLinkCount: 1},
+      {uri: '/vault/Inbox/Other.md', markdown: '[[New]]', updatedLinkCount: 1},
+    ] as const;
+    const progress: Array<{done: number; total: number}> = [];
+
+    await applyInboxWikiLinkRenameMaintenance({
+      fs,
+      oldUri: '/vault/Inbox/Old.md',
+      newUri: '/vault/Inbox/New.md',
+      updates,
+      onProgress: (done, total) => {
+        progress.push({done, total});
+      },
+      yieldEveryWrites: 1,
+    });
+
+    expect(progress).toEqual([
+      {done: 1, total: 3},
+      {done: 2, total: 3},
+      {done: 3, total: 3},
+    ]);
   });
 });

@@ -24,6 +24,28 @@ export type InboxWikiLinkRenamePlanResult = {
   skippedAmbiguousLinkCount: number;
 };
 
+function yieldToBrowserFrame(): Promise<void> {
+  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+    return new Promise(resolve => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  }
+  return new Promise(resolve => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function buildEmptyPlan(scannedFileCount: number): InboxWikiLinkRenamePlanResult {
+  return {
+    updates: [],
+    scannedFileCount,
+    touchedFileCount: 0,
+    touchedBytes: 0,
+    updatedLinkCount: 0,
+    skippedAmbiguousLinkCount: 0,
+  };
+}
+
 export function planInboxWikiLinkRenameMaintenance(options: {
   oldTargetUri: string;
   renamedStem: string;
@@ -73,6 +95,71 @@ export function planInboxWikiLinkRenameMaintenance(options: {
   };
 }
 
+export async function planInboxWikiLinkRenameMaintenanceAsync(options: {
+  oldTargetUri: string;
+  renamedStem: string;
+  notes: ReadonlyArray<InboxWikiLinkNoteRef>;
+  contentByUri: Readonly<Record<string, string>>;
+  activeUri: string | null;
+  activeBody: string;
+  yieldEveryNotes?: number;
+}): Promise<InboxWikiLinkRenamePlanResult> {
+  const {
+    oldTargetUri,
+    renamedStem,
+    notes,
+    contentByUri,
+    activeUri,
+    activeBody,
+    yieldEveryNotes = 0,
+  } = options;
+  if (notes.length === 0) {
+    return buildEmptyPlan(0);
+  }
+
+  const lookup = buildInboxWikiLinkResolveLookup(notes);
+  const updates: InboxWikiLinkRenameFileUpdate[] = [];
+  let touchedBytes = 0;
+  let updatedLinkCount = 0;
+  let skippedAmbiguousLinkCount = 0;
+
+  for (let i = 0; i < notes.length; i += 1) {
+    const source = notes[i];
+    const sourceBody =
+      activeUri != null && source.uri === activeUri
+        ? activeBody
+        : (contentByUri[source.uri] ?? '');
+    const rewrite = planInboxWikiLinkRenameInMarkdown({
+      markdown: sourceBody,
+      lookup,
+      oldTargetUri,
+      renamedStem,
+    });
+    updatedLinkCount += rewrite.updatedLinkCount;
+    skippedAmbiguousLinkCount += rewrite.skippedAmbiguousLinkCount;
+    if (rewrite.changed) {
+      touchedBytes += markdownUtf8ByteLength(rewrite.markdown);
+      updates.push({
+        uri: source.uri,
+        markdown: rewrite.markdown,
+        updatedLinkCount: rewrite.updatedLinkCount,
+      });
+    }
+    if (yieldEveryNotes > 0 && (i + 1) % yieldEveryNotes === 0) {
+      await yieldToBrowserFrame();
+    }
+  }
+
+  return {
+    updates,
+    scannedFileCount: notes.length,
+    touchedFileCount: updates.length,
+    touchedBytes,
+    updatedLinkCount,
+    skippedAmbiguousLinkCount,
+  };
+}
+
 export type InboxWikiLinkRenameApplyResult = {
   succeededUris: readonly string[];
   failed: readonly {uri: string; reason: string}[];
@@ -83,10 +170,14 @@ export async function applyInboxWikiLinkRenameMaintenance(options: {
   oldUri: string;
   newUri: string;
   updates: ReadonlyArray<InboxWikiLinkRenameFileUpdate>;
+  onProgress?: (done: number, total: number) => void;
+  yieldEveryWrites?: number;
 }): Promise<InboxWikiLinkRenameApplyResult> {
-  const {fs, oldUri, newUri, updates} = options;
+  const {fs, oldUri, newUri, updates, onProgress, yieldEveryWrites = 0} = options;
   const succeededUris: string[] = [];
   const failed: Array<{uri: string; reason: string}> = [];
+  const total = updates.length;
+  let done = 0;
 
   for (const update of updates) {
     const writeUri = update.uri === oldUri ? newUri : update.uri;
@@ -101,6 +192,11 @@ export async function applyInboxWikiLinkRenameMaintenance(options: {
         uri: writeUri,
         reason: error instanceof Error ? error.message : String(error),
       });
+    }
+    done += 1;
+    onProgress?.(done, total);
+    if (yieldEveryWrites > 0 && done % yieldEveryWrites === 0) {
+      await yieldToBrowserFrame();
     }
   }
 

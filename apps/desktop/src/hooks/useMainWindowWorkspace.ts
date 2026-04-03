@@ -49,7 +49,8 @@ import {
 import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
 import {
   applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenance,
+  planInboxWikiLinkRenameMaintenanceAsync,
+  type InboxWikiLinkRenamePlanResult,
 } from '../lib/inboxWikiLinkRenameMaintenance';
 
 const STORE_PATH = 'notebox-desktop.json';
@@ -61,6 +62,26 @@ const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
 type LastPersisted = {uri: string; markdown: string};
+
+type PendingWikiLinkAmbiguityRename = {
+  uri: string;
+  nextDisplayName: string;
+  summary: {
+    scannedFileCount: number;
+    touchedFileCount: number;
+    touchedBytes: number;
+    updatedLinkCount: number;
+    skippedAmbiguousLinkCount: number;
+  };
+};
+
+type RenameLinkProgress = {done: number; total: number};
+
+const LARGE_RENAME_MIN_TOUCHED_FILES = 60;
+const LARGE_RENAME_MIN_TOUCHED_BYTES = 768 * 1024;
+const RENAME_PLAN_YIELD_EVERY_NOTES = 80;
+const RENAME_APPLY_YIELD_EVERY_WRITES = 24;
+const RENAME_NOTICE_TTL_MS = 5000;
 
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
@@ -77,6 +98,11 @@ export type UseMainWindowWorkspaceResult = {
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   deviceInstanceId: string;
+  inboxRenameNotice: string | null;
+  renameLinkProgress: RenameLinkProgress | null;
+  pendingWikiLinkAmbiguityRename: PendingWikiLinkAmbiguityRename | null;
+  confirmPendingWikiLinkAmbiguityRename: () => Promise<void>;
+  cancelPendingWikiLinkAmbiguityRename: () => void;
   setErr: (value: string | null) => void;
   setEditorBody: (value: string) => void;
   hydrateVault: (root: string) => Promise<void>;
@@ -126,6 +152,12 @@ export function useMainWindowWorkspace(options: {
     useState(false);
   const [inboxShellRestored, setInboxShellRestored] = useState(true);
   const [backlinksActiveBody, setBacklinksActiveBody] = useState('');
+  const [inboxRenameNotice, setInboxRenameNotice] = useState<string | null>(null);
+  const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
+    null,
+  );
+  const [pendingWikiLinkAmbiguityRename, setPendingWikiLinkAmbiguityRename] =
+    useState<PendingWikiLinkAmbiguityRename | null>(null);
 
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRootRef = useRef<string | null>(null);
@@ -139,12 +171,41 @@ export function useMainWindowWorkspace(options: {
   );
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
+  const renameNoticeTimeoutRef = useRef<number | null>(null);
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
   composingNewEntryRef.current = composingNewEntry;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
+
+  const clearRenameNotice = useCallback(() => {
+    if (renameNoticeTimeoutRef.current != null) {
+      window.clearTimeout(renameNoticeTimeoutRef.current);
+      renameNoticeTimeoutRef.current = null;
+    }
+    setInboxRenameNotice(null);
+  }, []);
+
+  const setTransientRenameNotice = useCallback(
+    (message: string) => {
+      clearRenameNotice();
+      setInboxRenameNotice(message);
+      renameNoticeTimeoutRef.current = window.setTimeout(() => {
+        setInboxRenameNotice(null);
+        renameNoticeTimeoutRef.current = null;
+      }, RENAME_NOTICE_TTL_MS);
+    },
+    [clearRenameNotice],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (renameNoticeTimeoutRef.current != null) {
+        window.clearTimeout(renameNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const selectedNoteBacklinkUris = useMemo(() => {
     if (composingNewEntry || !selectedUri) {
@@ -230,6 +291,9 @@ export function useMainWindowWorkspace(options: {
       await flushInboxSaveRef.current();
       setBusy(true);
       setErr(null);
+      clearRenameNotice();
+      setRenameLinkProgress(null);
+      setPendingWikiLinkAmbiguityRename(null);
       setVaultSettings(null);
       try {
         await setVaultSession(root);
@@ -263,7 +327,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [fs, refreshNotes],
+    [fs, refreshNotes, clearRenameNotice],
   );
 
   useEffect(() => {
@@ -538,16 +602,35 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, selectedUri],
   );
 
-  const renameNote = useCallback(
-    async (uri: string, nextDisplayName: string) => {
+  const emptyRenamePlan = useCallback(
+    (scannedFileCount: number): InboxWikiLinkRenamePlanResult => ({
+      updates: [],
+      scannedFileCount,
+      touchedFileCount: 0,
+      touchedBytes: 0,
+      updatedLinkCount: 0,
+      skippedAmbiguousLinkCount: 0,
+    }),
+    [],
+  );
+
+  const runRenameWithWikiLinkMaintenance = useCallback(
+    async (options: {
+      uri: string;
+      nextDisplayName: string;
+      forceApplyDespiteAmbiguity: boolean;
+    }) => {
       if (!vaultRoot) {
         return;
       }
+      const {uri, nextDisplayName, forceApplyDespiteAmbiguity} = options;
       autosaveSchedulerRef.current.cancel();
       await flushInboxSaveRef.current();
 
       setBusy(true);
       setErr(null);
+      clearRenameNotice();
+      setRenameLinkProgress(null);
       try {
         const preRenameNotes = notes.map(n => ({name: n.name, uri: n.uri}));
         const preRenameContent = inboxContentByUriRef.current;
@@ -559,62 +642,73 @@ export function useMainWindowWorkspace(options: {
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
-          ? planInboxWikiLinkRenameMaintenance({
+          ? await planInboxWikiLinkRenameMaintenanceAsync({
               oldTargetUri: uri,
               renamedStem: plannedStem,
               notes: preRenameNotes,
               contentByUri: preRenameContent,
               activeUri,
               activeBody,
+              yieldEveryNotes: RENAME_PLAN_YIELD_EVERY_NOTES,
             })
-          : {
-              updates: [],
-              scannedFileCount: preRenameNotes.length,
-              touchedFileCount: 0,
-              touchedBytes: 0,
-              updatedLinkCount: 0,
-              skippedAmbiguousLinkCount: 0,
-            };
+          : emptyRenamePlan(preRenameNotes.length);
         const planDurationMs = performance.now() - planStartedAt;
         if (
-          preRenamePlan.updatedLinkCount > 0
-          || preRenamePlan.skippedAmbiguousLinkCount > 0
+          preRenamePlan.skippedAmbiguousLinkCount > 0
+          && !forceApplyDespiteAmbiguity
         ) {
-          const confirmed = window.confirm(
-            [
-              'Rename note and maintain wiki links?',
-              '',
-              `Scanned files: ${preRenamePlan.scannedFileCount}`,
-              `Files to update: ${preRenamePlan.touchedFileCount}`,
-              `Links to update: ${preRenamePlan.updatedLinkCount}`,
-              `Ambiguous links skipped: ${preRenamePlan.skippedAmbiguousLinkCount}`,
-            ].join('\n'),
-          );
-          if (!confirmed) {
-            return;
-          }
+          setPendingWikiLinkAmbiguityRename({
+            uri,
+            nextDisplayName,
+            summary: {
+              scannedFileCount: preRenamePlan.scannedFileCount,
+              touchedFileCount: preRenamePlan.touchedFileCount,
+              touchedBytes: preRenamePlan.touchedBytes,
+              updatedLinkCount: preRenamePlan.updatedLinkCount,
+              skippedAmbiguousLinkCount: preRenamePlan.skippedAmbiguousLinkCount,
+            },
+          });
+          return;
         }
+        setPendingWikiLinkAmbiguityRename(null);
 
         const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
         const nextName = nextUri.split('/').pop();
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
         const rewritePlan =
           renamedStem && renamedStem !== plannedStem
-            ? planInboxWikiLinkRenameMaintenance({
+            ? await planInboxWikiLinkRenameMaintenanceAsync({
                 oldTargetUri: uri,
                 renamedStem,
                 notes: preRenameNotes,
                 contentByUri: preRenameContent,
                 activeUri,
                 activeBody,
+                yieldEveryNotes: RENAME_PLAN_YIELD_EVERY_NOTES,
               })
             : preRenamePlan;
+        const showLargeImpactProgress =
+          rewritePlan.skippedAmbiguousLinkCount === 0 &&
+          (rewritePlan.touchedFileCount >= LARGE_RENAME_MIN_TOUCHED_FILES ||
+            rewritePlan.touchedBytes >= LARGE_RENAME_MIN_TOUCHED_BYTES);
+        if (showLargeImpactProgress && rewritePlan.touchedFileCount > 0) {
+          setRenameLinkProgress({done: 0, total: rewritePlan.touchedFileCount});
+        }
         const applyStartedAt = performance.now();
         const applyResult = await applyInboxWikiLinkRenameMaintenance({
           fs,
           oldUri: uri,
           newUri: nextUri,
           updates: rewritePlan.updates,
+          onProgress:
+            showLargeImpactProgress && rewritePlan.touchedFileCount > 0
+              ? (done, total) => {
+                  setRenameLinkProgress({done, total});
+                }
+              : undefined,
+          yieldEveryWrites: showLargeImpactProgress
+            ? RENAME_APPLY_YIELD_EVERY_WRITES
+            : 0,
         });
         const applyDurationMs = performance.now() - applyStartedAt;
         console.info('[WL-5] rename-maintenance', {
@@ -661,16 +755,58 @@ export function useMainWindowWorkspace(options: {
           setErr(
             `Renamed note, but wiki-link updates failed for ${applyResult.failed.length} file(s): ${list}`,
           );
+        } else if (rewritePlan.updatedLinkCount > 0) {
+          const noteLabel = rewritePlan.touchedFileCount === 1 ? 'note' : 'notes';
+          setTransientRenameNotice(
+            `Updated links in ${rewritePlan.touchedFileCount} ${noteLabel}.`,
+          );
         }
         await refreshNotes(vaultRoot);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
+        setRenameLinkProgress(null);
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, notes, inboxEditorRef],
+    [
+      vaultRoot,
+      fs,
+      refreshNotes,
+      notes,
+      inboxEditorRef,
+      clearRenameNotice,
+      setTransientRenameNotice,
+      emptyRenamePlan,
+    ],
   );
+
+  const renameNote = useCallback(
+    async (uri: string, nextDisplayName: string) => {
+      await runRenameWithWikiLinkMaintenance({
+        uri,
+        nextDisplayName,
+        forceApplyDespiteAmbiguity: false,
+      });
+    },
+    [runRenameWithWikiLinkMaintenance],
+  );
+
+  const confirmPendingWikiLinkAmbiguityRename = useCallback(async () => {
+    const pending = pendingWikiLinkAmbiguityRename;
+    if (!pending) {
+      return;
+    }
+    await runRenameWithWikiLinkMaintenance({
+      uri: pending.uri,
+      nextDisplayName: pending.nextDisplayName,
+      forceApplyDespiteAmbiguity: true,
+    });
+  }, [pendingWikiLinkAmbiguityRename, runRenameWithWikiLinkMaintenance]);
+
+  const cancelPendingWikiLinkAmbiguityRename = useCallback(() => {
+    setPendingWikiLinkAmbiguityRename(null);
+  }, []);
 
   const activateWikiLink = useCallback(
     async ({inner, at}: {inner: string; at: number}) => {
@@ -736,6 +872,12 @@ export function useMainWindowWorkspace(options: {
   }, [vaultRoot]);
 
   useEffect(() => {
+    setPendingWikiLinkAmbiguityRename(null);
+    setRenameLinkProgress(null);
+    clearRenameNotice();
+  }, [vaultRoot, clearRenameNotice]);
+
+  useEffect(() => {
     if (!vaultRoot) {
       return;
     }
@@ -778,6 +920,11 @@ export function useMainWindowWorkspace(options: {
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
+    inboxRenameNotice,
+    renameLinkProgress,
+    pendingWikiLinkAmbiguityRename,
+    confirmPendingWikiLinkAmbiguityRename,
+    cancelPendingWikiLinkAmbiguityRename,
     setErr,
     setEditorBody,
     hydrateVault,

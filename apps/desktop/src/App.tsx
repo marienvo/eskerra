@@ -120,6 +120,11 @@ export default function App() {
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
+    inboxRenameNotice,
+    renameLinkProgress,
+    pendingWikiLinkAmbiguityRename,
+    confirmPendingWikiLinkAmbiguityRename,
+    cancelPendingWikiLinkAmbiguityRename,
     setErr,
     setEditorBody,
     hydrateVault,
@@ -511,6 +516,16 @@ export default function App() {
           {err}
         </div>
       ) : null}
+      {!err && renameLinkProgress ? (
+        <div className="info-banner" aria-live="polite">
+          Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
+        </div>
+      ) : null}
+      {!err && !renameLinkProgress && inboxRenameNotice ? (
+        <div className="info-banner" aria-live="polite">
+          {inboxRenameNotice}
+        </div>
+      ) : null}
 
       <div className="app-body">
         <RailNav
@@ -556,6 +571,15 @@ export default function App() {
                 onRenameNote={(uri, nextDisplayName) => {
                   void renameNote(uri, nextDisplayName);
                 }}
+                wikiLinkAmbiguityRenamePrompt={
+                  pendingWikiLinkAmbiguityRename?.summary ?? null
+                }
+                onConfirmWikiLinkAmbiguityRename={() => {
+                  void confirmPendingWikiLinkAmbiguityRename();
+                }}
+                onCancelWikiLinkAmbiguityRename={
+                  cancelPendingWikiLinkAmbiguityRename
+                }
               />
             </div>
             {podcastsTabMounted ? (
