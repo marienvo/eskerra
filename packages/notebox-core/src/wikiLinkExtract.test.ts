@@ -1,6 +1,9 @@
 import {describe, expect, it} from 'vitest';
 
-import {extractWikiLinkInnersFromMarkdown} from './wikiLinkExtract';
+import {
+  extractWikiLinkInnerMatchesFromMarkdown,
+  extractWikiLinkInnersFromMarkdown,
+} from './wikiLinkExtract';
 
 describe('extractWikiLinkInnersFromMarkdown', () => {
   it('extracts plain and display-form wiki links', () => {
@@ -23,5 +26,14 @@ describe('extractWikiLinkInnersFromMarkdown', () => {
 
   it('returns empty when no links exist', () => {
     expect(extractWikiLinkInnersFromMarkdown('no wiki links here')).toEqual([]);
+  });
+
+  it('returns match offsets for safe rewrites', () => {
+    expect(
+      extractWikiLinkInnerMatchesFromMarkdown('A [[One]] B [[Two|Shown]] C'),
+    ).toEqual([
+      {inner: 'One', fullMatchStart: 2, fullMatchEnd: 9},
+      {inner: 'Two|Shown', fullMatchStart: 12, fullMatchEnd: 25},
+    ]);
   });
 });

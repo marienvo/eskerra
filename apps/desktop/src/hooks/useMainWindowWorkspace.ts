@@ -15,6 +15,8 @@ import {
   ensureDeviceInstanceId,
   markdownContainsTransientImageUrls,
   parseComposeInput,
+  sanitizeInboxNoteStem,
+  stemFromMarkdownFileName,
   type NoteboxSettings,
   type VaultFilesystem,
 } from '@notebox/core';
@@ -45,6 +47,10 @@ import {
   startVaultWatch,
 } from '../lib/tauriVault';
 import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
+import {
+  applyInboxWikiLinkRenameMaintenance,
+  planInboxWikiLinkRenameMaintenance,
+} from '../lib/inboxWikiLinkRenameMaintenance';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
@@ -543,14 +549,103 @@ export function useMainWindowWorkspace(options: {
       setBusy(true);
       setErr(null);
       try {
-        const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
-        setInboxContentByUri(prev => {
-          if (nextUri === uri || prev[uri] === undefined) {
-            return prev;
+        const preRenameNotes = notes.map(n => ({name: n.name, uri: n.uri}));
+        const preRenameContent = inboxContentByUriRef.current;
+        const activeUri = selectedUriRef.current;
+        const activeBody =
+          activeUri != null
+            ? (inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current)
+            : '';
+        const planStartedAt = performance.now();
+        const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
+        const preRenamePlan = plannedStem
+          ? planInboxWikiLinkRenameMaintenance({
+              oldTargetUri: uri,
+              renamedStem: plannedStem,
+              notes: preRenameNotes,
+              contentByUri: preRenameContent,
+              activeUri,
+              activeBody,
+            })
+          : {
+              updates: [],
+              scannedFileCount: preRenameNotes.length,
+              touchedFileCount: 0,
+              touchedBytes: 0,
+              updatedLinkCount: 0,
+              skippedAmbiguousLinkCount: 0,
+            };
+        const planDurationMs = performance.now() - planStartedAt;
+        if (
+          preRenamePlan.updatedLinkCount > 0
+          || preRenamePlan.skippedAmbiguousLinkCount > 0
+        ) {
+          const confirmed = window.confirm(
+            [
+              'Rename note and maintain wiki links?',
+              '',
+              `Scanned files: ${preRenamePlan.scannedFileCount}`,
+              `Files to update: ${preRenamePlan.touchedFileCount}`,
+              `Links to update: ${preRenamePlan.updatedLinkCount}`,
+              `Ambiguous links skipped: ${preRenamePlan.skippedAmbiguousLinkCount}`,
+            ].join('\n'),
+          );
+          if (!confirmed) {
+            return;
           }
+        }
+
+        const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
+        const nextName = nextUri.split('/').pop();
+        const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
+        const rewritePlan =
+          renamedStem && renamedStem !== plannedStem
+            ? planInboxWikiLinkRenameMaintenance({
+                oldTargetUri: uri,
+                renamedStem,
+                notes: preRenameNotes,
+                contentByUri: preRenameContent,
+                activeUri,
+                activeBody,
+              })
+            : preRenamePlan;
+        const applyStartedAt = performance.now();
+        const applyResult = await applyInboxWikiLinkRenameMaintenance({
+          fs,
+          oldUri: uri,
+          newUri: nextUri,
+          updates: rewritePlan.updates,
+        });
+        const applyDurationMs = performance.now() - applyStartedAt;
+        console.info('[WL-5] rename-maintenance', {
+          oldUri: uri,
+          newUri: nextUri,
+          scannedFiles: rewritePlan.scannedFileCount,
+          touchedFiles: rewritePlan.touchedFileCount,
+          touchedBytes: rewritePlan.touchedBytes,
+          updatedLinks: rewritePlan.updatedLinkCount,
+          skippedAmbiguous: rewritePlan.skippedAmbiguousLinkCount,
+          failedWrites: applyResult.failed.length,
+          planDurationMs: Math.round(planDurationMs),
+          applyDurationMs: Math.round(applyDurationMs),
+        });
+        const succeededWriteUris = new Set(applyResult.succeededUris);
+        const plannedContentByWriteUri = new Map<string, string>();
+        for (const update of rewritePlan.updates) {
+          const writeUri = update.uri === uri ? nextUri : update.uri;
+          plannedContentByWriteUri.set(writeUri, update.markdown);
+        }
+        setInboxContentByUri(prev => {
           const next = {...prev};
-          next[nextUri] = prev[uri];
-          delete next[uri];
+          if (nextUri !== uri && prev[uri] !== undefined) {
+            next[nextUri] = prev[uri];
+            delete next[uri];
+          }
+          for (const [writeUri, markdown] of plannedContentByWriteUri) {
+            if (succeededWriteUris.has(writeUri)) {
+              next[writeUri] = markdown;
+            }
+          }
           return next;
         });
         if (selectedUriRef.current === uri) {
@@ -561,6 +656,12 @@ export function useMainWindowWorkspace(options: {
             lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
           }
         }
+        if (applyResult.failed.length > 0) {
+          const list = applyResult.failed.map(f => f.uri).join(', ');
+          setErr(
+            `Renamed note, but wiki-link updates failed for ${applyResult.failed.length} file(s): ${list}`,
+          );
+        }
         await refreshNotes(vaultRoot);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -568,7 +669,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes],
+    [vaultRoot, fs, refreshNotes, notes, inboxEditorRef],
   );
 
   const activateWikiLink = useCallback(

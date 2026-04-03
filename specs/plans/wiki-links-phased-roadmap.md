@@ -145,6 +145,7 @@ This roadmap uses phase IDs **WL-0 … WL-6** so they do not collide with attach
 
 ### WL-5 — Rename-safe link maintenance
 
+- **Detailed design:** [wiki-rename-phase.md](./wiki-rename-phase.md).
 - **Goal:** When an inbox note is **renamed** (filename / identity change per product definition), update `[[...]]` references across the vault so links stay coherent and filename-safe.
 - **Why later:** Largest user-data and performance risk; depends on a trustworthy **set of referencing files** (from WL-4-style model or equivalent).
 - **Scope:** Define rename event source (single app rename path); compute affected files; apply pure rewrite from core; transactional story (per-file save order, rollback strategy); explicit user confirmation if needed; **no silent** rewrites outside documented policy (extension invariant).

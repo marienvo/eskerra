@@ -32,7 +32,16 @@ export {
   type InboxWikiLinkResolveResult,
   type ParsedWikiLinkInner,
 } from './wikiLinkInbox';
-export {extractWikiLinkInnersFromMarkdown} from './wikiLinkExtract';
+export {
+  extractWikiLinkInnerMatchesFromMarkdown,
+  extractWikiLinkInnersFromMarkdown,
+  type WikiLinkInnerMatch,
+} from './wikiLinkExtract';
+export {
+  planInboxWikiLinkRenameInMarkdown,
+  type InboxWikiLinkRenameMarkdownPlan,
+  type InboxWikiLinkRenameSkippedReason,
+} from './wikiLinkRename';
 export {
   buildInboxWikiLinkCompletionCandidates,
   filterInboxWikiLinkCompletionCandidates,
