@@ -29,6 +29,7 @@ export {
   type InboxWikiLinkResolveResult,
   type ParsedWikiLinkInner,
 } from './wikiLinkInbox';
+export {extractWikiLinkInnersFromMarkdown} from './wikiLinkExtract';
 export {
   buildInboxWikiLinkCompletionCandidates,
   filterInboxWikiLinkCompletionCandidates,

@@ -117,6 +117,7 @@ export default function App() {
     err,
     composingNewEntry,
     inboxContentByUri,
+    selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
     setErr,
@@ -534,6 +535,7 @@ export default function App() {
                 onLeftWidthPxChanged={persistInboxLeftWidthPx}
                 notes={notes}
                 inboxContentByUri={inboxContentByUri}
+                backlinkUris={selectedNoteBacklinkUris}
                 selectedUri={selectedUri}
                 onSelectNote={selectNote}
                 onAddEntry={startNewEntry}

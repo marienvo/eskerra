@@ -34,6 +34,7 @@ type InboxTabProps = {
   onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
   inboxContentByUri: Record<string, string>;
+  backlinkUris: readonly string[];
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
   onAddEntry: () => void;
@@ -57,6 +58,7 @@ export function InboxTab({
   onLeftWidthPxChanged,
   notes,
   inboxContentByUri,
+  backlinkUris,
   selectedUri,
   onSelectNote,
   onAddEntry,
@@ -106,6 +108,28 @@ export function InboxTab({
     const tail = selectedUri.split(/[/\\]/).pop()?.trim();
     return tail || 'Editor';
   }, [composingNewEntry, notes, selectedUri]);
+
+  const backlinkRows = useMemo(
+    () =>
+      backlinkUris
+        .map(uri => {
+          const row = notes.find(n => n.uri === uri);
+          if (!row) {
+            return null;
+          }
+          const markdownSource =
+            !composingNewEntry && row.uri === selectedUri
+              ? editorBody
+              : inboxContentByUri[row.uri];
+          const title =
+            markdownSource !== undefined
+              ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(row.name)
+              : getNoteTitle(row.name);
+          return {uri: row.uri, fileName: row.name, title};
+        })
+        .filter((row): row is {uri: string; fileName: string; title: string} => row != null),
+    [backlinkUris, notes, composingNewEntry, selectedUri, editorBody, inboxContentByUri],
+  );
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
 
@@ -283,6 +307,29 @@ export function InboxTab({
                     busy={busy}
                   />
                 </div>
+                {!composingNewEntry && selectedUri ? (
+                  <section className="inbox-backlinks" aria-label="Backlinks">
+                    <div className="inbox-backlinks__header">Linked from</div>
+                    {backlinkRows.length === 0 ? (
+                      <p className="muted inbox-backlinks__empty">No incoming links.</p>
+                    ) : (
+                      <ul className="inbox-backlinks__list">
+                        {backlinkRows.map(row => (
+                          <li key={row.uri}>
+                            <button
+                              type="button"
+                              className="inbox-backlinks__row"
+                              onClick={() => onSelectNote(row.uri)}
+                            >
+                              <span className="inbox-backlinks__title">{row.title}</span>
+                              <span className="inbox-backlinks__filename">{row.fileName}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                ) : null}
                 {composingNewEntry ? (
                   <div className="pane-footer">
                     <button

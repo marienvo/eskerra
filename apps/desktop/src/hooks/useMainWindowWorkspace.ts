@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -42,6 +43,7 @@ import {
   setVaultSession,
   startVaultWatch,
 } from '../lib/tauriVault';
+import {buildInboxWikiLinkBacklinkIndex} from '../lib/inboxWikiLinkBacklinkIndex';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
@@ -62,6 +64,7 @@ export type UseMainWindowWorkspaceResult = {
   err: string | null;
   composingNewEntry: boolean;
   inboxContentByUri: Record<string, string>;
+  selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   deviceInstanceId: string;
   setErr: (value: string | null) => void;
@@ -130,6 +133,25 @@ export function useMainWindowWorkspace(options: {
   composingNewEntryRef.current = composingNewEntry;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
+
+  const selectedNoteBacklinkUris = useMemo(() => {
+    if (composingNewEntry || !selectedUri) {
+      return [] as const;
+    }
+    const t0 = performance.now();
+    const backlinksByTarget = buildInboxWikiLinkBacklinkIndex({
+      notes: notes.map(n => ({name: n.name, uri: n.uri})),
+      contentByUri: inboxContentByUri,
+      activeUri: selectedUri,
+      activeBody: editorBody,
+    });
+    const elapsedMs = performance.now() - t0;
+    // WL-4 benchmark gates are validated with reference vault runs; keep runtime timing visible.
+    console.debug(
+      `[wl-4] rebuilt backlink read model in ${elapsedMs.toFixed(1)}ms for ${notes.length} notes`,
+    );
+    return backlinksByTarget.get(selectedUri) ?? [];
+  }, [composingNewEntry, selectedUri, notes, inboxContentByUri, editorBody]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -594,6 +616,7 @@ export function useMainWindowWorkspace(options: {
     err,
     composingNewEntry,
     inboxContentByUri,
+    selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
     setErr,
