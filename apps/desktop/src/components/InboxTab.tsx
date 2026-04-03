@@ -1,7 +1,8 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import * as Dialog from '@radix-ui/react-dialog';
 import type {RefObject} from 'react';
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
@@ -13,6 +14,7 @@ import {
   formatRelativeCalendarLabel,
   getInboxTileBackgroundColor,
   getNoteTitle,
+  stemFromMarkdownFileName,
 } from '@notebox/core';
 
 import {
@@ -49,6 +51,7 @@ type InboxTabProps = {
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
+  onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
 };
 
 export function InboxTab({
@@ -73,9 +76,42 @@ export function InboxTab({
   onSaveShortcut,
   busy,
   onDeleteNote,
+  onRenameNote,
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
+  const [renameTargetUri, setRenameTargetUri] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openRenameDialog = (uri: string) => {
+    const row = notes.find(n => n.uri === uri);
+    if (!row) {
+      return;
+    }
+    setRenameTargetUri(uri);
+    setRenameDraft(stemFromMarkdownFileName(row.name));
+  };
+
+  const submitRename = () => {
+    const uri = renameTargetUri;
+    if (!uri || busy) {
+      return;
+    }
+    void onRenameNote(uri, renameDraft);
+    setRenameTargetUri(null);
+  };
+
+  useEffect(() => {
+    if (!renameTargetUri) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [renameTargetUri]);
 
   const wikiLinkTargetIsResolved = useMemo(
     () => (inner: string) =>
@@ -175,6 +211,58 @@ export function InboxTab({
           </AlertDialog.Content>
         </AlertDialog.Portal>
       </AlertDialog.Root>
+      <Dialog.Root
+        open={renameTargetUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setRenameTargetUri(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="alert-dialog-overlay" />
+          <Dialog.Content className="alert-dialog-content">
+            <Dialog.Title className="alert-dialog-title">Rename note</Dialog.Title>
+            <Dialog.Description className="alert-dialog-description">
+              Choose a new name for this note.
+            </Dialog.Description>
+            <label className="rename-note-field">
+              <span className="rename-note-field__label">File name</span>
+              <input
+                ref={renameInputRef}
+                type="text"
+                className="rename-note-field__input"
+                value={renameDraft}
+                disabled={busy}
+                onChange={event => setRenameDraft(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitRename();
+                  }
+                }}
+              />
+            </label>
+            <div className="alert-dialog-actions">
+              <Dialog.Close asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </Dialog.Close>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={() => {
+                  submitRename();
+                }}
+              >
+                Rename
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <DesktopHorizontalSplit
         leftWidthPx={leftWidthPx}
@@ -245,6 +333,15 @@ export function InboxTab({
                           collisionPadding={8}
                         >
                           <ContextMenu.Item
+                            className="note-list-context-menu__item"
+                            disabled={busy}
+                            onSelect={() => {
+                              openRenameDialog(n.uri);
+                            }}
+                          >
+                            Rename
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
                             className="note-list-context-menu__item note-list-context-menu__item--danger"
                             disabled={busy}
                             onSelect={() => {
@@ -268,6 +365,21 @@ export function InboxTab({
               <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
                 {editorPaneTitle}
               </span>
+              {!composingNewEntry && selectedUri ? (
+                <button
+                  type="button"
+                  className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                  onClick={() => openRenameDialog(selectedUri)}
+                  disabled={busy}
+                  aria-label="Rename note"
+                  data-tooltip="Rename note"
+                  data-tooltip-placement="inline-start"
+                >
+                  <span className="pane-header-add-btn__glyph" aria-hidden>
+                    <MaterialIcon name="drive_file_rename_outline" size={12} />
+                  </span>
+                </button>
+              ) : null}
               {composingNewEntry ? (
                 <button
                   type="button"

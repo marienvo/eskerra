@@ -14,6 +14,7 @@ function createFsMock(): {fs: VaultFilesystem; unlinks: string[]} {
     unlink: vi.fn().mockImplementation(async (path: string) => {
       unlinks.push(path);
     }),
+    renameFile: vi.fn().mockResolvedValue(undefined),
     listFiles: vi.fn().mockResolvedValue([]),
   };
   return {fs, unlinks};

@@ -33,6 +33,7 @@ import {
   listInboxNotes,
   prefetchInboxMarkdownBodies,
   readVaultLocalSettings,
+  renameInboxMarkdownNote,
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
@@ -84,6 +85,7 @@ export type UseMainWindowWorkspaceResult = {
   /** Editor intent entrypoint for wiki link open/create. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
+  renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -530,6 +532,45 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, selectedUri],
   );
 
+  const renameNote = useCallback(
+    async (uri: string, nextDisplayName: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+
+      setBusy(true);
+      setErr(null);
+      try {
+        const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
+        setInboxContentByUri(prev => {
+          if (nextUri === uri || prev[uri] === undefined) {
+            return prev;
+          }
+          const next = {...prev};
+          next[nextUri] = prev[uri];
+          delete next[uri];
+          return next;
+        });
+        if (selectedUriRef.current === uri) {
+          selectedUriRef.current = nextUri;
+          setSelectedUri(nextUri);
+          const previousPersisted = lastPersistedRef.current;
+          if (previousPersisted && previousPersisted.uri === uri) {
+            lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
+          }
+        }
+        await refreshNotes(vaultRoot);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes],
+  );
+
   const activateWikiLink = useCallback(
     async ({inner, at}: {inner: string; at: number}) => {
       if (!vaultRoot) {
@@ -647,6 +688,7 @@ export function useMainWindowWorkspace(options: {
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
+    renameNote,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   };

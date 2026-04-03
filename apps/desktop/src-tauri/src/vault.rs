@@ -286,6 +286,20 @@ pub fn vault_remove_file(state: State<'_, VaultRootState>, path: String) -> Resu
 }
 
 #[tauri::command]
+pub fn vault_rename_file(
+    state: State<'_, VaultRootState>,
+    from_path: String,
+    to_path: String,
+) -> Result<(), String> {
+    let from_target = PathBuf::from(from_path);
+    let to_target = PathBuf::from(to_path);
+    let vault = state.0.lock().map_err(|e| e.to_string())?;
+    assert_in_vault(vault.as_ref(), &from_target)?;
+    assert_in_vault(vault.as_ref(), &to_target)?;
+    fs::rename(&from_target, &to_target).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn vault_list_dir(
     state: State<'_, VaultRootState>,
     path: String,

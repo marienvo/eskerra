@@ -38,6 +38,7 @@ export function createTauriVaultFilesystem(): VaultFilesystem {
       return invoke('vault_write_file', {path, contents: content});
     },
     unlink: path => invoke('vault_remove_file', {path}),
+    renameFile: (fromPath, toPath) => invoke('vault_rename_file', {fromPath, toPath}),
     listFiles: async path => {
       const rows = await invoke<ListRow[]>('vault_list_dir', {path});
       return rows.map(mapRow);

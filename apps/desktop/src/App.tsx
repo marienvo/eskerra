@@ -131,6 +131,7 @@ export default function App() {
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
+    renameNote,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({
@@ -551,6 +552,9 @@ export default function App() {
                 busy={busy}
                 onDeleteNote={uri => {
                   void deleteNote(uri);
+                }}
+                onRenameNote={(uri, nextDisplayName) => {
+                  void renameNote(uri, nextDisplayName);
                 }}
               />
             </div>

@@ -24,5 +24,6 @@ export interface VaultFilesystem {
   readFile(uri: string, options: VaultReadOptions): Promise<string>;
   writeFile(uri: string, content: string, options: VaultWriteOptions): Promise<void>;
   unlink(uri: string): Promise<void>;
+  renameFile(fromUri: string, toUri: string): Promise<void>;
   listFiles(directoryUri: string): Promise<VaultDirEntry[]>;
 }

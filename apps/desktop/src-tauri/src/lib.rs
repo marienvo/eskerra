@@ -68,6 +68,7 @@ pub fn run() {
             vault::vault_write_file_bytes,
             vault::vault_import_files_into_attachments,
             vault::vault_remove_file,
+            vault::vault_rename_file,
             vault::vault_list_dir,
             vault_watch::vault_start_watch,
             window_state_disk::notebox_peek_window_state_file,

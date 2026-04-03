@@ -24,6 +24,14 @@ function createMemoryFs(initial: Map<string, string | 'dir'>): VaultFilesystem {
     unlink: async uri => {
       store.delete(uri);
     },
+    renameFile: async (fromUri, toUri) => {
+      const value = store.get(fromUri);
+      if (value === undefined) {
+        throw new Error('not found');
+      }
+      store.delete(fromUri);
+      store.set(toUri, value);
+    },
     listFiles: async (): Promise<VaultDirEntry[]> => [],
   };
 }
