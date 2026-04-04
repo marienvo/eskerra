@@ -1781,6 +1781,23 @@ button.primary.destructive {
   padding-inline: 0.15rem;
 }
 
+/* In-document table mode: line tint + active cell (CodeMirror-native editing; no embedded grid). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-table-line {
+  padding-block: 0.06rem;
+  border-radius: 3px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-table-line--alt {
+  background: color-mix(in srgb, var(--nb-editor-text) 3%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-active-cell {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--nb-editor-paper));
+  outline: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  outline-offset: 0;
+  border-radius: 3px;
+}
+
 /*
  * Raw-Markdown controls: zero layout height (estimatedHeight 0) so table lines are not pushed down;
  * rail sits at the top-end of the content column, beside the first line (same idea as table __rail).
@@ -1807,6 +1824,21 @@ button.primary.destructive {
   right: 0;
   z-index: 2;
   pointer-events: auto;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner.cm-eskerra-table-rail-banner
+  .cm-eskerra-table__rail-bottom {
+  position: absolute;
+  top: 2.35rem;
+  right: 0;
+  z-index: 2;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 /*

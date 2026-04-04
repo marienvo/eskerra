@@ -37,7 +37,6 @@
     "@tauri-apps/plugin-window-state": "^2.4.1",
     "material-icons": "^1.13.14",
     "react": "19.2.3",
-    "react-data-grid": "^7.0.0-beta.59",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
