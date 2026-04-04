@@ -96,6 +96,6 @@ Do **not** implement multi-select and DnD in the same phase.
 - [ ] Phase 3: wiki wired to index only; stem-only; file rename rewrite only; no folder-move rewrites
 - [x] Phase 4: single-item DnD
 - [x] Phase 5: multi-select
-- [ ] Phase 6: bulk operations
+- [x] Phase 6: bulk operations
 - [ ] Phase 7: desktop specs updated
 - [ ] Backlinks: separate plan when started; **not** part of this checklist

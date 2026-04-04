@@ -142,6 +142,9 @@ export default function App() {
     deleteFolder,
     renameFolder,
     moveVaultTreeItem,
+    bulkDeleteVaultTreeItems,
+    bulkMoveVaultTreeItems,
+    vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({
@@ -589,6 +592,13 @@ export default function App() {
                 onMoveVaultTreeItem={(src, kind, destDir) => {
                   void moveVaultTreeItem(src, kind, destDir);
                 }}
+                onBulkMoveVaultTreeItems={(items, destDir) => {
+                  void bulkMoveVaultTreeItems(items, destDir);
+                }}
+                onBulkDeleteVaultTreeItems={items => {
+                  void bulkDeleteVaultTreeItems(items);
+                }}
+                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
                 wikiLinkAmbiguityRenamePrompt={
                   pendingWikiLinkAmbiguityRename?.summary ?? null
                 }

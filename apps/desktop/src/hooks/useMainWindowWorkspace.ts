@@ -39,6 +39,7 @@ import {
   deleteVaultTreeDirectory,
   listInboxNotes,
   moveVaultTreeItemToDirectory,
+  type MoveVaultTreeItemResult,
   readVaultLocalSettings,
   readVaultSettings,
   renameVaultMarkdownNote,
@@ -47,6 +48,11 @@ import {
   syncInboxMarkdownIndex,
   writeVaultLocalSettings,
 } from '../lib/vaultBootstrap';
+import {
+  filterVaultTreeBulkMoveSources,
+  planVaultTreeBulkTargets,
+  type VaultTreeBulkItem,
+} from '../lib/vaultTreeBulkPlan';
 import {
   getVaultSession,
   setVaultSession,
@@ -174,6 +180,13 @@ export type UseMainWindowWorkspaceResult = {
     sourceKind: 'folder' | 'article',
     targetDirectoryUri: string,
   ) => Promise<void>;
+  bulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => Promise<void>;
+  bulkMoveVaultTreeItems: (
+    items: VaultTreeBulkItem[],
+    targetDirectoryUri: string,
+  ) => Promise<void>;
+  /** Bumped after bulk tree mutations so the vault pane can clear stale multi-selection. */
+  vaultTreeSelectionClearNonce: number;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -204,6 +217,7 @@ export function useMainWindowWorkspace(options: {
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
+  const [vaultTreeSelectionClearNonce, setVaultTreeSelectionClearNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
     useState(false);
@@ -1118,6 +1132,78 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, clearRenameNotice],
   );
 
+  const commitMoveVaultTreeResult = useCallback(
+    (result: MoveVaultTreeItemResult) => {
+      if (!vaultRoot || result.previousUri === result.nextUri) {
+        return;
+      }
+      const invKind = result.movedKind === 'article' ? 'file' : 'directory';
+      subtreeMarkdownCacheRef.current.invalidateForMutation(
+        vaultRoot,
+        result.previousUri,
+        invKind,
+      );
+      subtreeMarkdownCacheRef.current.invalidateForMutation(
+        vaultRoot,
+        result.nextUri,
+        invKind,
+      );
+
+      if (result.movedKind === 'article') {
+        setInboxContentByUri(prev => {
+          if (prev[result.previousUri] === undefined) {
+            return prev;
+          }
+          const next = {...prev};
+          next[result.nextUri] = next[result.previousUri]!;
+          delete next[result.previousUri];
+          return next;
+        });
+        if (selectedUriRef.current === result.previousUri) {
+          selectedUriRef.current = result.nextUri;
+          setSelectedUri(result.nextUri);
+          const lp = lastPersistedRef.current;
+          if (lp && lp.uri === result.previousUri) {
+            lastPersistedRef.current = {...lp, uri: result.nextUri};
+          }
+        }
+      } else {
+        const oldUri = result.previousUri;
+        const newUri = result.nextUri;
+        setInboxContentByUri(prev => {
+          const next = {...prev};
+          for (const k of Object.keys(prev)) {
+            const mapped = replaceVaultUriPrefix(k, oldUri, newUri);
+            if (mapped && mapped !== k && prev[k] !== undefined) {
+              next[mapped] = prev[k]!;
+              delete next[k];
+            }
+          }
+          return next;
+        });
+        let nextSel: string | null = selectedUriRef.current;
+        if (nextSel) {
+          const mappedSel = replaceVaultUriPrefix(
+            nextSel.replace(/\\/g, '/'),
+            oldUri,
+            newUri,
+          );
+          nextSel = mappedSel ?? nextSel;
+        }
+        selectedUriRef.current = nextSel;
+        setSelectedUri(nextSel);
+        const lp = lastPersistedRef.current;
+        if (lp) {
+          const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, newUri);
+          if (mappedLp) {
+            lastPersistedRef.current = {...lp, uri: mappedLp};
+          }
+        }
+      }
+    },
+    [vaultRoot],
+  );
+
   const moveVaultTreeItem = useCallback(
     async (
       sourceUri: string,
@@ -1137,73 +1223,7 @@ export function useMainWindowWorkspace(options: {
           sourceKind,
           targetDirectoryUri,
         });
-        if (result.previousUri === result.nextUri) {
-          return;
-        }
-        const invKind = result.movedKind === 'article' ? 'file' : 'directory';
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
-          vaultRoot,
-          result.previousUri,
-          invKind,
-        );
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
-          vaultRoot,
-          result.nextUri,
-          invKind,
-        );
-
-        if (result.movedKind === 'article') {
-          setInboxContentByUri(prev => {
-            if (prev[result.previousUri] === undefined) {
-              return prev;
-            }
-            const next = {...prev};
-            next[result.nextUri] = next[result.previousUri]!;
-            delete next[result.previousUri];
-            return next;
-          });
-          if (selectedUriRef.current === result.previousUri) {
-            selectedUriRef.current = result.nextUri;
-            setSelectedUri(result.nextUri);
-            const lp = lastPersistedRef.current;
-            if (lp && lp.uri === result.previousUri) {
-              lastPersistedRef.current = {...lp, uri: result.nextUri};
-            }
-          }
-        } else {
-          const oldUri = result.previousUri;
-          const newUri = result.nextUri;
-          setInboxContentByUri(prev => {
-            const next = {...prev};
-            for (const k of Object.keys(prev)) {
-              const mapped = replaceVaultUriPrefix(k, oldUri, newUri);
-              if (mapped && mapped !== k && prev[k] !== undefined) {
-                next[mapped] = prev[k]!;
-                delete next[k];
-              }
-            }
-            return next;
-          });
-          let nextSel: string | null = selectedUriRef.current;
-          if (nextSel) {
-            const mappedSel = replaceVaultUriPrefix(
-              nextSel.replace(/\\/g, '/'),
-              oldUri,
-              newUri,
-            );
-            nextSel = mappedSel ?? nextSel;
-          }
-          selectedUriRef.current = nextSel;
-          setSelectedUri(nextSel);
-          const lp = lastPersistedRef.current;
-          if (lp) {
-            const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, newUri);
-            if (mappedLp) {
-              lastPersistedRef.current = {...lp, uri: mappedLp};
-            }
-          }
-        }
-
+        commitMoveVaultTreeResult(result);
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -1212,7 +1232,124 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
+    [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
+  );
+
+  const bulkDeleteVaultTreeItems = useCallback(
+    async (items: VaultTreeBulkItem[]) => {
+      if (!vaultRoot) {
+        return;
+      }
+      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const plan = planVaultTreeBulkTargets(items, rootId);
+      if (plan.length === 0) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      const normSel = selectedUriRef.current?.replace(/\\/g, '/');
+      const shouldClearEditor =
+        normSel != null
+        && plan.some(entry => {
+          const d = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+          if (entry.kind === 'folder') {
+            return normSel === d || normSel.startsWith(`${d}/`);
+          }
+          return normSel === d;
+        });
+      if (shouldClearEditor) {
+        selectedUriRef.current = null;
+        composingNewEntryRef.current = false;
+        lastPersistedRef.current = null;
+        setSelectedUri(null);
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      }
+      await saveChainRef.current.catch(() => undefined);
+      setBusy(true);
+      setErr(null);
+      try {
+        for (const entry of plan) {
+          if (entry.kind === 'article') {
+            await deleteVaultMarkdownNote(vaultRoot, entry.uri, fs);
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              entry.uri,
+              'file',
+            );
+            setInboxContentByUri(prev => {
+              if (prev[entry.uri] === undefined) {
+                return prev;
+              }
+              const next = {...prev};
+              delete next[entry.uri];
+              return next;
+            });
+          } else {
+            const normDir = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+            await deleteVaultTreeDirectory(vaultRoot, entry.uri, fs);
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              entry.uri,
+              'directory',
+            );
+            setInboxContentByUri(prev => {
+              const next = {...prev};
+              for (const k of Object.keys(next)) {
+                const kn = k.replace(/\\/g, '/');
+                if (kn === normDir || kn.startsWith(`${normDir}/`)) {
+                  delete next[k];
+                }
+              }
+              return next;
+            });
+          }
+        }
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+        setVaultTreeSelectionClearNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
     [vaultRoot, fs, refreshNotes],
+  );
+
+  const bulkMoveVaultTreeItems = useCallback(
+    async (items: VaultTreeBulkItem[], targetDirectoryUri: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const plan = filterVaultTreeBulkMoveSources(items, targetDirectoryUri, rootId);
+      if (plan.length === 0) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+      setBusy(true);
+      setErr(null);
+      try {
+        for (const entry of plan) {
+          const result = await moveVaultTreeItemToDirectory(vaultRoot, fs, {
+            sourceUri: entry.uri,
+            sourceKind: entry.kind,
+            targetDirectoryUri,
+          });
+          commitMoveVaultTreeResult(result);
+        }
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+        setVaultTreeSelectionClearNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
   );
 
   useEffect(() => {
@@ -1300,6 +1437,9 @@ export function useMainWindowWorkspace(options: {
     deleteFolder,
     renameFolder,
     moveVaultTreeItem,
+    bulkDeleteVaultTreeItems,
+    bulkMoveVaultTreeItems,
+    vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   };

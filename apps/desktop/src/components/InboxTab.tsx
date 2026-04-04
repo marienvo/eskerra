@@ -11,6 +11,7 @@ import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
   getNoteTitle,
+  normalizeVaultBaseUri,
   stemFromMarkdownFileName,
   type VaultFilesystem,
   type VaultMarkdownRef,
@@ -22,6 +23,10 @@ import {
 } from '../editor/noteEditor/NoteMarkdownEditor';
 
 import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
+import {
+  planVaultTreeBulkTargets,
+  type VaultTreeBulkItem,
+} from '../lib/vaultTreeBulkPlan';
 
 import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {MaterialIcon} from './MaterialIcon';
@@ -72,6 +77,12 @@ type InboxTabProps = {
     sourceKind: 'folder' | 'article',
     targetDirectoryUri: string,
   ) => void | Promise<void>;
+  onBulkMoveVaultTreeItems: (
+    items: VaultTreeBulkItem[],
+    targetDirectoryUri: string,
+  ) => void | Promise<void>;
+  onBulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => void | Promise<void>;
+  vaultTreeSelectionClearNonce: number;
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
@@ -107,6 +118,9 @@ export function InboxTab({
   onDeleteFolder,
   onRenameFolder,
   onMoveVaultTreeItem,
+  onBulkMoveVaultTreeItems,
+  onBulkDeleteVaultTreeItems,
+  vaultTreeSelectionClearNonce,
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
@@ -116,6 +130,9 @@ export function InboxTab({
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
     null,
   );
+  const [confirmBulkDeleteItems, setConfirmBulkDeleteItems] = useState<
+    VaultTreeBulkItem[] | null
+  >(null);
   const [renameTargetUri, setRenameTargetUri] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
@@ -320,6 +337,61 @@ export function InboxTab({
         </AlertDialog.Portal>
       </AlertDialog.Root>
       <AlertDialog.Root
+        open={confirmBulkDeleteItems !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setConfirmBulkDeleteItems(null);
+          }
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">
+              Delete multiple items
+            </AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              {confirmBulkDeleteItems ? (
+                <>
+                  Delete{' '}
+                  {
+                    planVaultTreeBulkTargets(
+                      confirmBulkDeleteItems,
+                      normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+                    ).length
+                  }{' '}
+                  vault item(s) including any files inside selected folders? This cannot be
+                  undone.
+                </>
+              ) : null}
+            </AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  type="button"
+                  className="primary destructive"
+                  disabled={busy}
+                  onClick={() => {
+                    const items = confirmBulkDeleteItems;
+                    setConfirmBulkDeleteItems(null);
+                    if (items) {
+                      void onBulkDeleteVaultTreeItems(items);
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <AlertDialog.Root
         open={wikiLinkAmbiguityRenamePrompt !== null}
         onOpenChange={open => {
           if (!open) {
@@ -500,6 +572,7 @@ export function InboxTab({
                 vaultRoot={vaultRoot}
                 fs={fs}
                 fsRefreshNonce={fsRefreshNonce}
+                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
                 selectedMarkdownUri={composingNewEntry ? null : selectedUri}
                 busy={busy}
                 onOpenMarkdownNote={onSelectNote}
@@ -512,7 +585,11 @@ export function InboxTab({
                 onDeleteFolderRequest={u => {
                   setConfirmDeleteFolderUri(u);
                 }}
+                onBulkDeleteRequest={items => {
+                  setConfirmBulkDeleteItems(items);
+                }}
                 onMoveVaultTreeItem={onMoveVaultTreeItem}
+                onBulkMoveVaultTreeItems={onBulkMoveVaultTreeItems}
               />
             </div>
           </div>

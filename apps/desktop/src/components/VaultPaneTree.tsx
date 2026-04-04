@@ -20,6 +20,10 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 
+import {
+  planVaultTreeBulkTargets,
+  type VaultTreeBulkItem,
+} from '../lib/vaultTreeBulkPlan';
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
 import {MaterialIcon} from './MaterialIcon';
 
@@ -103,6 +107,8 @@ export type VaultPaneTreeProps = {
   fs: VaultFilesystem;
   /** Bumps when vault files change; expanded branches refetch without remounting the tree. */
   fsRefreshNonce: number;
+  /** When this changes, multi-selection in the tree is cleared (after bulk mutations). */
+  vaultTreeSelectionClearNonce: number;
   selectedMarkdownUri: string | null;
   busy: boolean;
   onOpenMarkdownNote: (uri: string) => void;
@@ -111,9 +117,14 @@ export type VaultPaneTreeProps = {
   onDeleteMarkdownRequest: (uri: string) => void;
   onRenameFolderRequest: (uri: string) => void;
   onDeleteFolderRequest: (uri: string) => void;
+  onBulkDeleteRequest: (items: VaultTreeBulkItem[]) => void;
   onMoveVaultTreeItem: (
     sourceUri: string,
     sourceKind: 'folder' | 'article',
+    targetDirectoryUri: string,
+  ) => void | Promise<void>;
+  onBulkMoveVaultTreeItems: (
+    items: VaultTreeBulkItem[],
     targetDirectoryUri: string,
   ) => void | Promise<void>;
 };
@@ -122,6 +133,7 @@ export function VaultPaneTree({
   vaultRoot,
   fs,
   fsRefreshNonce,
+  vaultTreeSelectionClearNonce,
   selectedMarkdownUri,
   busy,
   onOpenMarkdownNote,
@@ -130,7 +142,9 @@ export function VaultPaneTree({
   onDeleteMarkdownRequest,
   onRenameFolderRequest,
   onDeleteFolderRequest,
+  onBulkDeleteRequest,
   onMoveVaultTreeItem,
+  onBulkMoveVaultTreeItems,
 }: VaultPaneTreeProps) {
   const rootId = useMemo(
     () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
@@ -226,6 +240,15 @@ export function VaultPaneTree({
 
   treeRef.current = tree;
 
+  const vaultTreeClearSelRef = useRef(vaultTreeSelectionClearNonce);
+  useEffect(() => {
+    if (vaultTreeClearSelRef.current === vaultTreeSelectionClearNonce) {
+      return;
+    }
+    vaultTreeClearSelRef.current = vaultTreeSelectionClearNonce;
+    treeRef.current?.setSelectedItems([]);
+  }, [vaultTreeSelectionClearNonce]);
+
   const fsRefreshBaselineRef = useRef(fsRefreshNonce);
   /** Serializes tree reloads so overlapping `fsRefreshNonce` bumps cannot apply out-of-order list results. */
   const treeReloadChainRef = useRef(Promise.resolve());
@@ -310,6 +333,29 @@ export function VaultPaneTree({
   }, [selectedMarkdownUri, rootId]);
 
   const containerProps = tree.getContainerProps('Vault');
+
+  const selectedIdsForBulk = tree.getState().selectedItems;
+  let vaultRootInMultiSelection = false;
+  const bulkItemsFromSelection: VaultTreeBulkItem[] = [];
+  for (const id of selectedIdsForBulk) {
+    if (id === rootId) {
+      vaultRootInMultiSelection = true;
+      continue;
+    }
+    const stored = itemStoreRef.current[id];
+    if (stored?.uri) {
+      bulkItemsFromSelection.push({uri: stored.uri, kind: stored.kind});
+    }
+  }
+  const multiSelectActive = selectedIdsForBulk.length > 1;
+  const bulkDeletePlannedCount = planVaultTreeBulkTargets(
+    bulkItemsFromSelection,
+    rootId,
+  ).length;
+  const allowBulkDelete =
+    multiSelectActive
+    && !vaultRootInMultiSelection
+    && bulkDeletePlannedCount > 0;
 
   return (
     <>
@@ -457,6 +503,25 @@ export function VaultPaneTree({
                         ) {
                           return;
                         }
+                        const selectedIds = tree.getState().selectedItems;
+                        const dragIsInMulti =
+                          selectedIds.length > 1 && selectedIds.includes(parsed.uri);
+                        if (dragIsInMulti) {
+                          const payload: VaultTreeBulkItem[] = [];
+                          for (const id of selectedIds) {
+                            if (id === rootId) {
+                              continue;
+                            }
+                            const row = itemStoreRef.current[id];
+                            if (row?.uri) {
+                              payload.push({uri: row.uri, kind: row.kind});
+                            }
+                          }
+                          void Promise.resolve(
+                            onBulkMoveVaultTreeItems(payload, data.uri),
+                          );
+                          return;
+                        }
                         onMoveVaultTreeItem(parsed.uri, parsed.kind, data.uri);
                       }
                     : undefined
@@ -503,45 +568,59 @@ export function VaultPaneTree({
                       alignOffset={4}
                       collisionPadding={8}
                     >
-                      <ContextMenu.Item
-                        className="note-list-context-menu__item"
-                        disabled={busy}
-                        onSelect={() => {
-                          if (data.kind === 'article') {
-                            onOpenMarkdownNote(data.uri);
-                          } else {
-                            void item.expand();
-                          }
-                        }}
-                      >
-                        Open
-                      </ContextMenu.Item>
-                      <ContextMenu.Item
-                        className="note-list-context-menu__item"
-                        disabled={busy || isVaultRoot}
-                        onSelect={() => {
-                          if (data.kind === 'article') {
-                            onRenameMarkdownRequest(data.uri);
-                          } else {
-                            onRenameFolderRequest(data.uri);
-                          }
-                        }}
-                      >
-                        Rename
-                      </ContextMenu.Item>
-                      <ContextMenu.Item
-                        className="note-list-context-menu__item note-list-context-menu__item--danger"
-                        disabled={busy || isVaultRoot}
-                        onSelect={() => {
-                          if (data.kind === 'article') {
-                            onDeleteMarkdownRequest(data.uri);
-                          } else {
-                            onDeleteFolderRequest(data.uri);
-                          }
-                        }}
-                      >
-                        Delete
-                      </ContextMenu.Item>
+                      {allowBulkDelete ? (
+                        <ContextMenu.Item
+                          className="note-list-context-menu__item note-list-context-menu__item--danger"
+                          disabled={busy}
+                          onSelect={() => {
+                            onBulkDeleteRequest(bulkItemsFromSelection);
+                          }}
+                        >
+                          Delete {bulkDeletePlannedCount} items…
+                        </ContextMenu.Item>
+                      ) : (
+                        <>
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item"
+                            disabled={busy || multiSelectActive}
+                            onSelect={() => {
+                              if (data.kind === 'article') {
+                                onOpenMarkdownNote(data.uri);
+                              } else {
+                                void item.expand();
+                              }
+                            }}
+                          >
+                            Open
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item"
+                            disabled={busy || isVaultRoot || multiSelectActive}
+                            onSelect={() => {
+                              if (data.kind === 'article') {
+                                onRenameMarkdownRequest(data.uri);
+                              } else {
+                                onRenameFolderRequest(data.uri);
+                              }
+                            }}
+                          >
+                            Rename
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            className="note-list-context-menu__item note-list-context-menu__item--danger"
+                            disabled={busy || isVaultRoot || multiSelectActive}
+                            onSelect={() => {
+                              if (data.kind === 'article') {
+                                onDeleteMarkdownRequest(data.uri);
+                              } else {
+                                onDeleteFolderRequest(data.uri);
+                              }
+                            }}
+                          >
+                            Delete
+                          </ContextMenu.Item>
+                        </>
+                      )}
                     </ContextMenu.Content>
                   </ContextMenu.Portal>
                 </ContextMenu.Root>
