@@ -2,6 +2,7 @@ import {
   asyncDataLoaderFeature,
   hotkeysCoreFeature,
   selectionFeature,
+  type AsyncDataLoaderDataRef,
   type TreeInstance,
 } from '@headless-tree/core';
 import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
@@ -152,6 +153,8 @@ export function VaultPaneTree({
   const dragGhostHostRef = useRef<HTMLDivElement | null>(null);
   const [dropTargetUri, setDropTargetUri] = useState<string | null>(null);
   const [draggingSourceUri, setDraggingSourceUri] = useState<string | null>(null);
+  /** Incremented after async FS reload so React re-runs flatten; headless-tree `rebuildTree` may not change `useState` reference. */
+  const [treeViewRevision, setTreeViewRevision] = useState(0);
 
   const clearDropTarget = () => setDropTargetUri(null);
 
@@ -222,6 +225,8 @@ export function VaultPaneTree({
   treeRef.current = tree;
 
   const fsRefreshBaselineRef = useRef(fsRefreshNonce);
+  /** Serializes tree reloads so overlapping `fsRefreshNonce` bumps cannot apply out-of-order list results. */
+  const treeReloadChainRef = useRef(Promise.resolve());
   useEffect(() => {
     if (fsRefreshNonce === fsRefreshBaselineRef.current) {
       return;
@@ -231,19 +236,30 @@ export function VaultPaneTree({
     if (!t) {
       return;
     }
-    const expanded = [...(t.getState().expandedItems ?? [])];
     const pathDepth = (uri: string) => uri.split('/').filter(Boolean).length;
-    expanded.sort((a, b) => pathDepth(a) - pathDepth(b) || a.localeCompare(b));
-    void (async () => {
-      for (const id of expanded) {
-        const inst = t.getItemInstance(id);
-        if (inst) {
-          await inst.invalidateChildrenIds(true);
+    const asyncRef = t.getDataRef<AsyncDataLoaderDataRef<VaultTreeItemData>>().current;
+    const parentsToReload = Object.keys(asyncRef.childrenIds ?? {}).filter(id => {
+      const n = id.replace(/\\/g, '/').replace(/\/+$/, '');
+      return n === rootId || n.startsWith(`${rootId}/`);
+    });
+    parentsToReload.sort((a, b) => pathDepth(a) - pathDepth(b) || a.localeCompare(b));
+    treeReloadChainRef.current = treeReloadChainRef.current
+      .then(async () => {
+        for (const id of parentsToReload) {
+          const inst = t.getItemInstance(id);
+          if (inst) {
+            // `false`: drop cached child ids before reload (avoids stale branches after moves).
+            await inst.invalidateChildrenIds(false);
+          }
         }
-      }
-    })();
-  }, [fsRefreshNonce]);
+        setTreeViewRevision(n => n + 1);
+      })
+      .catch(() => {
+        /* ignore: item ids may be stale during vault teardown */
+      });
+  }, [fsRefreshNonce, rootId]);
 
+  void treeViewRevision;
   const items = tree.getItems();
   /* eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual uses functional refs; safe here */
   const virtualizer = useVirtualizer({
