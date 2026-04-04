@@ -1524,6 +1524,17 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg.rdg-light {
   color-scheme: light;
   width: 100%;
+  /*
+   * Match `.cm-scroller` so cells and `<textarea>` are not monospace (WebKit form defaults)
+   * and line box matches row-height math in eskerraTableWrappedRowHeight.ts.
+   */
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  font-synthesis: none;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
   /* Override RDG default block-size: 350px (was leaving empty dark/grey gap below short tables). */
   min-block-size: 0;
   /*
@@ -1567,6 +1578,13 @@ button.primary.destructive {
   -webkit-user-select: none;
   border-inline-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
   border-block-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+  /* Wrap instead of react-data-grid’s nowrap + ellipsis */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  overflow: hidden;
+  align-content: start;
+  padding-block: 4px;
 }
 
 /*
@@ -1579,7 +1597,8 @@ button.primary.destructive {
   .cm-eskerra-table-rdg
   .rdg-cell[aria-selected='true'] {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--rdg-selection-color, var(--color-accent));
+  /* 1px reads cleaner with 1px cell borders than 2px inset against the grid. */
+  box-shadow: inset 0 0 0 1px var(--rdg-selection-color, var(--color-accent));
   border-radius: 0;
 }
 
@@ -1591,7 +1610,12 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-rdg
   .rdg-editor-container
-  input {
+  input,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea {
   user-select: text;
   -webkit-user-select: text;
 }
@@ -1611,11 +1635,45 @@ button.primary.destructive {
   .cm-eskerra-table-rdg
   .rdg-editor-container
   input {
+  /* Reset global `input, textarea` in App.css (width/padding/border-radius) for RDG editors. */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-block: 0;
+  padding-inline: 6px;
+  margin: 0;
   border-radius: 0;
   appearance: none;
   border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
   background-color: var(--nb-editor-paper) !important;
   color: var(--nb-editor-text) !important;
+  font: inherit;
+  line-height: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-block: 0;
+  padding-inline: 6px;
+  margin: 0;
+  border-radius: 0;
+  appearance: none;
+  border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
+  background-color: var(--nb-editor-paper) !important;
+  color: var(--nb-editor-text) !important;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  resize: none;
+  field-sizing: content;
+  min-block-size: 100%;
 }
 
 [data-app-surface='capture']
@@ -1623,6 +1681,14 @@ button.primary.destructive {
   .cm-eskerra-table-rdg
   .rdg-editor-container
   input:focus {
+  border-color: var(--color-accent) !important;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea:focus {
   border-color: var(--color-accent) !important;
 }
 

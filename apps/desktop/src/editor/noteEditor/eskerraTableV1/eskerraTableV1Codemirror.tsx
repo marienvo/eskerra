@@ -255,7 +255,18 @@ class EskerraTableWidget extends WidgetType {
   }
 
   get estimatedHeight(): number {
-    return this.mode === 'cells' ? 320 : 180;
+    if (this.mode !== 'cells') {
+      return 180;
+    }
+    const cells = this.block.model.cells;
+    const nRows = cells.length;
+    let charCount = 0;
+    for (const row of cells) {
+      for (const cell of row) {
+        charCount += cell.length;
+      }
+    }
+    return Math.min(900, 160 + nRows * 56 + Math.floor(charCount / 48));
   }
 
   destroy(dom: HTMLElement): void {
@@ -370,6 +381,11 @@ class EskerraTableWidget extends WidgetType {
         }}
         onCommit={(cells, moveBelow) => {
           this.commitDraft(view, cells, align, moveBelow);
+        }}
+        onTableGridLayoutChange={() => {
+          queueMicrotask(() => {
+            view.requestMeasure();
+          });
         }}
       />,
     );

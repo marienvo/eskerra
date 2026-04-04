@@ -4,34 +4,46 @@ import {type EskerraTableModelV1} from '@notebox/core';
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ClipboardEvent,
   type CSSProperties,
+  type RefObject,
 } from 'react';
 import {flushSync} from 'react-dom';
 import {
   DataGrid,
-  renderTextEditor,
   type CellKeyDownArgs,
   type CellKeyboardEvent,
   type DataGridHandle,
+  type RenderEditCellProps,
 } from 'react-data-grid';
 
 import {MaterialIcon} from '../../../components/MaterialIcon';
 
 import {clipboardMatrixFromClipboardEvent} from './eskerraTableClipboard';
+import {
+  createFixedCharWidthMeasure,
+  eskerraGridRowHeightPx,
+  ESKERRA_TABLE_WRAP_LINE_HEIGHT_PX,
+  parseComputedLineHeightPx,
+  sumEskerraGridRowHeights,
+  type EskerraTextWidthMeasure,
+} from './eskerraTableWrappedRowHeight';
 
 export type EskerraTableEditDataGridProps = {
   initialModel: EskerraTableModelV1;
   onCommit: (cells: string[][], moveCursorBelow: boolean) => void;
   onDiscard: () => void;
   onLeaveMarkdown: () => void;
+  /** Notifies when pixel height of the grid may have changed (for CodeMirror.requestMeasure). */
+  onTableGridLayoutChange?: () => void;
 };
 
 /** Stable row id for react-data-grid (not a table column). */
-const GRID_ROW_ID = '__eskerra_grid_row_id';
+const ESKERRA_GRID_ROW_ID = '__eskerra_grid_row_id';
 
 type EskerraGridRow = Record<string, string>;
 
@@ -41,7 +53,7 @@ function colKey(j: number): string {
 
 function modelToGridRows(cells: string[][]): EskerraGridRow[] {
   return cells.map((row, i) => {
-    const o: EskerraGridRow = {[GRID_ROW_ID]: String(i)};
+    const o: EskerraGridRow = {[ESKERRA_GRID_ROW_ID]: String(i)};
     for (let j = 0; j < row.length; j += 1) {
       o[colKey(j)] = row[j] ?? '';
     }
@@ -56,7 +68,91 @@ function gridRowsToCells(rows: EskerraGridRow[], colCount: number): string[][] {
 }
 
 function remapRowKeys(list: EskerraGridRow[]): EskerraGridRow[] {
-  return list.map((r, i) => ({...r, [GRID_ROW_ID]: String(i)}));
+  return list.map((r, i) => ({...r, [ESKERRA_GRID_ROW_ID]: String(i)}));
+}
+
+const GRID_VIEWPORT_MAX_BLOCK_PX = 560;
+
+type TextareaEditorNav = {
+  rowsRef: RefObject<EskerraGridRow[]>;
+  gridRef: RefObject<DataGridHandle | null>;
+  colCount: number;
+  onCommit: EskerraTableEditDataGridProps['onCommit'];
+  onDiscard: EskerraTableEditDataGridProps['onDiscard'];
+};
+
+function EskerraTableTextareaEditor({
+  column,
+  row,
+  rowIdx,
+  onRowChange,
+  onClose,
+  nav,
+}: RenderEditCellProps<EskerraGridRow> & {nav: TextareaEditorNav}) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) {
+      return;
+    }
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, []);
+
+  const key = column.key;
+
+  return (
+    <textarea
+      ref={taRef}
+      className="rdg-text-editor"
+      value={row[key] ?? ''}
+      onChange={e => onRowChange({...row, [key]: e.target.value})}
+      onBlur={() => onClose(true, false)}
+      onKeyDown={e => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          nav.onDiscard();
+          return;
+        }
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const v = e.currentTarget.value;
+          const base = gridRowsToCells(nav.rowsRef.current ?? [], nav.colCount).map(r => [...r]);
+          base[rowIdx]![column.idx] = v;
+          nav.onCommit(base, false);
+          return;
+        }
+        // Enter: next row (like single-line editor). Shift+Enter inserts a newline.
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          const v = e.currentTarget.value;
+          onRowChange({...row, [key]: v});
+          const rows = nav.rowsRef.current ?? [];
+          const lastRow = rowIdx >= rows.length - 1;
+          if (!lastRow) {
+            flushSync(() => {
+              onClose(true, true);
+            });
+            requestAnimationFrame(() => {
+              nav.gridRef.current?.selectCell(
+                {rowIdx: rowIdx + 1, idx: column.idx},
+                {enableEditor: true, shouldFocusCell: true},
+              );
+            });
+          } else {
+            const cellsToCommit = gridRowsToCells(rows, nav.colCount).map(r => [...r]);
+            cellsToCommit[rowIdx]![column.idx] = v;
+            nav.onCommit(cellsToCommit, true);
+          }
+        }
+      }}
+    />
+  );
 }
 
 export function EskerraTableEditDataGrid({
@@ -64,6 +160,7 @@ export function EskerraTableEditDataGrid({
   onCommit,
   onDiscard,
   onLeaveMarkdown,
+  onTableGridLayoutChange,
 }: EskerraTableEditDataGridProps) {
   const colCount = initialModel.cells[0]?.length ?? 0;
   const [initialDraftFingerprint] = useState(
@@ -77,7 +174,59 @@ export function EskerraTableEditDataGrid({
 
   const gridRef = useRef<DataGridHandle>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef({rowIdx: 0, colIdx: 0});
+  const rowsRef = useRef(rows);
+
+  const [layoutMetrics, setLayoutMetrics] = useState<{
+    gridWidthPx: number;
+    measure: EskerraTextWidthMeasure;
+    widthForMath: number;
+    lineHeightPx: number;
+  }>(() => ({
+    gridWidthPx: 0,
+    measure: createFixedCharWidthMeasure(7),
+    widthForMath: 320,
+    lineHeightPx: ESKERRA_TABLE_WRAP_LINE_HEIGHT_PX,
+  }));
+
+  useLayoutEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) {
+      return;
+    }
+    const pushMetrics = (width: number) => {
+      const w =
+        width > 0
+          ? width
+          : Math.max(1, wrap.getBoundingClientRect().width);
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      let measure: EskerraTextWidthMeasure = createFixedCharWidthMeasure(7);
+      const style = getComputedStyle(wrap);
+      if (ctx) {
+        ctx.font = style.font;
+        measure = (s: string) => ctx.measureText(s).width;
+      }
+      const lineHeightPx = parseComputedLineHeightPx(
+        style.lineHeight,
+        ESKERRA_TABLE_WRAP_LINE_HEIGHT_PX,
+      );
+      queueMicrotask(() => {
+        setLayoutMetrics({gridWidthPx: width, measure, widthForMath: w, lineHeightPx});
+      });
+    };
+    const ro = new ResizeObserver(entries => {
+      pushMetrics(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(wrap);
+    pushMetrics(wrap.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, []);
 
   const isDirty = useMemo(
     () =>
@@ -88,10 +237,20 @@ export function EskerraTableEditDataGrid({
   const columnEditorOptions = useMemo(
     () =>
       ({
-        // Required: Eskerra must not commit on outside mousedown/blur (Markdown widget contract).
         commitOnOutsideClick: false,
       }) as const,
     [],
+  );
+
+  const editorNav = useMemo(
+    (): TextareaEditorNav => ({
+      rowsRef,
+      gridRef,
+      colCount,
+      onCommit,
+      onDiscard,
+    }),
+    [colCount, onCommit, onDiscard],
   );
 
   /** No RDG header row labels: Markdown row 0 is the real header (avoids duplicate “File | Contents”). */
@@ -104,13 +263,15 @@ export function EskerraTableEditDataGrid({
           <span className="cm-eskerra-table-rdg__vh">{`Column ${i + 1}`}</span>
         ),
         editable: true,
-        renderEditCell: renderTextEditor,
+        renderEditCell: (p: RenderEditCellProps<EskerraGridRow>) => (
+          <EskerraTableTextareaEditor {...p} nav={editorNav} />
+        ),
         resizable: false,
         sortable: false,
         draggable: false,
         editorOptions: columnEditorOptions,
       })),
-    [colCount, columnEditorOptions],
+    [colCount, columnEditorOptions, editorNav],
   );
 
   const applyPasteFromMatrix = useCallback((matrix: string[][], rowIdx: number, colIdx: number) => {
@@ -239,17 +400,46 @@ export function EskerraTableEditDataGrid({
     });
   }, []);
 
-  const rowHeight = 34;
-  /** Hide react-data-grid’s column header strip (Markdown supplies the header in row 0). */
   const headerRowHeight = 0;
-  const gridBlockPx = Math.min(
-    420,
-    headerRowHeight + rows.length * rowHeight + 2,
+
+  const {measure, widthForMath, lineHeightPx} = layoutMetrics;
+
+  const totalRowPixels = useMemo(
+    () =>
+      sumEskerraGridRowHeights({
+        rows,
+        colCount,
+        gridWidthPx: widthForMath,
+        measure,
+        lineHeightPx,
+      }),
+    [rows, colCount, widthForMath, measure, lineHeightPx],
   );
+
+  const rowHeightForRow = useCallback(
+    (row: EskerraGridRow) =>
+      eskerraGridRowHeightPx({
+        row,
+        colCount,
+        gridWidthPx: widthForMath,
+        measure,
+        lineHeightPx,
+      }),
+    [colCount, widthForMath, measure, lineHeightPx],
+  );
+
+  const gridBlockPx = Math.min(
+    GRID_VIEWPORT_MAX_BLOCK_PX,
+    headerRowHeight + totalRowPixels + 2,
+  );
+
+  useLayoutEffect(() => {
+    queueMicrotask(() => onTableGridLayoutChange?.());
+  }, [gridBlockPx, totalRowPixels, layoutMetrics.gridWidthPx, onTableGridLayoutChange]);
 
   const addRow = useCallback(() => {
     setRows(prev => {
-      const nextRow: EskerraGridRow = {[GRID_ROW_ID]: String(prev.length)};
+      const nextRow: EskerraGridRow = {[ESKERRA_GRID_ROW_ID]: String(prev.length)};
       for (let j = 0; j < colCount; j += 1) {
         nextRow[colKey(j)] = '';
       }
@@ -275,13 +465,15 @@ export function EskerraTableEditDataGrid({
       <div className="cm-eskerra-table__actions">
         <button
           type="button"
-          className="cm-eskerra-table__button"
+          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+          data-tooltip="Add row"
+          aria-label="Add row"
           onClick={e => {
             e.preventDefault();
             addRow();
           }}
         >
-          Add row
+          <MaterialIcon name="add_circle_outline" size={12} aria-hidden />
         </button>
         <button
           type="button"
@@ -317,7 +509,7 @@ export function EskerraTableEditDataGrid({
           {pasteNotice}
         </p>
       )}
-      <div className="cm-eskerra-table-rdg-wrap">
+      <div ref={wrapRef} className="cm-eskerra-table-rdg-wrap">
         <DataGrid
           ref={gridRef}
           className="cm-eskerra-table-rdg rdg-light"
@@ -340,7 +532,7 @@ export function EskerraTableEditDataGrid({
           }
           columns={columns}
           rows={rows}
-          rowKeyGetter={r => r[GRID_ROW_ID]}
+          rowKeyGetter={r => r[ESKERRA_GRID_ROW_ID]}
           onRowsChange={next => {
             setRows(remapRowKeys(next as EskerraGridRow[]));
           }}
@@ -348,7 +540,7 @@ export function EskerraTableEditDataGrid({
             selectionRef.current = {rowIdx, colIdx: column.idx};
           }}
           onCellKeyDown={onCellKeyDown}
-          rowHeight={rowHeight}
+          rowHeight={rowHeightForRow}
           headerRowHeight={headerRowHeight}
           rowClass={(_row, rowIdx) =>
             rowIdx === 0 ? 'cm-eskerra-table-rdg__header-row' : undefined}
