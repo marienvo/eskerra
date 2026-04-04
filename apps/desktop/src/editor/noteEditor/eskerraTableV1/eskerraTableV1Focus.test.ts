@@ -1,0 +1,83 @@
+import {
+  EditorState,
+  EditorSelection,
+  type Extension,
+} from '@codemirror/state';
+import {drawSelection, EditorView} from '@codemirror/view';
+import {afterEach, describe, expect, it} from 'vitest';
+
+import {eskerraTableCellBundleFacet} from './eskerraTableCellBundleFacet';
+import {eskerraTableV1Extension} from './eskerraTableV1Codemirror';
+
+function makeTable(name: string, cols: number): string {
+  const header = `| ${Array.from({length: cols}, (_, i) => `${name}${i}`).join(' | ')} |`;
+  const sep = `| ${Array.from({length: cols}, () => '---').join(' | ')} |`;
+  const row = `| ${Array.from({length: cols}, () => 'x').join(' | ')} |`;
+  return `${header}\n${sep}\n${row}\n`;
+}
+
+function doubleRaf(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function editorExtensions(): readonly Extension[] {
+  return [
+    eskerraTableCellBundleFacet.of(() => [drawSelection(), EditorView.lineWrapping]),
+    ...eskerraTableV1Extension(),
+  ];
+}
+
+describe('eskerra table shell focus', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  it('keeps parent editor focused when opening a note with caret before the first table', async () => {
+    const tableMd = makeTable('T', 2);
+    const md = `Line before table\n\n${tableMd}`;
+    const parent = document.createElement('div');
+    document.body.append(parent);
+
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(0),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent});
+    view.focus();
+    await doubleRaf();
+    await doubleRaf();
+    expect(view.hasFocus).toBe(true);
+  });
+
+  it('focuses nested cell editor when caret starts inside the open table', async () => {
+    const tableMd = makeTable('T', 2);
+    const prefix = `Line before table\n\n`;
+    const md = `${prefix}${tableMd}`;
+    const parent = document.createElement('div');
+    document.body.append(parent);
+
+    const anchorInTable = prefix.length + 4;
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(anchorInTable),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent});
+    view.focus();
+    await doubleRaf();
+    await doubleRaf();
+    const nestedContent = parent.querySelector(
+      '.cm-eskerra-table-shell__cm-host .cm-content',
+    );
+    expect(nestedContent).toBeTruthy();
+    const nestedView = EditorView.findFromDOM(nestedContent as HTMLElement);
+    expect(nestedView).toBeTruthy();
+    expect(nestedView!.hasFocus).toBe(true);
+    expect(view.hasFocus).toBe(false);
+  });
+});

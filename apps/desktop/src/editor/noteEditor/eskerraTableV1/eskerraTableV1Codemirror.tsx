@@ -11,7 +11,9 @@ import {
 import {
   Decoration,
   EditorView,
+  ViewPlugin,
   type DecorationSet,
+  type ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
 import {createRoot, type Root} from 'react-dom/client';
@@ -71,8 +73,38 @@ const suppressedTableLines = StateField.define<Set<number>>({
   },
 });
 
+/** Prefer caret table; else first valid non-suppressed table (structured edit is default when present). */
+function initialTableShellOpenForState(state: EditorState): TableShellOpen | null {
+  const suppressed = state.field(suppressedTableLines);
+  const anchor = state.selection.main.anchor;
+  const tryBlock = (block: EskerraTableDocBlock | null): TableShellOpen | null => {
+    if (!block || suppressed.has(block.lineFrom)) {
+      return null;
+    }
+    const raw = state.doc.sliceString(block.from, block.to).split('\n');
+    if (!parseEskerraTableV1FromLines(raw).ok) {
+      return null;
+    }
+    return {
+      headerLineFrom: block.lineFrom,
+      baselineText: state.doc.sliceString(block.from, block.to),
+    };
+  };
+  const fromCaret = tryBlock(findBlockContaining(state.doc, anchor, suppressed));
+  if (fromCaret) {
+    return fromCaret;
+  }
+  for (const block of findEskerraTableDocBlocks(state.doc)) {
+    const shell = tryBlock(block);
+    if (shell) {
+      return shell;
+    }
+  }
+  return null;
+}
+
 const tableShellOpenField = StateField.define<TableShellOpen | null>({
-  create: () => null,
+  create: initialTableShellOpenForState,
   update(value, tr) {
     let next = value;
     if (next && tr.docChanged) {
@@ -183,7 +215,7 @@ class TableRawMarkdownExitWidget extends WidgetType {
           : []),
       ];
       view.dispatch({effects: openEffects});
-      view.focus();
+      scheduleFocusTableCellEditor(view);
     });
 
     const railTop = document.createElement('div');
@@ -195,6 +227,27 @@ class TableRawMarkdownExitWidget extends WidgetType {
 }
 
 const shellWidgetRoots = new WeakMap<HTMLElement, Root>();
+
+/**
+ * Focus the nested cell CodeMirror after the shell React tree mounts (double rAF).
+ */
+export function scheduleFocusTableCellEditor(hostView: EditorView): void {
+  const run = (): void => {
+    const root = hostView.dom.querySelector('.cm-eskerra-table-shell-root');
+    if (!root) {
+      return;
+    }
+    const content = root.querySelector('.cm-eskerra-table-shell__cm-host .cm-content');
+    if (!(content instanceof HTMLElement)) {
+      return;
+    }
+    const cellEditor = EditorView.findFromDOM(content);
+    cellEditor?.focus();
+  };
+  requestAnimationFrame(() => {
+    requestAnimationFrame(run);
+  });
+}
 
 class EskerraTableShellWidget extends WidgetType {
   private readonly headerLineFrom: number;
@@ -257,6 +310,39 @@ function findBlockContaining(
   }
   return null;
 }
+
+/** Focus nested cell only when the main selection is inside the open table (not first-table default with caret elsewhere). */
+function shouldScheduleFocusForOpenShell(state: EditorState): boolean {
+  const open = state.field(tableShellOpenField);
+  if (!open) {
+    return false;
+  }
+  const suppressed = state.field(suppressedTableLines);
+  const anchor = state.selection.main.anchor;
+  const block = findBlockContaining(state.doc, anchor, suppressed);
+  return block !== null && block.lineFrom === open.headerLineFrom;
+}
+
+const eskerraTableShellFocusCellPlugin = ViewPlugin.define(view => {
+  if (shouldScheduleFocusForOpenShell(view.state)) {
+    scheduleFocusTableCellEditor(view);
+  }
+  return {
+    update(u: ViewUpdate): void {
+      if (!u.docChanged && !u.selectionSet && u.transactions.length === 0) {
+        return;
+      }
+      const now = u.state.field(tableShellOpenField);
+      const prev = u.startState.field(tableShellOpenField);
+      const opened =
+        now != null
+        && (prev == null || prev.headerLineFrom !== now.headerLineFrom);
+      if (opened && shouldScheduleFocusForOpenShell(u.state)) {
+        scheduleFocusTableCellEditor(u.view);
+      }
+    },
+  };
+});
 
 function buildDecorations(state: EditorState): BuildResult {
   const suppressed = state.field(suppressedTableLines);
@@ -343,11 +429,16 @@ const eskerraTableShellSelectionBridge = EditorView.updateListener.of(update => 
   const open = st.field(tableShellOpenField);
   const startOpen = update.startState.field(tableShellOpenField);
 
-  if (update.selectionSet && open) {
-    if (!blockIn || blockIn.lineFrom !== open.headerLineFrom) {
+  if (update.selectionSet && open && blockIn && blockIn.lineFrom !== open.headerLineFrom) {
+    const raw = st.doc.sliceString(blockIn.from, blockIn.to).split('\n');
+    if (parseEskerraTableV1FromLines(raw).ok) {
       update.view.dispatch({
-        effects: closeTableShellEffect.of(null),
+        effects: openTableShellEffect.of({
+          headerLineFrom: blockIn.lineFrom,
+          baselineText: st.doc.sliceString(blockIn.from, blockIn.to),
+        }),
       });
+      return;
     }
   }
 
@@ -370,6 +461,7 @@ export function eskerraTableV1Extension(): readonly Extension[] {
     tableShellOpenField,
     tableBuilt,
     eskerraTableShellSelectionBridge,
+    eskerraTableShellFocusCellPlugin,
   ];
 }
 

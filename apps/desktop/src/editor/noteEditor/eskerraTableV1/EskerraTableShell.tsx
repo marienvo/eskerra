@@ -86,6 +86,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     relCompartmentRef.current = new Compartment();
   }
   const pasteSessionRef = useRef(0);
+  const skipInitialCellFocusRef = useRef(true);
 
   const tableCallbacksRef = useRef<EskerraTableCellKeyboardCallbacks>({
     onTabFromCell: () => false,
@@ -248,9 +249,13 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     });
     const v = new EditorView({parent: host, state});
     cellViewRef.current = v;
-    requestAnimationFrame(() => {
-      v.focus();
-    });
+    const skipFocus = skipInitialCellFocusRef.current;
+    skipInitialCellFocusRef.current = false;
+    if (!skipFocus) {
+      requestAnimationFrame(() => {
+        v.focus();
+      });
+    }
     parentView.requestMeasure();
     return () => {
       const cur = cellViewRef.current;
