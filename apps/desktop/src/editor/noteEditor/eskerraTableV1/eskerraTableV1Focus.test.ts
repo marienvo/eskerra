@@ -132,9 +132,37 @@ describe('eskerra table shell focus', () => {
     await doubleRaf();
     const rail = parentEl.querySelector('.cm-eskerra-table-shell__rail');
     expect(rail).toBeTruthy();
-    const topBtn = rail?.querySelector('.cm-eskerra-table__rail-top button');
+    const topBtns = rail?.querySelectorAll('.cm-eskerra-table__rail-top button');
+    expect(topBtns?.length).toBe(2);
+    expect(topBtns?.[0]?.getAttribute('aria-label')).toBe('Edit as Markdown');
+    expect(topBtns?.[1]?.getAttribute('aria-label')).toBe('Add column');
     const bottomBtn = rail?.querySelector('.cm-eskerra-table__rail-bottom button');
-    expect(topBtn?.getAttribute('aria-label')).toBe('Edit as Markdown');
     expect(bottomBtn?.getAttribute('aria-label')).toBe('Add row');
+  });
+
+  it('adds a new column of cell editors when Add column is clicked', async () => {
+    const tableMd = makeTable('T', 2);
+    const md = `${tableMd}`;
+    const parentEl = document.createElement('div');
+    document.body.appendChild(parentEl);
+
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(4),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent: parentEl});
+    view.focus();
+    await doubleRaf();
+    await doubleRaf();
+    const addColBtn = parentEl.querySelector(
+      '.cm-eskerra-table__rail-top button[aria-label="Add column"]',
+    );
+    expect(addColBtn).toBeTruthy();
+    (addColBtn as HTMLButtonElement).click();
+    await doubleRaf();
+    await doubleRaf();
+    const hosts = parentEl.querySelectorAll('.cm-eskerra-table-shell__cm-host');
+    expect(hosts.length).toBe(6);
   });
 });

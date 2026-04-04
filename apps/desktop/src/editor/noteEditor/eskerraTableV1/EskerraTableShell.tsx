@@ -71,7 +71,9 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const [cells, setCells] = useState<string[][]>(() =>
     initialCells.map(r => [...r]),
   );
-  const [align] = useState<EskerraTableAlignment[]>(() => [...initialAlign]);
+  const [align, setAlign] = useState<EskerraTableAlignment[]>(() => [
+    ...initialAlign,
+  ]);
   const [notice, setNotice] = useState<string | null>(null);
 
   const lineFromRef = useRef(headerLineFrom);
@@ -227,6 +229,34 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       col: activeCellRef.current.col,
     };
     parentView.requestMeasure();
+  }, [parentView, snapshotAllCellDocs]);
+
+  const onAddColumn = useCallback(() => {
+    const merged = snapshotAllCellDocs();
+    draftRef.current.cells = merged.map(r => [...r]);
+    const nCols = merged[0]?.length ?? 0;
+    const nRows = merged.length;
+    if (nCols === 0 || nRows === 0) {
+      return;
+    }
+    const newColIndex = nCols;
+    const focusRow = Math.min(
+      Math.max(activeCellRef.current.row, 0),
+      nRows - 1,
+    );
+    setAlign(prev => [
+      ...Array.from({length: nCols}, (_, i) => prev[i]),
+      undefined,
+    ]);
+    setCells(() => merged.map(r => [...r, '']));
+    activeCellRef.current = {row: focusRow, col: newColIndex};
+    parentView.requestMeasure();
+    requestAnimationFrame(() => {
+      const nextView = cellEditorsRef.current.get(
+        cellKey(focusRow, newColIndex),
+      );
+      nextView?.focus();
+    });
   }, [parentView, snapshotAllCellDocs]);
 
   const onEditMarkdown = exitToMarkdownSource;
@@ -403,6 +433,17 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           >
             <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
               code
+            </span>
+          </button>
+          <button
+            type="button"
+            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+            data-tooltip="Add column"
+            aria-label="Add column"
+            onClick={onAddColumn}
+          >
+            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
+              add
             </span>
           </button>
         </div>
