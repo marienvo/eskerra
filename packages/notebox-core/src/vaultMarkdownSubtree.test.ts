@@ -56,6 +56,35 @@ describe('vaultSubtreeHasEligibleMarkdown', () => {
     await expect(vaultSubtreeHasEligibleMarkdown(fs, '/v/Inbox')).resolves.toBe(false);
   });
 
+  it('reuses knownFilteredEntries instead of listing the same directory again', async () => {
+    const listCalls: string[] = [];
+    const fs: VaultFilesystem = {
+      exists: async () => false,
+      mkdir: async () => {},
+      readFile: async () => '',
+      writeFile: async () => {},
+      unlink: async () => {},
+      removeTree: async () => {},
+      renameFile: async () => {},
+      listFiles: async (dir: string): Promise<VaultDirEntry[]> => {
+        listCalls.push(dir);
+        if (dir === '/v/A') {
+          return [entry('sub', '/v/A/sub', 'directory')];
+        }
+        if (dir === '/v/A/sub') {
+          return [entry('n.md', '/v/A/sub/n.md', 'file')];
+        }
+        return [];
+      },
+    };
+    const known: VaultDirEntry[] = [entry('sub', '/v/A/sub', 'directory')];
+    await expect(
+      vaultSubtreeHasEligibleMarkdown(fs, '/v/A', {knownFilteredEntries: known}),
+    ).resolves.toBe(true);
+    expect(listCalls).not.toContain('/v/A');
+    expect(listCalls).toContain('/v/A/sub');
+  });
+
   it('uses subtreeCache hits', async () => {
     const listCalls: string[] = [];
     const fs: VaultFilesystem = {

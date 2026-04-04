@@ -21,6 +21,8 @@ export type VaultPaneTreeProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
+  /** Bumps when vault files change; expanded branches refetch without remounting the tree. */
+  fsRefreshNonce: number;
   selectedMarkdownUri: string | null;
   busy: boolean;
   onOpenMarkdownNote: (uri: string) => void;
@@ -35,6 +37,7 @@ export function VaultPaneTree({
   vaultRoot,
   fs,
   subtreeMarkdownCache,
+  fsRefreshNonce,
   selectedMarkdownUri,
   busy,
   onOpenMarkdownNote,
@@ -70,24 +73,14 @@ export function VaultPaneTree({
     getItemName: item => item.getItemData()?.name ?? '…',
     isItemFolder: item => (item.getItemData()?.kind ?? 'folder') !== 'article',
     onPrimaryAction: item => {
-      const inst = treeRef.current;
-      if (!inst) {
-        return;
-      }
       const data = item.getItemData();
       if (!data?.uri) {
         return;
       }
-      inst.setSelectedItems([item.getId()]);
       if (data.kind === 'article') {
         onOpenMarkdownNote(data.uri);
       } else {
         onFolderFocused();
-        if (item.isExpanded()) {
-          item.collapse();
-        } else {
-          void item.expand();
-        }
       }
     },
     createLoadingItemData: () => ({
@@ -129,6 +122,22 @@ export function VaultPaneTree({
   });
 
   treeRef.current = tree;
+
+  const fsRefreshBaselineRef = useRef(fsRefreshNonce);
+  useEffect(() => {
+    if (fsRefreshNonce === fsRefreshBaselineRef.current) {
+      return;
+    }
+    fsRefreshBaselineRef.current = fsRefreshNonce;
+    const t = treeRef.current;
+    if (!t) {
+      return;
+    }
+    const expanded = t.getState().expandedItems ?? [];
+    for (const id of expanded) {
+      void t.getItemInstance(id)?.invalidateChildrenIds(true);
+    }
+  }, [fsRefreshNonce]);
 
   const items = tree.getItems();
   /* eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual uses functional refs; safe here */
@@ -236,23 +245,6 @@ export function VaultPaneTree({
                 }
                 style={{paddingInlineStart: pad}}
                 disabled={busy}
-                onClick={event => {
-                  rowProps.onClick?.(event);
-                  if (event.defaultPrevented) {
-                    return;
-                  }
-                  tree.setSelectedItems([item.getId()]);
-                  if (data.kind === 'article') {
-                    onOpenMarkdownNote(data.uri);
-                  } else {
-                    onFolderFocused();
-                    if (item.isExpanded()) {
-                      item.collapse();
-                    } else {
-                      void item.expand();
-                    }
-                  }
-                }}
               >
                 <span className="vault-tree-row__chevron" aria-hidden>
                   {isFolder ? (

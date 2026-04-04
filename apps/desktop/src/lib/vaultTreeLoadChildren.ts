@@ -34,7 +34,11 @@ export async function loadVaultTreeVisibleChildIds(options: {
     if (e.type === 'directory') {
       const childFiltered = filterVaultTreeDirEntries(await fs.listFiles(e.uri));
       signal?.throwIfAborted();
-      const hasMd = await vaultSubtreeHasEligibleMarkdown(fs, e.uri, {signal, subtreeCache});
+      const hasMd = await vaultSubtreeHasEligibleMarkdown(fs, e.uri, {
+        signal,
+        subtreeCache,
+        knownFilteredEntries: childFiltered,
+      });
       if (
         shouldPruneVaultTreeSubdirectory({
           filteredChildEntries: childFiltered,

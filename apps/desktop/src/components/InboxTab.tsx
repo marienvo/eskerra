@@ -490,10 +490,10 @@ export function InboxTab({
             </div>
             <div className="vault-tree-panel">
               <VaultPaneTree
-                key={fsRefreshNonce}
                 vaultRoot={vaultRoot}
                 fs={fs}
                 subtreeMarkdownCache={subtreeMarkdownCache}
+                fsRefreshNonce={fsRefreshNonce}
                 selectedMarkdownUri={composingNewEntry ? null : selectedUri}
                 busy={busy}
                 onOpenMarkdownNote={onSelectNote}

@@ -1,9 +1,14 @@
-import type {VaultFilesystem} from './vaultFilesystem';
+import type {VaultDirEntry, VaultFilesystem} from './vaultFilesystem';
 import {filterVaultTreeDirEntries, isEligibleVaultMarkdownFileName, SubtreeMarkdownPresenceCache} from './vaultVisibility';
 
 export type VaultSubtreeMarkdownOptions = {
   signal?: AbortSignal;
   subtreeCache?: SubtreeMarkdownPresenceCache;
+  /**
+   * When set, uses this listing for `directoryUri` instead of `listFiles` + {@link filterVaultTreeDirEntries}
+   * (caller must apply the same filter).
+   */
+  knownFilteredEntries?: readonly VaultDirEntry[];
 };
 
 /**
@@ -17,18 +22,22 @@ export async function vaultSubtreeHasEligibleMarkdown(
 ): Promise<boolean> {
   const cache = options?.subtreeCache;
   const normRoot = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+  const rootPrefiltered = options?.knownFilteredEntries;
 
-  async function compute(dir: string): Promise<boolean> {
+  async function compute(
+    dir: string,
+    prefiltered: readonly VaultDirEntry[] | undefined,
+  ): Promise<boolean> {
     const cached = cache?.get(dir);
     if (cached !== undefined) {
       return cached;
     }
     options?.signal?.throwIfAborted();
-    const rows = await fs.listFiles(dir);
-    const filtered = filterVaultTreeDirEntries(rows);
+    const filtered =
+      prefiltered ?? filterVaultTreeDirEntries(await fs.listFiles(dir));
     for (const entry of filtered) {
       if (entry.type === 'directory') {
-        const sub = await compute(entry.uri.replace(/\\/g, '/').replace(/\/+$/, ''));
+        const sub = await compute(entry.uri.replace(/\\/g, '/').replace(/\/+$/, ''), undefined);
         if (sub) {
           cache?.set(dir, true);
           return true;
@@ -44,5 +53,5 @@ export async function vaultSubtreeHasEligibleMarkdown(
     return false;
   }
 
-  return compute(normRoot);
+  return compute(normRoot, rootPrefiltered);
 }
