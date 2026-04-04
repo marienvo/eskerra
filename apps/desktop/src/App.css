@@ -1388,9 +1388,8 @@ button.primary.destructive {
 }
 
 /*
- * Markdown syntax markers: visible only on lines that intersect the current selection
- * (cm-notebox-marker-focus-line from markdownMarkerFocusLine.ts). Applies whether or not the
- * editor has DOM focus so blur does not reveal markers on every line.
+ * Markdown syntax markers: removed from layout on non-focus lines (not only invisible) so gutters
+ * and delimiters take no space (cm-notebox-marker-focus-line from markdownMarkerFocusLine.ts).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -1412,7 +1411,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
   .cm-md-hr {
-  opacity: 0;
+  display: none;
 }
 
 .note-markdown-editor-host--drop-target {
