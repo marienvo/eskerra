@@ -54,6 +54,7 @@ import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCod
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
+import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
   wikiLinkInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
@@ -648,8 +649,13 @@ const NoteMarkdownEditorImpl = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getMarkdown: () =>
-        viewRef.current?.state.doc.toString() ?? initialMarkdownRef.current,
+      getMarkdown: () => {
+        const view = viewRef.current;
+        if (view) {
+          flushAllEskerraTableDrafts(view);
+        }
+        return view?.state.doc.toString() ?? initialMarkdownRef.current;
+      },
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;

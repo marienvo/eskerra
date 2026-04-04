@@ -24,6 +24,7 @@ import {
 import {MaterialIcon} from '../../../components/MaterialIcon';
 
 import {clipboardMatrixFromClipboardEvent} from './eskerraTableClipboard';
+import {registerEskerraTableDraftFlusher} from './eskerraTableDraftFlush';
 import {
   createFixedCharWidthMeasure,
   eskerraGridRowHeightPx,
@@ -33,10 +34,15 @@ import {
   type EskerraTextWidthMeasure,
 } from './eskerraTableWrappedRowHeight';
 
+const LIVE_COMMIT_DEBOUNCE_MS = 400;
+
 export type EskerraTableEditDataGridProps = {
+  /** Header row line `from` (byte offset); used for save flush ordering and doc resolution. */
+  headerLineFrom: number;
   initialModel: EskerraTableModelV1;
+  /** Reads the committed table model from the current CodeMirror document (may differ after external edits). */
+  resolveModelFromDoc: () => EskerraTableModelV1 | null;
   onCommit: (cells: string[][], moveCursorBelow: boolean) => void;
-  onDiscard: () => void;
   onLeaveMarkdown: () => void;
   /** Notifies when pixel height of the grid may have changed (for CodeMirror.requestMeasure). */
   onTableGridLayoutChange?: () => void;
@@ -88,8 +94,8 @@ type TextareaEditorNav = {
   rowsRef: RefObject<EskerraGridRow[]>;
   gridRef: RefObject<DataGridHandle | null>;
   colCount: number;
-  onCommit: EskerraTableEditDataGridProps['onCommit'];
-  onDiscard: EskerraTableEditDataGridProps['onDiscard'];
+  commitRows: (cells: string[][], moveCursorBelow: boolean) => void;
+  onRevertFromDoc: () => void;
   /** Mirrors draft cell text into parent `rows` so `rowHeight` tracks typing (RDG keeps edit state internal until commit). */
   onLiveRowSync: (rowIdx: number, nextRow: EskerraGridRow) => void;
   /** After closing a cell editor, ask CodeMirror to remeasure the table widget (avoids blank grid when selectCell is skipped). */
@@ -136,7 +142,7 @@ function EskerraTableTextareaEditor({
         if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
-          nav.onDiscard();
+          nav.onRevertFromDoc();
           return;
         }
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -145,7 +151,7 @@ function EskerraTableTextareaEditor({
           const v = e.currentTarget.value;
           const base = gridRowsToCells(nav.rowsRef.current ?? [], nav.colCount).map(r => [...r]);
           base[rowIdx]![column.idx] = v;
-          nav.onCommit(base, false);
+          nav.commitRows(base, false);
           return;
         }
         // Enter: next row (like single-line editor). Shift+Enter inserts a newline.
@@ -171,7 +177,7 @@ function EskerraTableTextareaEditor({
           } else {
             const cellsToCommit = gridRowsToCells(rows, nav.colCount).map(r => [...r]);
             cellsToCommit[rowIdx]![column.idx] = v;
-            nav.onCommit(cellsToCommit, true);
+            nav.commitRows(cellsToCommit, true);
           }
         }
       }}
@@ -180,16 +186,19 @@ function EskerraTableTextareaEditor({
 }
 
 export function EskerraTableEditDataGrid({
+  headerLineFrom,
   initialModel,
+  resolveModelFromDoc,
   onCommit,
-  onDiscard,
   onLeaveMarkdown,
   onTableGridLayoutChange,
 }: EskerraTableEditDataGridProps) {
   const colCount = initialModel.cells[0]?.length ?? 0;
-  const [initialDraftFingerprint] = useState(
+  const [baselineFingerprint, setBaselineFingerprint] = useState(
     () => JSON.stringify(initialModel.cells.map(row => [...row])),
   );
+
+  const lineFromRef = useRef(headerLineFrom);
 
   const [rows, setRows] = useState<EskerraGridRow[]>(() =>
     remapRowKeys(modelToGridRows(initialModel.cells)),
@@ -218,6 +227,10 @@ export function EskerraTableEditDataGrid({
     widthForMath: 320,
     lineHeightPx: ESKERRA_TABLE_WRAP_LINE_HEIGHT_PX,
   }));
+
+  useLayoutEffect(() => {
+    lineFromRef.current = headerLineFrom;
+  }, [headerLineFrom]);
 
   useLayoutEffect(() => {
     rowsRef.current = rows;
@@ -290,10 +303,58 @@ export function EskerraTableEditDataGrid({
   }, []);
 
   const isDirty = useMemo(
-    () =>
-      JSON.stringify(gridRowsToCells(rows, colCount)) !== initialDraftFingerprint,
-    [rows, colCount, initialDraftFingerprint],
+    () => JSON.stringify(gridRowsToCells(rows, colCount)) !== baselineFingerprint,
+    [rows, colCount, baselineFingerprint],
   );
+
+  const bumpBaselineFromCells = useCallback((cells: string[][]) => {
+    setBaselineFingerprint(JSON.stringify(cells.map(row => [...row])));
+  }, []);
+
+  const commitRows = useCallback(
+    (cells: string[][], moveBelow: boolean) => {
+      onCommit(cells, moveBelow);
+      bumpBaselineFromCells(cells);
+    },
+    [onCommit, bumpBaselineFromCells],
+  );
+
+  const onRevertFromDoc = useCallback(() => {
+    const m = resolveModelFromDoc();
+    if (!m) {
+      return;
+    }
+    setBaselineFingerprint(JSON.stringify(m.cells.map(row => [...row])));
+    setRows(remapRowKeys(modelToGridRows(m.cells)));
+    setPasteNotice(null);
+    setRdgRemountKey(k => k + 1);
+    queueMicrotask(() => {
+      const sel = selectionRef.current;
+      gridRef.current?.selectCell(
+        {rowIdx: sel.rowIdx, idx: sel.colIdx},
+        {shouldFocusCell: true, enableEditor: false},
+      );
+      onTableGridLayoutChange?.();
+    });
+  }, [resolveModelFromDoc, onTableGridLayoutChange]);
+
+  useEffect(() => {
+    if (!isDirty) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      const cells = gridRowsToCells(rowsRef.current ?? [], colCount);
+      commitRows(cells, false);
+    }, LIVE_COMMIT_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [rows, isDirty, colCount, commitRows]);
+
+  useEffect(() => {
+    return registerEskerraTableDraftFlusher(lineFromRef, () => {
+      const cells = gridRowsToCells(rowsRef.current ?? [], colCount);
+      commitRows(cells, false);
+    });
+  }, [colCount, commitRows]);
 
   const columnEditorOptions = useMemo(
     () =>
@@ -322,12 +383,12 @@ export function EskerraTableEditDataGrid({
       rowsRef,
       gridRef,
       colCount,
-      onCommit,
-      onDiscard,
+      commitRows,
+      onRevertFromDoc,
       onLiveRowSync,
       scheduleEditorRemeasure,
     }),
-    [colCount, onCommit, onDiscard, onLiveRowSync, scheduleEditorRemeasure],
+    [colCount, commitRows, onRevertFromDoc, onLiveRowSync, scheduleEditorRemeasure],
   );
 
   /** No RDG header row labels: Markdown row 0 is the real header (avoids duplicate “File | Contents”). */
@@ -396,7 +457,7 @@ export function EskerraTableEditDataGrid({
     (args: CellKeyDownArgs<EskerraGridRow>, event: CellKeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventGridDefault();
-        onDiscard();
+        onRevertFromDoc();
         return;
       }
 
@@ -412,7 +473,7 @@ export function EskerraTableEditDataGrid({
                 return next;
               })()
             : base;
-        onCommit(cellsToCommit, false);
+        commitRows(cellsToCommit, false);
         return;
       }
 
@@ -439,11 +500,11 @@ export function EskerraTableEditDataGrid({
         } else {
           const cellsToCommit = gridRowsToCells(rows, colCount).map(r => [...r]);
           cellsToCommit[rowIdx]![column.idx] = row[colKey(column.idx)] ?? '';
-          onCommit(cellsToCommit, true);
+          commitRows(cellsToCommit, true);
         }
       }
     },
-    [colCount, onCommit, onDiscard, rows],
+    [colCount, commitRows, onRevertFromDoc, rows],
   );
 
   useEffect(() => {
@@ -632,27 +693,14 @@ export function EskerraTableEditDataGrid({
               aria-label="Edit as Markdown"
               onClick={e => {
                 e.preventDefault();
+                const cells = gridRowsToCells(rowsRef.current ?? [], colCount);
+                commitRows(cells, false);
                 onLeaveMarkdown();
               }}
             >
               <MaterialIcon name="code" size={12} aria-hidden />
             </button>
-            <button
-              type="button"
-              className="cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger"
-              data-tooltip="Done"
-              aria-label="Done"
-              onClick={e => {
-                e.preventDefault();
-                if (isDirty) {
-                  onCommit(gridRowsToCells(rows, colCount), false);
-                } else {
-                  onDiscard();
-                }
-              }}
-            >
-              <MaterialIcon name="check" size={12} aria-hidden />
-            </button>
+            <div className="cm-eskerra-table__rail-slot-spacer" aria-hidden />
           </div>
           <div className="cm-eskerra-table__rail-bottom">
             <button

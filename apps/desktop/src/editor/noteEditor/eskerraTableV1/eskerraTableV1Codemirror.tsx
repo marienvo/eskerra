@@ -1,6 +1,5 @@
 import {
   type EskerraTableModelV1,
-  parseEskerraTableV1FromLines,
   serializeEskerraTableV1ToMarkdown,
 } from '@notebox/core';
 import {
@@ -11,7 +10,6 @@ import {
   StateField,
   type EditorState,
   type Extension,
-  type Text,
   type Transaction,
 } from '@codemirror/state';
 import {
@@ -23,6 +21,11 @@ import {
 import {createRoot, type Root} from 'react-dom/client';
 
 import {EskerraTableEditDataGrid} from './EskerraTableEditDataGrid';
+import {
+  findEskerraTableDocBlocks,
+  looksLikeDelimitedTableLine,
+  type EskerraTableDocBlock,
+} from './eskerraTableV1DocBlocks';
 
 const tableEditReactRoots = new WeakMap<HTMLElement, Root>();
 
@@ -34,45 +37,14 @@ class TableAtomicSpan extends RangeValue {
   }
 }
 
-type TableBlock = {
-  from: number;
-  to: number;
-  lineFrom: number;
-  model: EskerraTableModelV1;
-};
-
 type BuildResult = {
   decorations: DecorationSet;
   atomic: RangeSet<TableAtomicSpan>;
 };
 
-const enterTableEdit = StateEffect.define<{from: number}>();
-const exitTableEdit = StateEffect.define();
 const suppressTableWidgetAt = StateEffect.define<{lineFrom: number}>();
 /** Clears suppression for one table (header line `from`). */
 const clearTableSuppressionAt = StateEffect.define<{lineFrom: number}>();
-
-const editingTableFrom = StateField.define<number | null>({
-  create: () => null,
-  update(value, tr) {
-    if (tr.docChanged) {
-      return null;
-    }
-    for (const effect of tr.effects) {
-      if (effect.is(enterTableEdit)) {
-        return effect.value.from;
-      }
-      if (effect.is(exitTableEdit)) {
-        return null;
-      }
-    }
-    return value;
-  },
-});
-
-function looksLikeDelimitedTableLine(text: string): boolean {
-  return text.startsWith('|') && text.endsWith('|');
-}
 
 const suppressedTableLines = StateField.define<Set<number>>({
   create: () => new Set(),
@@ -110,52 +82,6 @@ const suppressedTableLines = StateField.define<Set<number>>({
     return next;
   },
 });
-
-function tableRangeTo(viewDoc: Text, lineTo: number): number {
-  if (lineTo < viewDoc.length && viewDoc.sliceString(lineTo, lineTo + 1) === '\n') {
-    return lineTo + 1;
-  }
-  return lineTo;
-}
-
-function findTableBlocks(doc: Text): TableBlock[] {
-  const out: TableBlock[] = [];
-  let lineNumber = 1;
-  while (lineNumber <= doc.lines) {
-    const startLine = doc.line(lineNumber);
-    if (!looksLikeDelimitedTableLine(startLine.text)) {
-      lineNumber += 1;
-      continue;
-    }
-
-    const lines: string[] = [];
-    let endLineNumber = lineNumber;
-    while (endLineNumber <= doc.lines) {
-      const line = doc.line(endLineNumber);
-      if (line.text.trim() === '' || !looksLikeDelimitedTableLine(line.text)) {
-        break;
-      }
-      lines.push(line.text);
-      endLineNumber += 1;
-    }
-
-    const parsed = parseEskerraTableV1FromLines(lines);
-    if (parsed.ok) {
-      const endLine = doc.line(endLineNumber - 1);
-      out.push({
-        from: startLine.from,
-        to: tableRangeTo(doc, endLine.to),
-        lineFrom: startLine.from,
-        model: parsed.model,
-      });
-      lineNumber = endLineNumber;
-      continue;
-    }
-
-    lineNumber = endLineNumber;
-  }
-  return out;
-}
 
 function defaultAlignmentForWidth(width: number): EskerraTableModelV1['align'] {
   return Array.from({length: width}, () => undefined);
@@ -203,13 +129,14 @@ class TableRawMarkdownExitWidget extends WidgetType {
 
     const tableFrom = this.headerLineFrom;
 
-    const showRenderedBtn = document.createElement('button');
-    showRenderedBtn.type = 'button';
-    showRenderedBtn.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
-    showRenderedBtn.setAttribute('data-tooltip', 'Show rendered table');
-    showRenderedBtn.setAttribute('aria-label', 'Show rendered table');
-    appendMaterialIcon(showRenderedBtn, 'code_off');
-    showRenderedBtn.addEventListener('click', e => {
+    const showTableBtn = document.createElement('button');
+    showTableBtn.type = 'button';
+    showTableBtn.className =
+      'cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger';
+    showTableBtn.setAttribute('data-tooltip', 'Show table');
+    showTableBtn.setAttribute('aria-label', 'Show table');
+    appendMaterialIcon(showTableBtn, 'code_off');
+    showTableBtn.addEventListener('click', e => {
       e.preventDefault();
       view.dispatch({
         effects: clearTableSuppressionAt.of({lineFrom: tableFrom}),
@@ -217,40 +144,20 @@ class TableRawMarkdownExitWidget extends WidgetType {
       view.focus();
     });
 
-    const editButton = document.createElement('button');
-    editButton.type = 'button';
-    editButton.className =
-      'cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger';
-    editButton.setAttribute('data-tooltip', 'Edit table');
-    editButton.setAttribute('aria-label', 'Edit table');
-    appendMaterialIcon(editButton, 'edit');
-    editButton.addEventListener('click', e => {
-      e.preventDefault();
-      view.dispatch({
-        effects: [
-          clearTableSuppressionAt.of({lineFrom: tableFrom}),
-          enterTableEdit.of({from: tableFrom}),
-        ],
-      });
-      view.focus();
-    });
-
     const railTop = document.createElement('div');
     railTop.className = 'cm-eskerra-table__rail-top';
-    railTop.append(showRenderedBtn, editButton, createRailSlotSpacer());
+    railTop.append(showTableBtn, createRailSlotSpacer());
     wrap.appendChild(railTop);
     return wrap;
   }
 }
 
 class EskerraTableWidget extends WidgetType {
-  private readonly block: TableBlock;
-  private readonly mode: 'render' | 'cells';
+  private readonly block: EskerraTableDocBlock;
 
-  constructor(block: TableBlock, mode: 'render' | 'cells') {
+  constructor(block: EskerraTableDocBlock) {
     super();
     this.block = block;
-    this.mode = mode;
   }
 
   eq(other: WidgetType): boolean {
@@ -258,17 +165,13 @@ class EskerraTableWidget extends WidgetType {
       return false;
     }
     return (
-      other.mode === this.mode
-      && other.block.from === this.block.from
+      other.block.from === this.block.from
       && other.block.to === this.block.to
       && JSON.stringify(other.block.model) === JSON.stringify(this.block.model)
     );
   }
 
   get estimatedHeight(): number {
-    if (this.mode !== 'cells') {
-      return 180;
-    }
     const cells = this.block.model.cells;
     const nRows = cells.length;
     let charCount = 0;
@@ -281,44 +184,11 @@ class EskerraTableWidget extends WidgetType {
   }
 
   destroy(dom: HTMLElement): void {
-    if (this.mode !== 'cells') {
-      return;
-    }
     const root = tableEditReactRoots.get(dom);
     if (root) {
       root.unmount();
       tableEditReactRoots.delete(dom);
     }
-  }
-
-  private renderTableFromModel(model: EskerraTableModelV1): HTMLTableElement {
-    const table = document.createElement('table');
-    table.className = 'cm-eskerra-table__table';
-    const [headerRow, ...bodyRows] = model.cells;
-    const thead = document.createElement('thead');
-    const tr = document.createElement('tr');
-    for (const cell of headerRow ?? []) {
-      const th = document.createElement('th');
-      th.textContent = cell;
-      tr.appendChild(th);
-    }
-    thead.appendChild(tr);
-    table.appendChild(thead);
-
-    if (bodyRows.length > 0) {
-      const tbody = document.createElement('tbody');
-      for (const row of bodyRows) {
-        const bodyTr = document.createElement('tr');
-        for (const cell of row) {
-          const td = document.createElement('td');
-          td.textContent = cell;
-          bodyTr.appendChild(td);
-        }
-        tbody.appendChild(bodyTr);
-      }
-      table.appendChild(tbody);
-    }
-    return table;
   }
 
   private commitDraft(
@@ -332,18 +202,23 @@ class EskerraTableWidget extends WidgetType {
       align: align.length > 0 ? align : defaultAlignmentForWidth(draft[0]?.length ?? 0),
     };
     const markdown = serializeEskerraTableV1ToMarkdown(model);
-    const current = view.state.doc.sliceString(this.block.from, this.block.to);
+    const block = findEskerraTableDocBlocks(view.state.doc).find(
+      b => b.lineFrom === this.block.lineFrom,
+    );
+    if (!block) {
+      return;
+    }
+    const current = view.state.doc.sliceString(block.from, block.to);
     let insert = markdown;
     if (!moveCursorBelow && current === insert) {
-      view.dispatch({effects: exitTableEdit.of(null)});
       return;
     }
 
     let selectionHead: number | null = null;
     if (moveCursorBelow) {
-      const oldTailChar = view.state.doc.sliceString(this.block.to, this.block.to + 1);
-      selectionHead = this.block.from + insert.length;
-      if (this.block.to >= view.state.doc.length || oldTailChar !== '\n') {
+      const oldTailChar = view.state.doc.sliceString(block.to, block.to + 1);
+      selectionHead = block.from + insert.length;
+      if (block.to >= view.state.doc.length || oldTailChar !== '\n') {
         insert += '\n';
         selectionHead += 1;
       }
@@ -351,11 +226,10 @@ class EskerraTableWidget extends WidgetType {
 
     view.dispatch({
       changes: {
-        from: this.block.from,
-        to: this.block.to,
+        from: block.from,
+        to: block.to,
         insert,
       },
-      effects: exitTableEdit.of(null),
       selection: selectionHead == null
         ? undefined
         : {anchor: selectionHead},
@@ -365,10 +239,7 @@ class EskerraTableWidget extends WidgetType {
 
   private leaveAsMarkdown(view: EditorView) {
     view.dispatch({
-      effects: [
-        exitTableEdit.of(null),
-        suppressTableWidgetAt.of({lineFrom: this.block.lineFrom}),
-      ],
+      effects: [suppressTableWidgetAt.of({lineFrom: this.block.lineFrom})],
       selection: {anchor: this.block.lineFrom},
       scrollIntoView: true,
     });
@@ -383,9 +254,14 @@ class EskerraTableWidget extends WidgetType {
     tableEditReactRoots.set(host, reactRoot);
     reactRoot.render(
       <EskerraTableEditDataGrid
+        headerLineFrom={this.block.lineFrom}
         initialModel={this.block.model}
-        onDiscard={() => {
-          view.dispatch({effects: exitTableEdit.of(null)});
+        resolveModelFromDoc={() => {
+          const doc = view.state.doc;
+          return (
+            findEskerraTableDocBlocks(doc).find(b => b.lineFrom === this.block.lineFrom)
+              ?.model ?? null
+          );
         }}
         onLeaveMarkdown={() => {
           this.leaveAsMarkdown(view);
@@ -408,66 +284,13 @@ class EskerraTableWidget extends WidgetType {
   }
 
   toDOM(view: EditorView): HTMLElement {
-    const root = document.createElement('div');
-    if (this.mode === 'cells') {
-      return this.renderCells(view);
-    }
-
-    root.className = 'cm-eskerra-table cm-eskerra-table--render';
-
-    const markdownButton = document.createElement('button');
-    markdownButton.type = 'button';
-    markdownButton.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
-    markdownButton.setAttribute('data-tooltip', 'Edit as Markdown');
-    markdownButton.setAttribute('aria-label', 'Edit as Markdown');
-    appendMaterialIcon(markdownButton, 'code');
-    markdownButton.addEventListener('click', event => {
-      event.preventDefault();
-      this.leaveAsMarkdown(view);
-    });
-
-    const editButton = document.createElement('button');
-    editButton.type = 'button';
-    editButton.className =
-      'cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger';
-    editButton.setAttribute('data-tooltip', 'Edit table');
-    editButton.setAttribute('aria-label', 'Edit table');
-    appendMaterialIcon(editButton, 'edit');
-    editButton.addEventListener('click', event => {
-      event.preventDefault();
-      view.dispatch({
-        effects: enterTableEdit.of({from: this.block.from}),
-      });
-      view.focus();
-    });
-
-    const railTop = document.createElement('div');
-    railTop.className = 'cm-eskerra-table__rail-top';
-    railTop.append(markdownButton, editButton, createRailSlotSpacer());
-
-    const railBottom = document.createElement('div');
-    railBottom.className = 'cm-eskerra-table__rail-bottom';
-
-    const rail = document.createElement('div');
-    rail.className = 'cm-eskerra-table__rail';
-    rail.append(railTop, railBottom);
-
-    const content = document.createElement('div');
-    content.className = 'cm-eskerra-table__content';
-    content.appendChild(this.renderTableFromModel(this.block.model));
-
-    const main = document.createElement('div');
-    main.className = 'cm-eskerra-table__main';
-    main.append(content, rail);
-    root.appendChild(main);
-    return root;
+    return this.renderCells(view);
   }
 }
 
 function buildDecorations(state: EditorState): BuildResult {
-  const editingFrom = state.field(editingTableFrom);
   const suppressed = state.field(suppressedTableLines);
-  const blocks = findTableBlocks(state.doc);
+  const blocks = findEskerraTableDocBlocks(state.doc);
   const decoBuilder = new RangeSetBuilder<Decoration>();
   const atomicBuilder = new RangeSetBuilder<TableAtomicSpan>();
 
@@ -484,18 +307,15 @@ function buildDecorations(state: EditorState): BuildResult {
       );
       continue;
     }
-    const mode = editingFrom === block.from ? 'cells' : 'render';
     decoBuilder.add(
       block.from,
       block.to,
       Decoration.replace({
-        widget: new EskerraTableWidget(block, mode),
+        widget: new EskerraTableWidget(block),
         block: true,
       }),
     );
-    if (mode === 'render' || mode === 'cells') {
-      atomicBuilder.add(block.from, block.to, TableAtomicSpan.instance);
-    }
+    atomicBuilder.add(block.from, block.to, TableAtomicSpan.instance);
   }
 
   return {
@@ -507,11 +327,9 @@ function buildDecorations(state: EditorState): BuildResult {
 function transactionAffectsTables(tr: Transaction): boolean {
   return (
     tr.docChanged
-    || tr.effects.some(effect =>
-      effect.is(enterTableEdit)
-      || effect.is(exitTableEdit)
-      || effect.is(suppressTableWidgetAt)
-      || effect.is(clearTableSuppressionAt))
+    || tr.effects.some(
+      effect => effect.is(suppressTableWidgetAt) || effect.is(clearTableSuppressionAt),
+    )
   );
 }
 
@@ -532,9 +350,5 @@ const tableBuilt = StateField.define<BuildResult>({
 });
 
 export function eskerraTableV1Extension(): readonly Extension[] {
-  return [
-    editingTableFrom,
-    suppressedTableLines,
-    tableBuilt,
-  ];
+  return [suppressedTableLines, tableBuilt];
 }
