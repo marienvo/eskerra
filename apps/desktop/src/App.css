@@ -951,7 +951,8 @@ a:focus:not(:focus-visible) {
 .inbox-backlinks {
   flex: none;
   border-top: 1px solid var(--color-border-soft, var(--color-border));
-  padding: 0.85rem 0.6rem 0.6rem;
+  padding-block: 0.85rem 0.6rem;
+  padding-inline: calc(0.6rem + var(--nb-editor-heading-gutter));
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1150,6 +1151,8 @@ button.primary.destructive {
   --nb-editor-inline-code-text: rgb(45, 45, 45);
   --nb-editor-code-block-bg: #ffffff;
   --nb-editor-code-block-border: #92a1a17a;
+  /* Left “margin column” width: fits ###### at editor base size; hashes sit right-aligned against body text. */
+  --nb-editor-heading-gutter: 9.25ch;
 
   flex: 1;
   display: flex;
@@ -1172,7 +1175,8 @@ button.primary.destructive {
 
 .note-markdown-editor-reading-column {
   width: 100%;
-  max-width: 690px;
+  /* + one gutter vs 690px: restores text width after mirroring the left margin on the right. */
+  max-width: calc(690px + var(--nb-editor-heading-gutter));
   margin-inline: auto;
   box-sizing: border-box;
   background: var(--nb-editor-paper);
@@ -1239,8 +1243,9 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
   min-height: 6rem;
-  /* Width matches reading column; scrollbar is on .note-markdown-editor-scroll. */
-  padding: 0.5rem 0.6rem 1rem;
+  /* Symmetric L/R “margin columns”; scrollbar is on .note-markdown-editor-scroll. */
+  padding-block: 0.5rem 1rem;
+  padding-inline: calc(0.6rem + var(--nb-editor-heading-gutter));
   box-sizing: border-box;
   background: transparent;
 }
@@ -1337,6 +1342,28 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-syntax-mark {
   color: var(--nb-editor-faint);
   font-weight: 400;
+}
+
+/* ATX heading hashes (HeaderMark): fixed-width left column, hashes right-aligned to meet body text. */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-header-mark {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--nb-editor-heading-gutter);
+  min-width: var(--nb-editor-heading-gutter);
+  margin-inline-start: calc(-1 * var(--nb-editor-heading-gutter));
+  /* Pull heading text tight against the hashes (source still has required ATX space). */
+  margin-inline-end: -0.42em;
+  /* add the space back at the margin side of the layout (not the content side) */
+  padding-right: 0.42em;
+  text-align: right;
+  white-space: pre;
+  color: color-mix(in srgb, var(--nb-editor-faint) 34%, var(--nb-editor-paper) 66%);
+  font-weight: 700;
+  font-style: italic;
+  font-size: 1em;
+  letter-spacing: -0.03em;
+  vertical-align: baseline;
+  font-synthesis: weight style;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-list {

@@ -1,4 +1,5 @@
 import {markdownLanguage} from '@codemirror/lang-markdown';
+import type {MarkdownExtension} from '@lezer/markdown';
 import {
   HighlightStyle,
   syntaxHighlighting,
@@ -12,9 +13,21 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
-import {tags} from '@lezer/highlight';
+import {tags, styleTags, Tag} from '@lezer/highlight';
 
 const SYNTAX_TREE_BUDGET_MS = 200;
+
+/** ATX `#` … `######` (and related header marks); split from other `processingInstruction` marks for Ulysses-style gutter styling. */
+export const markdownHeaderMarkTag = Tag.define();
+
+/** Pass to `markdown({ extensions: markdownHeaderMarkParserExtension })` with the same base language. */
+export const markdownHeaderMarkParserExtension: MarkdownExtension = {
+  props: [
+    styleTags({
+      HeaderMark: markdownHeaderMarkTag,
+    }),
+  ],
+};
 
 const markdownHighlightStyle = HighlightStyle.define(
   [
@@ -25,6 +38,7 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: tags.heading4, class: 'cm-md-h4'},
     {tag: tags.heading5, class: 'cm-md-h5'},
     {tag: tags.heading6, class: 'cm-md-h6'},
+    {tag: markdownHeaderMarkTag, class: 'cm-md-header-mark'},
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
     {tag: tags.list, class: 'cm-md-list'},
     {tag: tags.monospace, class: 'cm-md-code'},

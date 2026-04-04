@@ -1,5 +1,5 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
-import {markdown} from '@codemirror/lang-markdown';
+import {commonmarkLanguage, markdown} from '@codemirror/lang-markdown';
 import {
   Compartment,
   EditorSelection,
@@ -29,7 +29,10 @@ import {
   isNoteAttachmentImageFilePath,
   type NoteInboxAttachmentHost,
 } from '../../lib/noteInboxAttachmentHost';
-import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
+import {
+  markdownHeaderMarkParserExtension,
+  noteMarkdownEditorAppearance,
+} from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
@@ -368,7 +371,10 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
-      markdown(),
+      markdown({
+        base: commonmarkLanguage,
+        extensions: markdownHeaderMarkParserExtension,
+      }),
       ...noteMarkdownEditorAppearance,
       history(),
       drawSelection(),
