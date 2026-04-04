@@ -1448,11 +1448,134 @@ button.primary.destructive {
   border-color: var(--color-interactive-text);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  margin: 0;
+  padding: 0.22rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-panel-solid);
+  color: var(--color-text-primary);
+  cursor: default;
+  line-height: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nb-editor-text) 5%, var(--color-panel-solid));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn--primary {
+  border-color: var(--color-accent);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+  line-height: 12px;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__notice {
   margin: 0;
   padding: 0 0 0.35rem;
   color: var(--color-text-secondary);
   font-size: 0.77rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-shell {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-wrap {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+/* Screen-reader-only column titles (RDG header strip height is 0). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg__vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Eskerra table edit grid: match capture editor “paper” (see Red Graphite–style tokens in host rules).
+ * Force light color-scheme so `light-dark()` inside RDG does not follow system dark preference.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg.rdg-light {
+  color-scheme: light;
+  width: 100%;
+  /* Override RDG default block-size: 350px (was leaving empty dark/grey gap below short tables). */
+  min-block-size: 0;
+}
+
+/*
+ * Cell labels are not prose: block text selection until the cell editor is open
+ * (avoids drag-selecting fake “headers” / link-looking text; matches spreadsheet UX).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg .rdg-cell {
+  user-select: none;
+  -webkit-user-select: none;
+  border-inline-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+  border-block-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-row.cm-eskerra-table-rdg__header-row
+  > .rdg-cell {
+  font-weight: 620;
+  background-color: color-mix(in srgb, var(--nb-editor-text) 5%, var(--nb-editor-paper));
+  color: var(--nb-editor-header);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input {
+  border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
+  background-color: var(--nb-editor-paper) !important;
+  color: var(--nb-editor-text) !important;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input:focus {
+  border-color: var(--color-accent) !important;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table {
@@ -1493,8 +1616,8 @@ button.primary.destructive {
 }
 
 /*
- * Banner when a table is shown as raw Markdown (Edit as Markdown escape hatch).
- * Inline block widget directly above the suppressed pipe table (document order).
+ * Toolbar strip when a table is shown as raw Markdown (Edit as Markdown escape hatch).
+ * Icon-only code_off: restores rendered table (tooltip “Show rendered table”); inline block above source.
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -1503,6 +1626,7 @@ button.primary.destructive {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.35rem;
   padding: 0.35rem 0.5rem;
   margin: 0;
@@ -1511,29 +1635,6 @@ button.primary.destructive {
   color: var(--color-text-secondary);
   font-size: 0.78rem;
   line-height: 1.35;
-}
-
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-eskerra-table-raw-banner
-  .cm-eskerra-table-raw-banner__text {
-  flex: 1 1 auto;
-  min-width: 12rem;
-}
-
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-eskerra-table-raw-banner
-  .cm-eskerra-table-raw-banner__button {
-  cursor: default;
-  flex-shrink: 0;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 0.45rem;
-  padding: 0.12rem 0.5rem;
-  background: var(--color-panel-solid);
-  color: var(--color-text-primary);
-  font-size: inherit;
-  line-height: inherit;
 }
 
 /*

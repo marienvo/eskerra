@@ -66,7 +66,7 @@ The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tr
 
 ### Markdown tables (v1)
 
-- **Scope:** Desktop vault editor only (`NoteMarkdownEditor`) via a CodeMirror block-widget extension (`apps/desktop/src/editor/noteEditor/eskerraTableV1/eskerraTableV1Codemirror.ts`).
+- **Scope:** Desktop vault editor only (`NoteMarkdownEditor`) via a CodeMirror block-widget extension (`apps/desktop/src/editor/noteEditor/eskerraTableV1/eskerraTableV1Codemirror.tsx`). Cell edit mode embeds `react-data-grid` as the structured edit surface; Markdown remains the source of truth.
 - **Source of truth:** Markdown text on disk remains authoritative; no hidden table store. Structured edits replace the original table source range with one CodeMirror transaction.
 - **Detection contract (strict subset):**
   - contiguous non-empty lines that all start and end with `|`
@@ -74,9 +74,10 @@ The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tr
   - second line = separator row; each cell is GFM-style (**at least three hyphens**, optional leading/trailing `:` for alignment), so padded cells like `------` or `-----------` are accepted the same as `---`
   - remaining lines = body rows with the same column count
   - escaped pipes (`\|`) and multiline cells are unsupported in v1; failed parse leaves raw source visible (fail-closed).
-- **UI modes:** `render` (calm read table) and `cells` (structured cell inputs). `Edit as Markdown` is an action that removes/suppresses the widget for that block and focuses the source text; there is no long-lived raw mode. While suppressed, an inline **Show rendered table** banner is shown immediately above that table block in document order (CodeMirror block widget decoration). Suppression is remapped across edits and dropped if the former header line no longer looks like a pipe row.
+- **UI modes:** `render` (calm read table) and `cells` (structured cell inputs). In `render` mode the toolbar uses **icon-only** Material actions: **edit** (open structured `cells` edit) and **code** (open raw Markdown for that table — same as legacy “Edit as Markdown”); these use `data-tooltip` + `aria-label` for names. **`Edit as Markdown` / source is not offered while already in `cells` mode** (only **Add row** where applicable and **check** / Done). `Edit as Markdown` removes/suppresses the widget for that block and focuses the source text; there is no long-lived raw mode. While suppressed, an inline **code_off** icon control (tooltip *Show rendered table*) is shown immediately above that table block in document order (CodeMirror block widget decoration); there is no separate explanatory sentence in the banner. Suppression is remapped across edits and dropped if the former header line no longer looks like a pipe row.
+- **Cells edit chrome:** In `cells` mode, grid selection outlines and row-selection washes use the app **accent** (`--color-accent`), not link / interactive text (`--color-interactive-text`); see [brand-tokens-desktop.md](../design/brand-tokens-desktop.md). Cell label text is **not user-selectable** until that cell is in **edit** mode (open editor); only then may the user drag-select inside the input.
 - **Edit lifecycle:** `Done` commits, `Esc` discards, blur outside the widget refocuses back into table cells (no implicit commit/discard), and `Enter` on the last row commits and places the caret on a new line directly below the table block.
-- **Keyboard interactions:** `Tab`/`Shift+Tab` row-major wrap, `ArrowUp`/`ArrowDown` move between rows (same column), and `Mod+Enter` commits from cell mode.
+- **Keyboard interactions:** While editing, `Enter` moves down within the same column when another row exists, or commits (caret below the table) from the last row; `Mod+Enter` commits without moving below; `Esc` discards the whole structured edit session. `Tab`/arrows follow `react-data-grid` cell navigation (which can differ from the legacy row-major-only `input` grid).
 - **Clipboard:** TSV and HTML-table paste populate from the focused cell. Oversized paste clips to the current grid and must show an explicit notice (`Pasted m×n of M×N`).
 - **Normalization policy:** On commit, table markdown is serialized deterministically (fixed outer pipes, fixed inter-cell spacing, canonical separator tokens, LF newlines).
 
