@@ -665,7 +665,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             }}
           >
             <span
-              className="material-icons cm-eskerra-table-shell__handle-icon"
+              className="material-icons cm-eskerra-table-shell__handle-icon cm-eskerra-table-shell__handle-icon--col"
               aria-hidden
             >
               drag_indicator
@@ -910,7 +910,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             }}
           >
             <span
-              className="material-icons cm-eskerra-table-shell__handle-icon cm-eskerra-table-shell__handle-icon--row"
+              className="material-icons cm-eskerra-table-shell__handle-icon"
               aria-hidden
             >
               drag_indicator

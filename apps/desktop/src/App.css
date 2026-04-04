@@ -1943,7 +1943,7 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-shell__handle-icon--row {
+  .cm-eskerra-table-shell__handle-icon--col {
   transform: rotate(90deg);
 }
 
