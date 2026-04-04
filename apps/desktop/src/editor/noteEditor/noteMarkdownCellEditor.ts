@@ -28,6 +28,7 @@ import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
 
 function isActivatableRelativeMarkdownHref(href: string): boolean {
   const part = stripMarkdownLinkHrefToPathPart(href);
@@ -362,6 +363,7 @@ export function buildNoteMarkdownCellExtensions(
   ]);
 
   return [
+    markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
     markdownNotebox({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,

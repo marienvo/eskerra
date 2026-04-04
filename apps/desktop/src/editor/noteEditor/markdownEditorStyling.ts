@@ -18,6 +18,8 @@ import {
 } from '@codemirror/view';
 import {tags, styleTags, Tag} from '@lezer/highlight';
 
+import {markdownMarkerFocusLineExtension} from './markdownMarkerFocusLine';
+
 const SYNTAX_TREE_BUDGET_MS = 200;
 
 /** Same delimiter-boundary heuristic as @lezer/markdown Strikethrough (ASCII `Punctuation` set). */
@@ -369,4 +371,5 @@ const markdownBlockLineStyle = ViewPlugin.fromClass(
 export const noteMarkdownEditorAppearance: Extension[] = [
   syntaxHighlighting(markdownHighlightStyle),
   markdownBlockLineStyle,
+  markdownMarkerFocusLineExtension,
 ];

@@ -1387,6 +1387,34 @@ button.primary.destructive {
   padding: 0;
 }
 
+/*
+ * Markdown syntax markers: visible only on lines that intersect the current selection
+ * (cm-notebox-marker-focus-line from markdownMarkerFocusLine.ts). Applies whether or not the
+ * editor has DOM focus so blur does not reveal markers on every line.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-header-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-list-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-wiki-bracket,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-hr {
+  opacity: 0;
+}
+
 .note-markdown-editor-host--drop-target {
   box-shadow: inset 0 0 0 2px var(--color-accent, #4a90d9);
 }
@@ -1424,6 +1452,30 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link--unresolved {
   color: var(--nb-editor-faint);
+}
+
+/*
+ * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
+ * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-wiki-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
