@@ -1812,6 +1812,21 @@ button.primary.destructive {
   padding: 0;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell--dragging {
+  cursor: grabbing;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell--dragging
+  .cm-eskerra-table-shell__col-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell--dragging
+  .cm-eskerra-table-shell__row-handle {
+  cursor: grabbing;
+}
+
 /*
  * Vertical action rail to the right of the table; absolutely positioned so the table
  * stays full content width; lives in the visual margin beside the paper column.
@@ -1833,6 +1848,161 @@ button.primary.destructive {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__table--dragging {
+  opacity: 0.92;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__corner {
+  inline-size: 1.5rem;
+  min-inline-size: 1.5rem;
+  padding: 0;
+  background: color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__th {
+  position: relative;
+  padding-block-start: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__col-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-block-size: 1.05rem;
+  padding-block: 0.12rem;
+  padding-inline: 0.15rem;
+  margin-block-end: 0.1rem;
+  border-radius: 3px;
+  opacity: 0;
+  cursor: grab;
+  color: color-mix(in srgb, var(--nb-editor-text) 58%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__th:hover
+  .cm-eskerra-table-shell__col-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__col-handle:hover {
+  opacity: 1;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle-cell {
+  inline-size: 1.5rem;
+  min-inline-size: 1.5rem;
+  padding: 0.15rem;
+  vertical-align: middle;
+  text-align: center;
+  background: color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 1.35em;
+  border-radius: 3px;
+  opacity: 0;
+  cursor: grab;
+  color: color-mix(in srgb, var(--nb-editor-text) 58%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__body-row:hover
+  .cm-eskerra-table-shell__row-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle:hover {
+  opacity: 1;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__handle-icon {
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__handle-icon--row {
+  transform: rotate(90deg);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__drop-bar {
+  background: var(--color-accent, #0b57d0);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nb-editor-paper) 55%, transparent);
+}
+
+.eskerra-table-handle-menu {
+  z-index: 100;
+  min-width: 11.5rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.eskerra-table-handle-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: default;
+  outline: none;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.eskerra-table-handle-menu__item[data-disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.eskerra-table-handle-menu__item[data-highlighted] {
+  background: var(--color-row-hover);
+}
+
+.eskerra-table-handle-menu__item--danger[data-highlighted] {
+  background: var(--color-error-banner-bg);
+  color: var(--color-error);
+}
+
+.eskerra-table-handle-menu__sep {
+  block-size: 1px;
+  margin: 0.2rem 0.35rem;
+  background: var(--color-border-subtle);
+}
+
+.eskerra-table-handle-menu__glyph {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  opacity: 0.88;
 }
 
 [data-app-surface='capture']

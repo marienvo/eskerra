@@ -1,4 +1,5 @@
 import type {EskerraTableAlignment, EskerraTableModelV1} from '@notebox/core';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import {EditorState} from '@codemirror/state';
 import type {Compartment} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
@@ -10,6 +11,7 @@ import {
   useState,
   type ReactElement,
   type MutableRefObject,
+  type ReactNode,
   type RefObject,
 } from 'react';
 
@@ -35,6 +37,22 @@ import {
   flushTableDraftToDocumentSilent,
   restoreTableBaseline,
 } from './eskerraTableShellCommits';
+import {
+  applyColumnPermutation,
+  bodyRowReorderPermutation,
+  columnReorderPermutation,
+  deleteBodyRowAt,
+  duplicateBodyRowAt,
+  duplicateColumnAt,
+  insertBodyRowAt,
+  insertColumnAt,
+  moveBodyRowBefore,
+  moveBodyRowStep,
+  moveColumnStep,
+  removeColumnAt,
+  setColumnAlignment,
+  sortBodyByColumn,
+} from './eskerraTableRowColOps';
 
 export type EskerraTableShellProps = {
   parentView: EditorView;
@@ -63,6 +81,92 @@ function modelFromDraft(
 
 function cellKey(row: number, col: number): string {
   return `${row},${col}`;
+}
+
+function isIdentityPermutation(perm: number[]): boolean {
+  return perm.every((v, i) => v === i);
+}
+
+function pickColumnDropIndex(clientX: number, rects: DOMRect[]): number {
+  const n = rects.length;
+  let k = 0;
+  for (; k < n; k += 1) {
+    const mid =
+      k === n - 1 ? rects[k]!.right : (rects[k]!.right + rects[k + 1]!.left) / 2;
+    if (clientX < mid) {
+      return k;
+    }
+  }
+  return n;
+}
+
+function pickRowDropIndex(clientY: number, rects: DOMRect[]): number {
+  const n = rects.length;
+  let k = 0;
+  for (; k < n; k += 1) {
+    const mid =
+      k === n - 1
+        ? rects[k]!.bottom
+        : (rects[k]!.bottom + rects[k + 1]!.top) / 2;
+    if (clientY < mid) {
+      return k;
+    }
+  }
+  return n;
+}
+
+function columnDropBarViewport(rects: DOMRect[], drop: number): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} | null {
+  const n = rects.length;
+  if (n === 0) {
+    return null;
+  }
+  let top = Infinity;
+  let bottom = -Infinity;
+  for (const r of rects) {
+    top = Math.min(top, r.top);
+    bottom = Math.max(bottom, r.bottom);
+  }
+  let x: number;
+  if (drop <= 0) {
+    x = rects[0]!.left;
+  } else if (drop >= n) {
+    x = rects[n - 1]!.right;
+  } else {
+    x = (rects[drop - 1]!.right + rects[drop]!.left) / 2;
+  }
+  return {left: x - 2, top, width: 4, height: Math.max(bottom - top, 8)};
+}
+
+function rowDropBarViewport(rects: DOMRect[], drop: number): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} | null {
+  const n = rects.length;
+  if (n === 0) {
+    return null;
+  }
+  let left = Infinity;
+  let right = -Infinity;
+  for (const r of rects) {
+    left = Math.min(left, r.left);
+    right = Math.max(right, r.right);
+  }
+  let y: number;
+  if (drop <= 0) {
+    y = rects[0]!.top;
+  } else if (drop >= n) {
+    y = rects[n - 1]!.bottom;
+  } else {
+    y = (rects[drop - 1]!.bottom + rects[drop]!.top) / 2;
+  }
+  return {left, top: y - 2, width: Math.max(right - left, 8), height: 4};
 }
 
 export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
@@ -100,6 +204,18 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }
 
   const activeCellRef = useRef<{row: number; col: number}>({row: 0, col: 0});
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const dragSessionRef = useRef<null | {kind: 'col' | 'row'; source: number}>(
+    null,
+  );
+  const lastPointerRef = useRef({x: 0, y: 0});
+  const [dropLine, setDropLine] = useState<null | {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>(null);
+  const [isDraggingTable, setIsDraggingTable] = useState(false);
 
   const snapshotAllCellDocs = useCallback((): string[][] => {
     const rowCount = draftRef.current.cells.length;
@@ -350,20 +466,624 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     return () => el.removeEventListener('paste', onCapturePaste, true);
   }, [applyClipboardMatrix, parentView]);
 
+  const measureColumnHeaderElements = useCallback((): HTMLElement[] => {
+    const root = shellRef.current;
+    if (!root) {
+      return [];
+    }
+    return Array.from(
+      root.querySelectorAll<HTMLElement>('[data-eskerra-col-header]'),
+    ).sort(
+      (a, b) =>
+        Number(a.getAttribute('data-eskerra-col-header')) -
+        Number(b.getAttribute('data-eskerra-col-header')),
+    );
+  }, []);
+
+  const measureColumnRects = useCallback((): DOMRect[] => {
+    return measureColumnHeaderElements().map(el => el.getBoundingClientRect());
+  }, [measureColumnHeaderElements]);
+
+  const measureBodyRowElements = useCallback((): HTMLElement[] => {
+    const root = shellRef.current;
+    if (!root) {
+      return [];
+    }
+    return Array.from(
+      root.querySelectorAll<HTMLElement>('[data-eskerra-body-row]'),
+    ).sort(
+      (a, b) =>
+        Number(a.getAttribute('data-eskerra-body-row')) -
+        Number(b.getAttribute('data-eskerra-body-row')),
+    );
+  }, []);
+
+  const measureBodyRowRects = useCallback((): DOMRect[] => {
+    return measureBodyRowElements().map(el => el.getBoundingClientRect());
+  }, [measureBodyRowElements]);
+
+  useEffect(() => {
+    if (!isDraggingTable) {
+      return;
+    }
+    const doc = parentView.dom.ownerDocument;
+    const win = doc.defaultView;
+    const scrollEl = parentView.scrollDOM;
+
+    const refreshFromPointer = () => {
+      const sess = dragSessionRef.current;
+      if (!sess) {
+        return;
+      }
+      const {x, y} = lastPointerRef.current;
+      if (sess.kind === 'col') {
+        const rects = measureColumnRects();
+        if (rects.length === 0) {
+          return;
+        }
+        const drop = pickColumnDropIndex(x, rects);
+        const bar = columnDropBarViewport(rects, drop);
+        if (bar) {
+          setDropLine(bar);
+        }
+      } else {
+        const rects = measureBodyRowRects();
+        if (rects.length === 0) {
+          return;
+        }
+        const drop = pickRowDropIndex(y, rects);
+        const bar = rowDropBarViewport(rects, drop);
+        if (bar) {
+          setDropLine(bar);
+        }
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      lastPointerRef.current = {x: e.clientX, y: e.clientY};
+      refreshFromPointer();
+    };
+
+    const endDrag = () => {
+      const sess = dragSessionRef.current;
+      dragSessionRef.current = null;
+      setIsDraggingTable(false);
+      setDropLine(null);
+      doc.body.style.userSelect = '';
+      if (!sess) {
+        return;
+      }
+      const merged = snapshotAllCellDocs();
+      if (sess.kind === 'col') {
+        const n = merged[0]?.length ?? 0;
+        if (n === 0) {
+          return;
+        }
+        const rects = measureColumnRects();
+        if (rects.length === 0) {
+          return;
+        }
+        const drop = pickColumnDropIndex(lastPointerRef.current.x, rects);
+        const perm = columnReorderPermutation(n, sess.source, drop);
+        if (perm && !isIdentityPermutation(perm)) {
+          const alignNow = [...draftRef.current.align];
+          const {cells: nc, align: na} = applyColumnPermutation(
+            merged.map(r => [...r]),
+            alignNow,
+            perm,
+          );
+          draftRef.current.cells = nc.map(r => [...r]);
+          draftRef.current.align = [...na];
+          setCells(nc.map(r => [...r]));
+          setAlign(na);
+          const {row, col} = activeCellRef.current;
+          activeCellRef.current = {row, col: perm.indexOf(col)};
+        }
+      } else {
+        const m = merged.length - 1;
+        const rects = measureBodyRowRects();
+        if (rects.length === 0) {
+          return;
+        }
+        const drop = pickRowDropIndex(lastPointerRef.current.y, rects);
+        const perm = bodyRowReorderPermutation(m, sess.source, drop);
+        if (perm && !isIdentityPermutation(perm)) {
+          const next = moveBodyRowBefore(merged, sess.source, drop);
+          if (next) {
+            draftRef.current.cells = next.map(r => [...r]);
+            setCells(next.map(r => [...r]));
+            const {row, col} = activeCellRef.current;
+            const oldB = row - 1;
+            if (oldB >= 0) {
+              activeCellRef.current = {
+                row: perm.indexOf(oldB) + 1,
+                col,
+              };
+            }
+          }
+        }
+      }
+      parentView.requestMeasure();
+      requestAnimationFrame(() => {
+        const {row, col} = activeCellRef.current;
+        cellEditorsRef.current.get(cellKey(row, col))?.focus();
+      });
+    };
+
+    doc.body.style.userSelect = 'none';
+    refreshFromPointer();
+    doc.addEventListener('pointermove', onMove);
+    doc.addEventListener('pointerup', endDrag);
+    doc.addEventListener('pointercancel', endDrag);
+    scrollEl.addEventListener('scroll', refreshFromPointer, true);
+    win?.addEventListener('resize', refreshFromPointer);
+    return () => {
+      doc.removeEventListener('pointermove', onMove);
+      doc.removeEventListener('pointerup', endDrag);
+      doc.removeEventListener('pointercancel', endDrag);
+      scrollEl.removeEventListener('scroll', refreshFromPointer, true);
+      win?.removeEventListener('resize', refreshFromPointer);
+    };
+  }, [
+    isDraggingTable,
+    measureBodyRowRects,
+    measureColumnRects,
+    parentView,
+    snapshotAllCellDocs,
+  ]);
+
   const headerRow = cells[0];
   const bodyRows = cells.slice(1);
 
+  const menuIcon = (name: string) => (
+    <span className="material-icons eskerra-table-handle-menu__glyph" aria-hidden>
+      {name}
+    </span>
+  );
+
+  const renderColumnHandle = (ci: number): ReactNode => {
+    const n = colCount;
+    const run = (patch: () => void) => {
+      patch();
+      parentView.requestMeasure();
+    };
+    return (
+      <ContextMenu.Root>
+        <ContextMenu.Trigger asChild>
+          <div
+            className="cm-eskerra-table-shell__col-handle"
+            role="presentation"
+            onPointerDown={e => {
+              if (e.button !== 0) {
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+              lastPointerRef.current = {x: e.clientX, y: e.clientY};
+              dragSessionRef.current = {kind: 'col', source: ci};
+              setIsDraggingTable(true);
+            }}
+          >
+            <span
+              className="material-icons cm-eskerra-table-shell__handle-icon"
+              aria-hidden
+            >
+              drag_indicator
+            </span>
+          </div>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content
+            className="eskerra-table-handle-menu"
+            alignOffset={2}
+            collisionPadding={8}
+          >
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const sorted = sortBodyByColumn(merged, ci, 'asc');
+                  if (sorted) {
+                    draftRef.current.cells = sorted.map(r => [...r]);
+                    setCells(sorted.map(r => [...r]));
+                  }
+                });
+              }}
+            >
+              {menuIcon('sort_by_alpha')}
+              Sort by column (A to Z)
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const sorted = sortBodyByColumn(merged, ci, 'desc');
+                  if (sorted) {
+                    draftRef.current.cells = sorted.map(r => [...r]);
+                    setCells(sorted.map(r => [...r]));
+                  }
+                });
+              }}
+            >
+              {menuIcon('sort_by_alpha')}
+              Sort by column (Z to A)
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = insertColumnAt(merged, align, ci);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                  }
+                });
+              }}
+            >
+              {menuIcon('keyboard_arrow_left')}
+              Add column to the left
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = insertColumnAt(merged, align, ci + 1);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                  }
+                });
+              }}
+            >
+              {menuIcon('keyboard_arrow_right')}
+              Add column to the right
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              disabled={ci <= 0}
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = moveColumnStep(merged, align, ci, -1);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                    const {row, col} = activeCellRef.current;
+                    if (col === ci) {
+                      activeCellRef.current = {row, col: col - 1};
+                    }
+                  }
+                });
+              }}
+            >
+              {menuIcon('arrow_back')}
+              Move column left
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              disabled={ci >= n - 1}
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = moveColumnStep(merged, align, ci, 1);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                    const {row, col} = activeCellRef.current;
+                    if (col === ci) {
+                      activeCellRef.current = {row, col: col + 1};
+                    }
+                  }
+                });
+              }}
+            >
+              {menuIcon('arrow_forward')}
+              Move column right
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const na = setColumnAlignment(align, ci, 'left');
+                  if (na) {
+                    draftRef.current.align = na;
+                    setAlign(na);
+                  }
+                });
+              }}
+            >
+              {menuIcon('format_align_left')}
+              Align left
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const na = setColumnAlignment(align, ci, 'center');
+                  if (na) {
+                    draftRef.current.align = na;
+                    setAlign(na);
+                  }
+                });
+              }}
+            >
+              {menuIcon('format_align_center')}
+              Align center
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const na = setColumnAlignment(align, ci, 'right');
+                  if (na) {
+                    draftRef.current.align = na;
+                    setAlign(na);
+                  }
+                });
+              }}
+            >
+              {menuIcon('format_align_right')}
+              Align right
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = duplicateColumnAt(merged, align, ci);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                  }
+                });
+              }}
+            >
+              {menuIcon('content_copy')}
+              Duplicate column
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item eskerra-table-handle-menu__item--danger"
+              disabled={n <= 1}
+              onSelect={() => {
+                run(() => {
+                  const merged = snapshotAllCellDocs();
+                  const out = removeColumnAt(merged, align, ci);
+                  if (out) {
+                    draftRef.current.cells = out.cells.map(r => [...r]);
+                    draftRef.current.align = [...out.align];
+                    setCells(out.cells.map(r => [...r]));
+                    setAlign(out.align);
+                    const {row, col} = activeCellRef.current;
+                    const nextCol = Math.min(
+                      col >= ci ? Math.max(0, col - 1) : col,
+                      out.cells[0]!.length - 1,
+                    );
+                    activeCellRef.current = {row, col: nextCol};
+                  }
+                });
+              }}
+            >
+              {menuIcon('delete')}
+              Delete column
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>
+    );
+  };
+
+  const renderRowHandle = (bodyIndex: number): ReactNode => {
+    const nBody = bodyRows.length;
+    return (
+      <ContextMenu.Root>
+        <ContextMenu.Trigger asChild>
+          <div
+            className="cm-eskerra-table-shell__row-handle"
+            role="presentation"
+            onPointerDown={e => {
+              if (e.button !== 0) {
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+              lastPointerRef.current = {x: e.clientX, y: e.clientY};
+              dragSessionRef.current = {kind: 'row', source: bodyIndex};
+              setIsDraggingTable(true);
+            }}
+          >
+            <span
+              className="material-icons cm-eskerra-table-shell__handle-icon cm-eskerra-table-shell__handle-icon--row"
+              aria-hidden
+            >
+              drag_indicator
+            </span>
+          </div>
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content
+            className="eskerra-table-handle-menu"
+            alignOffset={2}
+            collisionPadding={8}
+          >
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = insertBodyRowAt(merged, bodyIndex);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('keyboard_arrow_up')}
+              Add row above
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = insertBodyRowAt(merged, bodyIndex + 1);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('keyboard_arrow_down')}
+              Add row below
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              disabled={bodyIndex <= 0}
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = moveBodyRowStep(merged, bodyIndex, -1);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                  const {row, col} = activeCellRef.current;
+                  if (row === bodyIndex + 1) {
+                    activeCellRef.current = {row: row - 1, col};
+                  }
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('arrow_upward')}
+              Move row up
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              disabled={bodyIndex >= nBody - 1}
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = moveBodyRowStep(merged, bodyIndex, 1);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                  const {row, col} = activeCellRef.current;
+                  if (row === bodyIndex + 1) {
+                    activeCellRef.current = {row: row + 1, col};
+                  }
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('arrow_downward')}
+              Move row down
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item"
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = duplicateBodyRowAt(merged, bodyIndex);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('content_copy')}
+              Duplicate row
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="eskerra-table-handle-menu__item eskerra-table-handle-menu__item--danger"
+              onSelect={() => {
+                const merged = snapshotAllCellDocs();
+                const next = deleteBodyRowAt(merged, bodyIndex);
+                if (next) {
+                  draftRef.current.cells = next.map(r => [...r]);
+                  setCells(next.map(r => [...r]));
+                  const {row, col} = activeCellRef.current;
+                  if (row === bodyIndex + 1) {
+                    activeCellRef.current = {
+                      row: Math.max(1, row - 1),
+                      col,
+                    };
+                  } else if (row > bodyIndex + 1) {
+                    activeCellRef.current = {row: row - 1, col};
+                  }
+                }
+                parentView.requestMeasure();
+              }}
+            >
+              {menuIcon('delete')}
+              Delete row
+            </ContextMenu.Item>
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>
+    );
+  };
+
   return (
-    <div className="cm-eskerra-table-shell">
+    <div
+      ref={shellRef}
+      className={
+        isDraggingTable
+          ? 'cm-eskerra-table-shell cm-eskerra-table-shell--dragging'
+          : 'cm-eskerra-table-shell'
+      }
+    >
       {notice ? (
         <div className="cm-eskerra-table__notice" role="status">
           {notice}
         </div>
       ) : null}
 
-      <table className="cm-eskerra-table-shell__table cm-eskerra-table__table">
+      {dropLine ? (
+        <div
+          className="cm-eskerra-table-shell__drop-bar"
+          style={{
+            position: 'fixed',
+            left: dropLine.left,
+            top: dropLine.top,
+            width: dropLine.width,
+            height: dropLine.height,
+            zIndex: 50,
+            pointerEvents: 'none',
+          }}
+          aria-hidden
+        />
+      ) : null}
+
+      <table
+        className={
+          isDraggingTable
+            ? 'cm-eskerra-table-shell__table cm-eskerra-table__table cm-eskerra-table-shell__table--dragging'
+            : 'cm-eskerra-table-shell__table cm-eskerra-table__table'
+        }
+      >
         <thead>
           <tr>
+            <th
+              className="cm-eskerra-table-shell__corner cm-eskerra-table-shell__cell"
+              aria-hidden
+            />
             {headerRow?.map((text, ci) => (
               <EskerraShellCell
                 key={`h-${ci}`}
@@ -371,6 +1091,8 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                 col={ci}
                 cellText={text}
                 isHeader
+                headerColIndex={ci}
+                prepend={renderColumnHandle(ci)}
                 align={align[ci]}
                 parentView={parentView}
                 wikiCompartment={linkCompartments.wikiLink}
@@ -389,7 +1111,16 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         </thead>
         <tbody>
           {bodyRows.map((row, ri) => (
-            <tr key={`br-${ri}`}>
+            <tr
+              key={`br-${ri}`}
+              className="cm-eskerra-table-shell__body-row"
+              data-eskerra-body-row={ri}
+            >
+              <td
+                className="cm-eskerra-table-shell__row-handle-cell cm-eskerra-table-shell__cell"
+              >
+                {renderRowHandle(ri)}
+              </td>
               {row.map((text, ci) => {
                 const r = ri + 1;
                 return (
@@ -470,6 +1201,8 @@ type ShellCellProps = {
   col: number;
   cellText: string;
   isHeader: boolean;
+  headerColIndex?: number;
+  prepend?: ReactNode;
   align: EskerraTableAlignment | undefined;
   parentView: EditorView;
   wikiCompartment: Compartment;
@@ -490,6 +1223,8 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     col,
     cellText,
     isHeader,
+    headerColIndex,
+    prepend,
     align,
     parentView,
     wikiCompartment,
@@ -604,8 +1339,21 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
   const CellTag = isHeader ? 'th' : 'td';
   const ta =
     align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
+  const thProps =
+    headerColIndex !== undefined
+      ? {'data-eskerra-col-header': String(headerColIndex)}
+      : {};
   return (
-    <CellTag className="cm-eskerra-table-shell__cell" style={{textAlign: ta}}>
+    <CellTag
+      className={
+        isHeader
+          ? 'cm-eskerra-table-shell__cell cm-eskerra-table-shell__th'
+          : 'cm-eskerra-table-shell__cell'
+      }
+      style={{textAlign: ta}}
+      {...thProps}
+    >
+      {prepend}
       <div
         ref={hostRef}
         className="cm-eskerra-table-shell__cm-host"
