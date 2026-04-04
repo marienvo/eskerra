@@ -1,5 +1,4 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
-import {foldKeymap} from '@codemirror/language';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {
   Compartment,
@@ -19,7 +18,6 @@ import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {MARKDOWN_EXTENSION, isExternalMarkdownHref, stripMarkdownLinkHrefToPathPart} from '@notebox/core';
 import {
   noteMarkdownEditorAppearance,
-  noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
@@ -337,7 +335,6 @@ export function buildNoteMarkdownCellExtensions(
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
-    noteMarkdownListItemFoldService,
     ...noteMarkdownEditorAppearance,
     history(),
     drawSelection(),
@@ -353,7 +350,6 @@ export function buildNoteMarkdownCellExtensions(
       },
       {key: '[', run: runWikiLinkOpenAssist},
       indentWithTab,
-      ...foldKeymap,
       ...defaultKeymap,
       ...historyKeymap,
     ]),

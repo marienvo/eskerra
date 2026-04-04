@@ -1861,6 +1861,151 @@ button.primary.destructive {
   background: transparent;
 }
 
+/*
+ * Nested table cell editors: do not use the root document margin column, min-height, or
+ * block heading/list/fence chrome. Inline markdown (links, code, emphasis, etc.) unchanged.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-content {
+  min-height: 0;
+  padding-block: 0;
+  padding-inline: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-scroller {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h1,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h2,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h3,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h4,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h5,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  line-height: inherit;
+  color: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-header-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-list-mark {
+  display: inline;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  text-align: start;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: normal;
+  letter-spacing: normal;
+  vertical-align: baseline;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-heading-line {
+  padding-block: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-1,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-2,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-3,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-4,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-5,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-6,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-7,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-8 {
+  padding-inline-start: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-hr-line {
+  padding-block: 0;
+  border-bottom: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line--first,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line--last {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+  color: inherit;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__idle-text {
