@@ -666,92 +666,96 @@ export function VaultTab({
               <>
                 <div className="editor note-markdown-editor-wrap">
                   <div className="note-markdown-editor-scroll">
-                    <div className="note-markdown-editor-reading-column">
-                      <div className="note-markdown-editor-fold-bulk-anchor">
-                        <button
-                          type="button"
-                          className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
-                          onClick={() => {
-                            const ed = inboxEditorRef.current;
-                            if (!ed) {
-                              return;
+                    <div className="note-markdown-editor-page">
+                      <div className="note-markdown-editor-fold-rail">
+                        <div className="note-markdown-editor-fold-bulk-anchor">
+                          <button
+                            type="button"
+                            className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                            onClick={() => {
+                              const ed = inboxEditorRef.current;
+                              if (!ed) {
+                                return;
+                              }
+                              if (editorHasFoldedRanges) {
+                                ed.unfoldAllFolds();
+                              } else {
+                                ed.collapseAllFolds();
+                              }
+                            }}
+                            disabled={busy}
+                            aria-label={
+                              editorHasFoldedRanges
+                                ? 'Expand all folds'
+                                : 'Collapse all folds'
                             }
-                            if (editorHasFoldedRanges) {
-                              ed.unfoldAllFolds();
-                            } else {
-                              ed.collapseAllFolds();
+                            data-tooltip={
+                              editorHasFoldedRanges
+                                ? 'Expand all folds'
+                                : 'Collapse all folds'
                             }
-                          }}
-                          disabled={busy}
-                          aria-label={
-                            editorHasFoldedRanges
-                              ? 'Expand all folds'
-                              : 'Collapse all folds'
-                          }
-                          data-tooltip={
-                            editorHasFoldedRanges
-                              ? 'Expand all folds'
-                              : 'Collapse all folds'
-                          }
-                          data-tooltip-placement="inline-end"
-                        >
-                          <MaterialIcon
-                            name={
-                              editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
-                            }
-                            size={12}
-                          />
-                        </button>
+                            data-tooltip-placement="inline-end"
+                          >
+                            <MaterialIcon
+                              name={
+                                editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
+                              }
+                              size={12}
+                            />
+                          </button>
+                        </div>
                       </div>
-                      <NoteMarkdownEditor
-                        ref={inboxEditorRef}
-                        attachmentHost={inboxAttachmentHost}
-                        resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                        vaultRoot={vaultRoot}
-                        activeNotePath={composingNewEntry ? null : selectedUri}
-                        initialMarkdown={editorBody}
-                        sessionKey={inboxEditorResetNonce}
-                        onMarkdownChange={onEditorChange}
-                        onEditorError={onEditorError}
-                        onWikiLinkActivate={onWikiLinkActivate}
-                        onMarkdownRelativeLinkActivate={
-                          onMarkdownRelativeLinkActivate
-                        }
-                        relativeMarkdownLinkHrefIsResolved={
-                          relativeMarkdownLinkHrefIsResolved
-                        }
-                        wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                        wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                        onSaveShortcut={onSaveShortcut}
-                        placeholder={
-                          composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
-                        }
-                        busy={busy}
-                        onFoldedRangesPresentChange={setEditorHasFoldedRanges}
-                      />
-                      {!composingNewEntry && selectedUri ? (
-                        <section className="inbox-backlinks" aria-label="Backlinks">
-                          <div className="inbox-backlinks__header">Linked from</div>
-                          {backlinkRows.length === 0 ? (
-                            <p className="muted inbox-backlinks__empty">No incoming links.</p>
-                          ) : (
-                            <ul className="inbox-backlinks__list">
-                              {backlinkRows.map(row => (
-                                <li key={row.uri}>
-                                  <button
-                                    type="button"
-                                    className="inbox-backlinks__row"
-                                    onClick={() => onSelectNote(row.uri)}
-                                  >
-                                    <span className="inbox-backlinks__title">{row.title}</span>
-                                    <span className="inbox-backlinks__filename">{row.fileName}</span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
-                      ) : null}
+                      <div className="note-markdown-editor-paper">
+                        <NoteMarkdownEditor
+                          ref={inboxEditorRef}
+                          attachmentHost={inboxAttachmentHost}
+                          resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                          vaultRoot={vaultRoot}
+                          activeNotePath={composingNewEntry ? null : selectedUri}
+                          initialMarkdown={editorBody}
+                          sessionKey={inboxEditorResetNonce}
+                          onMarkdownChange={onEditorChange}
+                          onEditorError={onEditorError}
+                          onWikiLinkActivate={onWikiLinkActivate}
+                          onMarkdownRelativeLinkActivate={
+                            onMarkdownRelativeLinkActivate
+                          }
+                          relativeMarkdownLinkHrefIsResolved={
+                            relativeMarkdownLinkHrefIsResolved
+                          }
+                          wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                          wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                          onSaveShortcut={onSaveShortcut}
+                          placeholder={
+                            composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                          }
+                          busy={busy}
+                          onFoldedRangesPresentChange={setEditorHasFoldedRanges}
+                        />
+                        {!composingNewEntry && selectedUri ? (
+                          <section className="inbox-backlinks" aria-label="Backlinks">
+                            <div className="inbox-backlinks__header">Linked from</div>
+                            {backlinkRows.length === 0 ? (
+                              <p className="muted inbox-backlinks__empty">No incoming links.</p>
+                            ) : (
+                              <ul className="inbox-backlinks__list">
+                                {backlinkRows.map(row => (
+                                  <li key={row.uri}>
+                                    <button
+                                      type="button"
+                                      className="inbox-backlinks__row"
+                                      onClick={() => onSelectNote(row.uri)}
+                                    >
+                                      <span className="inbox-backlinks__title">{row.title}</span>
+                                      <span className="inbox-backlinks__filename">{row.fileName}</span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </section>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>

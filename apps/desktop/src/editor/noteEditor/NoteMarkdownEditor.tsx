@@ -49,12 +49,19 @@ import {markdownNotebox} from './markdownNoteboxLanguage';
 import {nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
+import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
+import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
+import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
+import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
+import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
-  wikiLinkInnerAtDocPosition,
+  wikiLinkActivatableInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
 
@@ -160,6 +167,8 @@ const NoteMarkdownEditorImpl = forwardRef<
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
+  /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
+  const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
@@ -403,23 +412,24 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
       if (inner) {
         e.preventDefault();
         e.stopPropagation();
         onWikiLinkActivateRef.current({inner, at: pos});
         return true;
       }
-      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, pos);
-      if (
-        linkUrl
-        && isActivatableRelativeMarkdownHref(linkUrl.href)
-      ) {
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit) {
         e.preventDefault();
         e.stopPropagation();
         onMarkdownRelativeLinkActivateRef.current({
-          href: linkUrl.href,
-          at: linkUrl.hrefFrom,
+          href: relHit.href,
+          at: relHit.hrefFrom,
         });
         return true;
       }
@@ -449,7 +459,10 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
       const sel = view.state.selection.main;
-      const inner = wikiLinkInnerAtDocPosition(view.state.doc, sel.head);
+      const inner = wikiLinkActivatableInnerAtDocPosition(
+        view.state.doc,
+        sel.head,
+      );
       if (inner == null) {
         return false;
       }
@@ -459,16 +472,17 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
       const sel = view.state.selection.main;
-      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, sel.head);
-      if (
-        linkUrl == null
-        || !isActivatableRelativeMarkdownHref(linkUrl.href)
-      ) {
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        sel.head,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit == null) {
         return false;
       }
       onMarkdownRelativeLinkActivateRef.current({
-        href: linkUrl.href,
-        at: linkUrl.hrefFrom,
+        href: relHit.href,
+        at: relHit.hrefFrom,
       });
       return true;
     };
@@ -529,9 +543,34 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolved,
         ),
       ),
+      eskerraTableParentLinkCompartmentsFacet.of({
+        wikiLink: wikiLinkCompartment,
+        relativeMarkdownLink: relativeMdLinkCompartment,
+      }),
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
       ),
+      eskerraTableCellBundleFacet.of(partial =>
+        buildNoteMarkdownCellExtensions({
+          wikiLinkTargetIsResolved: wikiLinkTargetIsResolvedRef.current,
+          relativeMarkdownLinkHrefIsResolved:
+            relativeMarkdownLinkHrefIsResolvedRef.current,
+          wikiLinkCompletionCandidates: () =>
+            wikiLinkCompletionCandidatesRef.current,
+          vaultRootRef,
+          activeNotePathRef,
+          resolveVaultImagePreviewUrl: (vr, ap, src) =>
+            resolveVaultImagePreviewUrlRef.current(vr, ap, src),
+          attachmentHostRef,
+          busyRef,
+          onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+          onMarkdownRelativeLinkActivate: p =>
+            onMarkdownRelativeLinkActivateRef.current(p),
+          onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          ...partial,
+        }),
+      ),
+      ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
         activeNotePath: activeNotePathRef,
@@ -555,12 +594,12 @@ const NoteMarkdownEditorImpl = forwardRef<
           outline: 'none',
         },
         '.cm-gutters': {
-          /* Opaque: do not rely on column gradient (stripe width can be narrower than real gutter). */
-          backgroundColor: 'var(--nb-editor-margin-bg)',
+          /* Transparent: fold rail / panel gray shows through on desktop capture inbox. */
+          backgroundColor: 'transparent',
           border: 'none',
         },
         '.cm-foldGutter': {
-          /* Width comes from `.cm-gutters` in App.css (must match reading-column stripe). */
+          /* Width comes from `.cm-gutters` in App.css (must match `.note-markdown-editor-fold-rail`). */
           flexShrink: 0,
         },
         '.cm-scroller': {
@@ -619,11 +658,11 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!compartment || !view) {
       return;
     }
-    view.dispatch({
-      effects: compartment.reconfigure(
-        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
-      ),
-    });
+    const wikiEffect = compartment.reconfigure(
+      wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+    );
+    view.dispatch({effects: wikiEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: wikiEffect});
   }, [wikiLinkTargetIsResolved]);
 
   useEffect(() => {
@@ -632,20 +671,23 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!compartment || !view) {
       return;
     }
-    view.dispatch({
-      effects: compartment.reconfigure(
-        markdownRelativeLinkHighlightExtensions(
-          relativeMarkdownLinkHrefIsResolved,
-        ),
-      ),
-    });
+    const relEffect = compartment.reconfigure(
+      markdownRelativeLinkHighlightExtensions(relativeMarkdownLinkHrefIsResolved),
+    );
+    view.dispatch({effects: relEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
   useImperativeHandle(
     ref,
     () => ({
-      getMarkdown: () =>
-        viewRef.current?.state.doc.toString() ?? initialMarkdownRef.current,
+      getMarkdown: () => {
+        const view = viewRef.current;
+        if (view) {
+          flushAllEskerraTableDrafts(view);
+        }
+        return view?.state.doc.toString() ?? initialMarkdownRef.current;
+      },
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
@@ -661,20 +703,18 @@ const NoteMarkdownEditorImpl = forwardRef<
             extensions: bootExtensions,
           }),
         );
-        view.dispatch({
-          effects: [
-            wikiCompartment.reconfigure(
-              wikiLinkResolvedHighlightExtensions(
-                wikiLinkTargetIsResolvedRef.current,
-              ),
-            ),
-            relCompartment.reconfigure(
-              markdownRelativeLinkHighlightExtensions(
-                relativeMarkdownLinkHrefIsResolvedRef.current,
-              ),
-            ),
-          ],
-        });
+        const wikiEff = wikiCompartment.reconfigure(
+          wikiLinkResolvedHighlightExtensions(
+            wikiLinkTargetIsResolvedRef.current,
+          ),
+        );
+        const relEff = relCompartment.reconfigure(
+          markdownRelativeLinkHighlightExtensions(
+            relativeMarkdownLinkHrefIsResolvedRef.current,
+          ),
+        );
+        view.dispatch({effects: [wikiEff, relEff]});
+        dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
         onFoldedRangesPresentChangeRef.current?.(
           foldedRangesPresent(view.state),
         );
@@ -749,8 +789,6 @@ const NoteMarkdownEditorImpl = forwardRef<
   }, []);
 
   const [dropActive, setDropActive] = useState(false);
-
-  const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = hostRef.current;

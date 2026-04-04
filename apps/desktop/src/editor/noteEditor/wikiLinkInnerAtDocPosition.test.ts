@@ -2,6 +2,7 @@ import {EditorState, Text} from '@codemirror/state';
 import {describe, expect, it} from 'vitest';
 
 import {
+  wikiLinkActivatableInnerAtDocPosition,
   wikiLinkInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
@@ -36,5 +37,27 @@ describe('wikiLinkInnerAtDocPosition', () => {
       innerFrom: line.from + line.text.indexOf('second'),
       innerTo: line.from + line.text.indexOf(']]'),
     });
+  });
+});
+
+describe('wikiLinkActivatableInnerAtDocPosition', () => {
+  it('returns inner only when pos is inside the styled span, not on brackets', () => {
+    const doc = Text.of(['Before [[alpha note]] after']);
+    const line = doc.line(1);
+    const firstBracket = line.from + line.text.indexOf('[[');
+    const firstCloseInner = line.from + line.text.indexOf(']]');
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstBracket)).toBeNull();
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstBracket + 1)).toBeNull();
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner)).toBeNull();
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner - 1)).toBe(
+      'alpha note',
+    );
+  });
+
+  it('returns inner at start of wiki inner span', () => {
+    const doc = Text.of(['x [[y]] z']);
+    const line = doc.line(1);
+    const innerStart = line.from + line.text.indexOf('y');
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, innerStart)).toBe('y');
   });
 });

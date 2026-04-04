@@ -6,6 +6,11 @@
   pointer-events: none;
   overflow: hidden;
   background-color: #f5f5f5;
+}
+
+.desktop-startup-splash__artwork {
+  position: absolute;
+  inset: 0;
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;

@@ -16,7 +16,10 @@ import {
   useState,
 } from 'react';
 
-import {DesktopStartupSplash} from './components/DesktopStartupSplash';
+import {
+  DesktopStartupSplash,
+  type DesktopStartupSplashPhase,
+} from './components/DesktopStartupSplash';
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
@@ -50,6 +53,8 @@ import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
 import './App.css';
 
 type MainTab = MainTabId;
+
+type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
 const TITLE_BAR_SKIP_MS = 10_000;
 const MAIN_WINDOW_LABEL = 'main';
@@ -161,8 +166,8 @@ export default function App() {
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
-  const [startupSplashDismissed, setStartupSplashDismissed] = useState(
-    () => !isTauri(),
+  const [startupSplashPhase, setStartupSplashPhase] = useState<StartupSplashPhase>(
+    () => (!isTauri() ? 'done' : 'artwork'),
   );
 
   const appStartupReady = useMemo(
@@ -308,91 +313,106 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!isTauri() || startupSplashDismissed) {
+    if (!isTauri() || startupSplashPhase !== 'artwork' || !appStartupReady) {
       return;
     }
-    if (!appStartupReady) {
+    setStartupSplashPhase('scrim');
+  }, [appStartupReady, startupSplashPhase]);
+
+  useEffect(() => {
+    if (!isTauri() || startupSplashPhase !== 'scrim' || !appStartupReady) {
       return;
     }
     let cancelled = false;
-    void (async () => {
-      const win = getCurrentWindow();
-      let diskMainW: number | undefined;
-      let diskMainH: number | undefined;
-      try {
-        const v = await invoke<{
-          pathExists: boolean;
-          mainWidth?: number;
-          mainHeight?: number;
-        }>('notebox_peek_window_state_file');
-        if (v.pathExists) {
-          diskMainW = v.mainWidth;
-          diskMainH = v.mainHeight;
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) {
+          return;
         }
-      } catch {
-        /* ignore: fallback only when peek succeeds */
-      }
-
-      try {
-        await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
-      } catch (e) {
-        if (import.meta.env.DEV) {
-          console.error(
-            '[eskerra] window-state restore (size, maximized, visible, …) failed',
-            e,
-          );
-        }
-      }
-
-      try {
-        await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
-      } catch (e) {
-        if (import.meta.env.DEV) {
-          console.error(
-            '[eskerra] window-state restore (position) failed; size already applied',
-            e,
-          );
-        }
-      }
-
-      let sizeAfterRestore: {width: number; height: number} | null = null;
-      try {
-        const s = await win.innerSize();
-        sizeAfterRestore = {width: s.width, height: s.height};
-      } catch {
-        sizeAfterRestore = null;
-      }
-
-      const dw = diskMainW;
-      const dh = diskMainH;
-      if (
-        dw != null &&
-        dh != null &&
-        dw > 0 &&
-        dh > 0 &&
-        sizeAfterRestore != null &&
-        (sizeAfterRestore.width !== dw || sizeAfterRestore.height !== dh)
-      ) {
-        try {
-          await win.setSize(new PhysicalSize(dw, dh));
-        } catch (e) {
-          if (import.meta.env.DEV) {
-            console.error(
-              '[eskerra] window restore: setSize from persisted file failed',
-              e,
-            );
+        void (async () => {
+          const win = getCurrentWindow();
+          let diskMainW: number | undefined;
+          let diskMainH: number | undefined;
+          try {
+            const v = await invoke<{
+              pathExists: boolean;
+              mainWidth?: number;
+              mainHeight?: number;
+            }>('notebox_peek_window_state_file');
+            if (v.pathExists) {
+              diskMainW = v.mainWidth;
+              diskMainH = v.mainHeight;
+            }
+          } catch {
+            /* ignore: fallback only when peek succeeds */
           }
-        }
-      }
 
-      if (!cancelled) {
-        setStartupSplashDismissed(true);
-      }
-    })();
+          try {
+            await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error(
+                '[eskerra] window-state restore (size, maximized, visible, …) failed',
+                e,
+              );
+            }
+          }
+
+          try {
+            await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error(
+                '[eskerra] window-state restore (position) failed; size already applied',
+                e,
+              );
+            }
+          }
+
+          let sizeAfterRestore: {width: number; height: number} | null = null;
+          try {
+            const s = await win.innerSize();
+            sizeAfterRestore = {width: s.width, height: s.height};
+          } catch {
+            sizeAfterRestore = null;
+          }
+
+          const dw = diskMainW;
+          const dh = diskMainH;
+          if (
+            dw != null &&
+            dh != null &&
+            dw > 0 &&
+            dh > 0 &&
+            sizeAfterRestore != null &&
+            (sizeAfterRestore.width !== dw || sizeAfterRestore.height !== dh)
+          ) {
+            try {
+              await win.setSize(new PhysicalSize(dw, dh));
+            } catch (e) {
+              if (import.meta.env.DEV) {
+                console.error(
+                  '[eskerra] window restore: setSize from persisted file failed',
+                  e,
+                );
+              }
+            }
+          }
+
+          if (!cancelled) {
+            setStartupSplashPhase('done');
+          }
+        })();
+      });
+    });
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
     };
-  }, [appStartupReady, startupSplashDismissed]);
+  }, [appStartupReady, startupSplashPhase]);
 
   const pickFolder = async () => {
     setErr(null);
@@ -474,8 +494,10 @@ export default function App() {
   }, [flushInboxSave]);
 
   const startupOverlay =
-    isTauri() && !startupSplashDismissed ? (
-      <DesktopStartupSplash />
+    isTauri() && startupSplashPhase !== 'done' ? (
+      <DesktopStartupSplash
+        phase={startupSplashPhase === 'artwork' ? 'artwork' : 'scrim'}
+      />
     ) : null;
 
   if (!vaultRoot) {

@@ -950,17 +950,15 @@ a:focus:not(:focus-visible) {
 
 .inbox-backlinks {
   flex: none;
-  border-top: 1px solid var(--color-border-soft, var(--color-border));
   padding-block: 0.85rem 0.6rem;
-  /* Match `.cm-content`: body text starts after fold gutter + same inline padding (symmetric R). */
-  padding-inline-start: calc(
-    var(--nb-editor-fold-gutter-width) + 0.6rem + var(--nb-editor-heading-gutter)
-  );
+  /* Match `.cm-content`: same inline padding (symmetric R); fold rail is outside this paper column. */
+  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter));
   padding-inline-end: calc(0.6rem + var(--nb-editor-heading-gutter));
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   background: transparent;
+  padding-bottom: 2rem;
 }
 
 .inbox-backlinks__header {
@@ -1162,13 +1160,14 @@ button.primary.destructive {
   --nb-editor-heading-gutter: 9.25ch;
   /* Extra inline start per nested list level (`cm-md-list-line--nest-*`). */
   --nb-editor-list-nest-step: 0.5rem;
-  /* Fold gutter column width; matches `EditorView.theme` + stripe in `.note-markdown-editor-reading-column`. */
+  /* Fold gutter column width; matches rail + `EditorView.theme` + `.cm-gutters` in App.css. */
   --nb-editor-fold-gutter-width: 1.375rem;
+  /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
+  --nb-editor-paper-pad-block-start: 4rem;
 
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 120px;
   min-height: 0;
   background: var(--nb-editor-margin-bg);
   color: var(--nb-editor-text);
@@ -1186,32 +1185,45 @@ button.primary.destructive {
   flex-direction: column;
 }
 
-.note-markdown-editor-reading-column {
-  position: relative;
+/*
+ * Centered row: fold rail (panel gray only) + paper column. Fold chevrons render in the rail via a
+ * negative-margin host shift (see `.note-markdown-editor-host`).
+ */
+.note-markdown-editor-page {
   width: 100%;
-  /* 690px targets body column; add heading-gutter (cm padding) + fold gutter so total width matches layout. */
   max-width: calc(
     690px + var(--nb-editor-heading-gutter) + var(--nb-editor-fold-gutter-width)
   );
   margin-inline: auto;
   box-sizing: border-box;
-  /* Full-height left stripe matches fold gutter chrome through editor + Linked from (CodeMirror gutters are shorter than this column). */
-  background: linear-gradient(
-    to right,
-    var(--nb-editor-margin-bg) 0,
-    var(--nb-editor-margin-bg) var(--nb-editor-fold-gutter-width),
-    var(--nb-editor-paper) var(--nb-editor-fold-gutter-width)
-  );
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.025);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1 0 0;
+  /* Let outer .note-markdown-editor-scroll grow with editor + “Linked from” on long notes. */
+  min-height: min-content;
+}
+
+.note-markdown-editor-fold-rail {
+  flex: none;
+  width: var(--nb-editor-fold-gutter-width);
+  box-sizing: border-box;
+  /* Background comes from `.note-markdown-editor-scroll`; keep fold icons outside the paper card. */
+  background: transparent;
+}
+
+.note-markdown-editor-paper {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* flex-basis 0 + grow: fill scroll viewport when the note is short; flex-shrink 0 keeps long notes from clipping. */
-  flex: 1 0 0;
+  background: var(--nb-editor-paper);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.025);
 }
 
 /*
- * Bulk fold (expand all / collapse all): fold column + first-line band; sticky in scroll.
- * Negative margin keeps the editor laid out like the former absolute overlay.
+ * Bulk fold (expand all / collapse all): sticky in the fold rail over panel gray.
  */
 [data-app-surface='capture'] .note-markdown-editor-fold-bulk-anchor {
   position: sticky;
@@ -1219,8 +1231,7 @@ button.primary.destructive {
   z-index: 6;
   align-self: flex-start;
   width: var(--nb-editor-fold-gutter-width);
-  height: calc(0.5rem + 1.6em);
-  margin-bottom: calc(-1 * (0.5rem + 1.6em));
+  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + 1.6em);
   font-size: 16px;
   line-height: 1.6;
   display: flex;
@@ -1228,7 +1239,7 @@ button.primary.destructive {
   justify-content: center;
   box-sizing: border-box;
   pointer-events: none;
-  background: var(--nb-editor-margin-bg);
+  background: transparent;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-fold-bulk-btn {
@@ -1263,7 +1274,7 @@ button.primary.destructive {
 }
 
 .note-markdown-editor-host {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 8rem;
@@ -1271,6 +1282,12 @@ button.primary.destructive {
   padding: 0 0 4rem;
   outline: none;
   background: transparent;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-paper .note-markdown-editor-host {
+  margin-inline-start: calc(-1 * var(--nb-editor-fold-gutter-width));
+  width: calc(100% + var(--nb-editor-fold-gutter-width));
+  box-sizing: border-box;
 }
 
 /* Stretch paper with the host when there is leftover height (no gray band above backlinks). */
@@ -1295,19 +1312,17 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-editor {
-  /* Paper is on `.cm-scroller` only; editor root stays transparent so the reading-column stripe shows through `.cm-gutters`. */
+  /* Paper is on `.cm-scroller` (right of gutter); editor root and gutters stay transparent over panel gray / fold rail. */
   background: transparent;
   color: inherit;
   min-height: 0;
 }
 
 /*
- * Solid margin chrome for the full gutter column. Transparent gutters showed the reading-column
- * gradient through — the gradient switches to paper at `--nb-editor-fold-gutter-width`, so a gutter
- * wider than that looked half gray / half white.
+ * Gutter column sits in the fold rail (panel gray shows through); same fixed width as `.note-markdown-editor-fold-rail`.
  */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-gutters {
-  background: var(--nb-editor-margin-bg);
+  background: transparent;
   border: none;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -1336,7 +1351,7 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-activeLineGutter {
-  background: color-mix(in srgb, var(--nb-editor-margin-bg) 55%, #99c8f0 45%) !important;
+  background: color-mix(in srgb, transparent 40%, #99c8f0 60%) !important;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-scroller {
@@ -1351,13 +1366,19 @@ button.primary.destructive {
   /* Same WebKit tradeoff as .playlist-body / .section-heading: grayscale AA can look more even when
    * scrolling/compositing would otherwise muddle subpixel LCD antialiasing. */
   -webkit-font-smoothing: antialiased;
-  background: var(--nb-editor-paper);
+  /* Transparent under `.cm-gutters` (fold rail); paper only for the text column. */
+  background: linear-gradient(
+    to right,
+    transparent 0,
+    transparent var(--nb-editor-fold-gutter-width),
+    var(--nb-editor-paper) var(--nb-editor-fold-gutter-width)
+  );
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
   min-height: 6rem;
   /* Symmetric L/R “margin columns”; scrollbar is on .note-markdown-editor-scroll. */
-  padding-block: 0.5rem 1rem;
+  padding-block: var(--nb-editor-paper-pad-block-start, 0.5rem) 1rem;
   padding-inline: calc(0.6rem + var(--nb-editor-heading-gutter));
   box-sizing: border-box;
   background: transparent;
@@ -1365,6 +1386,38 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-line {
   padding: 0;
+}
+
+/*
+ * Markdown syntax markers on non-focus lines (cm-notebox-marker-focus-line from
+ * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
+ * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
+ * take no space.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-header-mark {
+  visibility: hidden;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-wiki-bracket,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-hr,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-rel-link-href {
+  display: none;
 }
 
 .note-markdown-editor-host--drop-target {
@@ -1406,6 +1459,30 @@ button.primary.destructive {
   color: var(--nb-editor-faint);
 }
 
+/*
+ * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
+ * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-wiki-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
   max-width: 100%;
   padding: 0.5rem 0;
@@ -1418,6 +1495,846 @@ button.primary.destructive {
   display: block;
   cursor: default;
   border-radius: 4px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__main {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* Invisible slot so Markdown / Edit stay fixed across render vs cell-edit. */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-slot-spacer {
+  box-sizing: border-box;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  flex-shrink: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  padding-bottom: 0.35rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__button {
+  cursor: default;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 0.45rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--color-panel-solid);
+  color: var(--color-text-primary);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__button--primary {
+  border-color: var(--color-interactive-text);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  margin: 0;
+  padding: 0.22rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-panel-solid);
+  color: var(--color-text-primary);
+  cursor: default;
+  line-height: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--nb-editor-text) 5%, var(--color-panel-solid));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-btn--primary {
+  border-color: var(--color-accent);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__icon-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+  line-height: 12px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__notice {
+  margin: 0;
+  padding: 0 0 0.35rem;
+  color: var(--color-text-secondary);
+  font-size: 0.77rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-shell {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-shell .cm-eskerra-table__main {
+  min-height: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-wrap {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+}
+
+/* Screen-reader-only column titles (RDG header strip height is 0). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg__vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Eskerra table edit grid: match capture editor “paper” (see Red Graphite–style tokens in host rules).
+ * Force light color-scheme so `light-dark()` inside RDG does not follow system dark preference.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg.rdg-light {
+  color-scheme: light;
+  width: 100%;
+  /*
+   * Match `.cm-scroller` so cells and `<textarea>` are not monospace (WebKit form defaults)
+   * and line box matches row-height math in eskerraTableWrappedRowHeight.ts.
+   */
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  font-synthesis: none;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  /* Override RDG default block-size: 350px (was leaving empty dark/grey gap below short tables). */
+  min-block-size: 0;
+  /*
+   * RDG paints a 1px border on the grid root on all sides while every cell also has a 1px
+   * inline-end and block-end border. That stacks on the outer right and bottom (~2px) while the
+   * outer left/top are only the root (~1px). Drop the root edge where cells already draw it.
+   */
+  border-inline-end: none;
+  border-block-end: none;
+  /*
+   * With headerRowHeight 0, header cells still draw a 1px block-end border; it stacks with the
+   * root’s block-start and reads as a thick top edge. Remove both and restore a single top line on
+   * the first data row (see sibling rule below).
+   */
+  border-block-start: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-header-row
+  > .rdg-cell {
+  border-block-end: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-header-row
+  + .rdg-row
+  > .rdg-cell {
+  border-block-start: 1px solid var(--rdg-border-color);
+}
+
+/*
+ * Cell labels are not prose: block text selection until the cell editor is open
+ * (avoids drag-selecting fake “headers” / link-looking text; matches spreadsheet UX).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg .rdg-cell {
+  user-select: none;
+  -webkit-user-select: none;
+  border-inline-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+  border-block-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+  /* Wrap instead of react-data-grid’s nowrap + ellipsis */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  overflow: hidden;
+  align-content: start;
+  padding-block: 4px;
+}
+
+/*
+ * RDG uses outline + negative outline-offset on selected cells; combined with overflow: clip and the
+ * grid scrollport, the ring clips (especially on the left) and corners look wrong. An inset box-shadow
+ * stays inside the border box so all sides read as the same width (same token as --rdg-selection-color).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-cell[aria-selected='true'] {
+  outline: none;
+  /* 1px reads cleaner with 1px cell borders than 2px inset against the grid. */
+  box-shadow: inset 0 0 0 1px var(--rdg-selection-color, var(--color-accent));
+  border-radius: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-row.cm-eskerra-table-rdg__header-row
+  > .rdg-cell {
+  font-weight: 620;
+  background-color: color-mix(in srgb, var(--nb-editor-text) 5%, var(--nb-editor-paper));
+  color: var(--nb-editor-header);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input {
+  /* Reset global `input, textarea` in App.css (width/padding/border-radius) for RDG editors. */
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-block: 0;
+  padding-inline: 6px;
+  margin: 0;
+  border-radius: 0;
+  appearance: none;
+  border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
+  background-color: var(--nb-editor-paper) !important;
+  color: var(--nb-editor-text) !important;
+  font: inherit;
+  line-height: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-block: 0;
+  padding-inline: 6px;
+  margin: 0;
+  border-radius: 0;
+  appearance: none;
+  border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
+  background-color: var(--nb-editor-paper) !important;
+  color: var(--nb-editor-text) !important;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  resize: none;
+  field-sizing: content;
+  min-block-size: 100%;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  input:focus {
+  border-color: var(--color-accent) !important;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-editor-container
+  textarea:focus {
+  border-color: var(--color-accent) !important;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table td {
+  border: 1px solid var(--color-border-subtle);
+  padding: 0.32rem 0.45rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th {
+  color: var(--color-text-primary);
+  font-weight: 620;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  padding: 0.08rem 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__input:focus {
+  outline: 1px solid var(--color-interactive-text);
+  outline-offset: 0;
+  border-radius: 0.2rem;
+  padding-inline: 0.15rem;
+}
+
+/* In-document table mode: line tint + active cell (CodeMirror-native editing; no embedded grid). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-table-line {
+  padding-block: 0.06rem;
+  border-radius: 3px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-table-line--alt {
+  background: color-mix(in srgb, var(--nb-editor-text) 3%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-active-cell {
+  background: color-mix(in srgb, var(--color-accent) 10%, var(--nb-editor-paper));
+  outline: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  outline-offset: 0;
+  border-radius: 3px;
+}
+
+/* Hybrid table shell: replace-widget DOM grid + one nested CodeMirror for the active cell. */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell-root {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell {
+  position: relative;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  /* Column drag strip (header): keep --eskerra-col-handle-strip in sync with these parts. */
+  --eskerra-col-handle-pad-y: 0.12rem;
+  --eskerra-col-handle-min-block: 1.05rem;
+  --eskerra-col-handle-gap-after: 0.1rem;
+  --eskerra-col-handle-strip: calc(
+    var(--eskerra-col-handle-pad-y) + var(--eskerra-col-handle-min-block) +
+      var(--eskerra-col-handle-pad-y) + var(--eskerra-col-handle-gap-after)
+  );
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell__sheet {
+  position: relative;
+  box-sizing: border-box;
+  /* Padding (not margin) so block widget height matches hit-testing; see codemirror-desktop-layout.mdc */
+  padding-block-end: var(--eskerra-col-handle-strip);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell--dragging {
+  cursor: grabbing;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell--dragging
+  .cm-eskerra-table-shell__col-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell--dragging
+  .cm-eskerra-table-shell__row-handle {
+  cursor: grabbing;
+}
+
+/*
+ * Vertical action rail to the right of the table; absolutely positioned so the table
+ * stays full content width; lives in the visual margin beside the paper column.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 100%;
+  margin-inline-start: 0.35rem;
+  z-index: 2;
+}
+
+/* Row drag handles in the document margin (mirror of the right action rail). */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__rail-left {
+  inset-inline-end: 100%;
+  inset-inline-start: auto;
+  margin-inline-end: 0.35rem;
+  margin-inline-start: 0;
+  inline-size: 1.25rem;
+  min-inline-size: 1.25rem;
+  pointer-events: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle-slot {
+  position: absolute;
+  inset-inline: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Content-based widths: narrow columns stay compact; wide cells get more room. */
+  table-layout: auto;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__table--dragging {
+  opacity: 0.92;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__th {
+  position: relative;
+  padding-block-start: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__col-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-block-size: var(--eskerra-col-handle-min-block);
+  padding-block: var(--eskerra-col-handle-pad-y);
+  padding-inline: 0.15rem;
+  margin-block-end: var(--eskerra-col-handle-gap-after);
+  border-radius: 3px;
+  opacity: 0;
+  cursor: grab;
+  color: color-mix(in srgb, var(--nb-editor-text) 58%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__th:hover
+  .cm-eskerra-table-shell__col-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__col-handle:hover {
+  opacity: 1;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 1.35em;
+  border-radius: 3px;
+  opacity: 0;
+  cursor: grab;
+  color: color-mix(in srgb, var(--nb-editor-text) 58%, var(--nb-editor-paper));
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle-slot:hover
+  .cm-eskerra-table-shell__row-handle,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle-slot--lit
+  .cm-eskerra-table-shell__row-handle {
+  opacity: 1;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__handle-icon {
+  font-size: 1rem;
+  line-height: 1;
+  user-select: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__handle-icon--col {
+  transform: rotate(90deg);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__drop-bar {
+  background: var(--color-accent, #0b57d0);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nb-editor-paper) 55%, transparent);
+}
+
+.eskerra-table-handle-menu {
+  z-index: 100;
+  min-width: 11.5rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.eskerra-table-handle-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: default;
+  outline: none;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.eskerra-table-handle-menu__item[data-disabled] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.eskerra-table-handle-menu__item[data-highlighted] {
+  background: var(--color-row-hover);
+}
+
+.eskerra-table-handle-menu__item--danger[data-highlighted] {
+  background: var(--color-error-banner-bg);
+  color: var(--color-error);
+}
+
+.eskerra-table-handle-menu__sep {
+  block-size: 1px;
+  margin: 0.2rem 0.35rem;
+  background: var(--color-border-subtle);
+}
+
+.eskerra-table-handle-menu__glyph {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  opacity: 0.88;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell {
+  border: 1px solid var(--color-border-subtle);
+  padding: 0.28rem 0.4rem;
+  vertical-align: top;
+  min-block-size: 1.5em;
+  /* Let the table algorithm shrink columns; avoid a forced equal split. */
+  width: auto;
+  max-width: 100%;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host {
+  box-sizing: border-box;
+  min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host .cm-editor {
+  background: transparent;
+}
+
+/*
+ * Nested table cell editors: do not use the root document margin column, min-height, or
+ * block heading/list/fence chrome. Inline markdown (links, code, emphasis, etc.) unchanged.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-content {
+  min-height: 0;
+  padding-block: 0;
+  padding-inline: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-scroller {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h1,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h2,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h3,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h4,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h5,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-h6 {
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  line-height: inherit;
+  color: inherit;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-header-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-list-mark {
+  display: inline;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  text-align: start;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: normal;
+  letter-spacing: normal;
+  vertical-align: baseline;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-heading-line {
+  padding-block: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-1,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-2,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-3,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-4,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-5,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-6,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-7,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-line.cm-md-list-line--nest-8 {
+  padding-inline-start: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-hr-line {
+  padding-block: 0;
+  border-bottom: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-hr-line::after {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line--first,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-line--last {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  background: transparent;
+  color: inherit;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__idle-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/*
+ * Raw-Markdown controls: zero layout height (estimatedHeight 0) so table lines are not pushed down;
+ * rail sits at the top-end of the content column, beside the first line (same idea as table __rail).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-raw-banner {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner
+  .cm-eskerra-table__rail-top {
+  position: absolute;
+  /* Match `.cm-eskerra-table-shell__rail`: beside the content, not inset from line end. */
+  top: 0;
+  inset-inline-start: 100%;
+  margin-inline-start: 0.35rem;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner.cm-eskerra-table-rail-banner
+  .cm-eskerra-table__rail-bottom {
+  position: absolute;
+  top: 2.35rem;
+  right: 0;
+  z-index: 2;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 /*
@@ -1602,6 +2519,28 @@ button.primary.destructive {
   font-weight: 400;
 }
 
+/*
+ * Horizontal rule: same gutter column + pull as `.cm-md-header-mark`; rule line runs in the body column (`::after`).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line .cm-md-hr {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--nb-editor-heading-gutter);
+  min-width: var(--nb-editor-heading-gutter);
+  margin-inline-start: calc(-1 * var(--nb-editor-heading-gutter));
+  margin-inline-end: -0.42em;
+  padding-inline-end: 0.42em;
+  text-align: right;
+  white-space: pre;
+  color: var(--nb-editor-hash-tone);
+  font-weight: 700;
+  font-style: italic;
+  font-size: 1em;
+  letter-spacing: -0.03em;
+  vertical-align: baseline;
+  font-synthesis: weight style;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
@@ -1710,9 +2649,20 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line {
+  position: relative;
   padding-top: 1.35em;
   padding-bottom: 0.6em;
-  border-bottom: 1px solid color-mix(in srgb, var(--nb-editor-faint) 38%, var(--nb-editor-paper) 62%);
+  border-bottom: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 19px;
+  height: 2px;
+  pointer-events: none;
+  background: var(--color-text);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line {

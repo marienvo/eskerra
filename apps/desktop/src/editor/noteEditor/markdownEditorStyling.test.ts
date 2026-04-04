@@ -163,4 +163,16 @@ describe('markdownEditorBlockLineClasses', () => {
     expect(byLine[2]?.includes('cm-md-list-line--nest-1')).toBe(true);
   });
 
+  it('tags horizontal rule lines', () => {
+    const byLine = lineClassSets('before\n\n---\nafter');
+    expect(byLine[3]?.includes('cm-md-hr-line')).toBe(true);
+  });
+});
+
+describe('noteMarkdown horizontal rule highlighting', () => {
+  it('applies cm-md-hr to the rule token', () => {
+    const doc = 'x\n\n---\ny';
+    const pos = doc.indexOf('-');
+    expect(innermostHighlightClassAt(doc, pos)).toContain('cm-md-hr');
+  });
 });

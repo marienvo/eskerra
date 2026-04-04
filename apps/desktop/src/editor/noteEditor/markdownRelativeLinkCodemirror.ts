@@ -8,6 +8,8 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 
+import {relativeMarkdownLinkLabelSpan} from './relativeMarkdownLinkLabelSpan';
+
 const TREE_ENSURE_BUDGET_MS = 200;
 
 type RelativeMdLinkHrefIsResolved = (href: string) => boolean;
@@ -21,7 +23,8 @@ export const relativeMdLinkHrefIsResolvedFacet = Facet.define<
     values.length > 0 ? values[values.length - 1]! : () => false,
 });
 
-function buildRelativeMdLinkDecorations(view: EditorView): DecorationSet {
+/** Builds relative `.md` link highlight decorations (label + URL under `Link`). Exported for tests. */
+export function buildRelativeMdLinkDecorations(view: EditorView): DecorationSet {
   const isResolved = view.state.facet(relativeMdLinkHrefIsResolvedFacet);
   ensureSyntaxTree(view.state, view.state.doc.length, TREE_ENSURE_BUDGET_MS);
   const tree = syntaxTree(view.state);
@@ -36,16 +39,28 @@ function buildRelativeMdLinkDecorations(view: EditorView): DecorationSet {
         return;
       }
       const href = view.state.sliceDoc(ref.from, ref.to);
-      const hrefClass = isResolved(href)
+      const labelClass = isResolved(href)
         ? 'cm-md-rel-link cm-md-rel-link--resolved'
         : 'cm-md-rel-link cm-md-rel-link--unresolved';
+      const hrefClass = `${labelClass} cm-md-rel-link-href`;
       ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
+      const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
+        view.state.sliceDoc(a, b),
+      );
+      if (labelSpan != null) {
+        ranges.push(
+          Decoration.mark({class: labelClass}).range(
+            labelSpan.from,
+            labelSpan.to,
+          ),
+        );
+      }
     },
   });
   return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
 }
 
-/** Highlights inline link URL text for relative vault `.md` targets (not images). */
+/** Highlights inline link label and URL for relative vault `.md` targets (not images). */
 export function markdownRelativeLinkHighlightExtensions(
   hrefIsResolved: RelativeMdLinkHrefIsResolved,
 ): Extension {

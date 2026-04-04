@@ -21,6 +21,8 @@ This note documents **intentional CSS choices** for the Linux desktop app ([`app
 
 7. **Inbox editor (scroll / compositing):** After fixing `text-rendering`, opaque `.cm-editor`, and related layout, text could still look **uneven or heavier on one edge**, especially **when scrolling**. **Cause:** WebKitGTK often paints scrolling text with **subpixel LCD antialiasing** in a way that interacts badly with CodeMirror’s scroll layer. **Fix:** **`-webkit-font-smoothing: antialiased`** on capture **`[data-app-surface='capture'] .note-markdown-editor-host .cm-scroller`** (grayscale AA; same tradeoff as `.playlist-body`: slightly lighter strokes, more stable appearance). **Do not remove** this without re-checking on Linux WebKitGTK at fractional UI scale.
 
+8. **Inbox editor fold gutter vs paper:** Collapse icons should sit **in the panel margin** (same gray as `.note-markdown-editor-scroll`), not on the **white paper** card. **Layout:** `.note-markdown-editor-page` is a flex row: **`.note-markdown-editor-fold-rail`** (narrow, transparent over scroll gray) + **`.note-markdown-editor-paper`** (solid `--nb-editor-paper`, shadow). **`.note-markdown-editor-host`** inside the paper uses a **negative `margin-inline-start`** and wider `width` so CodeMirrors **`.cm-gutters`** paint in the rail; **`.cm-gutters`** and **`EditorView.theme`** use **transparent** gutter backgrounds; **`.cm-scroller`** uses a **horizontal gradient** (transparent for the gutter width, then paper). **Linked from** padding omits the old fold width (see `.inbox-backlinks`). Re-test alignment and scrolling on Linux WebKitGTK after changing this layout.
+
 ## Rules (keep these unless you measure a regression)
 
 | Area | Rule | Where |
@@ -37,6 +39,7 @@ This note documents **intentional CSS choices** for the Linux desktop app ([`app
 | Inbox editor scroll surface | `font-synthesis: none` on capture `.cm-scroller` (same rationale as list rows) | `App.css` |
 | Inbox editor WebKit smoothing | **`-webkit-font-smoothing: antialiased`** on capture `.cm-scroller` (same idea as `.playlist-body`; tradeoff: slightly lighter strokes vs more even AA when scrolling) | `App.css` |
 | Podcasts playlist body | Dense metadata / monospace: `-webkit-font-smoothing: antialiased` and `text-rendering: geometricPrecision` on `.playlist-body` | `App.css` |
+| Inbox fold rail + paper | Flex **`.note-markdown-editor-page`**: rail + paper; transparent **`.cm-gutters`**, gradient **`.cm-scroller`**, host negative margin only under **`.note-markdown-editor-paper`** | [`VaultTab.tsx`](../../apps/desktop/src/components/VaultTab.tsx), [`App.css`](../../apps/desktop/src/App.css), [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx) |
 
 ## Fractional UI scale (GNOME / Wayland)
 
