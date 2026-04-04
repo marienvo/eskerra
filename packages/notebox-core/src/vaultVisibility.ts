@@ -4,6 +4,7 @@ import {isSyncConflictFileName, MARKDOWN_EXTENSION} from './vaultLayout';
 /** Directory names excluded from the vault tree (product layout; Linux: case-sensitive). */
 export const VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES = [
   'Assets',
+  'Excalidraw',
   'Scripts',
   'Templates',
 ] as const;
