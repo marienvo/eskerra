@@ -1526,6 +1526,36 @@ button.primary.destructive {
   width: 100%;
   /* Override RDG default block-size: 350px (was leaving empty dark/grey gap below short tables). */
   min-block-size: 0;
+  /*
+   * RDG paints a 1px border on the grid root on all sides while every cell also has a 1px
+   * inline-end and block-end border. That stacks on the outer right and bottom (~2px) while the
+   * outer left/top are only the root (~1px). Drop the root edge where cells already draw it.
+   */
+  border-inline-end: none;
+  border-block-end: none;
+  /*
+   * With headerRowHeight 0, header cells still draw a 1px block-end border; it stacks with the
+   * root’s block-start and reads as a thick top edge. Remove both and restore a single top line on
+   * the first data row (see sibling rule below).
+   */
+  border-block-start: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-header-row
+  > .rdg-cell {
+  border-block-end: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-header-row
+  + .rdg-row
+  > .rdg-cell {
+  border-block-start: 1px solid var(--rdg-border-color);
 }
 
 /*
@@ -1537,6 +1567,20 @@ button.primary.destructive {
   -webkit-user-select: none;
   border-inline-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
   border-block-end-color: var(--color-border-subtle, var(--nb-editor-inline-code-border));
+}
+
+/*
+ * RDG uses outline + negative outline-offset on selected cells; combined with overflow: clip and the
+ * grid scrollport, the ring clips (especially on the left) and corners look wrong. An inset box-shadow
+ * stays inside the border box so all sides read as the same width (same token as --rdg-selection-color).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-rdg
+  .rdg-cell[aria-selected='true'] {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--rdg-selection-color, var(--color-accent));
+  border-radius: 0;
 }
 
 [data-app-surface='capture']
@@ -1567,6 +1611,8 @@ button.primary.destructive {
   .cm-eskerra-table-rdg
   .rdg-editor-container
   input {
+  border-radius: 0;
+  appearance: none;
   border-color: var(--color-border-subtle, var(--nb-editor-inline-code-border)) !important;
   background-color: var(--nb-editor-paper) !important;
   color: var(--nb-editor-text) !important;
