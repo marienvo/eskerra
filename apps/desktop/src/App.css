@@ -1887,7 +1887,8 @@ button.primary.destructive {
   .cm-eskerra-table-shell__table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  /* Content-based widths: narrow columns stay compact; wide cells get more room. */
+  table-layout: auto;
 }
 
 [data-app-surface='capture']
@@ -2033,6 +2034,9 @@ button.primary.destructive {
   padding: 0.28rem 0.4rem;
   vertical-align: top;
   min-block-size: 1.5em;
+  /* Let the table algorithm shrink columns; avoid a forced equal split. */
+  width: auto;
+  max-width: 100%;
 }
 
 [data-app-surface='capture']
@@ -2040,6 +2044,8 @@ button.primary.destructive {
   .cm-eskerra-table-shell__cm-host {
   box-sizing: border-box;
   min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
   padding: 0;
 }
 
