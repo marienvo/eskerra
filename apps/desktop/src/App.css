@@ -950,7 +950,6 @@ a:focus:not(:focus-visible) {
 
 .inbox-backlinks {
   flex: none;
-  border-top: 1px solid var(--color-border-soft, var(--color-border));
   padding-block: 0.85rem 0.6rem;
   /* Match `.cm-content`: body text starts after fold gutter + same inline padding (symmetric R). */
   padding-inline-start: calc(
@@ -961,6 +960,7 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   gap: 0.35rem;
   background: transparent;
+  padding-bottom: 2rem;
 }
 
 .inbox-backlinks__header {
