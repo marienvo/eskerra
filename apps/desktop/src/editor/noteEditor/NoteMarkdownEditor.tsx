@@ -1,6 +1,5 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {
-  foldAll,
   foldedRanges,
   foldGutter,
   foldKeymap,
@@ -47,6 +46,7 @@ import {
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
+import {nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
@@ -691,7 +691,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (!view) {
           return false;
         }
-        return foldAll(view);
+        return nestedCollapseAllFolds(view);
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
         if (replacementInner === expectedInner) {
