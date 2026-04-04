@@ -1410,7 +1410,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
-  .cm-md-hr {
+  .cm-md-hr,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-rel-link-href {
   display: none;
 }
 

@@ -39,16 +39,17 @@ export function buildRelativeMdLinkDecorations(view: EditorView): DecorationSet 
         return;
       }
       const href = view.state.sliceDoc(ref.from, ref.to);
-      const hrefClass = isResolved(href)
+      const labelClass = isResolved(href)
         ? 'cm-md-rel-link cm-md-rel-link--resolved'
         : 'cm-md-rel-link cm-md-rel-link--unresolved';
+      const hrefClass = `${labelClass} cm-md-rel-link-href`;
       ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
       const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
         view.state.sliceDoc(a, b),
       );
       if (labelSpan != null) {
         ranges.push(
-          Decoration.mark({class: hrefClass}).range(
+          Decoration.mark({class: labelClass}).range(
             labelSpan.from,
             labelSpan.to,
           ),

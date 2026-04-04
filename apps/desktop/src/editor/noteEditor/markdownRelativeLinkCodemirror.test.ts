@@ -71,7 +71,8 @@ describe('markdownRelativeLinkCodemirror', () => {
         i =>
           i.from === urlFrom
           && i.to === urlTo
-          && i.class === 'cm-md-rel-link cm-md-rel-link--resolved',
+          && i.class
+            === 'cm-md-rel-link cm-md-rel-link--resolved cm-md-rel-link-href',
       ),
     ).toBe(true);
   });
@@ -93,6 +94,13 @@ describe('markdownRelativeLinkCodemirror', () => {
     view = new EditorView({state, parent});
     const intervals = collectMarkIntervals(view);
     expect(intervals.length).toBeGreaterThanOrEqual(2);
-    expect(intervals.every(i => i.class === 'cm-md-rel-link cm-md-rel-link--unresolved')).toBe(true);
+    expect(
+      intervals.every(
+        i =>
+          i.class === 'cm-md-rel-link cm-md-rel-link--unresolved'
+          || i.class
+            === 'cm-md-rel-link cm-md-rel-link--unresolved cm-md-rel-link-href',
+      ),
+    ).toBe(true);
   });
 });
