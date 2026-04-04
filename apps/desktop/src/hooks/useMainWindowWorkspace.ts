@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -12,13 +11,17 @@ import {
 
 import {
   buildInboxMarkdownFromCompose,
+  collectVaultMarkdownRefs,
   ensureDeviceInstanceId,
   markdownContainsTransientImageUrls,
+  normalizeVaultBaseUri,
   parseComposeInput,
   sanitizeInboxNoteStem,
   stemFromMarkdownFileName,
+  SubtreeMarkdownPresenceCache,
   type NoteboxSettings,
   type VaultFilesystem,
+  type VaultMarkdownRef,
 } from '@notebox/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
@@ -31,16 +34,24 @@ import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownIma
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
-  deleteInboxMarkdownNote,
+  deleteVaultMarkdownNote,
+  deleteVaultTreeDirectory,
   listInboxNotes,
-  prefetchInboxMarkdownBodies,
+  moveVaultTreeItemToDirectory,
+  type MoveVaultTreeItemResult,
   readVaultLocalSettings,
-  renameInboxMarkdownNote,
   readVaultSettings,
+  renameVaultMarkdownNote,
+  renameVaultTreeDirectory,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
   writeVaultLocalSettings,
 } from '../lib/vaultBootstrap';
+import {
+  filterVaultTreeBulkMoveSources,
+  planVaultTreeBulkTargets,
+  type VaultTreeBulkItem,
+} from '../lib/vaultTreeBulkPlan';
 import {
   getVaultSession,
   setVaultSession,
@@ -48,15 +59,18 @@ import {
 } from '../lib/tauriVault';
 import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
 import {
-  applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenance,
-} from '../lib/inboxWikiLinkRenameMaintenance';
+  applyVaultWikiLinkRenameMaintenance,
+  planVaultWikiLinkRenameMaintenance,
+} from '../lib/vaultWikiLinkRenameMaintenance';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 /** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
 const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
+
+/** Debounce vault-wide backlink computation after selection / ref list changes (reads note bodies from disk). */
+const VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS = 320;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -81,6 +95,45 @@ const LARGE_RENAME_MIN_TOUCHED_BYTES = 768 * 1024;
 const RENAME_APPLY_YIELD_EVERY_WRITES = 24;
 const RENAME_NOTICE_TTL_MS = 5000;
 
+async function loadMarkdownBodiesForWikiMaintenance(
+  fs: VaultFilesystem,
+  refs: ReadonlyArray<{uri: string}>,
+  seed: Readonly<Record<string, string>>,
+  activeUri: string | null,
+  activeBody: string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {...seed};
+  for (const {uri} of refs) {
+    if (activeUri != null && uri === activeUri) {
+      out[uri] = activeBody;
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(out, uri)) {
+      continue;
+    }
+    try {
+      const raw = await fs.readFile(uri, {encoding: 'utf8'});
+      out[uri] = raw.replace(/\n$/, '');
+    } catch {
+      out[uri] = '';
+    }
+  }
+  return out;
+}
+
+function replaceVaultUriPrefix(uri: string, oldPrefix: string, newPrefix: string): string | null {
+  const u = uri.replace(/\\/g, '/');
+  const o = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  const n = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (u === o) {
+    return n;
+  }
+  if (u.startsWith(`${o}/`)) {
+    return `${n}/${u.slice(o.length + 1)}`;
+  }
+  return null;
+}
+
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
   vaultSettings: NoteboxSettings | null;
@@ -93,10 +146,12 @@ export type UseMainWindowWorkspaceResult = {
   err: string | null;
   composingNewEntry: boolean;
   inboxContentByUri: Record<string, string>;
+  /** Vault-wide markdown index for wiki resolve, autocomplete, and link styling (async; may lag the tree). */
+  vaultMarkdownRefs: VaultMarkdownRef[];
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   deviceInstanceId: string;
-  inboxRenameNotice: string | null;
+  wikiRenameNotice: string | null;
   renameLinkProgress: RenameLinkProgress | null;
   pendingWikiLinkAmbiguityRename: PendingWikiLinkAmbiguityRename | null;
   confirmPendingWikiLinkAmbiguityRename: () => Promise<void>;
@@ -116,6 +171,22 @@ export type UseMainWindowWorkspaceResult = {
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
   renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
+  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
+  deleteFolder: (directoryUri: string) => Promise<void>;
+  renameFolder: (directoryUri: string, nextDisplayName: string) => Promise<void>;
+  /** Single-item tree move (DnD): `renameFile` into target folder; stem unchanged (no wiki rewrites). */
+  moveVaultTreeItem: (
+    sourceUri: string,
+    sourceKind: 'folder' | 'article',
+    targetDirectoryUri: string,
+  ) => Promise<void>;
+  bulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => Promise<void>;
+  bulkMoveVaultTreeItems: (
+    items: VaultTreeBulkItem[],
+    targetDirectoryUri: string,
+  ) => Promise<void>;
+  /** Bumped after bulk tree mutations so the vault pane can clear stale multi-selection. */
+  vaultTreeSelectionClearNonce: number;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -144,20 +215,28 @@ export function useMainWindowWorkspace(options: {
   const [err, setErr] = useState<string | null>(null);
   const [composingNewEntry, setComposingNewEntry] = useState(false);
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
+  const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
+  const [vaultTreeSelectionClearNonce, setVaultTreeSelectionClearNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
     useState(false);
   const [inboxShellRestored, setInboxShellRestored] = useState(true);
   const [backlinksActiveBody, setBacklinksActiveBody] = useState('');
-  const [inboxRenameNotice, setInboxRenameNotice] = useState<string | null>(null);
+  const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
+    readonly string[]
+  >([]);
+  const [wikiRenameNotice, setWikiRenameNotice] = useState<string | null>(null);
   const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
     null,
   );
   const [pendingWikiLinkAmbiguityRename, setPendingWikiLinkAmbiguityRename] =
     useState<PendingWikiLinkAmbiguityRename | null>(null);
 
+  const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   const inboxBodyPrefetchGenRef = useRef(0);
+  const vaultRefsBuildGenRef = useRef(0);
+  const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
@@ -169,6 +248,7 @@ export function useMainWindowWorkspace(options: {
   );
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
+  const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
 
   vaultRootRef.current = vaultRoot;
@@ -176,21 +256,22 @@ export function useMainWindowWorkspace(options: {
   composingNewEntryRef.current = composingNewEntry;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
+  backlinksActiveBodyRef.current = backlinksActiveBody;
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
       window.clearTimeout(renameNoticeTimeoutRef.current);
       renameNoticeTimeoutRef.current = null;
     }
-    setInboxRenameNotice(null);
+    setWikiRenameNotice(null);
   }, []);
 
   const setTransientRenameNotice = useCallback(
     (message: string) => {
       clearRenameNotice();
-      setInboxRenameNotice(message);
+      setWikiRenameNotice(message);
       renameNoticeTimeoutRef.current = window.setTimeout(() => {
-        setInboxRenameNotice(null);
+        setWikiRenameNotice(null);
         renameNoticeTimeoutRef.current = null;
       }, RENAME_NOTICE_TTL_MS);
     },
@@ -205,18 +286,73 @@ export function useMainWindowWorkspace(options: {
     };
   }, []);
 
-  const selectedNoteBacklinkUris = useMemo(() => {
+  useEffect(() => {
     if (composingNewEntry || !selectedUri) {
-      return [] as const;
+      setSelectedNoteBacklinkUris([]);
+      return;
     }
-    return listInboxWikiLinkBacklinkReferrersForTarget({
-      targetUri: selectedUri,
-      notes: notes.map(n => ({name: n.name, uri: n.uri})),
-      contentByUri: inboxContentByUri,
-      activeUri: selectedUri,
-      activeBody: backlinksActiveBody,
-    });
-  }, [composingNewEntry, selectedUri, notes, inboxContentByUri, backlinksActiveBody]);
+
+    const selected = selectedUri;
+    let cancelled = false;
+
+    const tid = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      void (async () => {
+        try {
+          const refs = vaultMarkdownRefsRef.current;
+          const activeUri = selectedUriRef.current;
+          const activeBody = backlinksActiveBodyRef.current;
+          if (cancelled || activeUri !== selected) {
+            return;
+          }
+
+          const expanded = await loadMarkdownBodiesForWikiMaintenance(
+            fs,
+            refs,
+            inboxContentByUriRef.current,
+            activeUri,
+            activeBody,
+          );
+          if (cancelled || selectedUriRef.current !== selected) {
+            return;
+          }
+
+          const uris = listInboxWikiLinkBacklinkReferrersForTarget({
+            targetUri: selected,
+            notes: refs.map(r => ({name: r.name, uri: r.uri})),
+            contentByUri: expanded,
+            activeUri,
+            activeBody,
+          });
+          if (!cancelled && selectedUriRef.current === selected) {
+            setSelectedNoteBacklinkUris(uris);
+          }
+        } catch {
+          if (!cancelled && selectedUriRef.current === selected) {
+            setSelectedNoteBacklinkUris([]);
+          }
+        }
+      })();
+    }, VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(tid);
+    };
+  }, [
+    composingNewEntry,
+    selectedUri,
+    vaultMarkdownRefs,
+    inboxContentByUri,
+    backlinksActiveBody,
+    fs,
+  ]);
+
+  useEffect(() => {
+    vaultMarkdownRefsRef.current = vaultMarkdownRefs;
+  }, [vaultMarkdownRefs]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -226,11 +362,6 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       setNotes(list);
-      const bodies = await prefetchInboxMarkdownBodies(list, fs);
-      if (gen !== inboxBodyPrefetchGenRef.current) {
-        return;
-      }
-      setInboxContentByUri(bodies);
     },
     [fs],
   );
@@ -292,6 +423,7 @@ export function useMainWindowWorkspace(options: {
       clearRenameNotice();
       setRenameLinkProgress(null);
       setPendingWikiLinkAmbiguityRename(null);
+      subtreeMarkdownCacheRef.current.invalidateAll();
       setVaultSettings(null);
       try {
         await setVaultSession(root);
@@ -360,6 +492,7 @@ export function useMainWindowWorkspace(options: {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     void listen('vault-files-changed', () => {
+      subtreeMarkdownCacheRef.current.invalidateAll();
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       void (async () => {
@@ -385,6 +518,32 @@ export function useMainWindowWorkspace(options: {
     };
   }, [vaultRoot, refreshNotes, fs]);
 
+  useEffect(() => {
+    if (!vaultRoot) {
+      setVaultMarkdownRefs([]);
+      return;
+    }
+    const gen = ++vaultRefsBuildGenRef.current;
+    const ac = new AbortController();
+    void (async () => {
+      try {
+        const refs = await collectVaultMarkdownRefs(vaultRoot, fs, {signal: ac.signal});
+        if (gen !== vaultRefsBuildGenRef.current) {
+          return;
+        }
+        setVaultMarkdownRefs(refs);
+      } catch (e) {
+        if (ac.signal.aborted) {
+          return;
+        }
+        console.warn('[vaultMarkdownRefs]', e);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [vaultRoot, fs, fsRefreshNonce]);
+
   useLayoutEffect(() => {
     if (!vaultRoot || !selectedUri) {
       return;
@@ -393,11 +552,27 @@ export function useMainWindowWorkspace(options: {
     if (cached !== undefined) {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
+      setInboxEditorResetNonce(n => n + 1);
     } else {
       setEditorBody('');
+      lastPersistedRef.current = null;
     }
-    setInboxEditorResetNonce(n => n + 1);
   }, [vaultRoot, selectedUri]);
+
+  /**
+   * Clear the open note in CodeMirror when the shell has no cached body yet.
+   * Runs after `NoteMarkdownEditor`'s mount effect creates the view (parent layout is too early).
+   */
+  useEffect(() => {
+    if (!vaultRoot || !selectedUri) {
+      return;
+    }
+    if (inboxContentByUriRef.current[selectedUri] !== undefined) {
+      return;
+    }
+    inboxEditorRef.current?.loadMarkdown('');
+  }, [vaultRoot, selectedUri, inboxEditorRef]);
+
 
   useLayoutEffect(() => {
     if (composingNewEntry || !selectedUri) {
@@ -437,7 +612,7 @@ export function useMainWindowWorkspace(options: {
           });
           if (normalized !== editorBodyRef.current) {
             setEditorBody(normalized);
-            setInboxEditorResetNonce(n => n + 1);
+            inboxEditorRef.current?.loadMarkdown(normalized);
           }
         }
       } catch (e) {
@@ -449,7 +624,7 @@ export function useMainWindowWorkspace(options: {
     return () => {
       cancelled = true;
     };
-  }, [vaultRoot, selectedUri, fs]);
+  }, [vaultRoot, selectedUri, fs, inboxEditorRef]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
@@ -482,7 +657,13 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       try {
         const created = await createInboxMarkdownNote(vaultRoot, fs, title, body);
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          created.uri,
+          'file',
+        );
         await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
         setSelectedUri(created.uri);
         setComposingNewEntry(false);
       } catch (e) {
@@ -584,13 +765,15 @@ export function useMainWindowWorkspace(options: {
       setBusy(true);
       setErr(null);
       try {
-        await deleteInboxMarkdownNote(vaultRoot, uri, fs);
+        await deleteVaultMarkdownNote(vaultRoot, uri, fs);
+        subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, uri, 'file');
         setInboxContentByUri(prev => {
           const next = {...prev};
           delete next[uri];
           return next;
         });
         await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -618,27 +801,36 @@ export function useMainWindowWorkspace(options: {
       clearRenameNotice();
       setRenameLinkProgress(null);
       try {
-        const preRenameNotes = notes.map(n => ({name: n.name, uri: n.uri}));
-        const preRenameContent = inboxContentByUriRef.current;
+        const wikiRefs = vaultMarkdownRefsRef.current.map(r => ({
+          name: r.name,
+          uri: r.uri,
+        }));
         const activeUri = selectedUriRef.current;
         const activeBody =
           activeUri != null
             ? (inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current)
             : '';
+        const expandedContent = await loadMarkdownBodiesForWikiMaintenance(
+          fs,
+          wikiRefs,
+          inboxContentByUriRef.current,
+          activeUri,
+          activeBody,
+        );
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
-          ? planInboxWikiLinkRenameMaintenance({
+          ? planVaultWikiLinkRenameMaintenance({
               oldTargetUri: uri,
               renamedStem: plannedStem,
-              notes: preRenameNotes,
-              contentByUri: preRenameContent,
+              notes: wikiRefs,
+              contentByUri: expandedContent,
               activeUri,
               activeBody,
             })
           : {
               updates: [],
-              scannedFileCount: preRenameNotes.length,
+              scannedFileCount: wikiRefs.length,
               touchedFileCount: 0,
               touchedBytes: 0,
               updatedLinkCount: 0,
@@ -664,16 +856,16 @@ export function useMainWindowWorkspace(options: {
         }
         setPendingWikiLinkAmbiguityRename(null);
 
-        const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
+        const nextUri = await renameVaultMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
         const nextName = nextUri.split('/').pop();
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
         const rewritePlan =
           renamedStem && renamedStem !== plannedStem
-            ? planInboxWikiLinkRenameMaintenance({
+            ? planVaultWikiLinkRenameMaintenance({
                 oldTargetUri: uri,
                 renamedStem,
-                notes: preRenameNotes,
-                contentByUri: preRenameContent,
+                notes: wikiRefs,
+                contentByUri: expandedContent,
                 activeUri,
                 activeBody,
               })
@@ -686,7 +878,7 @@ export function useMainWindowWorkspace(options: {
           setRenameLinkProgress({done: 0, total: rewritePlan.touchedFileCount});
         }
         const applyStartedAt = performance.now();
-        const applyResult = await applyInboxWikiLinkRenameMaintenance({
+        const applyResult = await applyVaultWikiLinkRenameMaintenance({
           fs,
           oldUri: uri,
           newUri: nextUri,
@@ -752,7 +944,12 @@ export function useMainWindowWorkspace(options: {
             `Updated links in ${rewritePlan.touchedFileCount} ${noteLabel}.`,
           );
         }
+        subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, uri, 'file');
+        if (nextUri !== uri) {
+          subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, nextUri, 'file');
+        }
         await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -764,7 +961,6 @@ export function useMainWindowWorkspace(options: {
       vaultRoot,
       fs,
       refreshNotes,
-      notes,
       inboxEditorRef,
       clearRenameNotice,
       setTransientRenameNotice,
@@ -807,13 +1003,22 @@ export function useMainWindowWorkspace(options: {
       try {
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
-          notes: notes.map(n => ({name: n.name, uri: n.uri})),
+          notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
           vaultRoot,
           fs,
+          activeMarkdownUri: composingNewEntryRef.current
+            ? null
+            : selectedUriRef.current,
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              result.uri,
+              'file',
+            );
             await refreshNotes(vaultRoot);
+            setFsRefreshNonce(n => n + 1);
           } else if (result.canonicalInner) {
             inboxEditorRef.current?.replaceWikiLinkInnerAt({
               at,
@@ -834,7 +1039,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (result.reason === 'path_not_supported') {
           setErr(
-            `Wiki link "${inner}" is outside Inbox scope for now. Only Inbox targets are supported in this MVP.`,
+            `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
           );
         } else {
           setErr('Wiki link target is empty.');
@@ -843,7 +1048,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, notes, fs, refreshNotes, inboxEditorRef],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -851,6 +1056,349 @@ export function useMainWindowWorkspace(options: {
       void activateWikiLink(payload);
     },
     [activateWikiLink],
+  );
+
+  const deleteFolder = useCallback(
+    async (directoryUri: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      const normDir = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+      const selected = selectedUriRef.current?.replace(/\\/g, '/');
+      if (
+        selected
+        && (selected === normDir || selected.startsWith(`${normDir}/`))
+      ) {
+        selectedUriRef.current = null;
+        composingNewEntryRef.current = false;
+        lastPersistedRef.current = null;
+        setSelectedUri(null);
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      }
+      await saveChainRef.current.catch(() => undefined);
+      setBusy(true);
+      setErr(null);
+      try {
+        await deleteVaultTreeDirectory(vaultRoot, directoryUri, fs);
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          directoryUri,
+          'directory',
+        );
+        setInboxContentByUri(prev => {
+          const norm = normDir;
+          const next = {...prev};
+          for (const k of Object.keys(next)) {
+            const kn = k.replace(/\\/g, '/');
+            if (kn === norm || kn.startsWith(`${norm}/`)) {
+              delete next[k];
+            }
+          }
+          return next;
+        });
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes],
+  );
+
+  const renameFolder = useCallback(
+    async (directoryUri: string, nextDisplayName: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+      setBusy(true);
+      setErr(null);
+      clearRenameNotice();
+      try {
+        const oldUri = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+        const nextUri = await renameVaultTreeDirectory(
+          vaultRoot,
+          directoryUri,
+          nextDisplayName,
+          fs,
+        );
+        const normalizedNext = nextUri.replace(/\\/g, '/');
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          oldUri,
+          'directory',
+        );
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          normalizedNext,
+          'directory',
+        );
+        setInboxContentByUri(prev => {
+          const next = {...prev};
+          for (const k of Object.keys(prev)) {
+            const mapped = replaceVaultUriPrefix(k, oldUri, normalizedNext);
+            if (mapped && mapped !== k && prev[k] !== undefined) {
+              next[mapped] = prev[k]!;
+              delete next[k];
+            }
+          }
+          return next;
+        });
+        {
+          let nextSel: string | null = selectedUriRef.current;
+          if (nextSel) {
+            const mappedSel = replaceVaultUriPrefix(
+              nextSel.replace(/\\/g, '/'),
+              oldUri,
+              normalizedNext,
+            );
+            nextSel = mappedSel ?? nextSel;
+          }
+          selectedUriRef.current = nextSel;
+          setSelectedUri(nextSel);
+        }
+        const lp = lastPersistedRef.current;
+        if (lp) {
+          const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, normalizedNext);
+          if (mappedLp) {
+            lastPersistedRef.current = {...lp, uri: mappedLp};
+          }
+        }
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes, clearRenameNotice],
+  );
+
+  const commitMoveVaultTreeResult = useCallback(
+    (result: MoveVaultTreeItemResult) => {
+      if (!vaultRoot || result.previousUri === result.nextUri) {
+        return;
+      }
+      const invKind = result.movedKind === 'article' ? 'file' : 'directory';
+      subtreeMarkdownCacheRef.current.invalidateForMutation(
+        vaultRoot,
+        result.previousUri,
+        invKind,
+      );
+      subtreeMarkdownCacheRef.current.invalidateForMutation(
+        vaultRoot,
+        result.nextUri,
+        invKind,
+      );
+
+      if (result.movedKind === 'article') {
+        setInboxContentByUri(prev => {
+          if (prev[result.previousUri] === undefined) {
+            return prev;
+          }
+          const next = {...prev};
+          next[result.nextUri] = next[result.previousUri]!;
+          delete next[result.previousUri];
+          return next;
+        });
+        if (selectedUriRef.current === result.previousUri) {
+          selectedUriRef.current = result.nextUri;
+          setSelectedUri(result.nextUri);
+          const lp = lastPersistedRef.current;
+          if (lp && lp.uri === result.previousUri) {
+            lastPersistedRef.current = {...lp, uri: result.nextUri};
+          }
+        }
+      } else {
+        const oldUri = result.previousUri;
+        const newUri = result.nextUri;
+        setInboxContentByUri(prev => {
+          const next = {...prev};
+          for (const k of Object.keys(prev)) {
+            const mapped = replaceVaultUriPrefix(k, oldUri, newUri);
+            if (mapped && mapped !== k && prev[k] !== undefined) {
+              next[mapped] = prev[k]!;
+              delete next[k];
+            }
+          }
+          return next;
+        });
+        let nextSel: string | null = selectedUriRef.current;
+        if (nextSel) {
+          const mappedSel = replaceVaultUriPrefix(
+            nextSel.replace(/\\/g, '/'),
+            oldUri,
+            newUri,
+          );
+          nextSel = mappedSel ?? nextSel;
+        }
+        selectedUriRef.current = nextSel;
+        setSelectedUri(nextSel);
+        const lp = lastPersistedRef.current;
+        if (lp) {
+          const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, newUri);
+          if (mappedLp) {
+            lastPersistedRef.current = {...lp, uri: mappedLp};
+          }
+        }
+      }
+    },
+    [vaultRoot],
+  );
+
+  const moveVaultTreeItem = useCallback(
+    async (
+      sourceUri: string,
+      sourceKind: 'folder' | 'article',
+      targetDirectoryUri: string,
+    ) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+      setBusy(true);
+      setErr(null);
+      try {
+        const result = await moveVaultTreeItemToDirectory(vaultRoot, fs, {
+          sourceUri,
+          sourceKind,
+          targetDirectoryUri,
+        });
+        commitMoveVaultTreeResult(result);
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
+  );
+
+  const bulkDeleteVaultTreeItems = useCallback(
+    async (items: VaultTreeBulkItem[]) => {
+      if (!vaultRoot) {
+        return;
+      }
+      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const plan = planVaultTreeBulkTargets(items, rootId);
+      if (plan.length === 0) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      const normSel = selectedUriRef.current?.replace(/\\/g, '/');
+      const shouldClearEditor =
+        normSel != null
+        && plan.some(entry => {
+          const d = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+          if (entry.kind === 'folder') {
+            return normSel === d || normSel.startsWith(`${d}/`);
+          }
+          return normSel === d;
+        });
+      if (shouldClearEditor) {
+        selectedUriRef.current = null;
+        composingNewEntryRef.current = false;
+        lastPersistedRef.current = null;
+        setSelectedUri(null);
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      }
+      await saveChainRef.current.catch(() => undefined);
+      setBusy(true);
+      setErr(null);
+      try {
+        for (const entry of plan) {
+          if (entry.kind === 'article') {
+            await deleteVaultMarkdownNote(vaultRoot, entry.uri, fs);
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              entry.uri,
+              'file',
+            );
+            setInboxContentByUri(prev => {
+              if (prev[entry.uri] === undefined) {
+                return prev;
+              }
+              const next = {...prev};
+              delete next[entry.uri];
+              return next;
+            });
+          } else {
+            const normDir = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+            await deleteVaultTreeDirectory(vaultRoot, entry.uri, fs);
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              entry.uri,
+              'directory',
+            );
+            setInboxContentByUri(prev => {
+              const next = {...prev};
+              for (const k of Object.keys(next)) {
+                const kn = k.replace(/\\/g, '/');
+                if (kn === normDir || kn.startsWith(`${normDir}/`)) {
+                  delete next[k];
+                }
+              }
+              return next;
+            });
+          }
+        }
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+        setVaultTreeSelectionClearNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes],
+  );
+
+  const bulkMoveVaultTreeItems = useCallback(
+    async (items: VaultTreeBulkItem[], targetDirectoryUri: string) => {
+      if (!vaultRoot) {
+        return;
+      }
+      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const plan = filterVaultTreeBulkMoveSources(items, targetDirectoryUri, rootId);
+      if (plan.length === 0) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+      setBusy(true);
+      setErr(null);
+      try {
+        for (const entry of plan) {
+          const result = await moveVaultTreeItemToDirectory(vaultRoot, fs, {
+            sourceUri: entry.uri,
+            sourceKind: entry.kind,
+            targetDirectoryUri,
+          });
+          commitMoveVaultTreeResult(result);
+        }
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+        setVaultTreeSelectionClearNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
   );
 
   useEffect(() => {
@@ -877,11 +1425,16 @@ export function useMainWindowWorkspace(options: {
     if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
       if (restoredInboxState.composingNewEntry) {
         startNewEntry();
-      } else if (
-        restoredInboxState.selectedUri &&
-        notes.some(n => n.uri === restoredInboxState.selectedUri)
-      ) {
-        selectNote(restoredInboxState.selectedUri);
+      } else if (restoredInboxState.selectedUri) {
+        const uri = restoredInboxState.selectedUri.replace(/\\/g, '/');
+        const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+        const inVault = uri === root || uri.startsWith(`${root}/`);
+        if (
+          inVault
+          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'))
+        ) {
+          selectNote(restoredInboxState.selectedUri);
+        }
       }
     }
     setInboxShellRestored(true);
@@ -907,10 +1460,11 @@ export function useMainWindowWorkspace(options: {
     err,
     composingNewEntry,
     inboxContentByUri,
+    vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
-    inboxRenameNotice,
+    wikiRenameNotice,
     renameLinkProgress,
     pendingWikiLinkAmbiguityRename,
     confirmPendingWikiLinkAmbiguityRename,
@@ -927,6 +1481,13 @@ export function useMainWindowWorkspace(options: {
     onWikiLinkActivate,
     deleteNote,
     renameNote,
+    subtreeMarkdownCache: subtreeMarkdownCacheRef.current,
+    deleteFolder,
+    renameFolder,
+    moveVaultTreeItem,
+    bulkDeleteVaultTreeItems,
+    bulkMoveVaultTreeItems,
+    vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   };

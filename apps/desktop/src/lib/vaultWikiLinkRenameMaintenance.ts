@@ -9,14 +9,14 @@ function markdownUtf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
 
-export type InboxWikiLinkRenameFileUpdate = {
+export type VaultWikiLinkRenameFileUpdate = {
   uri: string;
   markdown: string;
   updatedLinkCount: number;
 };
 
-export type InboxWikiLinkRenamePlanResult = {
-  updates: readonly InboxWikiLinkRenameFileUpdate[];
+export type VaultWikiLinkRenamePlanResult = {
+  updates: readonly VaultWikiLinkRenameFileUpdate[];
   scannedFileCount: number;
   touchedFileCount: number;
   touchedBytes: number;
@@ -35,17 +35,17 @@ function yieldToBrowserFrame(): Promise<void> {
   });
 }
 
-export function planInboxWikiLinkRenameMaintenance(options: {
+export function planVaultWikiLinkRenameMaintenance(options: {
   oldTargetUri: string;
   renamedStem: string;
   notes: ReadonlyArray<InboxWikiLinkNoteRef>;
   contentByUri: Readonly<Record<string, string>>;
   activeUri: string | null;
   activeBody: string;
-}): InboxWikiLinkRenamePlanResult {
+}): VaultWikiLinkRenamePlanResult {
   const {oldTargetUri, renamedStem, notes, contentByUri, activeUri, activeBody} = options;
   const lookup = buildInboxWikiLinkResolveLookup(notes);
-  const updates: InboxWikiLinkRenameFileUpdate[] = [];
+  const updates: VaultWikiLinkRenameFileUpdate[] = [];
   let touchedBytes = 0;
   let updatedLinkCount = 0;
   let skippedAmbiguousLinkCount = 0;
@@ -84,19 +84,19 @@ export function planInboxWikiLinkRenameMaintenance(options: {
   };
 }
 
-export type InboxWikiLinkRenameApplyResult = {
+export type VaultWikiLinkRenameApplyResult = {
   succeededUris: readonly string[];
   failed: readonly {uri: string; reason: string}[];
 };
 
-export async function applyInboxWikiLinkRenameMaintenance(options: {
+export async function applyVaultWikiLinkRenameMaintenance(options: {
   fs: VaultFilesystem;
   oldUri: string;
   newUri: string;
-  updates: ReadonlyArray<InboxWikiLinkRenameFileUpdate>;
+  updates: ReadonlyArray<VaultWikiLinkRenameFileUpdate>;
   onProgress?: (done: number, total: number) => void;
   yieldEveryWrites?: number;
-}): Promise<InboxWikiLinkRenameApplyResult> {
+}): Promise<VaultWikiLinkRenameApplyResult> {
   const {fs, oldUri, newUri, updates, onProgress, yieldEveryWrites = 0} = options;
   const succeededUris: string[] = [];
   const failed: Array<{uri: string; reason: string}> = [];

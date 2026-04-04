@@ -25,6 +25,18 @@ type SafDocumentFile = {
  * VaultFilesystem backed by react-native-saf-x (Android SAF URIs).
  */
 
+async function removeDirectoryTree(directoryUri: string): Promise<void> {
+  const documents = (await listFiles(directoryUri)) as SafDocumentFile[];
+  for (const doc of documents) {
+    if (doc.type === 'directory') {
+      await removeDirectoryTree(doc.uri);
+    } else {
+      await safUnlink(doc.uri);
+    }
+  }
+  await safUnlink(directoryUri);
+}
+
 export const safVaultFilesystem: VaultFilesystem = {
   exists: (uri: string) => exists(uri),
   mkdir: async (uri: string): Promise<void> => {
@@ -42,6 +54,7 @@ export const safVaultFilesystem: VaultFilesystem = {
   unlink: async (uri: string): Promise<void> => {
     await safUnlink(uri);
   },
+  removeTree: removeDirectoryTree,
   renameFile: async (fromUri: string, toUri: string): Promise<void> => {
     const toName = toUri.split('/').pop()?.trim();
     if (!toName) {

@@ -1,6 +1,8 @@
 import {desktopR2SignedTransport} from './desktopR2Transport';
 
 import {
+  assertVaultMarkdownNoteUriForCrud,
+  assertVaultTreeDirectoryUriForCrud,
   buildInboxMarkdownIndexContent,
   defaultNoteboxLocalSettings,
   deleteR2PlaylistObject,
@@ -32,6 +34,7 @@ import {
   serializeNoteboxLocalSettings,
   serializeNoteboxSettings,
   serializePlaylistEntry,
+  vaultPathDirname,
   type NoteboxLocalSettings,
   type NoteboxSettings,
   type PlaylistEntry,
@@ -62,6 +65,11 @@ export async function bootstrapVaultLayout(
   }
 }
 
+/**
+ * Rewrites `General/Inbox.md` from **top-level** `Inbox/*.md` filenames only (not nested paths).
+ * Vault-wide delete/rename still calls this so **flat** inbox notes stay listed in that index; for
+ * nested or non-inbox paths the scan is unchanged and the write is usually skipped (existing === body).
+ */
 export async function syncInboxMarkdownIndex(
   root: string,
   fs: VaultFilesystem,
@@ -204,30 +212,6 @@ export async function listInboxNotes(root: string, fs: VaultFilesystem) {
       }
       return a.name.localeCompare(b.name);
     });
-}
-
-/** Reads markdown bodies for list preview (H1 extraction). Failed reads are omitted. */
-export async function prefetchInboxMarkdownBodies(
-  notes: ReadonlyArray<{uri: string}>,
-  fs: VaultFilesystem,
-): Promise<Record<string, string>> {
-  const entries = await Promise.all(
-    notes.map(async n => {
-      try {
-        const text = await fs.readFile(n.uri, {encoding: 'utf8'});
-        return [n.uri, text.replace(/\n$/, '')] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const map: Record<string, string> = {};
-  for (const e of entries) {
-    if (e) {
-      map[e[0]] = e[1];
-    }
-  }
-  return map;
 }
 
 async function readLocalPlaylistFileOnly(
@@ -413,18 +397,25 @@ export async function clearPlaylistEntry(root: string, fs: VaultFilesystem): Pro
   }
 }
 
-export async function createInboxMarkdownNote(
+/**
+ * Creates a markdown note under an existing vault directory (validated for tree CRUD).
+ * Updates `General/Inbox.md` when the file lives under `Inbox/`.
+ */
+export async function createVaultMarkdownNoteInDirectory(
   root: string,
   fs: VaultFilesystem,
+  parentDirectoryUri: string,
   title: string,
   markdownBody: string,
 ): Promise<{lastModified: number; name: string; uri: string}> {
   const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  if (!(await fs.exists(inbox))) {
-    await fs.mkdir(inbox);
+  const parent = assertVaultTreeDirectoryUriForCrud(base, parentDirectoryUri)
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '');
+  if (!(await fs.exists(parent))) {
+    await fs.mkdir(parent);
   }
-  const rows = await fs.listFiles(inbox);
+  const rows = await fs.listFiles(parent);
   const occupied = new Set(
     rows
       .filter(
@@ -436,79 +427,163 @@ export async function createInboxMarkdownNote(
   );
   const stem = sanitizeFileName(title);
   const fileName = pickNextInboxMarkdownFileName(stem, occupied);
-  const uri = `${inbox}/${fileName}`;
+  const uri = `${parent}/${fileName}`;
   const trimmed = markdownBody.trim();
   const body = trimmed ? `${trimmed}\n` : '';
   await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
-  await syncInboxMarkdownIndex(root, fs);
+  const inbox = getInboxDirectoryUri(base).replace(/\\/g, '/').replace(/\/+$/, '');
+  if (parent === inbox || parent.startsWith(`${inbox}/`)) {
+    await syncInboxMarkdownIndex(root, fs);
+  }
   return {lastModified: Date.now(), name: fileName, uri};
 }
 
-export async function deleteInboxMarkdownNote(
+export async function createInboxMarkdownNote(
+  root: string,
+  fs: VaultFilesystem,
+  title: string,
+  markdownBody: string,
+): Promise<{lastModified: number; name: string; uri: string}> {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  return createVaultMarkdownNoteInDirectory(root, fs, inbox, title, markdownBody);
+}
+
+export async function deleteVaultMarkdownNote(
   root: string,
   noteUri: string,
   fs: VaultFilesystem,
 ): Promise<void> {
-  const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  const normalizedNote = noteUri.trim();
-  const inboxPrefix = `${inbox}/`;
-  if (!normalizedNote.startsWith(inboxPrefix)) {
-    throw new Error('Note is not in the vault Inbox folder.');
-  }
-  const relative = normalizedNote.slice(inboxPrefix.length);
-  if (!relative || relative.includes('/') || relative.includes('\\')) {
-    throw new Error('Invalid inbox note path.');
-  }
-  if (!relative.endsWith(MARKDOWN_EXTENSION)) {
-    throw new Error('Only inbox markdown notes can be deleted here.');
-  }
-  if (isSyncConflictFileName(relative)) {
-    throw new Error('Cannot delete sync conflict notes with this action.');
-  }
-  await fs.unlink(normalizedNote);
+  const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
+  await fs.unlink(normalized);
   await syncInboxMarkdownIndex(root, fs);
 }
 
-export async function renameInboxMarkdownNote(
+export async function deleteVaultTreeDirectory(
+  root: string,
+  directoryUri: string,
+  fs: VaultFilesystem,
+): Promise<void> {
+  const normalized = assertVaultTreeDirectoryUriForCrud(root, directoryUri);
+  await fs.removeTree(normalized);
+  await syncInboxMarkdownIndex(root, fs);
+}
+
+export async function renameVaultTreeDirectory(
+  root: string,
+  directoryUri: string,
+  nextDisplayName: string,
+  fs: VaultFilesystem,
+): Promise<string> {
+  const normalized = assertVaultTreeDirectoryUriForCrud(root, directoryUri);
+  const sanitized = sanitizeInboxNoteStem(nextDisplayName);
+  if (!sanitized) {
+    throw new Error('Folder name cannot be empty.');
+  }
+  if (sanitized.includes('/') || sanitized.includes('\\')) {
+    throw new Error('Folder name cannot contain path separators.');
+  }
+  const parentDir = vaultPathDirname(normalized);
+  const nextUri = `${parentDir}/${sanitized}`;
+  const currentName = normalized.split('/').pop() ?? '';
+  if (sanitized === currentName) {
+    return normalized;
+  }
+  if (await fs.exists(nextUri)) {
+    throw new Error('A folder or file with this name already exists.');
+  }
+  await fs.renameFile(normalized, nextUri);
+  await syncInboxMarkdownIndex(root, fs);
+  return nextUri;
+}
+
+export async function renameVaultMarkdownNote(
   root: string,
   noteUri: string,
   nextDisplayName: string,
   fs: VaultFilesystem,
 ): Promise<string> {
-  const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  const normalizedNote = noteUri.trim();
-  const inboxPrefix = `${inbox}/`;
-  if (!normalizedNote.startsWith(inboxPrefix)) {
-    throw new Error('Note is not in the vault Inbox folder.');
-  }
-  const relative = normalizedNote.slice(inboxPrefix.length);
-  if (!relative || relative.includes('/') || relative.includes('\\')) {
-    throw new Error('Invalid inbox note path.');
-  }
-  if (!relative.endsWith(MARKDOWN_EXTENSION)) {
-    throw new Error('Only inbox markdown notes can be renamed here.');
-  }
-  if (isSyncConflictFileName(relative)) {
-    throw new Error('Cannot rename sync conflict notes with this action.');
-  }
+  const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
 
   const sanitizedStem = sanitizeInboxNoteStem(nextDisplayName);
   if (!sanitizedStem) {
     throw new Error('Note name cannot be empty.');
   }
   const nextName = `${sanitizedStem}${MARKDOWN_EXTENSION}`;
-  if (nextName === relative) {
-    return normalizedNote;
+  const currentFileName = normalized.split('/').pop() ?? '';
+  if (nextName === currentFileName) {
+    return normalized;
   }
-  const nextUri = `${inbox}/${nextName}`;
+  const parentDir = vaultPathDirname(normalized);
+  const nextUri = `${parentDir}/${nextName}`;
   if (await fs.exists(nextUri)) {
     throw new Error('A note with this name already exists.');
   }
-  await fs.renameFile(normalizedNote, nextUri);
+  await fs.renameFile(normalized, nextUri);
   await syncInboxMarkdownIndex(root, fs);
   return nextUri;
+}
+
+export type MoveVaultTreeItemResult = {
+  previousUri: string;
+  nextUri: string;
+  movedKind: 'folder' | 'article';
+};
+
+/**
+ * Moves a vault tree item (markdown note or user folder) into `targetDirectoryUri` via `renameFile`.
+ * Preserves the base name; rejects collisions and invalid moves (for example folder into itself).
+ */
+export async function moveVaultTreeItemToDirectory(
+  root: string,
+  fs: VaultFilesystem,
+  options: {
+    sourceUri: string;
+    sourceKind: 'folder' | 'article';
+    targetDirectoryUri: string;
+  },
+): Promise<MoveVaultTreeItemResult> {
+  const normTarget = assertVaultTreeDirectoryUriForCrud(root, options.targetDirectoryUri)
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '');
+
+  let normalizedSource: string;
+  let movedKind: 'folder' | 'article';
+  if (options.sourceKind === 'article') {
+    normalizedSource = assertVaultMarkdownNoteUriForCrud(root, options.sourceUri);
+    movedKind = 'article';
+  } else {
+    normalizedSource = assertVaultTreeDirectoryUriForCrud(
+      root,
+      options.sourceUri,
+    ).replace(/\\/g, '/').replace(/\/+$/, '');
+    movedKind = 'folder';
+  }
+
+  if (movedKind === 'folder' && normTarget === normalizedSource) {
+    return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};
+  }
+
+  const baseName = normalizedSource.split('/').pop() ?? '';
+  const nextUri = `${normTarget}/${baseName}`;
+
+  if (nextUri === normalizedSource) {
+    return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};
+  }
+
+  if (movedKind === 'folder') {
+    if (normTarget.startsWith(`${normalizedSource}/`)) {
+      throw new Error('Cannot move a folder into its own subfolder.');
+    }
+  }
+
+  if (await fs.exists(nextUri)) {
+    throw new Error('A folder or file with this name already exists.');
+  }
+
+  await fs.renameFile(normalizedSource, nextUri);
+  await syncInboxMarkdownIndex(root, fs);
+  return {previousUri: normalizedSource, nextUri, movedKind};
 }
 
 export async function saveNoteMarkdown(

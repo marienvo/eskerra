@@ -22,7 +22,7 @@ export const wikiLinkIsResolvedFacet = Facet.define<
 });
 
 /**
- * Highlights `[[wiki-style]]` spans: resolved vs unresolved using the same inbox policy as navigation.
+ * Highlights `[[wiki-style]]` spans: resolved vs unresolved using the same stem-resolve policy as navigation.
  */
 export function wikiLinkResolvedHighlightExtensions(
   isResolved: WikiLinkTargetIsResolved,

@@ -1,13 +1,13 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import {
-  applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenance,
-} from './inboxWikiLinkRenameMaintenance';
+  applyVaultWikiLinkRenameMaintenance,
+  planVaultWikiLinkRenameMaintenance,
+} from './vaultWikiLinkRenameMaintenance';
 
 import type {VaultFilesystem} from '@notebox/core';
 
-describe('planInboxWikiLinkRenameMaintenance', () => {
+describe('planVaultWikiLinkRenameMaintenance', () => {
   const notes = [
     {name: 'Old.md', uri: '/vault/Inbox/Old.md'},
     {name: 'Ref.md', uri: '/vault/Inbox/Ref.md'},
@@ -15,7 +15,7 @@ describe('planInboxWikiLinkRenameMaintenance', () => {
   ] as const;
 
   it('plans updates by scanning all notes and uses active body override', () => {
-    const result = planInboxWikiLinkRenameMaintenance({
+    const result = planVaultWikiLinkRenameMaintenance({
       oldTargetUri: '/vault/Inbox/Old.md',
       renamedStem: 'Renamed',
       notes,
@@ -53,7 +53,7 @@ describe('planInboxWikiLinkRenameMaintenance', () => {
       {name: 'dup.md', uri: '/vault/Inbox/dup.md'},
       {name: 'Ref.md', uri: '/vault/Inbox/Ref.md'},
     ] as const;
-    const result = planInboxWikiLinkRenameMaintenance({
+    const result = planVaultWikiLinkRenameMaintenance({
       oldTargetUri: '/vault/Inbox/Dup.md',
       renamedStem: 'Renamed',
       notes: duplicateNotes,
@@ -71,10 +71,9 @@ describe('planInboxWikiLinkRenameMaintenance', () => {
       skippedAmbiguousLinkCount: 1,
     });
   });
-
 });
 
-describe('applyInboxWikiLinkRenameMaintenance', () => {
+describe('applyVaultWikiLinkRenameMaintenance', () => {
   function createFs(overrides?: Partial<VaultFilesystem>): VaultFilesystem {
     return {
       exists: vi.fn().mockResolvedValue(false),
@@ -82,6 +81,7 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
       readFile: vi.fn().mockResolvedValue(''),
       writeFile: vi.fn().mockResolvedValue(undefined),
       unlink: vi.fn().mockResolvedValue(undefined),
+      removeTree: vi.fn().mockResolvedValue(undefined),
       renameFile: vi.fn().mockResolvedValue(undefined),
       listFiles: vi.fn().mockResolvedValue([]),
       ...overrides,
@@ -90,7 +90,7 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
 
   it('rewrites oldUri updates to newUri during apply', async () => {
     const fs = createFs();
-    const result = await applyInboxWikiLinkRenameMaintenance({
+    const result = await applyVaultWikiLinkRenameMaintenance({
       fs,
       oldUri: '/vault/Inbox/Old.md',
       newUri: '/vault/Inbox/New.md',
@@ -122,7 +122,7 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
         }
       }),
     });
-    const result = await applyInboxWikiLinkRenameMaintenance({
+    const result = await applyVaultWikiLinkRenameMaintenance({
       fs,
       oldUri: '/vault/Inbox/Old.md',
       newUri: '/vault/Inbox/New.md',
@@ -146,7 +146,7 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
     ] as const;
     const progress: Array<{done: number; total: number}> = [];
 
-    await applyInboxWikiLinkRenameMaintenance({
+    await applyVaultWikiLinkRenameMaintenance({
       fs,
       oldUri: '/vault/Inbox/Old.md',
       newUri: '/vault/Inbox/New.md',

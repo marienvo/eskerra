@@ -28,7 +28,7 @@ export function TabButton({
   ariaPressed,
   disabled,
   icon,
-  iconSize = 12,
+  iconSize = 24,
   tooltip,
   tooltipPlacement = 'inline-end',
   onClick,

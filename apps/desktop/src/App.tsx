@@ -18,7 +18,7 @@ import {
 
 import {DesktopStartupSplash} from './components/DesktopStartupSplash';
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
-import {InboxTab} from './components/InboxTab';
+import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
 import {AppStatusBar} from './components/AppStatusBar';
@@ -117,10 +117,11 @@ export default function App() {
     err,
     composingNewEntry,
     inboxContentByUri,
+    vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
-    inboxRenameNotice,
+    wikiRenameNotice,
     renameLinkProgress,
     pendingWikiLinkAmbiguityRename,
     confirmPendingWikiLinkAmbiguityRename,
@@ -137,6 +138,12 @@ export default function App() {
     onWikiLinkActivate,
     deleteNote,
     renameNote,
+    deleteFolder,
+    renameFolder,
+    moveVaultTreeItem,
+    bulkDeleteVaultTreeItems,
+    bulkMoveVaultTreeItems,
+    vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({
@@ -521,9 +528,9 @@ export default function App() {
           Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
         </div>
       ) : null}
-      {!err && !renameLinkProgress && inboxRenameNotice ? (
+      {!err && !renameLinkProgress && wikiRenameNotice ? (
         <div className="info-banner" aria-live="polite">
-          {inboxRenameNotice}
+          {wikiRenameNotice}
         </div>
       ) : null}
 
@@ -543,13 +550,16 @@ export default function App() {
         <div className="main-column">
           <main className="main-stage">
             <div className="tab-panel" hidden={mainTab !== 'inbox'}>
-              <InboxTab
+              <VaultTab
                 key={vaultRoot}
                 vaultRoot={vaultRoot}
+                fs={fs}
+                fsRefreshNonce={fsRefreshNonce}
                 inboxEditorRef={inboxEditorRef}
                 leftWidthPx={layouts.inbox.leftWidthPx}
                 onLeftWidthPxChanged={persistInboxLeftWidthPx}
                 notes={notes}
+                vaultMarkdownRefs={vaultMarkdownRefs}
                 inboxContentByUri={inboxContentByUri}
                 backlinkUris={selectedNoteBacklinkUris}
                 selectedUri={selectedUri}
@@ -571,6 +581,22 @@ export default function App() {
                 onRenameNote={(uri, nextDisplayName) => {
                   void renameNote(uri, nextDisplayName);
                 }}
+                onDeleteFolder={uri => {
+                  void deleteFolder(uri);
+                }}
+                onRenameFolder={(uri, nextDisplayName) => {
+                  void renameFolder(uri, nextDisplayName);
+                }}
+                onMoveVaultTreeItem={(src, kind, destDir) => {
+                  void moveVaultTreeItem(src, kind, destDir);
+                }}
+                onBulkMoveVaultTreeItems={(items, destDir) => {
+                  void bulkMoveVaultTreeItems(items, destDir);
+                }}
+                onBulkDeleteVaultTreeItems={items => {
+                  void bulkDeleteVaultTreeItems(items);
+                }}
+                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
                 wikiLinkAmbiguityRenamePrompt={
                   pendingWikiLinkAmbiguityRename?.summary ?? null
                 }

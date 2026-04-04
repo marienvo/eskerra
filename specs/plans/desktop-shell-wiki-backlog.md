@@ -19,8 +19,8 @@ The following are **landed**; do not re-scope them as greenfield work:
 
 - Editor Tauri ban + attachment host; vault image preview URL injected from shell.
 - Workspace orchestration in `useMainWindowWorkspace` (inbox restore, save flush, wiki activation, FS watch).
-- Core inbox wiki resolver, navigation, rename markdown planning (`planInboxWikiLinkRenameInMarkdown`), shell plan/apply (`planInboxWikiLinkRenameMaintenance`, `applyInboxWikiLinkRenameMaintenance`).
-- Inbox backlinks list driven from a full-inbox scan with debounced active note body.
+- Core inbox wiki resolver, navigation, rename markdown planning (`planInboxWikiLinkRenameInMarkdown`), shell plan/apply (`planVaultWikiLinkRenameMaintenance`, `applyVaultWikiLinkRenameMaintenance`).
+- Backlinks list driven from **`vaultMarkdownRefs`** with debounced body loads and a debounced active note body.
 - Rename flow with link maintenance, ambiguity confirmation when skipped ambiguous links exist, progress for large applies.
 
 Remaining phases below are about **measurement**, **polish**, **scale if needed**, and **central command ownership**—not repeating the above.

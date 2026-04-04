@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 
-import {deleteInboxMarkdownNote} from './vaultBootstrap';
+import {deleteVaultMarkdownNote} from './vaultBootstrap';
 
 import type {VaultFilesystem} from '@notebox/core';
 
@@ -14,19 +14,21 @@ function createFsMock(): {fs: VaultFilesystem; unlinks: string[]} {
     unlink: vi.fn().mockImplementation(async (path: string) => {
       unlinks.push(path);
     }),
+    removeTree: vi.fn().mockResolvedValue(undefined),
     renameFile: vi.fn().mockResolvedValue(undefined),
     listFiles: vi.fn().mockResolvedValue([]),
   };
   return {fs, unlinks};
 }
 
-describe('deleteInboxMarkdownNote', () => {
+// Nested `.md` paths under the vault are allowed for vault-wide CRUD (not Inbox-list-only).
+describe('deleteVaultMarkdownNote', () => {
   it('unlinks the note and refreshes the inbox index', async () => {
     const {fs, unlinks} = createFsMock();
     const root = '/vault';
     const noteUri = '/vault/Inbox/note.md';
 
-    await deleteInboxMarkdownNote(root, noteUri, fs);
+    await deleteVaultMarkdownNote(root, noteUri, fs);
 
     expect(fs.unlink).toHaveBeenCalledWith(noteUri);
     expect(unlinks).toEqual([noteUri]);
@@ -38,27 +40,35 @@ describe('deleteInboxMarkdownNote', () => {
     );
   });
 
-  it('rejects paths outside Inbox', async () => {
+  it('allows nested vault markdown paths', async () => {
+    const {fs, unlinks} = createFsMock();
+    const root = '/vault';
+    const noteUri = '/vault/Inbox/sub/note.md';
+    await deleteVaultMarkdownNote(root, noteUri, fs);
+    expect(unlinks).toEqual([noteUri]);
+  });
+
+  it('rejects paths outside the vault', async () => {
     const {fs} = createFsMock();
     await expect(
-      deleteInboxMarkdownNote('/vault', '/vault/General/other.md', fs),
-    ).rejects.toThrow('not in the vault Inbox folder');
+      deleteVaultMarkdownNote('/vault', '/other/Inbox/note.md', fs),
+    ).rejects.toThrow('outside the vault');
     expect(fs.unlink).not.toHaveBeenCalled();
   });
 
-  it('rejects nested paths under Inbox', async () => {
+  it('rejects markdown under hard-excluded folders', async () => {
     const {fs} = createFsMock();
-    await expect(
-      deleteInboxMarkdownNote('/vault', '/vault/Inbox/sub/note.md', fs),
-    ).rejects.toThrow('Invalid inbox note path');
+    await expect(deleteVaultMarkdownNote('/vault', '/vault/Assets/n.md', fs)).rejects.toThrow(
+      'excluded folder',
+    );
     expect(fs.unlink).not.toHaveBeenCalled();
   });
 
   it('rejects non-markdown files', async () => {
     const {fs} = createFsMock();
     await expect(
-      deleteInboxMarkdownNote('/vault', '/vault/Inbox/note.txt', fs),
-    ).rejects.toThrow('Only inbox markdown');
+      deleteVaultMarkdownNote('/vault', '/vault/Inbox/note.txt', fs),
+    ).rejects.toThrow('Only vault markdown');
     expect(fs.unlink).not.toHaveBeenCalled();
   });
 });

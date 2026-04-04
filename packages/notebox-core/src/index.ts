@@ -133,6 +133,31 @@ export {
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
 export {
+  assertVaultMarkdownNoteUriForCrud,
+  assertVaultTreeDirectoryUriForCrud,
+} from './vaultMarkdownPaths';
+export {
+  collectVaultMarkdownRefs,
+  type CollectVaultMarkdownRefsOptions,
+  type VaultMarkdownRef,
+} from './vaultMarkdownRefs';
+export {
+  vaultSubtreeHasEligibleMarkdown,
+  type VaultSubtreeMarkdownOptions,
+} from './vaultMarkdownSubtree';
+export {
+  filterVaultTreeDirEntries,
+  isEligibleVaultMarkdownFileName,
+  isVaultTreeHardExcludedDirectoryName,
+  isVaultTreeIgnoredEntryName,
+  shouldPruneVaultTreeSubdirectory,
+  SubtreeMarkdownPresenceCache,
+  type VaultPathKindForInvalidation,
+  vaultAncestorDirectoryUrisForSubtreeCacheInvalidation,
+  vaultPathDirname,
+  VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES,
+} from './vaultVisibility';
+export {
   ASSETS_DIRECTORY_NAME,
   ATTACHMENTS_DIRECTORY_NAME,
   GENERAL_DIRECTORY_NAME,

@@ -50,7 +50,7 @@ export function TitleBarTransport({
       >
         <MaterialIcon
           name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-          size={36}
+          size={24}
           aria-hidden
         />
       </button>

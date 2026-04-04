@@ -74,6 +74,7 @@ function createMemoryVaultFs(
     unlink: async uri => {
       files.delete(uri);
     },
+    removeTree: async () => {},
     renameFile: async (fromUri, toUri) => {
       const value = files.get(fromUri);
       if (value === undefined) {
@@ -174,6 +175,30 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
       canonicalInner: 'Alpha Note',
     });
     expect(writes).toEqual([]);
+  });
+
+  it('creates beside the active note when activeMarkdownUri is set', async () => {
+    const activeUri = `${vaultRoot}/Proj/current.md`;
+    const {fs, writes} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/Proj`, 'dir'],
+      [activeUri, '# Cur\n'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'side page',
+      notes: [{name: 'current', uri: activeUri}],
+      vaultRoot,
+      fs,
+      activeMarkdownUri: activeUri,
+    });
+    expect(result.kind).toBe('created');
+    if (result.kind !== 'created') {
+      return;
+    }
+    expect(result.uri).toBe(`${vaultRoot}/Proj/side page.md`);
+    expect(writes.some(w => w.uri === result.uri)).toBe(true);
   });
 
   it('creates a new inbox note when target does not exist', async () => {

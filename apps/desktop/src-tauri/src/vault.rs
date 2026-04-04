@@ -286,6 +286,18 @@ pub fn vault_remove_file(state: State<'_, VaultRootState>, path: String) -> Resu
 }
 
 #[tauri::command]
+pub fn vault_remove_tree(state: State<'_, VaultRootState>, path: String) -> Result<(), String> {
+    let target = PathBuf::from(path);
+    let vault = state.0.lock().map_err(|e| e.to_string())?;
+    assert_in_vault(vault.as_ref(), &target)?;
+    let meta = fs::metadata(&target).map_err(|e| e.to_string())?;
+    if !meta.is_dir() {
+        return Err("path is not a directory".into());
+    }
+    fs::remove_dir_all(&target).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn vault_rename_file(
     state: State<'_, VaultRootState>,
     from_path: String,

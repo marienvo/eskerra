@@ -6,9 +6,9 @@ import {
 } from '@notebox/core';
 
 /**
- * Lists inbox notes whose bodies contain a wiki link that resolves to `targetUri`
+ * Lists vault markdown notes whose bodies contain a wiki link that resolves to `targetUri`
  * (same policy as navigation: open + ambiguous; self-links excluded).
- * Scans all inbox bodies once; uses a single O(N) stem lookup table for resolutions.
+ * Scans the provided `notes` list once; uses a single O(N) stem lookup table for resolutions.
  */
 export function listInboxWikiLinkBacklinkReferrersForTarget(options: {
   targetUri: string;

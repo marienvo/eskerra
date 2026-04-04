@@ -1,6 +1,11 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {markdown} from '@codemirror/lang-markdown';
-import {Compartment, EditorSelection, EditorState} from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+} from '@codemirror/state';
 import {
   drawSelection,
   EditorView,
@@ -39,7 +44,7 @@ const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandi
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
-  /** Absolute path to the open inbox `.md` file, or `null` while composing a new note. */
+  /** Absolute path to the open vault `.md` file, or `null` while composing a new note. */
   activeNotePath: string | null;
   initialMarkdown: string;
   /** Bumped when the document should reload from `initialMarkdown` (note switch or new entry). */
@@ -49,9 +54,9 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  /** Shell-owned: `[[inner]]` resolves to exactly one inbox note (for styling). */
+  /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
-  /** Shell-provided inbox notes for `[[` autocomplete (WL-3). */
+  /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
@@ -94,6 +99,10 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
+  const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
+  const wikiLinkTargetIsResolvedRef = useRef(wikiLinkTargetIsResolved);
+  wikiLinkTargetIsResolvedRef.current = wikiLinkTargetIsResolved;
   const initialMarkdownRef = useRef(initialMarkdown);
   initialMarkdownRef.current = initialMarkdown;
 
@@ -432,6 +441,8 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
     ];
 
+    codemirrorBootExtensionsRef.current = extensions;
+
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -444,6 +455,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     return () => {
       view.destroy();
       viewRef.current = null;
+      codemirrorBootExtensionsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- remount via `sessionKey` wraps this component
   }, []);
@@ -468,16 +480,24 @@ const NoteMarkdownEditorImpl = forwardRef<
         viewRef.current?.state.doc.toString() ?? initialMarkdownRef.current,
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
-        if (!view) {
+        const bootExtensions = codemirrorBootExtensionsRef.current;
+        const compartment = wikiLinkCompartmentRef.current;
+        if (!view || !bootExtensions || !compartment) {
           return;
         }
+        view.setState(
+          EditorState.create({
+            doc: markdown,
+            selection: EditorSelection.cursor(markdown.length),
+            extensions: bootExtensions,
+          }),
+        );
         view.dispatch({
-          changes: {
-            from: 0,
-            to: view.state.doc.length,
-            insert: markdown,
-          },
-          selection: EditorSelection.cursor(markdown.length),
+          effects: compartment.reconfigure(
+            wikiLinkResolvedHighlightExtensions(
+              wikiLinkTargetIsResolvedRef.current,
+            ),
+          ),
         });
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
