@@ -79,6 +79,8 @@ type TextareaEditorNav = {
   colCount: number;
   onCommit: EskerraTableEditDataGridProps['onCommit'];
   onDiscard: EskerraTableEditDataGridProps['onDiscard'];
+  /** Mirrors draft cell text into parent `rows` so `rowHeight` tracks typing (RDG keeps edit state internal until commit). */
+  onLiveRowSync: (rowIdx: number, nextRow: EskerraGridRow) => void;
 };
 
 function EskerraTableTextareaEditor({
@@ -108,7 +110,11 @@ function EskerraTableTextareaEditor({
       ref={taRef}
       className="rdg-text-editor"
       value={row[key] ?? ''}
-      onChange={e => onRowChange({...row, [key]: e.target.value})}
+      onChange={e => {
+        const next = {...row, [key]: e.target.value};
+        onRowChange(next);
+        nav.onLiveRowSync(rowIdx, next);
+      }}
       onBlur={() => onClose(true, false)}
       onKeyDown={e => {
         if (e.key === 'Escape') {
@@ -131,7 +137,9 @@ function EskerraTableTextareaEditor({
           e.preventDefault();
           e.stopPropagation();
           const v = e.currentTarget.value;
-          onRowChange({...row, [key]: v});
+          const nextRow = {...row, [key]: v};
+          onRowChange(nextRow);
+          nav.onLiveRowSync(rowIdx, nextRow);
           const rows = nav.rowsRef.current ?? [];
           const lastRow = rowIdx >= rows.length - 1;
           if (!lastRow) {
@@ -238,9 +246,19 @@ export function EskerraTableEditDataGrid({
     () =>
       ({
         commitOnOutsideClick: false,
+        closeOnExternalRowChange: false,
       }) as const,
     [],
   );
+
+  const onLiveRowSync = useCallback((rowIdx: number, nextRow: EskerraGridRow) => {
+    setRows(prev => {
+      if (rowIdx < 0 || rowIdx >= prev.length) {
+        return prev;
+      }
+      return remapRowKeys(prev.map((r, i) => (i === rowIdx ? {...nextRow} : r)));
+    });
+  }, []);
 
   const editorNav = useMemo(
     (): TextareaEditorNav => ({
@@ -249,8 +267,9 @@ export function EskerraTableEditDataGrid({
       colCount,
       onCommit,
       onDiscard,
+      onLiveRowSync,
     }),
-    [colCount, onCommit, onDiscard],
+    [colCount, onCommit, onDiscard, onLiveRowSync],
   );
 
   /** No RDG header row labels: Markdown row 0 is the real header (avoids duplicate “File | Contents”). */
