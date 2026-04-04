@@ -2033,9 +2033,10 @@ button.primary.destructive {
   .cm-eskerra-table-raw-banner
   .cm-eskerra-table__rail-top {
   position: absolute;
-  /* Align with first line body (matches .cm-content padding-block start). */
-  top: 0.5rem;
-  right: 0;
+  /* Match `.cm-eskerra-table-shell__rail`: beside the content, not inset from line end. */
+  top: 0;
+  inset-inline-start: 100%;
+  margin-inline-start: 0.35rem;
   z-index: 2;
   pointer-events: auto;
 }

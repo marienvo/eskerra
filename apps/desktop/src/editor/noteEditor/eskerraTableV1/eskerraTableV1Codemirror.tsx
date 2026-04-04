@@ -159,13 +159,6 @@ function appendMaterialIcon(button: HTMLButtonElement, ligature: string): void {
   button.append(icon);
 }
 
-function createRailSlotSpacer(): HTMLDivElement {
-  const el = document.createElement('div');
-  el.className = 'cm-eskerra-table__rail-slot-spacer';
-  el.setAttribute('aria-hidden', 'true');
-  return el;
-}
-
 class TableRawMarkdownExitWidget extends WidgetType {
   private readonly headerLineFrom: number;
 
@@ -220,7 +213,7 @@ class TableRawMarkdownExitWidget extends WidgetType {
 
     const railTop = document.createElement('div');
     railTop.className = 'cm-eskerra-table__rail-top';
-    railTop.append(showTableBtn, createRailSlotSpacer());
+    railTop.append(showTableBtn);
     wrap.appendChild(railTop);
     return wrap;
   }
@@ -380,6 +373,7 @@ function buildDecorations(state: EditorState): BuildResult {
         block.from,
         block.to,
         Decoration.replace({
+          block: true,
           widget: new EskerraTableShellWidget(
             block.lineFrom,
             shellOpen.baselineText,
