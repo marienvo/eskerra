@@ -1389,13 +1389,17 @@ button.primary.destructive {
 }
 
 /*
- * Markdown syntax markers: removed from layout on non-focus lines (not only invisible) so gutters
- * and delimiters take no space (cm-notebox-marker-focus-line from markdownMarkerFocusLine.ts).
+ * Markdown syntax markers on non-focus lines (cm-notebox-marker-focus-line from
+ * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; other
+ * markers use display:none so they take no space.
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
-  .cm-md-header-mark,
+  .cm-md-header-mark {
+  visibility: hidden;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
