@@ -1,12 +1,16 @@
 import {
+  assertVaultMarkdownNoteUriForCrud,
   buildInboxMarkdownFromCompose,
+  getInboxDirectoryUri,
+  normalizeVaultBaseUri,
   resolveInboxWikiLinkTarget,
+  vaultPathDirname,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveResult,
   type VaultFilesystem,
 } from '@notebox/core';
 
-import {createInboxMarkdownNote} from './vaultBootstrap';
+import {createVaultMarkdownNoteInDirectory} from './vaultBootstrap';
 
 export type InboxWikiLinkNavigationResult =
   | {kind: 'open'; uri: string; canonicalInner?: string}
@@ -20,17 +24,18 @@ export type InboxWikiLinkNavigationResult =
   | {kind: 'unsupported'; reason: 'empty_target' | 'path_not_supported'};
 
 /**
- * Shell-owned wiki-link flow for Inbox notes:
- * resolve existing note deterministically or create a new inbox note
- * using the existing title->filename and markdown compose policy.
+ * Shell-owned wiki-link flow: resolve against the vault markdown ref index, or create a new note
+ * beside the active note’s folder (else Inbox) using the shared title→filename policy.
  */
 export async function openOrCreateInboxWikiLinkTarget(options: {
   inner: string;
   notes: ReadonlyArray<InboxWikiLinkNoteRef>;
   vaultRoot: string;
   fs: VaultFilesystem;
+  /** Open `.md` URI whose parent directory receives new notes; omit or null → Inbox. */
+  activeMarkdownUri?: string | null;
 }): Promise<InboxWikiLinkNavigationResult> {
-  const {inner, notes, vaultRoot, fs} = options;
+  const {inner, notes, vaultRoot, fs, activeMarkdownUri} = options;
   const resolved: InboxWikiLinkResolveResult = resolveInboxWikiLinkTarget(
     notes,
     inner,
@@ -55,8 +60,22 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
     return {kind: 'unsupported', reason: resolved.reason};
   }
 
+  const base = normalizeVaultBaseUri(vaultRoot);
+  const inbox = getInboxDirectoryUri(base);
+  let parentDir = inbox;
+  if (activeMarkdownUri) {
+    const noteUri = assertVaultMarkdownNoteUriForCrud(vaultRoot, activeMarkdownUri);
+    parentDir = vaultPathDirname(noteUri);
+  }
+
   const markdown = buildInboxMarkdownFromCompose(resolved.title, '');
-  const created = await createInboxMarkdownNote(vaultRoot, fs, resolved.title, markdown);
+  const created = await createVaultMarkdownNoteInDirectory(
+    vaultRoot,
+    fs,
+    parentDir,
+    resolved.title,
+    markdown,
+  );
   return {kind: 'created', uri: created.uri};
 }
 

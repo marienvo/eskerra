@@ -117,6 +117,7 @@ export default function App() {
     err,
     composingNewEntry,
     inboxContentByUri,
+    vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
@@ -555,6 +556,7 @@ export default function App() {
                 leftWidthPx={layouts.inbox.leftWidthPx}
                 onLeftWidthPxChanged={persistInboxLeftWidthPx}
                 notes={notes}
+                vaultMarkdownRefs={vaultMarkdownRefs}
                 inboxContentByUri={inboxContentByUri}
                 backlinkUris={selectedNoteBacklinkUris}
                 selectedUri={selectedUri}

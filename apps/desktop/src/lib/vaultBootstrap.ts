@@ -397,18 +397,25 @@ export async function clearPlaylistEntry(root: string, fs: VaultFilesystem): Pro
   }
 }
 
-export async function createInboxMarkdownNote(
+/**
+ * Creates a markdown note under an existing vault directory (validated for tree CRUD).
+ * Updates `General/Inbox.md` when the file lives under `Inbox/`.
+ */
+export async function createVaultMarkdownNoteInDirectory(
   root: string,
   fs: VaultFilesystem,
+  parentDirectoryUri: string,
   title: string,
   markdownBody: string,
 ): Promise<{lastModified: number; name: string; uri: string}> {
   const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  if (!(await fs.exists(inbox))) {
-    await fs.mkdir(inbox);
+  const parent = assertVaultTreeDirectoryUriForCrud(base, parentDirectoryUri)
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '');
+  if (!(await fs.exists(parent))) {
+    await fs.mkdir(parent);
   }
-  const rows = await fs.listFiles(inbox);
+  const rows = await fs.listFiles(parent);
   const occupied = new Set(
     rows
       .filter(
@@ -420,12 +427,26 @@ export async function createInboxMarkdownNote(
   );
   const stem = sanitizeFileName(title);
   const fileName = pickNextInboxMarkdownFileName(stem, occupied);
-  const uri = `${inbox}/${fileName}`;
+  const uri = `${parent}/${fileName}`;
   const trimmed = markdownBody.trim();
   const body = trimmed ? `${trimmed}\n` : '';
   await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
-  await syncInboxMarkdownIndex(root, fs);
+  const inbox = getInboxDirectoryUri(base).replace(/\\/g, '/').replace(/\/+$/, '');
+  if (parent === inbox || parent.startsWith(`${inbox}/`)) {
+    await syncInboxMarkdownIndex(root, fs);
+  }
   return {lastModified: Date.now(), name: fileName, uri};
+}
+
+export async function createInboxMarkdownNote(
+  root: string,
+  fs: VaultFilesystem,
+  title: string,
+  markdownBody: string,
+): Promise<{lastModified: number; name: string; uri: string}> {
+  const base = normalizeVaultBaseUri(root);
+  const inbox = getInboxDirectoryUri(base);
+  return createVaultMarkdownNoteInDirectory(root, fs, inbox, title, markdownBody);
 }
 
 export async function deleteVaultMarkdownNote(

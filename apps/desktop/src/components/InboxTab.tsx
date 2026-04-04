@@ -13,6 +13,7 @@ import {
   getNoteTitle,
   stemFromMarkdownFileName,
   type VaultFilesystem,
+  type VaultMarkdownRef,
 } from '@notebox/core';
 
 import {
@@ -44,6 +45,8 @@ type InboxTabProps = {
   leftWidthPx: number;
   onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
+  /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
+  vaultMarkdownRefs: VaultMarkdownRef[];
   inboxContentByUri: Record<string, string>;
   backlinkUris: readonly string[];
   selectedUri: string | null;
@@ -77,6 +80,7 @@ export function InboxTab({
   leftWidthPx,
   onLeftWidthPxChanged,
   notes,
+  vaultMarkdownRefs,
   inboxContentByUri,
   backlinkUris,
   selectedUri,
@@ -174,18 +178,18 @@ export function InboxTab({
   const wikiLinkTargetIsResolved = useMemo(
     () => (inner: string) =>
       inboxWikiLinkTargetIsResolved(
-        notes.map(n => ({name: n.name, uri: n.uri})),
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
         inner,
       ),
-    [notes],
+    [vaultMarkdownRefs],
   );
 
   const wikiLinkCompletionCandidates = useMemo(
     () =>
       buildInboxWikiLinkCompletionCandidates(
-        notes.map(n => ({name: n.name, uri: n.uri})),
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
       ),
-    [notes],
+    [vaultMarkdownRefs],
   );
 
   const editorPaneTitle = useMemo(() => {

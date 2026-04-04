@@ -86,6 +86,32 @@ const LARGE_RENAME_MIN_TOUCHED_BYTES = 768 * 1024;
 const RENAME_APPLY_YIELD_EVERY_WRITES = 24;
 const RENAME_NOTICE_TTL_MS = 5000;
 
+async function loadMarkdownBodiesForWikiMaintenance(
+  fs: VaultFilesystem,
+  refs: ReadonlyArray<{uri: string}>,
+  seed: Readonly<Record<string, string>>,
+  activeUri: string | null,
+  activeBody: string,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {...seed};
+  for (const {uri} of refs) {
+    if (activeUri != null && uri === activeUri) {
+      out[uri] = activeBody;
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(out, uri)) {
+      continue;
+    }
+    try {
+      const raw = await fs.readFile(uri, {encoding: 'utf8'});
+      out[uri] = raw.replace(/\n$/, '');
+    } catch {
+      out[uri] = '';
+    }
+  }
+  return out;
+}
+
 function replaceVaultUriPrefix(uri: string, oldPrefix: string, newPrefix: string): string | null {
   const u = uri.replace(/\\/g, '/');
   const o = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -111,7 +137,7 @@ export type UseMainWindowWorkspaceResult = {
   err: string | null;
   composingNewEntry: boolean;
   inboxContentByUri: Record<string, string>;
-  /** Background-built vault-wide markdown refs for future wiki index (Phase 3); safe to ignore in UI until then. */
+  /** Vault-wide markdown index for wiki resolve, autocomplete, and link styling (async; may lag the tree). */
   vaultMarkdownRefs: VaultMarkdownRef[];
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
@@ -186,6 +212,7 @@ export function useMainWindowWorkspace(options: {
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRefsBuildGenRef = useRef(0);
+  const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
@@ -245,6 +272,10 @@ export function useMainWindowWorkspace(options: {
       activeBody: backlinksActiveBody,
     });
   }, [composingNewEntry, selectedUri, notes, inboxContentByUri, backlinksActiveBody]);
+
+  useEffect(() => {
+    vaultMarkdownRefsRef.current = vaultMarkdownRefs;
+  }, [vaultMarkdownRefs]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -700,27 +731,36 @@ export function useMainWindowWorkspace(options: {
       clearRenameNotice();
       setRenameLinkProgress(null);
       try {
-        const preRenameNotes = notes.map(n => ({name: n.name, uri: n.uri}));
-        const preRenameContent = inboxContentByUriRef.current;
+        const wikiRefs = vaultMarkdownRefsRef.current.map(r => ({
+          name: r.name,
+          uri: r.uri,
+        }));
         const activeUri = selectedUriRef.current;
         const activeBody =
           activeUri != null
             ? (inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current)
             : '';
+        const expandedContent = await loadMarkdownBodiesForWikiMaintenance(
+          fs,
+          wikiRefs,
+          inboxContentByUriRef.current,
+          activeUri,
+          activeBody,
+        );
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
           ? planInboxWikiLinkRenameMaintenance({
               oldTargetUri: uri,
               renamedStem: plannedStem,
-              notes: preRenameNotes,
-              contentByUri: preRenameContent,
+              notes: wikiRefs,
+              contentByUri: expandedContent,
               activeUri,
               activeBody,
             })
           : {
               updates: [],
-              scannedFileCount: preRenameNotes.length,
+              scannedFileCount: wikiRefs.length,
               touchedFileCount: 0,
               touchedBytes: 0,
               updatedLinkCount: 0,
@@ -754,8 +794,8 @@ export function useMainWindowWorkspace(options: {
             ? planInboxWikiLinkRenameMaintenance({
                 oldTargetUri: uri,
                 renamedStem,
-                notes: preRenameNotes,
-                contentByUri: preRenameContent,
+                notes: wikiRefs,
+                contentByUri: expandedContent,
                 activeUri,
                 activeBody,
               })
@@ -851,7 +891,6 @@ export function useMainWindowWorkspace(options: {
       vaultRoot,
       fs,
       refreshNotes,
-      notes,
       inboxEditorRef,
       clearRenameNotice,
       setTransientRenameNotice,
@@ -894,9 +933,12 @@ export function useMainWindowWorkspace(options: {
       try {
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
-          notes: notes.map(n => ({name: n.name, uri: n.uri})),
+          notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
           vaultRoot,
           fs,
+          activeMarkdownUri: composingNewEntryRef.current
+            ? null
+            : selectedUriRef.current,
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
@@ -927,7 +969,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (result.reason === 'path_not_supported') {
           setErr(
-            `Wiki link "${inner}" is outside Inbox scope for now. Only Inbox targets are supported in this MVP.`,
+            `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
           );
         } else {
           setErr('Wiki link target is empty.');
@@ -936,7 +978,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, notes, fs, refreshNotes, inboxEditorRef],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef],
   );
 
   const onWikiLinkActivate = useCallback(
