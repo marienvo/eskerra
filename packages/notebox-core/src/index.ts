@@ -132,6 +132,24 @@ export {
 } from './r2PlaylistObject';
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
+export {assertVaultMarkdownNoteUriForCrud} from './vaultMarkdownPaths';
+export {
+  collectVaultMarkdownRefs,
+  type CollectVaultMarkdownRefsOptions,
+  type VaultMarkdownRef,
+} from './vaultMarkdownRefs';
+export {
+  filterVaultTreeDirEntries,
+  isEligibleVaultMarkdownFileName,
+  isVaultTreeHardExcludedDirectoryName,
+  isVaultTreeIgnoredEntryName,
+  shouldPruneVaultTreeSubdirectory,
+  SubtreeMarkdownPresenceCache,
+  type VaultPathKindForInvalidation,
+  vaultAncestorDirectoryUrisForSubtreeCacheInvalidation,
+  vaultPathDirname,
+  VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES,
+} from './vaultVisibility';
 export {
   ASSETS_DIRECTORY_NAME,
   ATTACHMENTS_DIRECTORY_NAME,

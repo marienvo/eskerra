@@ -1,6 +1,7 @@
 import {desktopR2SignedTransport} from './desktopR2Transport';
 
 import {
+  assertVaultMarkdownNoteUriForCrud,
   buildInboxMarkdownIndexContent,
   defaultNoteboxLocalSettings,
   deleteR2PlaylistObject,
@@ -32,6 +33,7 @@ import {
   serializeNoteboxLocalSettings,
   serializeNoteboxSettings,
   serializePlaylistEntry,
+  vaultPathDirname,
   type NoteboxLocalSettings,
   type NoteboxSettings,
   type PlaylistEntry,
@@ -204,30 +206,6 @@ export async function listInboxNotes(root: string, fs: VaultFilesystem) {
       }
       return a.name.localeCompare(b.name);
     });
-}
-
-/** Reads markdown bodies for list preview (H1 extraction). Failed reads are omitted. */
-export async function prefetchInboxMarkdownBodies(
-  notes: ReadonlyArray<{uri: string}>,
-  fs: VaultFilesystem,
-): Promise<Record<string, string>> {
-  const entries = await Promise.all(
-    notes.map(async n => {
-      try {
-        const text = await fs.readFile(n.uri, {encoding: 'utf8'});
-        return [n.uri, text.replace(/\n$/, '')] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const map: Record<string, string> = {};
-  for (const e of entries) {
-    if (e) {
-      map[e[0]] = e[1];
-    }
-  }
-  return map;
 }
 
 async function readLocalPlaylistFileOnly(
@@ -444,69 +422,39 @@ export async function createInboxMarkdownNote(
   return {lastModified: Date.now(), name: fileName, uri};
 }
 
-export async function deleteInboxMarkdownNote(
+export async function deleteVaultMarkdownNote(
   root: string,
   noteUri: string,
   fs: VaultFilesystem,
 ): Promise<void> {
-  const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  const normalizedNote = noteUri.trim();
-  const inboxPrefix = `${inbox}/`;
-  if (!normalizedNote.startsWith(inboxPrefix)) {
-    throw new Error('Note is not in the vault Inbox folder.');
-  }
-  const relative = normalizedNote.slice(inboxPrefix.length);
-  if (!relative || relative.includes('/') || relative.includes('\\')) {
-    throw new Error('Invalid inbox note path.');
-  }
-  if (!relative.endsWith(MARKDOWN_EXTENSION)) {
-    throw new Error('Only inbox markdown notes can be deleted here.');
-  }
-  if (isSyncConflictFileName(relative)) {
-    throw new Error('Cannot delete sync conflict notes with this action.');
-  }
-  await fs.unlink(normalizedNote);
+  const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
+  await fs.unlink(normalized);
   await syncInboxMarkdownIndex(root, fs);
 }
 
-export async function renameInboxMarkdownNote(
+export async function renameVaultMarkdownNote(
   root: string,
   noteUri: string,
   nextDisplayName: string,
   fs: VaultFilesystem,
 ): Promise<string> {
-  const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  const normalizedNote = noteUri.trim();
-  const inboxPrefix = `${inbox}/`;
-  if (!normalizedNote.startsWith(inboxPrefix)) {
-    throw new Error('Note is not in the vault Inbox folder.');
-  }
-  const relative = normalizedNote.slice(inboxPrefix.length);
-  if (!relative || relative.includes('/') || relative.includes('\\')) {
-    throw new Error('Invalid inbox note path.');
-  }
-  if (!relative.endsWith(MARKDOWN_EXTENSION)) {
-    throw new Error('Only inbox markdown notes can be renamed here.');
-  }
-  if (isSyncConflictFileName(relative)) {
-    throw new Error('Cannot rename sync conflict notes with this action.');
-  }
+  const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
 
   const sanitizedStem = sanitizeInboxNoteStem(nextDisplayName);
   if (!sanitizedStem) {
     throw new Error('Note name cannot be empty.');
   }
   const nextName = `${sanitizedStem}${MARKDOWN_EXTENSION}`;
-  if (nextName === relative) {
-    return normalizedNote;
+  const currentFileName = normalized.split('/').pop() ?? '';
+  if (nextName === currentFileName) {
+    return normalized;
   }
-  const nextUri = `${inbox}/${nextName}`;
+  const parentDir = vaultPathDirname(normalized);
+  const nextUri = `${parentDir}/${nextName}`;
   if (await fs.exists(nextUri)) {
     throw new Error('A note with this name already exists.');
   }
-  await fs.renameFile(normalizedNote, nextUri);
+  await fs.renameFile(normalized, nextUri);
   await syncInboxMarkdownIndex(root, fs);
   return nextUri;
 }

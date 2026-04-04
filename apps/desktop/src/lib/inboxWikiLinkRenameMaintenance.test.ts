@@ -82,6 +82,7 @@ describe('applyInboxWikiLinkRenameMaintenance', () => {
       readFile: vi.fn().mockResolvedValue(''),
       writeFile: vi.fn().mockResolvedValue(undefined),
       unlink: vi.fn().mockResolvedValue(undefined),
+      removeTree: vi.fn().mockResolvedValue(undefined),
       renameFile: vi.fn().mockResolvedValue(undefined),
       listFiles: vi.fn().mockResolvedValue([]),
       ...overrides,

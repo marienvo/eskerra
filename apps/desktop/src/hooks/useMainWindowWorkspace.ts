@@ -12,6 +12,7 @@ import {
 
 import {
   buildInboxMarkdownFromCompose,
+  collectVaultMarkdownRefs,
   ensureDeviceInstanceId,
   markdownContainsTransientImageUrls,
   parseComposeInput,
@@ -19,6 +20,7 @@ import {
   stemFromMarkdownFileName,
   type NoteboxSettings,
   type VaultFilesystem,
+  type VaultMarkdownRef,
 } from '@notebox/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
@@ -31,11 +33,10 @@ import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownIma
 import {
   bootstrapVaultLayout,
   createInboxMarkdownNote,
-  deleteInboxMarkdownNote,
+  deleteVaultMarkdownNote,
   listInboxNotes,
-  prefetchInboxMarkdownBodies,
   readVaultLocalSettings,
-  renameInboxMarkdownNote,
+  renameVaultMarkdownNote,
   readVaultSettings,
   saveNoteMarkdown,
   syncInboxMarkdownIndex,
@@ -93,6 +94,8 @@ export type UseMainWindowWorkspaceResult = {
   err: string | null;
   composingNewEntry: boolean;
   inboxContentByUri: Record<string, string>;
+  /** Background-built vault-wide markdown refs for future wiki index (Phase 3); safe to ignore in UI until then. */
+  vaultMarkdownRefs: VaultMarkdownRef[];
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   deviceInstanceId: string;
@@ -144,6 +147,7 @@ export function useMainWindowWorkspace(options: {
   const [err, setErr] = useState<string | null>(null);
   const [composingNewEntry, setComposingNewEntry] = useState(false);
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
+  const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
@@ -158,6 +162,7 @@ export function useMainWindowWorkspace(options: {
     useState<PendingWikiLinkAmbiguityRename | null>(null);
 
   const inboxBodyPrefetchGenRef = useRef(0);
+  const vaultRefsBuildGenRef = useRef(0);
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
@@ -226,11 +231,16 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       setNotes(list);
-      const bodies = await prefetchInboxMarkdownBodies(list, fs);
-      if (gen !== inboxBodyPrefetchGenRef.current) {
-        return;
-      }
-      setInboxContentByUri(bodies);
+      setInboxContentByUri(prev => {
+        const keep = new Set(list.map(n => n.uri));
+        const next = {...prev};
+        for (const k of Object.keys(next)) {
+          if (!keep.has(k)) {
+            delete next[k];
+          }
+        }
+        return next;
+      });
     },
     [fs],
   );
@@ -384,6 +394,32 @@ export function useMainWindowWorkspace(options: {
       unlisten?.();
     };
   }, [vaultRoot, refreshNotes, fs]);
+
+  useEffect(() => {
+    if (!vaultRoot) {
+      setVaultMarkdownRefs([]);
+      return;
+    }
+    const gen = ++vaultRefsBuildGenRef.current;
+    const ac = new AbortController();
+    void (async () => {
+      try {
+        const refs = await collectVaultMarkdownRefs(vaultRoot, fs, {signal: ac.signal});
+        if (gen !== vaultRefsBuildGenRef.current) {
+          return;
+        }
+        setVaultMarkdownRefs(refs);
+      } catch (e) {
+        if (ac.signal.aborted) {
+          return;
+        }
+        console.warn('[vaultMarkdownRefs]', e);
+      }
+    })();
+    return () => {
+      ac.abort();
+    };
+  }, [vaultRoot, fs, fsRefreshNonce]);
 
   useLayoutEffect(() => {
     if (!vaultRoot || !selectedUri) {
@@ -584,7 +620,7 @@ export function useMainWindowWorkspace(options: {
       setBusy(true);
       setErr(null);
       try {
-        await deleteInboxMarkdownNote(vaultRoot, uri, fs);
+        await deleteVaultMarkdownNote(vaultRoot, uri, fs);
         setInboxContentByUri(prev => {
           const next = {...prev};
           delete next[uri];
@@ -664,7 +700,7 @@ export function useMainWindowWorkspace(options: {
         }
         setPendingWikiLinkAmbiguityRename(null);
 
-        const nextUri = await renameInboxMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
+        const nextUri = await renameVaultMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
         const nextName = nextUri.split('/').pop();
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
         const rewritePlan =
@@ -907,6 +943,7 @@ export function useMainWindowWorkspace(options: {
     err,
     composingNewEntry,
     inboxContentByUri,
+    vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,

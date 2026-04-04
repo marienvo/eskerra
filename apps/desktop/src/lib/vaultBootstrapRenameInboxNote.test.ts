@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 
-import {renameInboxMarkdownNote} from './vaultBootstrap';
+import {renameVaultMarkdownNote} from './vaultBootstrap';
 
 import type {VaultFilesystem} from '@notebox/core';
 
@@ -16,6 +16,7 @@ function createFsMock(existingUris: string[] = []): {
     readFile: vi.fn().mockRejectedValue(new Error('missing')),
     writeFile: vi.fn().mockResolvedValue(undefined),
     unlink: vi.fn().mockResolvedValue(undefined),
+    removeTree: vi.fn().mockResolvedValue(undefined),
     renameFile: vi.fn().mockImplementation(async (fromPath: string, toPath: string) => {
       renames.push({from: fromPath, to: toPath});
       existing.delete(fromPath);
@@ -26,13 +27,13 @@ function createFsMock(existingUris: string[] = []): {
   return {fs, renames};
 }
 
-describe('renameInboxMarkdownNote', () => {
+describe('renameVaultMarkdownNote', () => {
   it('renames the note and refreshes the inbox index', async () => {
     const noteUri = '/vault/Inbox/old-name.md';
     const nextUri = '/vault/Inbox/new name.md';
     const {fs, renames} = createFsMock([noteUri, '/vault/Inbox']);
 
-    const renamedUri = await renameInboxMarkdownNote('/vault', noteUri, 'new name', fs);
+    const renamedUri = await renameVaultMarkdownNote('/vault', noteUri, 'new name', fs);
 
     expect(renamedUri).toBe(nextUri);
     expect(fs.renameFile).toHaveBeenCalledWith(noteUri, nextUri);
@@ -45,27 +46,28 @@ describe('renameInboxMarkdownNote', () => {
     );
   });
 
-  it('rejects paths outside Inbox', async () => {
+  it('rejects paths outside the vault', async () => {
     const {fs} = createFsMock();
     await expect(
-      renameInboxMarkdownNote('/vault', '/vault/General/other.md', 'renamed', fs),
-    ).rejects.toThrow('not in the vault Inbox folder');
+      renameVaultMarkdownNote('/vault', '/vault-other/other.md', 'renamed', fs),
+    ).rejects.toThrow('outside the vault');
     expect(fs.renameFile).not.toHaveBeenCalled();
   });
 
-  it('rejects nested paths under Inbox', async () => {
-    const {fs} = createFsMock();
-    await expect(
-      renameInboxMarkdownNote('/vault', '/vault/Inbox/sub/note.md', 'renamed', fs),
-    ).rejects.toThrow('Invalid inbox note path');
-    expect(fs.renameFile).not.toHaveBeenCalled();
+  it('allows nested markdown paths', async () => {
+    const noteUri = '/vault/Inbox/subject/note.md';
+    const nextUri = '/vault/Inbox/subject/renamed.md';
+    const {fs, renames} = createFsMock([noteUri]);
+    const out = await renameVaultMarkdownNote('/vault', noteUri, 'renamed', fs);
+    expect(out).toBe(nextUri);
+    expect(renames).toEqual([{from: noteUri, to: nextUri}]);
   });
 
   it('rejects non-markdown files', async () => {
     const {fs} = createFsMock();
     await expect(
-      renameInboxMarkdownNote('/vault', '/vault/Inbox/note.txt', 'renamed', fs),
-    ).rejects.toThrow('Only inbox markdown');
+      renameVaultMarkdownNote('/vault', '/vault/Inbox/note.txt', 'renamed', fs),
+    ).rejects.toThrow('Only vault markdown');
     expect(fs.renameFile).not.toHaveBeenCalled();
   });
 
@@ -74,7 +76,7 @@ describe('renameInboxMarkdownNote', () => {
     const existingUri = '/vault/Inbox/existing.md';
     const {fs} = createFsMock([noteUri, existingUri]);
     await expect(
-      renameInboxMarkdownNote('/vault', noteUri, 'existing', fs),
+      renameVaultMarkdownNote('/vault', noteUri, 'existing', fs),
     ).rejects.toThrow('already exists');
     expect(fs.renameFile).not.toHaveBeenCalled();
   });

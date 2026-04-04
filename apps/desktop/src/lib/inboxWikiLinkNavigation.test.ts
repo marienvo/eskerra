@@ -74,6 +74,7 @@ function createMemoryVaultFs(
     unlink: async uri => {
       files.delete(uri);
     },
+    removeTree: async () => {},
     renameFile: async (fromUri, toUri) => {
       const value = files.get(fromUri);
       if (value === undefined) {

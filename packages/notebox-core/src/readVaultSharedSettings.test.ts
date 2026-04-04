@@ -33,6 +33,7 @@ function createMemoryFs(initial: Map<string, string | 'dir'>): VaultFilesystem {
       store.set(toUri, value);
     },
     listFiles: async (): Promise<VaultDirEntry[]> => [],
+    removeTree: async () => {},
   };
 }
 
