@@ -2,7 +2,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
 
-import {loadVaultTreeVisibleChildIds, type VaultTreeItemData} from './vaultTreeLoadChildren';
+import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from './vaultTreeLoadChildren';
 
 function dir(name: string, uri: string): VaultDirEntry {
   return {name, uri, type: 'directory', lastModified: null};
@@ -12,8 +12,8 @@ function file(name: string, uri: string): VaultDirEntry {
   return {name, uri, type: 'file', lastModified: null};
 }
 
-describe('loadVaultTreeVisibleChildIds', () => {
-  it('lists direct children only: folders first, then markdown; one listFiles per expand', async () => {
+describe('loadVaultTreeVisibleChildRows', () => {
+  it('returns id+data rows: folders first, then markdown; one listFiles per parent', async () => {
     const fs: VaultFilesystem = {
       exists: vi.fn(),
       mkdir: vi.fn(),
@@ -35,14 +35,13 @@ describe('loadVaultTreeVisibleChildIds', () => {
       }),
     };
     const itemStoreRef = {current: {} as Record<string, VaultTreeItemData>};
-    const ids = await loadVaultTreeVisibleChildIds({
+    const rows = await loadVaultTreeVisibleChildRows({
       parentUri: '/v',
       fs,
       itemStoreRef,
     });
-    expect(ids).toEqual(['/v/Empty', '/v/Zebra', '/v/a.md', '/v/b.md']);
-    expect(itemStoreRef.current['/v/Empty']).toMatchObject({kind: 'folder'});
-    expect(itemStoreRef.current['/v/Zebra']).toMatchObject({kind: 'folder'});
+    expect(rows.map(r => r.id)).toEqual(['/v/Empty', '/v/Zebra', '/v/a.md', '/v/b.md']);
+    expect(rows[0]?.data).toMatchObject({kind: 'folder', uri: '/v/Empty'});
     expect(itemStoreRef.current['/v/a.md']).toMatchObject({kind: 'article', name: 'a.md'});
     expect(vi.mocked(fs.listFiles)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(fs.listFiles)).toHaveBeenCalledWith('/v');

@@ -13,16 +13,18 @@ export type VaultTreeItemData = {
   lastModified: number | null;
 };
 
+export type VaultTreeChildRow = {id: string; data: VaultTreeItemData};
+
 /**
  * Lists visible children for the vault tree using one `listFiles` + non-recursive filters only.
- * Subtree-based pruning (empty-looking folders) is deferred; expansion stays on the direct listing path.
+ * Returns id + payload for async loaders that apply item data before rebuilding (stale-while-revalidate friendly).
  */
-export async function loadVaultTreeVisibleChildIds(options: {
+export async function loadVaultTreeVisibleChildRows(options: {
   parentUri: string;
   fs: VaultFilesystem;
   itemStoreRef: MutableRefObject<Record<string, VaultTreeItemData>>;
   signal?: AbortSignal;
-}): Promise<string[]> {
+}): Promise<VaultTreeChildRow[]> {
   const {parentUri, fs, itemStoreRef, signal} = options;
   const rows = await fs.listFiles(parentUri);
   signal?.throwIfAborted();
@@ -42,7 +44,7 @@ export async function loadVaultTreeVisibleChildIds(options: {
   folders.sort(byName);
   articles.sort(byName);
   const ordered = [...folders, ...articles];
-  const ids: string[] = [];
+  const out: VaultTreeChildRow[] = [];
   for (const e of ordered) {
     const isDir = e.type === 'directory';
     const payload: VaultTreeItemData = {
@@ -52,7 +54,7 @@ export async function loadVaultTreeVisibleChildIds(options: {
       lastModified: e.lastModified,
     };
     itemStoreRef.current[e.uri] = payload;
-    ids.push(e.uri);
+    out.push({id: e.uri, data: payload});
   }
-  return ids;
+  return out;
 }

@@ -10,7 +10,7 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {useEffect, useMemo, useRef} from 'react';
 
-import {loadVaultTreeVisibleChildIds, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
+import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
 import {MaterialIcon} from './MaterialIcon';
 
 export type VaultPaneTreeProps = {
@@ -96,8 +96,8 @@ export function VaultPaneTree({
           lastModified: null,
         };
       },
-      getChildren: async parentId =>
-        loadVaultTreeVisibleChildIds({
+      getChildrenWithData: async parentId =>
+        loadVaultTreeVisibleChildRows({
           parentUri: parentId,
           fs,
           itemStoreRef,
@@ -126,10 +126,17 @@ export function VaultPaneTree({
     if (!t) {
       return;
     }
-    const expanded = t.getState().expandedItems ?? [];
-    for (const id of expanded) {
-      void t.getItemInstance(id)?.invalidateChildrenIds(true);
-    }
+    const expanded = [...(t.getState().expandedItems ?? [])];
+    const pathDepth = (uri: string) => uri.split('/').filter(Boolean).length;
+    expanded.sort((a, b) => pathDepth(a) - pathDepth(b) || a.localeCompare(b));
+    void (async () => {
+      for (const id of expanded) {
+        const inst = t.getItemInstance(id);
+        if (inst) {
+          await inst.invalidateChildrenIds(true);
+        }
+      }
+    })();
   }, [fsRefreshNonce]);
 
   const items = tree.getItems();
