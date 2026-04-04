@@ -1618,8 +1618,8 @@ button.primary.destructive {
 }
 
 /*
- * Raw-Markdown strip: reuse .cm-eskerra-table__actions row rules + same vertical inset as
- * .cm-eskerra-table (0.5rem top) so icons line up with render / cells toolbars (no extra inline pad).
+ * Raw-Markdown strip: edit + show-rendered icons; reuse .cm-eskerra-table__actions and 0.5rem top
+ * inset so icons line up with render / cells toolbars (no extra inline pad).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host

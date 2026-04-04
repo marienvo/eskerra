@@ -193,22 +193,41 @@ class TableRawMarkdownExitWidget extends WidgetType {
     const wrap = document.createElement('div');
     wrap.className = 'cm-eskerra-table-raw-banner cm-eskerra-table__actions';
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className =
+    const tableFrom = this.headerLineFrom;
+
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className =
       'cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger';
-    btn.setAttribute('data-tooltip', 'Show rendered table');
-    btn.setAttribute('aria-label', 'Show rendered table');
-    appendMaterialIcon(btn, 'code_off');
-    btn.addEventListener('click', e => {
+    editButton.setAttribute('data-tooltip', 'Edit table');
+    editButton.setAttribute('aria-label', 'Edit table');
+    appendMaterialIcon(editButton, 'edit');
+    editButton.addEventListener('click', e => {
       e.preventDefault();
       view.dispatch({
-        effects: clearTableSuppressionAt.of({lineFrom: this.headerLineFrom}),
+        effects: [
+          clearTableSuppressionAt.of({lineFrom: tableFrom}),
+          enterTableEdit.of({from: tableFrom}),
+        ],
       });
       view.focus();
     });
 
-    wrap.append(btn);
+    const showRenderedBtn = document.createElement('button');
+    showRenderedBtn.type = 'button';
+    showRenderedBtn.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
+    showRenderedBtn.setAttribute('data-tooltip', 'Show rendered table');
+    showRenderedBtn.setAttribute('aria-label', 'Show rendered table');
+    appendMaterialIcon(showRenderedBtn, 'code_off');
+    showRenderedBtn.addEventListener('click', e => {
+      e.preventDefault();
+      view.dispatch({
+        effects: clearTableSuppressionAt.of({lineFrom: tableFrom}),
+      });
+      view.focus();
+    });
+
+    wrap.append(editButton, showRenderedBtn);
     return wrap;
   }
 }
@@ -345,6 +364,9 @@ class EskerraTableWidget extends WidgetType {
         initialModel={this.block.model}
         onDiscard={() => {
           view.dispatch({effects: exitTableEdit.of(null)});
+        }}
+        onLeaveMarkdown={() => {
+          this.leaveAsMarkdown(view);
         }}
         onCommit={(cells, moveBelow) => {
           this.commitDraft(view, cells, align, moveBelow);

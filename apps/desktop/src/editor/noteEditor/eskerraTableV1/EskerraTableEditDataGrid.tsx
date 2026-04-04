@@ -27,6 +27,7 @@ export type EskerraTableEditDataGridProps = {
   initialModel: EskerraTableModelV1;
   onCommit: (cells: string[][], moveCursorBelow: boolean) => void;
   onDiscard: () => void;
+  onLeaveMarkdown: () => void;
 };
 
 /** Stable row id for react-data-grid (not a table column). */
@@ -62,6 +63,7 @@ export function EskerraTableEditDataGrid({
   initialModel,
   onCommit,
   onDiscard,
+  onLeaveMarkdown,
 }: EskerraTableEditDataGridProps) {
   const colCount = initialModel.cells[0]?.length ?? 0;
   const [initialDraftFingerprint] = useState(
@@ -296,6 +298,18 @@ export function EskerraTableEditDataGrid({
           }}
         >
           <MaterialIcon name="check" size={12} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+          data-tooltip="Edit as Markdown"
+          aria-label="Edit as Markdown"
+          onClick={e => {
+            e.preventDefault();
+            onLeaveMarkdown();
+          }}
+        >
+          <MaterialIcon name="code" size={12} aria-hidden />
         </button>
       </div>
       {pasteNotice !== null && (
