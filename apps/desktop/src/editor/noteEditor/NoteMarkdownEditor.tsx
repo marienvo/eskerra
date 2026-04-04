@@ -53,6 +53,8 @@ import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
+import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
+import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
@@ -535,6 +537,26 @@ const NoteMarkdownEditorImpl = forwardRef<
       ),
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
+      ),
+      eskerraTableCellBundleFacet.of(partial =>
+        buildNoteMarkdownCellExtensions({
+          wikiLinkTargetIsResolved: wikiLinkTargetIsResolvedRef.current,
+          relativeMarkdownLinkHrefIsResolved:
+            relativeMarkdownLinkHrefIsResolvedRef.current,
+          wikiLinkCompletionCandidates: () =>
+            wikiLinkCompletionCandidatesRef.current,
+          vaultRootRef,
+          activeNotePathRef,
+          resolveVaultImagePreviewUrl: (vr, ap, src) =>
+            resolveVaultImagePreviewUrlRef.current(vr, ap, src),
+          attachmentHostRef,
+          busyRef,
+          onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+          onMarkdownRelativeLinkActivate: p =>
+            onMarkdownRelativeLinkActivateRef.current(p),
+          onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          ...partial,
+        }),
       ),
       ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
