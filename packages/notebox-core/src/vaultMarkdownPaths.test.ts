@@ -1,6 +1,9 @@
 import {describe, expect, it} from 'vitest';
 
-import {assertVaultMarkdownNoteUriForCrud} from './vaultMarkdownPaths';
+import {
+  assertVaultMarkdownNoteUriForCrud,
+  assertVaultTreeDirectoryUriForCrud,
+} from './vaultMarkdownPaths';
 
 /**
  * Policy: vault markdown CRUD allows **nested** paths anywhere under the vault root (except
@@ -31,5 +34,25 @@ describe('assertVaultMarkdownNoteUriForCrud (nested vault markdown)', () => {
     expect(() => assertVaultMarkdownNoteUriForCrud('/vault', '/vault/_hidden/x.md')).toThrow(
       'Invalid note path.',
     );
+  });
+});
+
+describe('assertVaultTreeDirectoryUriForCrud', () => {
+  it('accepts a nested folder path', () => {
+    expect(assertVaultTreeDirectoryUriForCrud('/vault', '/vault/Inbox/Projects')).toBe(
+      '/vault/Inbox/Projects',
+    );
+  });
+
+  it('rejects vault root', () => {
+    expect(() => assertVaultTreeDirectoryUriForCrud('/vault', '/vault')).toThrow(
+      'vault root',
+    );
+  });
+
+  it('rejects excluded directory segments', () => {
+    expect(() =>
+      assertVaultTreeDirectoryUriForCrud('/vault', '/vault/Assets/Attachments'),
+    ).toThrow('excluded folder');
   });
 });

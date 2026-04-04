@@ -4,7 +4,7 @@ const STORE_PATH = 'notebox-desktop.json';
 const KEY_V4 = 'layoutPanelsV4';
 const KEY_V3 = 'layoutPanelsV3';
 
-/** Left column width in pixels (Log, Episodes). The right column fills the rest. */
+/** Left column width in pixels (Vault, Episodes). The right column fills the rest. */
 export type LeftSplitLayout = {
   leftWidthPx: number;
 };

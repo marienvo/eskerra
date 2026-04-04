@@ -2,6 +2,7 @@ import {desktopR2SignedTransport} from './desktopR2Transport';
 
 import {
   assertVaultMarkdownNoteUriForCrud,
+  assertVaultTreeDirectoryUriForCrud,
   buildInboxMarkdownIndexContent,
   defaultNoteboxLocalSettings,
   deleteR2PlaylistObject,
@@ -435,6 +436,44 @@ export async function deleteVaultMarkdownNote(
   const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
   await fs.unlink(normalized);
   await syncInboxMarkdownIndex(root, fs);
+}
+
+export async function deleteVaultTreeDirectory(
+  root: string,
+  directoryUri: string,
+  fs: VaultFilesystem,
+): Promise<void> {
+  const normalized = assertVaultTreeDirectoryUriForCrud(root, directoryUri);
+  await fs.removeTree(normalized);
+  await syncInboxMarkdownIndex(root, fs);
+}
+
+export async function renameVaultTreeDirectory(
+  root: string,
+  directoryUri: string,
+  nextDisplayName: string,
+  fs: VaultFilesystem,
+): Promise<string> {
+  const normalized = assertVaultTreeDirectoryUriForCrud(root, directoryUri);
+  const sanitized = sanitizeInboxNoteStem(nextDisplayName);
+  if (!sanitized) {
+    throw new Error('Folder name cannot be empty.');
+  }
+  if (sanitized.includes('/') || sanitized.includes('\\')) {
+    throw new Error('Folder name cannot contain path separators.');
+  }
+  const parentDir = vaultPathDirname(normalized);
+  const nextUri = `${parentDir}/${sanitized}`;
+  const currentName = normalized.split('/').pop() ?? '';
+  if (sanitized === currentName) {
+    return normalized;
+  }
+  if (await fs.exists(nextUri)) {
+    throw new Error('A folder or file with this name already exists.');
+  }
+  await fs.renameFile(normalized, nextUri);
+  await syncInboxMarkdownIndex(root, fs);
+  return nextUri;
 }
 
 export async function renameVaultMarkdownNote(

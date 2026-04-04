@@ -1,5 +1,4 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as Dialog from '@radix-ui/react-dialog';
 import type {RefObject} from 'react';
 import {useEffect, useMemo, useRef, useState} from 'react';
@@ -11,10 +10,10 @@ import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
-  formatRelativeCalendarLabel,
-  getInboxTileBackgroundColor,
   getNoteTitle,
   stemFromMarkdownFileName,
+  type SubtreeMarkdownPresenceCache,
+  type VaultFilesystem,
 } from '@notebox/core';
 
 import {
@@ -26,6 +25,7 @@ import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
 
 import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {MaterialIcon} from './MaterialIcon';
+import {VaultPaneTree} from './VaultPaneTree';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -39,6 +39,9 @@ type WikiLinkAmbiguityRenamePrompt = {
 
 type InboxTabProps = {
   vaultRoot: string;
+  fs: VaultFilesystem;
+  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
+  fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   leftWidthPx: number;
   onLeftWidthPxChanged: (px: number) => void;
@@ -57,9 +60,12 @@ type InboxTabProps = {
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onSaveShortcut: () => void;
+  onVaultFolderSelect: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
+  onDeleteFolder: (directoryUri: string) => void | Promise<void>;
+  onRenameFolder: (directoryUri: string, nextDisplayName: string) => void | Promise<void>;
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
@@ -67,6 +73,9 @@ type InboxTabProps = {
 
 export function InboxTab({
   vaultRoot,
+  fs,
+  subtreeMarkdownCache,
+  fsRefreshNonce,
   inboxEditorRef,
   leftWidthPx,
   onLeftWidthPxChanged,
@@ -85,18 +94,27 @@ export function InboxTab({
   onEditorError,
   onWikiLinkActivate,
   onSaveShortcut,
+  onVaultFolderSelect,
   busy,
   onDeleteNote,
   onRenameNote,
+  onDeleteFolder,
+  onRenameFolder,
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
 }: InboxTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
+  const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
+    null,
+  );
   const [renameTargetUri, setRenameTargetUri] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
+  const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const openRenameDialog = (uri: string) => {
     const row = notes.find(n => n.uri === uri);
@@ -116,6 +134,24 @@ export function InboxTab({
     setRenameTargetUri(null);
   };
 
+  const openRenameFolderDialog = (uri: string) => {
+    const tail = uri.split(/[/\\]/).filter(Boolean).pop();
+    if (!tail) {
+      return;
+    }
+    setRenameFolderUri(uri);
+    setRenameFolderDraft(tail);
+  };
+
+  const submitFolderRename = () => {
+    const uri = renameFolderUri;
+    if (!uri || busy) {
+      return;
+    }
+    void onRenameFolder(uri, renameFolderDraft);
+    setRenameFolderUri(null);
+  };
+
   useEffect(() => {
     if (!renameTargetUri) {
       return;
@@ -126,6 +162,17 @@ export function InboxTab({
     }, 0);
     return () => window.clearTimeout(id);
   }, [renameTargetUri]);
+
+  useEffect(() => {
+    if (!renameFolderUri) {
+      return;
+    }
+    const id = window.setTimeout(() => {
+      renameFolderInputRef.current?.focus();
+      renameFolderInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [renameFolderUri]);
 
   const wikiLinkTargetIsResolved = useMemo(
     () => (inner: string) =>
@@ -215,6 +262,46 @@ export function InboxTab({
                     const uri = confirmDeleteUri;
                     if (uri) {
                       void onDeleteNote(uri);
+                    }
+                  }}
+                >
+                  Delete
+                </button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      <AlertDialog.Root
+        open={confirmDeleteFolderUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setConfirmDeleteFolderUri(null);
+          }
+        }}
+      >
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="alert-dialog-overlay" />
+          <AlertDialog.Content className="alert-dialog-content">
+            <AlertDialog.Title className="alert-dialog-title">Delete folder</AlertDialog.Title>
+            <AlertDialog.Description className="alert-dialog-description">
+              Delete this folder and everything inside it? This cannot be undone.
+            </AlertDialog.Description>
+            <div className="alert-dialog-actions">
+              <AlertDialog.Cancel asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <button
+                  type="button"
+                  className="primary destructive"
+                  disabled={busy}
+                  onClick={() => {
+                    const uri = confirmDeleteFolderUri;
+                    if (uri) {
+                      void onDeleteFolder(uri);
                     }
                   }}
                 >
@@ -324,6 +411,58 @@ export function InboxTab({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+      <Dialog.Root
+        open={renameFolderUri !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setRenameFolderUri(null);
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="alert-dialog-overlay" />
+          <Dialog.Content className="alert-dialog-content">
+            <Dialog.Title className="alert-dialog-title">Rename folder</Dialog.Title>
+            <Dialog.Description className="alert-dialog-description">
+              Choose a new name for this folder.
+            </Dialog.Description>
+            <label className="rename-note-field">
+              <span className="rename-note-field__label">Folder name</span>
+              <input
+                ref={renameFolderInputRef}
+                type="text"
+                className="rename-note-field__input"
+                value={renameFolderDraft}
+                disabled={busy}
+                onChange={event => setRenameFolderDraft(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    submitFolderRename();
+                  }
+                }}
+              />
+            </label>
+            <div className="alert-dialog-actions">
+              <Dialog.Close asChild>
+                <button type="button" className="ghost" disabled={busy}>
+                  Cancel
+                </button>
+              </Dialog.Close>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy}
+                onClick={() => {
+                  submitFolderRename();
+                }}
+              >
+                Rename
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <DesktopHorizontalSplit
         leftWidthPx={leftWidthPx}
@@ -334,7 +473,7 @@ export function InboxTab({
         left={
           <div className="panel-surface">
             <div className="pane-header">
-              <span className="pane-title">Log</span>
+              <span className="pane-title">Vault</span>
               <button
                 type="button"
                 className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
@@ -349,75 +488,26 @@ export function InboxTab({
                 </span>
               </button>
             </div>
-            <ul className="note-list">
-              {notes.map(n => {
-                const markdownSource =
-                  !composingNewEntry && n.uri === selectedUri
-                    ? editorBody
-                    : inboxContentByUri[n.uri];
-                const listTitle =
-                  markdownSource !== undefined
-                    ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(n.name)
-                    : getNoteTitle(n.name);
-                const tileColor = getInboxTileBackgroundColor(n.lastModified);
-                return (
-                  <li key={n.uri}>
-                    <ContextMenu.Root>
-                      <ContextMenu.Trigger asChild>
-                        <button
-                          type="button"
-                          className={
-                            n.uri === selectedUri
-                              ? 'note-list-row active'
-                              : 'note-list-row'
-                          }
-                          onClick={() => onSelectNote(n.uri)}
-                        >
-                          <span
-                            className="note-list-row__accent"
-                            style={{backgroundColor: tileColor}}
-                            aria-hidden
-                          />
-                          <span className="note-list-row__body">
-                            <span className="note-list-row__title">{listTitle}</span>
-                            <span className="note-list-row__filename">{n.name}</span>
-                            <span className="note-list-row__meta">
-                              {formatRelativeCalendarLabel(n.lastModified)}
-                            </span>
-                          </span>
-                        </button>
-                      </ContextMenu.Trigger>
-                      <ContextMenu.Portal>
-                        <ContextMenu.Content
-                          className="note-list-context-menu"
-                          alignOffset={4}
-                          collisionPadding={8}
-                        >
-                          <ContextMenu.Item
-                            className="note-list-context-menu__item"
-                            disabled={busy}
-                            onSelect={() => {
-                              openRenameDialog(n.uri);
-                            }}
-                          >
-                            Rename
-                          </ContextMenu.Item>
-                          <ContextMenu.Item
-                            className="note-list-context-menu__item note-list-context-menu__item--danger"
-                            disabled={busy}
-                            onSelect={() => {
-                              setConfirmDeleteUri(n.uri);
-                            }}
-                          >
-                            Delete
-                          </ContextMenu.Item>
-                        </ContextMenu.Content>
-                      </ContextMenu.Portal>
-                    </ContextMenu.Root>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="vault-tree-panel">
+              <VaultPaneTree
+                key={fsRefreshNonce}
+                vaultRoot={vaultRoot}
+                fs={fs}
+                subtreeMarkdownCache={subtreeMarkdownCache}
+                selectedMarkdownUri={composingNewEntry ? null : selectedUri}
+                busy={busy}
+                onOpenMarkdownNote={onSelectNote}
+                onFolderFocused={onVaultFolderSelect}
+                onRenameMarkdownRequest={openRenameDialog}
+                onDeleteMarkdownRequest={u => {
+                  setConfirmDeleteUri(u);
+                }}
+                onRenameFolderRequest={openRenameFolderDialog}
+                onDeleteFolderRequest={u => {
+                  setConfirmDeleteFolderUri(u);
+                }}
+              />
+            </div>
           </div>
         }
         right={
@@ -517,7 +607,7 @@ export function InboxTab({
                 ) : null}
               </>
             ) : (
-              <p className="muted empty-hint">Select a note from the log or use Add entry.</p>
+              <p className="muted empty-hint">Select a note from the vault or use Add entry.</p>
             )}
           </div>
         }

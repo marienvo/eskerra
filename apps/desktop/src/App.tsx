@@ -133,10 +133,14 @@ export default function App() {
     selectNote,
     submitNewEntry,
     onInboxSaveShortcut,
+    clearVaultNoteSelection,
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
     renameNote,
+    subtreeMarkdownCache,
+    deleteFolder,
+    renameFolder,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({
@@ -546,6 +550,9 @@ export default function App() {
               <InboxTab
                 key={vaultRoot}
                 vaultRoot={vaultRoot}
+                fs={fs}
+                subtreeMarkdownCache={subtreeMarkdownCache}
+                fsRefreshNonce={fsRefreshNonce}
                 inboxEditorRef={inboxEditorRef}
                 leftWidthPx={layouts.inbox.leftWidthPx}
                 onLeftWidthPxChanged={persistInboxLeftWidthPx}
@@ -564,12 +571,19 @@ export default function App() {
                 onEditorError={setErr}
                 onWikiLinkActivate={onWikiLinkActivate}
                 onSaveShortcut={onInboxSaveShortcut}
+                onVaultFolderSelect={clearVaultNoteSelection}
                 busy={busy}
                 onDeleteNote={uri => {
                   void deleteNote(uri);
                 }}
                 onRenameNote={(uri, nextDisplayName) => {
                   void renameNote(uri, nextDisplayName);
+                }}
+                onDeleteFolder={uri => {
+                  void deleteFolder(uri);
+                }}
+                onRenameFolder={(uri, nextDisplayName) => {
+                  void renameFolder(uri, nextDisplayName);
                 }}
                 wikiLinkAmbiguityRenamePrompt={
                   pendingWikiLinkAmbiguityRename?.summary ?? null

@@ -30,9 +30,9 @@ export function RailNav({
       />
       <TabButton
         active={active === 'inbox'}
-        aria-label="Log"
+        aria-label="Vault"
         icon="edit_note"
-        tooltip="Log"
+        tooltip="Vault"
         onClick={() => onSelect('inbox')}
       />
       <div className="rail-spacer" aria-hidden />

@@ -54,3 +54,32 @@ export function assertVaultMarkdownNoteUriForCrud(
   }
   return uri;
 }
+
+/**
+ * Validates a vault directory path for tree CRUD (rename / delete folder). Does not require `.md`;
+ * rejects vault root, ignored segments, and hard-excluded directories.
+ */
+export function assertVaultTreeDirectoryUriForCrud(
+  vaultRootUri: string,
+  dirUri: string,
+): string {
+  const base = normalizeSlashes(normalizeVaultBaseUri(vaultRootUri)).replace(/\/+$/, '');
+  const uri = normalizeSlashes(dirUri).replace(/\/+$/, '');
+  if (uri !== base && !uri.startsWith(`${base}/`)) {
+    throw new Error('Path is outside the vault.');
+  }
+  const relative = uri === base ? '' : uri.slice(base.length + 1);
+  if (!relative) {
+    throw new Error('Cannot change the vault root folder.');
+  }
+  const segments = relative.split('/').filter(Boolean);
+  for (const seg of segments) {
+    if (isVaultTreeIgnoredEntryName(seg)) {
+      throw new Error('Invalid path.');
+    }
+    if (isVaultTreeHardExcludedDirectoryName(seg)) {
+      throw new Error('Path is in an excluded folder.');
+    }
+  }
+  return dirUri.replace(/\\/g, '/');
+}
