@@ -1428,8 +1428,10 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__actions {
   display: flex;
+  align-items: center;
   gap: 0.4rem;
   justify-content: flex-end;
+  flex-wrap: nowrap;
   padding-bottom: 0.35rem;
 }
 
@@ -1616,25 +1618,19 @@ button.primary.destructive {
 }
 
 /*
- * Toolbar strip when a table is shown as raw Markdown (Edit as Markdown escape hatch).
- * Icon-only code_off: restores rendered table (tooltip “Show rendered table”); inline block above source.
+ * Raw-Markdown strip: reuse .cm-eskerra-table__actions row rules + same vertical inset as
+ * .cm-eskerra-table (0.5rem top) so icons line up with render / cells toolbars (no extra inline pad).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-raw-banner {
+  .cm-eskerra-table-raw-banner.cm-eskerra-table__actions {
   box-sizing: border-box;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.35rem;
-  padding: 0.35rem 0.5rem;
+  width: 100%;
   margin: 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-panel-solid);
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-  line-height: 1.35;
+  padding-top:      0.5rem;
+  padding-inline:   0;
+  border-bottom:    1px solid var(--color-border-subtle);
+  background:       var(--color-panel-solid);
 }
 
 /*

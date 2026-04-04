@@ -191,7 +191,7 @@ class TableRawMarkdownExitWidget extends WidgetType {
 
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div');
-    wrap.className = 'cm-eskerra-table-raw-banner';
+    wrap.className = 'cm-eskerra-table-raw-banner cm-eskerra-table__actions';
 
     const btn = document.createElement('button');
     btn.type = 'button';
