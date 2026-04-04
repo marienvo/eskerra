@@ -141,6 +141,7 @@ export function VaultTab({
   const [renameDraft, setRenameDraft] = useState('');
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
+  const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -666,6 +667,23 @@ export function VaultTab({
                 <div className="editor note-markdown-editor-wrap">
                   <div className="note-markdown-editor-scroll">
                     <div className="note-markdown-editor-reading-column">
+                      {editorHasFoldedRanges ? (
+                        <div className="note-markdown-editor-expand-folds-anchor">
+                          <button
+                            type="button"
+                            className="note-markdown-editor-expand-folds-btn app-tooltip-trigger"
+                            onClick={() => {
+                              inboxEditorRef.current?.unfoldAllFolds();
+                            }}
+                            disabled={busy}
+                            aria-label="Expand all folds"
+                            data-tooltip="Expand all folds"
+                            data-tooltip-placement="inline-end"
+                          >
+                            <MaterialIcon name="unfold_more" size={12} />
+                          </button>
+                        </div>
+                      ) : null}
                       <NoteMarkdownEditor
                         ref={inboxEditorRef}
                         attachmentHost={inboxAttachmentHost}
@@ -690,6 +708,7 @@ export function VaultTab({
                           composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
                         }
                         busy={busy}
+                        onFoldedRangesPresentChange={setEditorHasFoldedRanges}
                       />
                       {!composingNewEntry && selectedUri ? (
                         <section className="inbox-backlinks" aria-label="Backlinks">

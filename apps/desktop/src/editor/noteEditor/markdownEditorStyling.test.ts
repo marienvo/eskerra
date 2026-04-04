@@ -1,4 +1,4 @@
-import {commonmarkLanguage, markdown} from '@codemirror/lang-markdown';
+import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {codeFolding, ensureSyntaxTree, foldable} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
@@ -10,11 +10,12 @@ import {
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
+import {markdownNotebox} from './markdownNoteboxLanguage';
 
 function lineClassSets(md: string): Record<number, string[]> {
   const state = EditorState.create({
     doc: md,
-    extensions: markdown({
+    extensions: markdownNotebox({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -33,7 +34,7 @@ function lineClassSets(md: string): Record<number, string[]> {
 function innermostHighlightClassAt(docText: string, pos: number): string | undefined {
   const state = EditorState.create({
     doc: docText,
-    extensions: markdown({
+    extensions: markdownNotebox({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -57,7 +58,7 @@ function innermostHighlightClassAt(docText: string, pos: number): string | undef
 function highlightClassesOverlapping(docText: string, from: number, to: number): string[] {
   const state = EditorState.create({
     doc: docText,
-    extensions: markdown({
+    extensions: markdownNotebox({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -91,7 +92,7 @@ describe('noteMarkdown list highlighting', () => {
 
 describe('noteMarkdownListItemFoldService', () => {
   const foldExtensions = [
-    markdown({
+    markdownNotebox({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),

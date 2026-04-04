@@ -1,6 +1,11 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
-import {foldGutter, foldKeymap} from '@codemirror/language';
-import {commonmarkLanguage, markdown} from '@codemirror/lang-markdown';
+import {
+  foldedRanges,
+  foldGutter,
+  foldKeymap,
+  unfoldAll,
+} from '@codemirror/language';
+import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {
   Compartment,
   EditorSelection,
@@ -40,6 +45,7 @@ import {
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
+import {markdownNotebox} from './markdownNoteboxLanguage';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
@@ -53,6 +59,20 @@ import {
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
+
+function foldedRangesPresent(state: EditorState): boolean {
+  return foldedRanges(state).size > 0;
+}
+
+function createFoldGutterMarker(open: boolean): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.textContent = open ? '⌄' : '›';
+  span.className = 'cm-foldGutter-marker app-tooltip-trigger';
+  span.setAttribute('data-tooltip', open ? 'Fold line' : 'Unfold line');
+  span.setAttribute('data-tooltip-placement', 'inline-end');
+  span.setAttribute('aria-label', open ? 'Fold line' : 'Unfold line');
+  return span;
+}
 
 function isActivatableRelativeMarkdownHref(href: string): boolean {
   const part = stripMarkdownLinkHrefToPathPart(href);
@@ -90,11 +110,15 @@ export type NoteMarkdownEditorProps = {
   attachmentHost: NoteInboxAttachmentHost;
   /** Shell-owned: Markdown image src → preview URL (for example `lib/resolveVaultImagePreviewUrl`). */
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
+  /** Called when the editor gains or loses at least one folded range (fold gutter, lists, etc.). */
+  onFoldedRangesPresentChange?: (present: boolean) => void;
 };
 
 export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
   loadMarkdown: (markdown: string) => void;
+  /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
+  unfoldAllFolds: () => boolean;
   replaceWikiLinkInnerAt: (options: {
     at: number;
     expectedInner: string;
@@ -126,6 +150,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onSaveShortcut,
     placeholder: placeholderText,
     busy,
+    onFoldedRangesPresentChange,
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -163,6 +188,13 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
+
+  const onFoldedRangesPresentChangeRef = useRef(
+    onFoldedRangesPresentChange,
+  );
+  useEffect(() => {
+    onFoldedRangesPresentChangeRef.current = onFoldedRangesPresentChange;
+  }, [onFoldedRangesPresentChange]);
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -445,7 +477,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
-      markdown({
+      markdownNotebox({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),
@@ -454,6 +486,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       foldGutter({
         openText: '⌄',
         closedText: '›',
+        markerDOM: open => createFoldGutterMarker(open),
       }),
       history(),
       drawSelection(),
@@ -515,6 +548,15 @@ const NoteMarkdownEditorImpl = forwardRef<
         '&.cm-focused': {
           outline: 'none',
         },
+        '.cm-gutters': {
+          /* Opaque: do not rely on column gradient (stripe width can be narrower than real gutter). */
+          backgroundColor: 'var(--nb-editor-margin-bg)',
+          border: 'none',
+        },
+        '.cm-foldGutter': {
+          /* Width comes from `.cm-gutters` in App.css (must match reading-column stripe). */
+          flexShrink: 0,
+        },
         '.cm-scroller': {
           fontFamily: 'inherit',
           overflow: 'visible',
@@ -533,6 +575,14 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
         }
+        const onFold = onFoldedRangesPresentChangeRef.current;
+        if (onFold) {
+          const prev = foldedRangesPresent(update.startState);
+          const next = foldedRangesPresent(update.state);
+          if (prev !== next) {
+            onFold(next);
+          }
+        }
       }),
     ];
 
@@ -546,8 +596,10 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
     });
     viewRef.current = view;
+    onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(view.state));
 
     return () => {
+      onFoldedRangesPresentChangeRef.current?.(false);
       view.destroy();
       viewRef.current = null;
       codemirrorBootExtensionsRef.current = null;
@@ -617,6 +669,16 @@ const NoteMarkdownEditorImpl = forwardRef<
             ),
           ],
         });
+        onFoldedRangesPresentChangeRef.current?.(
+          foldedRangesPresent(view.state),
+        );
+      },
+      unfoldAllFolds: () => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return unfoldAll(view);
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
         if (replacementInner === expectedInner) {
