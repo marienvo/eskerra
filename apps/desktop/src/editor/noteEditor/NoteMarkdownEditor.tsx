@@ -49,6 +49,7 @@ import {markdownNotebox} from './markdownNoteboxLanguage';
 import {nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
@@ -60,7 +61,7 @@ import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTab
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
-  wikiLinkInnerAtDocPosition,
+  wikiLinkActivatableInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
 
@@ -411,23 +412,24 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
       if (inner) {
         e.preventDefault();
         e.stopPropagation();
         onWikiLinkActivateRef.current({inner, at: pos});
         return true;
       }
-      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, pos);
-      if (
-        linkUrl
-        && isActivatableRelativeMarkdownHref(linkUrl.href)
-      ) {
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit) {
         e.preventDefault();
         e.stopPropagation();
         onMarkdownRelativeLinkActivateRef.current({
-          href: linkUrl.href,
-          at: linkUrl.hrefFrom,
+          href: relHit.href,
+          at: relHit.hrefFrom,
         });
         return true;
       }
@@ -457,7 +459,10 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
       const sel = view.state.selection.main;
-      const inner = wikiLinkInnerAtDocPosition(view.state.doc, sel.head);
+      const inner = wikiLinkActivatableInnerAtDocPosition(
+        view.state.doc,
+        sel.head,
+      );
       if (inner == null) {
         return false;
       }
@@ -467,16 +472,17 @@ const NoteMarkdownEditorImpl = forwardRef<
 
     const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
       const sel = view.state.selection.main;
-      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, sel.head);
-      if (
-        linkUrl == null
-        || !isActivatableRelativeMarkdownHref(linkUrl.href)
-      ) {
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        sel.head,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit == null) {
         return false;
       }
       onMarkdownRelativeLinkActivateRef.current({
-        href: linkUrl.href,
-        at: linkUrl.hrefFrom,
+        href: relHit.href,
+        at: relHit.hrefFrom,
       });
       return true;
     };

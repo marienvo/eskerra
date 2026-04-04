@@ -21,13 +21,13 @@ import {
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
-import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
+import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
-import {wikiLinkInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 
 function isActivatableRelativeMarkdownHref(href: string): boolean {
   const part = stripMarkdownLinkHrefToPathPart(href);
@@ -153,21 +153,54 @@ export function buildNoteMarkdownCellExtensions(
     if (pos == null) {
       return false;
     }
-    const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
+    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
     if (inner) {
       e.preventDefault();
       e.stopPropagation();
       onWikiLinkActivate({inner, at: pos});
       return true;
     }
-    const linkUrl = markdownInlineLinkUrlAtPosition(view.state, pos);
-    if (linkUrl && isActivatableRelativeMarkdownHref(linkUrl.href)) {
+    const relHit = markdownActivatableRelativeMdLinkAtPosition(
+      view.state,
+      pos,
+      isActivatableRelativeMarkdownHref,
+    );
+    if (relHit) {
       e.preventDefault();
       e.stopPropagation();
-      onMarkdownRelativeLinkActivate({href: linkUrl.href, at: linkUrl.hrefFrom});
+      onMarkdownRelativeLinkActivate({href: relHit.href, at: relHit.hrefFrom});
       return true;
     }
     return false;
+  };
+
+  const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
+    const sel = view.state.selection.main;
+    const wikiInner = wikiLinkActivatableInnerAtDocPosition(
+      view.state.doc,
+      sel.head,
+    );
+    if (wikiInner == null) {
+      return false;
+    }
+    onWikiLinkActivate({inner: wikiInner, at: sel.head});
+    return true;
+  };
+
+  const runMarkdownRelativeLinkActivateFromCaret = (
+    view: EditorView,
+  ): boolean => {
+    const sel = view.state.selection.main;
+    const relHit = markdownActivatableRelativeMdLinkAtPosition(
+      view.state,
+      sel.head,
+      isActivatableRelativeMarkdownHref,
+    );
+    if (relHit == null) {
+      return false;
+    }
+    onMarkdownRelativeLinkActivate({href: relHit.href, at: relHit.hrefFrom});
+    return true;
   };
 
   const pasteOk = () => args.pasteSessionRef.current === args.pasteSessionId;
@@ -347,6 +380,12 @@ export function buildNoteMarkdownCellExtensions(
         },
       },
       {key: '[', run: runWikiLinkOpenAssist},
+      {
+        key: 'Mod-Enter',
+        run: view =>
+          runWikiLinkActivateFromCaret(view)
+          || runMarkdownRelativeLinkActivateFromCaret(view),
+      },
       indentWithTab,
       ...defaultKeymap,
       ...historyKeymap,

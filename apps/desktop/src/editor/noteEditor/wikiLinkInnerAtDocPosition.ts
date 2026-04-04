@@ -37,3 +37,21 @@ export function wikiLinkMatchAtDocPosition(
     innerTo: line.from + match.innerTo,
   };
 }
+
+/**
+ * Wiki link inner for vault navigation (click / Mod-Enter): only when `pos` lies in the
+ * styled inner span `[innerFrom, innerTo)`, not on `[[` / `]]`.
+ */
+export function wikiLinkActivatableInnerAtDocPosition(
+  doc: Text,
+  pos: number,
+): string | null {
+  const match = wikiLinkMatchAtDocPosition(doc, pos);
+  if (match == null) {
+    return null;
+  }
+  if (pos < match.innerFrom || pos >= match.innerTo) {
+    return null;
+  }
+  return match.inner;
+}
