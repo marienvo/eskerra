@@ -766,7 +766,9 @@ a:focus:not(:focus-visible) {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 4px 0;
+  /* Horizontal inset here (not row margin) keeps virtual row geometry aligned with estimateSize */
+  padding: 4px;
+  box-sizing: border-box;
 }
 
 .vault-tree__inner {
@@ -775,20 +777,30 @@ a:focus:not(:focus-visible) {
 
 .vault-tree-row-virtual-wrap {
   box-sizing: border-box;
+  overflow: hidden;
+  width: 100%;
+  /* Crisper text on compositor layer: fractional translateY causes smeared/bold-like labels */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .vault-tree-row {
   display: flex;
   align-items: center;
   width: 100%;
+  /* Fixed height must match VaultPaneTree VAULT_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
+  height: 40px;
   min-height: 40px;
-  margin: 0 4px;
+  max-height: 40px;
+  margin: 0;
+  padding-block: 0;
   padding-inline-end: 6px;
   box-sizing: border-box;
   border: none;
   background: transparent;
   color: inherit;
-  font: inherit;
+  font-size: 0.84rem;
+  line-height: 20px;
   text-align: start;
   cursor: default;
   gap: 2px;
@@ -827,7 +839,7 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.84rem;
+  line-height: 20px;
 }
 
 .visually-hidden {

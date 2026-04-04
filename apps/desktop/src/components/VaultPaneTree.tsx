@@ -13,6 +13,9 @@ import {useEffect, useMemo, useRef} from 'react';
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
 import {MaterialIcon} from './MaterialIcon';
 
+/** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
+const VAULT_TREE_ROW_HEIGHT_PX = 40;
+
 export type VaultPaneTreeProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
@@ -144,7 +147,7 @@ export function VaultPaneTree({
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 40,
+    estimateSize: () => VAULT_TREE_ROW_HEIGHT_PX,
     overscan: 12,
   });
 
@@ -211,6 +214,8 @@ export function VaultPaneTree({
             if (!item) {
               return null;
             }
+            /** Integer Y avoids sub-pixel anti-alias “fake bold” on translated row layers (WebKit/Chromium). */
+            const rowOffsetYPx = Math.round(virtualRow.start);
             const data = item.getItemData();
             if (!data?.uri) {
               return (
@@ -222,8 +227,8 @@ export function VaultPaneTree({
                     top: 0,
                     left: 0,
                     width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
+                    height: VAULT_TREE_ROW_HEIGHT_PX,
+                    transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                   }}
                   aria-hidden
                 />
@@ -275,8 +280,8 @@ export function VaultPaneTree({
                   top: 0,
                   left: 0,
                   width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
+                  height: VAULT_TREE_ROW_HEIGHT_PX,
+                  transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                 }}
               >
                 <ContextMenu.Root>
