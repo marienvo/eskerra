@@ -773,7 +773,7 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   overflow: auto;
   /* Horizontal inset here (not row margin) keeps virtual row geometry aligned with estimateSize */
-  padding: 2px;
+  padding: 8px;
   box-sizing: border-box;
 }
 

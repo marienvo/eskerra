@@ -69,7 +69,7 @@ function mountVaultTreeDragGhost(options: {
 
   const icon = document.createElement('span');
   icon.className = 'material-icons vault-tree-drag-ghost__icon';
-  icon.textContent = isFolder ? 'folder' : 'description';
+  icon.textContent = isFolder ? 'folder' : 'article';
 
   const text = document.createElement('span');
   text.className = 'vault-tree-drag-ghost__label';
@@ -539,7 +539,7 @@ export function VaultPaneTree({
                 </span>
                 <span className="vault-tree-row__icon" aria-hidden>
                   <MaterialIcon
-                    name={isFolder ? 'folder' : 'description'}
+                    name={isFolder ? 'folder' : 'article'}
                     size={12}
                   />
                 </span>
