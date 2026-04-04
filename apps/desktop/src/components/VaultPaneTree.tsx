@@ -28,7 +28,7 @@ import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaul
 import {MaterialIcon} from './MaterialIcon';
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
-const VAULT_TREE_ROW_HEIGHT_PX = 26;
+const VAULT_TREE_ROW_HEIGHT_PX = 32;
 
 const VAULT_TREE_DND_MIME = 'application/x-notebox-vault-tree';
 
@@ -531,16 +531,22 @@ export function VaultPaneTree({
                   {isFolder ? (
                     <MaterialIcon
                       name={item.isExpanded() ? 'expand_more' : 'chevron_right'}
-                      size={12}
+                      size={24}
                     />
                   ) : (
                     <span className="vault-tree-row__chevron-spacer" />
                   )}
                 </span>
-                <span className="vault-tree-row__icon" aria-hidden>
+                <span
+                  className={[
+                    'vault-tree-row__icon',
+                    isFolder ? 'vault-tree-row__icon--folder' : 'vault-tree-row__icon--article',
+                  ].join(' ')}
+                  aria-hidden
+                >
                   <MaterialIcon
                     name={isFolder ? 'folder' : 'article'}
-                    size={12}
+                    size={24}
                   />
                 </span>
                 <span className="vault-tree-row__label">{data.name}</span>
