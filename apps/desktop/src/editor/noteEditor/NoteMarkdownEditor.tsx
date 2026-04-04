@@ -594,12 +594,12 @@ const NoteMarkdownEditorImpl = forwardRef<
           outline: 'none',
         },
         '.cm-gutters': {
-          /* Opaque: do not rely on column gradient (stripe width can be narrower than real gutter). */
-          backgroundColor: 'var(--nb-editor-margin-bg)',
+          /* Transparent: fold rail / panel gray shows through on desktop capture inbox. */
+          backgroundColor: 'transparent',
           border: 'none',
         },
         '.cm-foldGutter': {
-          /* Width comes from `.cm-gutters` in App.css (must match reading-column stripe). */
+          /* Width comes from `.cm-gutters` in App.css (must match `.note-markdown-editor-fold-rail`). */
           flexShrink: 0,
         },
         '.cm-scroller': {
