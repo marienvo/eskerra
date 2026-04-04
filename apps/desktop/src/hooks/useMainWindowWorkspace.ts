@@ -165,8 +165,6 @@ export type UseMainWindowWorkspaceResult = {
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
-  /** Close the open note (folder selected in vault tree) after flushing any pending save. */
-  clearVaultNoteSelection: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   /** Editor intent entrypoint for wiki link open/create. */
@@ -745,19 +743,6 @@ export function useMainWindowWorkspace(options: {
       void flushInboxSave();
     }
   }, [submitNewEntry, flushInboxSave]);
-
-  const clearVaultNoteSelection = useCallback(() => {
-    void (async () => {
-      await flushInboxSaveRef.current();
-      setComposingNewEntry(false);
-      setSelectedUri(null);
-      setEditorBody('');
-      lastPersistedRef.current = null;
-      composingNewEntryRef.current = false;
-      selectedUriRef.current = null;
-      setInboxEditorResetNonce(n => n + 1);
-    })();
-  }, []);
 
   const deleteNote = useCallback(
     async (uri: string) => {
@@ -1492,7 +1477,6 @@ export function useMainWindowWorkspace(options: {
     selectNote,
     submitNewEntry,
     onInboxSaveShortcut,
-    clearVaultNoteSelection,
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,

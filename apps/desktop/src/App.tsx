@@ -134,7 +134,6 @@ export default function App() {
     selectNote,
     submitNewEntry,
     onInboxSaveShortcut,
-    clearVaultNoteSelection,
     flushInboxSave,
     onWikiLinkActivate,
     deleteNote,
@@ -575,7 +574,6 @@ export default function App() {
                 onEditorError={setErr}
                 onWikiLinkActivate={onWikiLinkActivate}
                 onSaveShortcut={onInboxSaveShortcut}
-                onVaultFolderSelect={clearVaultNoteSelection}
                 busy={busy}
                 onDeleteNote={uri => {
                   void deleteNote(uri);

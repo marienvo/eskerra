@@ -112,7 +112,6 @@ export type VaultPaneTreeProps = {
   selectedMarkdownUri: string | null;
   busy: boolean;
   onOpenMarkdownNote: (uri: string) => void;
-  onFolderFocused: () => void;
   onRenameMarkdownRequest: (uri: string) => void;
   onDeleteMarkdownRequest: (uri: string) => void;
   onRenameFolderRequest: (uri: string) => void;
@@ -137,7 +136,6 @@ export function VaultPaneTree({
   selectedMarkdownUri,
   busy,
   onOpenMarkdownNote,
-  onFolderFocused,
   onRenameMarkdownRequest,
   onDeleteMarkdownRequest,
   onRenameFolderRequest,
@@ -197,8 +195,6 @@ export function VaultPaneTree({
       }
       if (data.kind === 'article') {
         onOpenMarkdownNote(data.uri);
-      } else {
-        onFolderFocused();
       }
     },
     createLoadingItemData: () => ({
@@ -439,6 +435,17 @@ export function VaultPaneTree({
                     return;
                   }
                   rowAriaOnClick?.(e.nativeEvent);
+                  if (
+                    isFolder
+                    && selectedMarkdownUri
+                    && (selectedMarkdownUri === rootId
+                      || selectedMarkdownUri.startsWith(`${rootId}/`))
+                  ) {
+                    const keepNoteUri = selectedMarkdownUri;
+                    queueMicrotask(() => {
+                      treeRef.current?.setSelectedItems([keepNoteUri]);
+                    });
+                  }
                 }}
                 onDragStart={e => {
                   if (!canDragFromRow) {
@@ -531,7 +538,7 @@ export function VaultPaneTree({
                   {isFolder ? (
                     <MaterialIcon
                       name={item.isExpanded() ? 'expand_more' : 'chevron_right'}
-                      size={24}
+                      size={12}
                     />
                   ) : (
                     <span className="vault-tree-row__chevron-spacer" />

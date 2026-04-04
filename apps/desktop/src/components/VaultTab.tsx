@@ -66,7 +66,6 @@ type VaultTabProps = {
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onSaveShortcut: () => void;
-  onVaultFolderSelect: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
@@ -111,7 +110,6 @@ export function VaultTab({
   onEditorError,
   onWikiLinkActivate,
   onSaveShortcut,
-  onVaultFolderSelect,
   busy,
   onDeleteNote,
   onRenameNote,
@@ -583,7 +581,6 @@ export function VaultTab({
                 selectedMarkdownUri={composingNewEntry ? null : selectedUri}
                 busy={busy}
                 onOpenMarkdownNote={onSelectNote}
-                onFolderFocused={onVaultFolderSelect}
                 onRenameMarkdownRequest={openRenameDialog}
                 onDeleteMarkdownRequest={u => {
                   setConfirmDeleteUri(u);
