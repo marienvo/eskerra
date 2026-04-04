@@ -22,6 +22,7 @@ import {createRoot, type Root} from 'react-dom/client';
 
 import {EskerraTableEditDataGrid} from './EskerraTableEditDataGrid';
 import {
+  buildEskerraTableInsertWithBlankLines,
   findEskerraTableDocBlocks,
   looksLikeDelimitedTableLine,
   type EskerraTableDocBlock,
@@ -208,20 +209,16 @@ class EskerraTableWidget extends WidgetType {
     if (!block) {
       return;
     }
-    const current = view.state.doc.sliceString(block.from, block.to);
-    let insert = markdown;
+    const doc = view.state.doc;
+    const insert = buildEskerraTableInsertWithBlankLines(doc, block, markdown);
+    const current = doc.sliceString(block.from, block.to);
     if (!moveCursorBelow && current === insert) {
       return;
     }
 
     let selectionHead: number | null = null;
     if (moveCursorBelow) {
-      const oldTailChar = view.state.doc.sliceString(block.to, block.to + 1);
       selectionHead = block.from + insert.length;
-      if (block.to >= view.state.doc.length || oldTailChar !== '\n') {
-        insert += '\n';
-        selectionHead += 1;
-      }
     }
 
     view.dispatch({
