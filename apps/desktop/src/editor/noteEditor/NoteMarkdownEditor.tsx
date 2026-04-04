@@ -21,7 +21,12 @@ import {
   useState,
 } from 'react';
 
-import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
+import {
+  isExternalMarkdownHref,
+  MARKDOWN_EXTENSION,
+  stripMarkdownLinkHrefToPathPart,
+  type InboxWikiLinkCompletionCandidate,
+} from '@notebox/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -35,6 +40,8 @@ import {
 } from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
+import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {
@@ -44,6 +51,14 @@ import {
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
+
+function isActivatableRelativeMarkdownHref(href: string): boolean {
+  const part = stripMarkdownLinkHrefToPathPart(href);
+  if (part === '' || isExternalMarkdownHref(part)) {
+    return false;
+  }
+  return part.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase());
+}
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -57,6 +72,10 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  /** Shell-owned: relative `.md` href resolves to an existing indexed note (for styling). */
+  relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
+  /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
+  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
@@ -79,6 +98,11 @@ export type NoteMarkdownEditorHandle = {
     expectedInner: string;
     replacementInner: string;
   }) => boolean;
+  replaceMarkdownLinkHrefAt: (options: {
+    at: number;
+    expectedHref: string;
+    replacementHref: string;
+  }) => boolean;
 };
 
 const NoteMarkdownEditorImpl = forwardRef<
@@ -93,6 +117,8 @@ const NoteMarkdownEditorImpl = forwardRef<
     onMarkdownChange,
     onEditorError,
     onWikiLinkActivate,
+    relativeMarkdownLinkHrefIsResolved,
+    onMarkdownRelativeLinkActivate,
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
@@ -106,6 +132,10 @@ const NoteMarkdownEditorImpl = forwardRef<
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
   const wikiLinkTargetIsResolvedRef = useRef(wikiLinkTargetIsResolved);
   wikiLinkTargetIsResolvedRef.current = wikiLinkTargetIsResolved;
+  const relativeMarkdownLinkHrefIsResolvedRef = useRef(
+    relativeMarkdownLinkHrefIsResolved,
+  );
+  relativeMarkdownLinkHrefIsResolvedRef.current = relativeMarkdownLinkHrefIsResolved;
   const initialMarkdownRef = useRef(initialMarkdown);
   initialMarkdownRef.current = initialMarkdown;
 
@@ -123,6 +153,11 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onWikiLinkActivateRef.current = onWikiLinkActivate;
   }, [onWikiLinkActivate]);
+
+  const onMarkdownRelativeLinkActivateRef = useRef(onMarkdownRelativeLinkActivate);
+  useEffect(() => {
+    onMarkdownRelativeLinkActivateRef.current = onMarkdownRelativeLinkActivate;
+  }, [onMarkdownRelativeLinkActivate]);
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
@@ -151,6 +186,10 @@ const NoteMarkdownEditorImpl = forwardRef<
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
     wikiLinkCompartmentRef.current = new Compartment();
+  }
+  const relativeMdLinkCompartmentRef = useRef<Compartment | null>(null);
+  if (relativeMdLinkCompartmentRef.current === null) {
+    relativeMdLinkCompartmentRef.current = new Compartment();
   }
 
   useEffect(() => {
@@ -325,13 +364,26 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
       const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
-      if (!inner) {
-        return false;
+      if (inner) {
+        e.preventDefault();
+        e.stopPropagation();
+        onWikiLinkActivateRef.current({inner, at: pos});
+        return true;
       }
-      e.preventDefault();
-      e.stopPropagation();
-      onWikiLinkActivateRef.current({inner, at: pos});
-      return true;
+      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, pos);
+      if (
+        linkUrl
+        && isActivatableRelativeMarkdownHref(linkUrl.href)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownRelativeLinkActivateRef.current({
+          href: linkUrl.href,
+          at: linkUrl.hrefFrom,
+        });
+        return true;
+      }
+      return false;
     };
 
     const runWikiLinkOpenAssist = (view: EditorView): boolean => {
@@ -365,9 +417,29 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
+      const sel = view.state.selection.main;
+      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, sel.head);
+      if (
+        linkUrl == null
+        || !isActivatableRelativeMarkdownHref(linkUrl.href)
+      ) {
+        return false;
+      }
+      onMarkdownRelativeLinkActivateRef.current({
+        href: linkUrl.href,
+        at: linkUrl.hrefFrom,
+      });
+      return true;
+    };
+
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
+    }
+    const relativeMdLinkCompartment = relativeMdLinkCompartmentRef.current;
+    if (!relativeMdLinkCompartment) {
+      throw new Error('relativeMdLinkCompartment must be initialized');
     }
 
     const extensions = [
@@ -392,7 +464,9 @@ const NoteMarkdownEditorImpl = forwardRef<
         },
         {
           key: 'Mod-Enter',
-          run: runWikiLinkActivateFromCaret,
+          run: view =>
+            runWikiLinkActivateFromCaret(view)
+            || runMarkdownRelativeLinkActivateFromCaret(view),
         },
         indentWithTab,
         ...defaultKeymap,
@@ -402,6 +476,11 @@ const NoteMarkdownEditorImpl = forwardRef<
       placeholder(placeholderText),
       wikiLinkCompartment.of(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+      ),
+      relativeMdLinkCompartment.of(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolved,
+        ),
       ),
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
@@ -481,6 +560,21 @@ const NoteMarkdownEditorImpl = forwardRef<
     });
   }, [wikiLinkTargetIsResolved]);
 
+  useEffect(() => {
+    const compartment = relativeMdLinkCompartmentRef.current;
+    const view = viewRef.current;
+    if (!compartment || !view) {
+      return;
+    }
+    view.dispatch({
+      effects: compartment.reconfigure(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolved,
+        ),
+      ),
+    });
+  }, [relativeMarkdownLinkHrefIsResolved]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -489,8 +583,9 @@ const NoteMarkdownEditorImpl = forwardRef<
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
-        const compartment = wikiLinkCompartmentRef.current;
-        if (!view || !bootExtensions || !compartment) {
+        const wikiCompartment = wikiLinkCompartmentRef.current;
+        const relCompartment = relativeMdLinkCompartmentRef.current;
+        if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
         view.setState(
@@ -501,11 +596,18 @@ const NoteMarkdownEditorImpl = forwardRef<
           }),
         );
         view.dispatch({
-          effects: compartment.reconfigure(
-            wikiLinkResolvedHighlightExtensions(
-              wikiLinkTargetIsResolvedRef.current,
+          effects: [
+            wikiCompartment.reconfigure(
+              wikiLinkResolvedHighlightExtensions(
+                wikiLinkTargetIsResolvedRef.current,
+              ),
             ),
-          ),
+            relCompartment.reconfigure(
+              markdownRelativeLinkHighlightExtensions(
+                relativeMarkdownLinkHrefIsResolvedRef.current,
+              ),
+            ),
+          ],
         });
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
@@ -525,6 +627,27 @@ const NoteMarkdownEditorImpl = forwardRef<
             from: match.innerFrom,
             to: match.innerTo,
             insert: replacementInner,
+          },
+        });
+        return true;
+      },
+      replaceMarkdownLinkHrefAt: ({at, expectedHref, replacementHref}) => {
+        if (replacementHref === expectedHref) {
+          return true;
+        }
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        const linkUrl = markdownInlineLinkUrlAtPosition(view.state, at);
+        if (!linkUrl || linkUrl.href !== expectedHref) {
+          return false;
+        }
+        view.dispatch({
+          changes: {
+            from: linkUrl.hrefFrom,
+            to: linkUrl.hrefTo,
+            insert: replacementHref,
           },
         });
         return true;

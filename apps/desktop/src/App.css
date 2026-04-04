@@ -1281,6 +1281,20 @@ button.primary.destructive {
   color: var(--nb-editor-faint);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link--resolved {
+  color: var(--color-interactive-text);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link--unresolved {
+  color: var(--nb-editor-faint);
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
   max-width: 100%;
   padding: 0.5rem 0;

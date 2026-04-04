@@ -4,12 +4,16 @@ import type {RefObject} from 'react';
 import {useEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
-import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
+import {
+  inboxRelativeMarkdownLinkHrefIsResolved,
+  inboxWikiLinkTargetIsResolved,
+} from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
+  getInboxDirectoryUri,
   getNoteTitle,
   normalizeVaultBaseUri,
   type VaultFilesystem,
@@ -65,6 +69,7 @@ type VaultTabProps = {
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
@@ -109,6 +114,7 @@ export function VaultTab({
   inboxEditorResetNonce,
   onEditorError,
   onWikiLinkActivate,
+  onMarkdownRelativeLinkActivate,
   onSaveShortcut,
   busy,
   onDeleteNote,
@@ -203,6 +209,26 @@ export function VaultTab({
         inner,
       ),
     [vaultMarkdownRefs],
+  );
+
+  const relativeMarkdownSourceUriOrDir = useMemo(() => {
+    if (composingNewEntry) {
+      return getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot));
+    }
+    return (
+      selectedUri ?? getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot))
+    );
+  }, [composingNewEntry, selectedUri, vaultRoot]);
+
+  const relativeMarkdownLinkHrefIsResolved = useMemo(
+    () => (href: string) =>
+      inboxRelativeMarkdownLinkHrefIsResolved(
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
+        relativeMarkdownSourceUriOrDir,
+        vaultRoot,
+        href,
+      ),
+    [vaultMarkdownRefs, relativeMarkdownSourceUriOrDir, vaultRoot],
   );
 
   const wikiLinkCompletionCandidates = useMemo(
@@ -408,7 +434,7 @@ export function VaultTab({
           <AlertDialog.Overlay className="alert-dialog-overlay" />
           <AlertDialog.Content className="alert-dialog-content">
             <AlertDialog.Title className="alert-dialog-title">
-              Ambiguous wiki links found
+              Ambiguous links found
             </AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               {wikiLinkAmbiguityRenamePrompt ? (
@@ -416,8 +442,8 @@ export function VaultTab({
                   This rename can safely update{' '}
                   {wikiLinkAmbiguityRenamePrompt.updatedLinkCount} link(s) across{' '}
                   {wikiLinkAmbiguityRenamePrompt.touchedFileCount} note(s), but{' '}
-                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} link(s) are
-                  ambiguous and will be skipped.
+                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} wiki link(s)
+                  are ambiguous and will be skipped.
                 </>
               ) : null}
             </AlertDialog.Description>
@@ -651,6 +677,12 @@ export function VaultTab({
                         onMarkdownChange={onEditorChange}
                         onEditorError={onEditorError}
                         onWikiLinkActivate={onWikiLinkActivate}
+                        onMarkdownRelativeLinkActivate={
+                          onMarkdownRelativeLinkActivate
+                        }
+                        relativeMarkdownLinkHrefIsResolved={
+                          relativeMarkdownLinkHrefIsResolved
+                        }
                         wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                         wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                         onSaveShortcut={onSaveShortcut}

@@ -16,8 +16,10 @@ describe('planVaultWikiLinkRenameMaintenance', () => {
 
   it('plans updates by scanning all notes and uses active body override', () => {
     const result = planVaultWikiLinkRenameMaintenance({
+      vaultRoot: '/vault',
       oldTargetUri: '/vault/Inbox/Old.md',
       renamedStem: 'Renamed',
+      newTargetUri: '/vault/Inbox/Old.md',
       notes,
       contentByUri: {
         '/vault/Inbox/Old.md': 'self [[Old]]',
@@ -54,8 +56,10 @@ describe('planVaultWikiLinkRenameMaintenance', () => {
       {name: 'Ref.md', uri: '/vault/Inbox/Ref.md'},
     ] as const;
     const result = planVaultWikiLinkRenameMaintenance({
+      vaultRoot: '/vault',
       oldTargetUri: '/vault/Inbox/Dup.md',
       renamedStem: 'Renamed',
+      newTargetUri: '/vault/Inbox/Dup.md',
       notes: duplicateNotes,
       contentByUri: {
         '/vault/Inbox/Dup.md': '',
@@ -70,6 +74,34 @@ describe('planVaultWikiLinkRenameMaintenance', () => {
       updatedLinkCount: 0,
       skippedAmbiguousLinkCount: 1,
     });
+  });
+
+  it('rewrites relative markdown links when newTargetUri differs', () => {
+    const extended = [
+      ...notes,
+      {name: 'New.md', uri: '/vault/Inbox/New.md'},
+    ] as const;
+    const result = planVaultWikiLinkRenameMaintenance({
+      vaultRoot: '/vault',
+      oldTargetUri: '/vault/Inbox/Old.md',
+      renamedStem: 'New',
+      newTargetUri: '/vault/Inbox/New.md',
+      notes: extended,
+      contentByUri: {
+        '/vault/Inbox/Old.md': '[[Old]] [x](./Old.md)',
+        '/vault/Inbox/Ref.md': 'mixed [[Old]] [lbl](./Old.md)',
+        '/vault/Inbox/Other.md': '[[Other]]',
+      },
+      activeUri: null,
+      activeBody: '',
+    });
+
+    expect(result.updatedLinkCount).toBeGreaterThanOrEqual(2);
+    const oldU = result.updates.find(u => u.uri === '/vault/Inbox/Old.md');
+    expect(oldU?.markdown).toContain('[[New]]');
+    expect(oldU?.markdown).toContain('./New.md');
+    const refU = result.updates.find(u => u.uri === '/vault/Inbox/Ref.md');
+    expect(refU?.markdown).toContain('./New.md');
   });
 });
 

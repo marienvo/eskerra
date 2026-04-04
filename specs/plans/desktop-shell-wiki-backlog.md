@@ -75,7 +75,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
 **Likely work:**
 
 - **Picker UI** when resolving a wiki link from the editor hits `ambiguous` (today users mainly see an error string). Rename already has a confirmation path for ambiguous *skips* during link maintenance; activation should get comparable clarity.
-- Optional **path / relative** target grammar **only** if product explicitly requires it—document identity rules in `@notebox/core` with tests.
+- **Done (subset):** Relative inline **`[label](./note.md)`** targets: resolve, editor activation, rename maintenance, backlinks, and `@notebox/core` tests — see [desktop-editor.md](../architecture/desktop-editor.md) (Relative Markdown links). Remaining WL-6 items: wiki ambiguity picker, reference-style markdown links, optional broader path rules.
 
 **Exclude:** Full-text search platform, fuzzy vault-wide ranking as a product.
 

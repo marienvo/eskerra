@@ -3,8 +3,10 @@ import {describe, expect, it} from 'vitest';
 import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
 
 import {
+  inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
   openOrCreateInboxWikiLinkTarget,
+  openOrCreateVaultRelativeMarkdownLink,
 } from './inboxWikiLinkNavigation';
 
 function createMemoryVaultFs(
@@ -288,5 +290,75 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
       fs,
     });
     expect(result).toEqual({kind: 'unsupported', reason: 'empty_target'});
+  });
+});
+
+describe('openOrCreateVaultRelativeMarkdownLink', () => {
+  const vaultRoot = '/vault';
+
+  it('opens an existing target', async () => {
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/Inbox/a.md`, '# A'],
+      [`${vaultRoot}/Inbox/b.md`, '# B'],
+    ]);
+    const notes = [
+      {name: 'a.md', uri: `${vaultRoot}/Inbox/a.md`},
+      {name: 'b.md', uri: `${vaultRoot}/Inbox/b.md`},
+    ];
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: './b.md',
+      notes,
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: `${vaultRoot}/Inbox/a.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: `${vaultRoot}/Inbox/b.md`});
+  });
+
+  it('returns unsupported for https links', async () => {
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+    ]);
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: 'https://ex/x.md',
+      notes: [],
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: `${vaultRoot}/Inbox`,
+    });
+    expect(result).toEqual({kind: 'unsupported'});
+  });
+});
+
+describe('inboxRelativeMarkdownLinkHrefIsResolved', () => {
+  const vaultRoot = '/vault';
+  const notes = [
+    {name: 'a.md', uri: `${vaultRoot}/Inbox/a.md`},
+    {name: 'b.md', uri: `${vaultRoot}/Inbox/b.md`},
+  ];
+
+  it('is true when href resolves to an indexed note', () => {
+    expect(
+      inboxRelativeMarkdownLinkHrefIsResolved(
+        notes,
+        `${vaultRoot}/Inbox/a.md`,
+        vaultRoot,
+        './b.md',
+      ),
+    ).toBe(true);
+  });
+
+  it('is false for missing targets', () => {
+    expect(
+      inboxRelativeMarkdownLinkHrefIsResolved(
+        notes,
+        `${vaultRoot}/Inbox/a.md`,
+        vaultRoot,
+        './nope.md',
+      ),
+    ).toBe(false);
   });
 });
