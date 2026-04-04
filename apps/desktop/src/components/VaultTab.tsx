@@ -638,49 +638,53 @@ export function VaultTab({
             {editorOpen ? (
               <>
                 <div className="editor note-markdown-editor-wrap">
-                  <NoteMarkdownEditor
-                    ref={inboxEditorRef}
-                    attachmentHost={inboxAttachmentHost}
-                    resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                    vaultRoot={vaultRoot}
-                    activeNotePath={composingNewEntry ? null : selectedUri}
-                    initialMarkdown={editorBody}
-                    sessionKey={inboxEditorResetNonce}
-                    onMarkdownChange={onEditorChange}
-                    onEditorError={onEditorError}
-                    onWikiLinkActivate={onWikiLinkActivate}
-                    wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                    wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                    onSaveShortcut={onSaveShortcut}
-                    placeholder={
-                      composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
-                    }
-                    busy={busy}
-                  />
+                  <div className="note-markdown-editor-scroll">
+                    <div className="note-markdown-editor-reading-column">
+                      <NoteMarkdownEditor
+                        ref={inboxEditorRef}
+                        attachmentHost={inboxAttachmentHost}
+                        resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                        vaultRoot={vaultRoot}
+                        activeNotePath={composingNewEntry ? null : selectedUri}
+                        initialMarkdown={editorBody}
+                        sessionKey={inboxEditorResetNonce}
+                        onMarkdownChange={onEditorChange}
+                        onEditorError={onEditorError}
+                        onWikiLinkActivate={onWikiLinkActivate}
+                        wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                        wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                        onSaveShortcut={onSaveShortcut}
+                        placeholder={
+                          composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                        }
+                        busy={busy}
+                      />
+                      {!composingNewEntry && selectedUri ? (
+                        <section className="inbox-backlinks" aria-label="Backlinks">
+                          <div className="inbox-backlinks__header">Linked from</div>
+                          {backlinkRows.length === 0 ? (
+                            <p className="muted inbox-backlinks__empty">No incoming links.</p>
+                          ) : (
+                            <ul className="inbox-backlinks__list">
+                              {backlinkRows.map(row => (
+                                <li key={row.uri}>
+                                  <button
+                                    type="button"
+                                    className="inbox-backlinks__row"
+                                    onClick={() => onSelectNote(row.uri)}
+                                  >
+                                    <span className="inbox-backlinks__title">{row.title}</span>
+                                    <span className="inbox-backlinks__filename">{row.fileName}</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-                {!composingNewEntry && selectedUri ? (
-                  <section className="inbox-backlinks" aria-label="Backlinks">
-                    <div className="inbox-backlinks__header">Linked from</div>
-                    {backlinkRows.length === 0 ? (
-                      <p className="muted inbox-backlinks__empty">No incoming links.</p>
-                    ) : (
-                      <ul className="inbox-backlinks__list">
-                        {backlinkRows.map(row => (
-                          <li key={row.uri}>
-                            <button
-                              type="button"
-                              className="inbox-backlinks__row"
-                              onClick={() => onSelectNote(row.uri)}
-                            >
-                              <span className="inbox-backlinks__title">{row.title}</span>
-                              <span className="inbox-backlinks__filename">{row.fileName}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-                ) : null}
                 {composingNewEntry ? (
                   <div className="pane-footer">
                     <button

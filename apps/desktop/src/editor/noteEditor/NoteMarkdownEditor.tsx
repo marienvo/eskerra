@@ -416,13 +416,15 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       EditorView.theme({
         '&': {
-          height: '100%',
+          height: 'auto',
+          minHeight: '6rem',
         },
         '&.cm-focused': {
           outline: 'none',
         },
         '.cm-scroller': {
           fontFamily: 'inherit',
+          overflow: 'visible',
         },
         '.cm-content': {
           caretColor: 'inherit',
