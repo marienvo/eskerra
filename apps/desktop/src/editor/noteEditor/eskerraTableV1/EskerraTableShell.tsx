@@ -9,6 +9,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type MouseEvent,
   type ReactElement,
   type MutableRefObject,
   type ReactNode,
@@ -216,6 +217,19 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     height: number;
   }>(null);
   const [isDraggingTable, setIsDraggingTable] = useState(false);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const [rowHandleGeom, setRowHandleGeom] = useState<
+    readonly {readonly top: number; readonly height: number}[]
+  >([]);
+  const [hoveredBodyRow, setHoveredBodyRow] = useState<number | null>(null);
+
+  const leaveRowHover = useCallback((bodyIndex: number, e: MouseEvent) => {
+    const next = e.relatedTarget as HTMLElement | null;
+    if (next?.closest(`[data-eskerra-row-hover="${bodyIndex}"]`)) {
+      return;
+    }
+    setHoveredBodyRow(h => (h === bodyIndex ? null : h));
+  }, []);
 
   const snapshotAllCellDocs = useCallback((): string[][] => {
     const rowCount = draftRef.current.cells.length;
@@ -501,6 +515,45 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const measureBodyRowRects = useCallback((): DOMRect[] => {
     return measureBodyRowElements().map(el => el.getBoundingClientRect());
   }, [measureBodyRowElements]);
+
+  useLayoutEffect(() => {
+    const sheet = sheetRef.current;
+    if (!sheet) {
+      return;
+    }
+    const measure = () => {
+      const rows = Array.from(
+        sheet.querySelectorAll<HTMLElement>('[data-eskerra-body-row]'),
+      ).sort(
+        (a, b) =>
+          Number(a.getAttribute('data-eskerra-body-row')) -
+          Number(b.getAttribute('data-eskerra-body-row')),
+      );
+      const sr = sheet.getBoundingClientRect();
+      setRowHandleGeom(
+        rows.map(tr => {
+          const br = tr.getBoundingClientRect();
+          return {
+            top: br.top - sr.top,
+            height: br.height,
+          };
+        }),
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(sheet);
+    const tbl = sheet.querySelector('table');
+    if (tbl) {
+      ro.observe(tbl);
+    }
+    for (const el of sheet.querySelectorAll<HTMLElement>(
+      '[data-eskerra-body-row]',
+    )) {
+      ro.observe(el);
+    }
+    return () => ro.disconnect();
+  }, [cells.length, notice, colCount]);
 
   useEffect(() => {
     if (!isDraggingTable) {
@@ -1071,89 +1124,115 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         />
       ) : null}
 
-      <table
-        className={
-          isDraggingTable
-            ? 'cm-eskerra-table-shell__table cm-eskerra-table__table cm-eskerra-table-shell__table--dragging'
-            : 'cm-eskerra-table-shell__table cm-eskerra-table__table'
-        }
-      >
-        <thead>
-          <tr>
-            <th
-              className="cm-eskerra-table-shell__corner cm-eskerra-table-shell__cell"
-              aria-hidden
-            />
-            {headerRow?.map((text, ci) => (
-              <EskerraShellCell
-                key={`h-${ci}`}
-                row={0}
-                col={ci}
-                cellText={text}
-                isHeader
-                headerColIndex={ci}
-                prepend={renderColumnHandle(ci)}
-                align={align[ci]}
-                parentView={parentView}
-                wikiCompartment={linkCompartments.wikiLink}
-                relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
-                cellEditorsRef={cellEditorsRef}
-                setNotice={setNotice}
-                activeCellRef={activeCellRef}
-                moveTabFrom={moveTabFrom}
-                runEnterFrom={runEnterFrom}
-                baselineText={baselineText}
-                lineFromRef={lineFromRef}
-                onCellDocChange={onCellDocChange}
-              />
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {bodyRows.map((row, ri) => (
-            <tr
-              key={`br-${ri}`}
-              className="cm-eskerra-table-shell__body-row"
-              data-eskerra-body-row={ri}
-            >
-              <td
-                className="cm-eskerra-table-shell__row-handle-cell cm-eskerra-table-shell__cell"
+      <div ref={sheetRef} className="cm-eskerra-table-shell__sheet">
+        <div
+          className="cm-eskerra-table__rail cm-eskerra-table-shell__rail cm-eskerra-table-shell__rail-left"
+          aria-label="Row drag handles"
+        >
+          {bodyRows.map((_, ri) => {
+            const g = rowHandleGeom[ri];
+            if (g == null) {
+              return null;
+            }
+            return (
+              <div
+                key={`lr-${ri}`}
+                className={
+                  hoveredBodyRow === ri
+                    ? 'cm-eskerra-table-shell__row-handle-slot cm-eskerra-table-shell__row-handle-slot--lit'
+                    : 'cm-eskerra-table-shell__row-handle-slot'
+                }
+                data-eskerra-row-hover={ri}
+                style={{
+                  top: g.top,
+                  height: Math.max(g.height, 12),
+                }}
+                onMouseEnter={() => setHoveredBodyRow(ri)}
+                onMouseLeave={e => leaveRowHover(ri, e)}
               >
                 {renderRowHandle(ri)}
-              </td>
-              {row.map((text, ci) => {
-                const r = ri + 1;
-                return (
-                  <EskerraShellCell
-                    key={`c-${r}-${ci}`}
-                    row={r}
-                    col={ci}
-                    cellText={text}
-                    isHeader={false}
-                    align={align[ci]}
-                    parentView={parentView}
-                    wikiCompartment={linkCompartments.wikiLink}
-                    relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
-                    cellEditorsRef={cellEditorsRef}
-                    setNotice={setNotice}
-                    activeCellRef={activeCellRef}
-                    moveTabFrom={moveTabFrom}
-                    runEnterFrom={runEnterFrom}
-                    baselineText={baselineText}
-                    lineFromRef={lineFromRef}
-                    onCellDocChange={onCellDocChange}
-                  />
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            );
+          })}
+        </div>
 
-      <div
-        className="cm-eskerra-table__rail cm-eskerra-table-shell__rail"
-        aria-label="Table actions"
-      >
+        <table
+          className={
+            isDraggingTable
+              ? 'cm-eskerra-table-shell__table cm-eskerra-table__table cm-eskerra-table-shell__table--dragging'
+              : 'cm-eskerra-table-shell__table cm-eskerra-table__table'
+          }
+        >
+          <thead>
+            <tr>
+              {headerRow?.map((text, ci) => (
+                <EskerraShellCell
+                  key={`h-${ci}`}
+                  row={0}
+                  col={ci}
+                  cellText={text}
+                  isHeader
+                  headerColIndex={ci}
+                  prepend={renderColumnHandle(ci)}
+                  align={align[ci]}
+                  parentView={parentView}
+                  wikiCompartment={linkCompartments.wikiLink}
+                  relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
+                  cellEditorsRef={cellEditorsRef}
+                  setNotice={setNotice}
+                  activeCellRef={activeCellRef}
+                  moveTabFrom={moveTabFrom}
+                  runEnterFrom={runEnterFrom}
+                  baselineText={baselineText}
+                  lineFromRef={lineFromRef}
+                  onCellDocChange={onCellDocChange}
+                />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bodyRows.map((row, ri) => (
+              <tr
+                key={`br-${ri}`}
+                className="cm-eskerra-table-shell__body-row"
+                data-eskerra-body-row={ri}
+                data-eskerra-row-hover={ri}
+                onMouseEnter={() => setHoveredBodyRow(ri)}
+                onMouseLeave={e => leaveRowHover(ri, e)}
+              >
+                {row.map((text, ci) => {
+                  const r = ri + 1;
+                  return (
+                    <EskerraShellCell
+                      key={`c-${r}-${ci}`}
+                      row={r}
+                      col={ci}
+                      cellText={text}
+                      isHeader={false}
+                      align={align[ci]}
+                      parentView={parentView}
+                      wikiCompartment={linkCompartments.wikiLink}
+                      relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
+                      cellEditorsRef={cellEditorsRef}
+                      setNotice={setNotice}
+                      activeCellRef={activeCellRef}
+                      moveTabFrom={moveTabFrom}
+                      runEnterFrom={runEnterFrom}
+                      baselineText={baselineText}
+                      lineFromRef={lineFromRef}
+                      onCellDocChange={onCellDocChange}
+                    />
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div
+          className="cm-eskerra-table__rail cm-eskerra-table-shell__rail"
+          aria-label="Table actions"
+        >
         <div className="cm-eskerra-table__rail-top">
           <button
             type="button"
@@ -1191,6 +1270,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             </span>
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

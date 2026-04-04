@@ -130,7 +130,11 @@ describe('eskerra table shell focus', () => {
     view.focus();
     await doubleRaf();
     await doubleRaf();
-    const rail = parentEl.querySelector('.cm-eskerra-table-shell__rail');
+    const rowRail = parentEl.querySelector(
+      '[aria-label="Row drag handles"]',
+    );
+    expect(rowRail).toBeTruthy();
+    const rail = parentEl.querySelector('[aria-label="Table actions"]');
     expect(rail).toBeTruthy();
     const topBtns = rail?.querySelectorAll('.cm-eskerra-table__rail-top button');
     expect(topBtns?.length).toBe(2);

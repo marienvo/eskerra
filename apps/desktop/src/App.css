@@ -1812,6 +1812,11 @@ button.primary.destructive {
   padding: 0;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell__sheet {
+  position: relative;
+  box-sizing: border-box;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell--dragging {
   cursor: grabbing;
 }
@@ -1842,6 +1847,31 @@ button.primary.destructive {
   z-index: 2;
 }
 
+/* Row drag handles in the document margin (mirror of the right action rail). */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__rail-left {
+  inset-inline-end: 100%;
+  inset-inline-start: auto;
+  margin-inline-end: 0.35rem;
+  margin-inline-start: 0;
+  inline-size: 1.25rem;
+  min-inline-size: 1.25rem;
+  pointer-events: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__row-handle-slot {
+  position: absolute;
+  inset-inline: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__table {
@@ -1854,15 +1884,6 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__table--dragging {
   opacity: 0.92;
-}
-
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-eskerra-table-shell__corner {
-  inline-size: 1.5rem;
-  min-inline-size: 1.5rem;
-  padding: 0;
-  background: color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper));
 }
 
 [data-app-surface='capture']
@@ -1901,17 +1922,6 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-shell__row-handle-cell {
-  inline-size: 1.5rem;
-  min-inline-size: 1.5rem;
-  padding: 0.15rem;
-  vertical-align: middle;
-  text-align: center;
-  background: color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper));
-}
-
-[data-app-surface='capture']
-  .note-markdown-editor-host
   .cm-eskerra-table-shell__row-handle {
   display: flex;
   align-items: center;
@@ -1925,11 +1935,12 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-shell__body-row:hover
+  .cm-eskerra-table-shell__row-handle-slot:hover
   .cm-eskerra-table-shell__row-handle,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-shell__row-handle:hover {
+  .cm-eskerra-table-shell__row-handle-slot--lit
+  .cm-eskerra-table-shell__row-handle {
   opacity: 1;
 }
 
