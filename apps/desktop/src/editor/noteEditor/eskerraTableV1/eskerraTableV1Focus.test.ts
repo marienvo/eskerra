@@ -44,6 +44,27 @@ describe('eskerra table shell focus', () => {
     document.body.replaceChildren();
   });
 
+  it('renders one shell widget per Eskerra table (not only the primary)', async () => {
+    const t1 = makeTable('A', 2);
+    const t2 = makeTable('B', 2);
+    const md = `${t1}\n\nBetween\n\n${t2}\n`;
+    const parentEl = document.createElement('div');
+    document.body.appendChild(parentEl);
+
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(0),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent: parentEl});
+    await doubleRaf();
+    await doubleRaf();
+    const roots = parentEl.querySelectorAll('.cm-eskerra-table-shell-root');
+    expect(roots.length).toBe(2);
+    view.destroy();
+    parentEl.remove();
+  });
+
   it('keeps parent editor focused when opening a note with caret before the first table', async () => {
     const tableMd = makeTable('T', 2);
     const md = `Line before table\n\n${tableMd}`;

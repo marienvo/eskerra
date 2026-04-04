@@ -69,7 +69,7 @@ The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tr
 
 ### Markdown tables (v1)
 
-- **Scope:** Desktop vault editor only (`NoteMarkdownEditor`) via a CodeMirror extension (`apps/desktop/src/editor/noteEditor/eskerraTableV1/eskerraTableV1Codemirror.tsx`): pipe tables stay canonical on disk, while structured editing uses a replace-widget DOM table shell with a focused mini CodeMirror per cell (markdown parity via `eskerraTableCellBundleFacet` + `noteMarkdownCellEditor.ts`) and rail actions; optional raw markdown rail suppresses the shell. Markdown remains the source of truth.
+- **Scope:** Desktop vault editor only (`NoteMarkdownEditor`) via a CodeMirror extension (`apps/desktop/src/editor/noteEditor/eskerraTableV1/eskerraTableV1Codemirror.tsx`): pipe tables stay canonical on disk, while structured editing uses a replace-widget DOM table shell with a focused mini CodeMirror per cell (markdown parity via `eskerraTableCellBundleFacet` + `noteMarkdownCellEditor.ts`) and rail actions; optional raw markdown rail suppresses the shell. Markdown remains the source of truth. **Multiple tables:** each parsed, non-suppressed block gets its own shell at once (not only the “primary” table); `tableShellOpenField` still tracks one primary shell for default focus and root-selection bridging, promoted when the user interacts with another table’s shell.
 - **Source of truth:** Markdown text on disk remains authoritative; no hidden table store. Structured edits replace the original table source range with one CodeMirror transaction.
 - **Detection contract (strict subset):**
   - contiguous non-empty lines that all start and end with `|`

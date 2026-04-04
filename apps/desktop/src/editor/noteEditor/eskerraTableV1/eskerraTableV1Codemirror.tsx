@@ -265,6 +265,32 @@ class EskerraTableShellWidget extends WidgetType {
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'cm-eskerra-table-shell-root';
+    const headerLineFrom = this.headerLineFrom;
+    const promoteIfNeeded = (): void => {
+      const st = view.state;
+      const open = st.field(tableShellOpenField);
+      if (open?.headerLineFrom === headerLineFrom) {
+        return;
+      }
+      const blk = findEskerraTableDocBlocks(st.doc).find(
+        b => b.lineFrom === headerLineFrom,
+      );
+      if (!blk) {
+        return;
+      }
+      const rawLines = st.doc.sliceString(blk.from, blk.to).split('\n');
+      if (!parseEskerraTableV1FromLines(rawLines).ok) {
+        return;
+      }
+      view.dispatch({
+        effects: openTableShellEffect.of({
+          headerLineFrom,
+          baselineText: st.doc.sliceString(blk.from, blk.to),
+        }),
+      });
+    };
+    wrap.addEventListener('focusin', promoteIfNeeded);
+    wrap.addEventListener('pointerdown', promoteIfNeeded);
     const block = findEskerraTableDocBlocks(view.state.doc).find(
       b => b.lineFrom === this.headerLineFrom,
     );
@@ -341,7 +367,6 @@ const eskerraTableShellFocusCellPlugin = ViewPlugin.define(view => {
 
 function buildDecorations(state: EditorState): BuildResult {
   const suppressed = state.field(suppressedTableLines);
-  const shellOpen = state.field(tableShellOpenField);
   const blocks = findEskerraTableDocBlocks(state.doc);
   const decoBuilder = new RangeSetBuilder<Decoration>();
 
@@ -365,22 +390,15 @@ function buildDecorations(state: EditorState): BuildResult {
       continue;
     }
 
-    const shellOn =
-      shellOpen?.headerLineFrom === block.lineFrom
-      && !suppressed.has(block.lineFrom);
-    if (shellOn) {
-      decoBuilder.add(
-        block.from,
-        block.to,
-        Decoration.replace({
-          block: true,
-          widget: new EskerraTableShellWidget(
-            block.lineFrom,
-            shellOpen.baselineText,
-          ),
-        }),
-      );
-    }
+    const baseline = state.doc.sliceString(block.from, block.to);
+    decoBuilder.add(
+      block.from,
+      block.to,
+      Decoration.replace({
+        block: true,
+        widget: new EskerraTableShellWidget(block.lineFrom, baseline),
+      }),
+    );
   }
 
   return {decorations: decoBuilder.finish()};
