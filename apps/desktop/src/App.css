@@ -1162,6 +1162,8 @@ button.primary.destructive {
   --nb-editor-list-nest-step: 0.5rem;
   /* Fold gutter column width; matches rail + `EditorView.theme` + `.cm-gutters` in App.css. */
   --nb-editor-fold-gutter-width: 1.375rem;
+  /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
+  --nb-editor-paper-pad-block-start: 4rem;
 
   flex: 1;
   display: flex;
@@ -1230,7 +1232,7 @@ button.primary.destructive {
   z-index: 6;
   align-self: flex-start;
   width: var(--nb-editor-fold-gutter-width);
-  height: calc(0.5rem + 1.6em);
+  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + 1.6em);
   font-size: 16px;
   line-height: 1.6;
   display: flex;
@@ -1377,7 +1379,7 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
   min-height: 6rem;
   /* Symmetric L/R “margin columns”; scrollbar is on .note-markdown-editor-scroll. */
-  padding-block: 0.5rem 1rem;
+  padding-block: var(--nb-editor-paper-pad-block-start, 0.5rem) 1rem;
   padding-inline: calc(0.6rem + var(--nb-editor-heading-gutter));
   box-sizing: border-box;
   background: transparent;
