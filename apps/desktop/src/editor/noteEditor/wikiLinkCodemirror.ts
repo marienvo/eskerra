@@ -1,12 +1,13 @@
-import {Facet, type Extension} from '@codemirror/state';
+import {Facet, type Extension, type Range} from '@codemirror/state';
 import {
   Decoration,
   EditorView,
-  MatchDecorator,
   ViewPlugin,
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
+
+const WIKI_LINK_LINE_RE = /\[\[([^[\]]+)\]\]/g;
 
 type WikiLinkTargetIsResolved = (inner: string) => boolean;
 
@@ -21,35 +22,58 @@ export const wikiLinkIsResolvedFacet = Facet.define<
       : () => false,
 });
 
+function buildWikiLinkDecorations(view: EditorView): DecorationSet {
+  const isResolved = view.state.facet(wikiLinkIsResolvedFacet);
+  const {doc} = view.state;
+  const ranges: Range<Decoration>[] = [];
+
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i);
+    const text = line.text;
+    WIKI_LINK_LINE_RE.lastIndex = 0;
+    let match = WIKI_LINK_LINE_RE.exec(text);
+    while (match) {
+      const start = match.index;
+      const fullLen = match[0].length;
+      const from = line.from + start;
+      const to = from + fullLen;
+      const inner = match[1]!;
+      const innerClass = isResolved(inner)
+        ? 'cm-wiki-link cm-wiki-link--resolved'
+        : 'cm-wiki-link cm-wiki-link--unresolved';
+      ranges.push(
+        Decoration.mark({class: 'cm-md-wiki-bracket'}).range(from, from + 2),
+      );
+      ranges.push(Decoration.mark({class: innerClass}).range(from + 2, to - 2));
+      ranges.push(
+        Decoration.mark({class: 'cm-md-wiki-bracket'}).range(to - 2, to),
+      );
+      match = WIKI_LINK_LINE_RE.exec(text);
+    }
+  }
+
+  return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
+}
+
 /**
  * Highlights `[[wiki-style]]` spans: resolved vs unresolved using the same stem-resolve policy as navigation.
+ * Opening/closing brackets use the same muted tone as other markdown marks; inner text is interactive.
  */
 export function wikiLinkResolvedHighlightExtensions(
   isResolved: WikiLinkTargetIsResolved,
 ): Extension {
-  const wikiLinkMatcher = new MatchDecorator({
-    regexp: /\[\[([^[\]]+)\]\]/g,
-    decoration: (match, view) => {
-      const inner = match[1];
-      const resolved = view.state.facet(wikiLinkIsResolvedFacet)(inner);
-      return Decoration.mark({
-        class: resolved
-          ? 'cm-wiki-link cm-wiki-link--resolved'
-          : 'cm-wiki-link cm-wiki-link--unresolved',
-      });
-    },
-  });
-
   const wikiLinkHighlight = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = wikiLinkMatcher.createDeco(view);
+        this.decorations = buildWikiLinkDecorations(view);
       }
 
       update(update: ViewUpdate) {
-        this.decorations = wikiLinkMatcher.updateDeco(update, this.decorations);
+        if (update.docChanged) {
+          this.decorations = buildWikiLinkDecorations(update.view);
+        }
       }
     },
     {decorations: instance => instance.decorations},

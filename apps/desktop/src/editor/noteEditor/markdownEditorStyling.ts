@@ -1,5 +1,5 @@
 import {markdownLanguage} from '@codemirror/lang-markdown';
-import type {MarkdownExtension} from '@lezer/markdown';
+import {Strikethrough, type MarkdownConfig, type MarkdownExtension} from '@lezer/markdown';
 import {
   HighlightStyle,
   syntaxHighlighting,
@@ -17,10 +17,60 @@ import {tags, styleTags, Tag} from '@lezer/highlight';
 
 const SYNTAX_TREE_BUDGET_MS = 200;
 
+/** Same delimiter-boundary heuristic as @lezer/markdown Strikethrough (ASCII `Punctuation` set). */
+const MARKDOWN_PUNCT_OR_SYMBOL =
+  /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~\xA1\u2010-\u2027]/;
+
 /** ATX `#` … `######` (and related header marks); split from other `processingInstruction` marks for Ulysses-style gutter styling. */
 export const markdownHeaderMarkTag = Tag.define();
 
-/** Pass to `markdown({ extensions: markdownHeaderMarkParserExtension })` with the same base language. */
+/** Visible `%%…%%` span (Notebox extension); inner content is smaller gray text. */
+const markdownPercentMutedContentTag = Tag.define();
+
+const PercentMutedDelim = {resolve: 'PercentMuted', mark: 'PercentMark'};
+
+const noteboxPercentMutedExtension: MarkdownConfig = {
+  defineNodes: [
+    {
+      name: 'PercentMuted',
+      style: {'PercentMuted/...': markdownPercentMutedContentTag},
+    },
+    {
+      name: 'PercentMark',
+      style: tags.processingInstruction,
+    },
+  ],
+  parseInline: [
+    {
+      name: 'PercentMuted',
+      parse(cx, next, pos) {
+        if (
+          next !== 37 /* '%' */ ||
+          cx.char(pos + 1) !== 37 ||
+          cx.char(pos + 2) === 37
+        ) {
+          return -1;
+        }
+        const before = cx.slice(pos - 1, pos);
+        const after = cx.slice(pos + 2, pos + 3);
+        const sBefore = /\s|^$/.test(before);
+        const sAfter = /\s|^$/.test(after);
+        const pBefore = MARKDOWN_PUNCT_OR_SYMBOL.test(before);
+        const pAfter = MARKDOWN_PUNCT_OR_SYMBOL.test(after);
+        return cx.addDelimiter(
+          PercentMutedDelim,
+          pos,
+          pos + 2,
+          !sAfter && (!pAfter || sBefore || pBefore),
+          !sBefore && (!pBefore || sAfter || pAfter),
+        );
+      },
+      after: 'Strikethrough',
+    },
+  ],
+};
+
+/** Pass to `markdown({ extensions: noteMarkdownParserExtensions })`. */
 export const markdownHeaderMarkParserExtension: MarkdownExtension = {
   props: [
     styleTags({
@@ -28,6 +78,13 @@ export const markdownHeaderMarkParserExtension: MarkdownExtension = {
     }),
   ],
 };
+
+/** Parser extensions for the vault markdown editor (header mark styling, GFM strikethrough, `%%` muted). */
+export const noteMarkdownParserExtensions: MarkdownExtension = [
+  markdownHeaderMarkParserExtension,
+  Strikethrough,
+  noteboxPercentMutedExtension,
+];
 
 const markdownHighlightStyle = HighlightStyle.define(
   [
@@ -39,6 +96,11 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: tags.heading5, class: 'cm-md-h5'},
     {tag: tags.heading6, class: 'cm-md-h6'},
     {tag: markdownHeaderMarkTag, class: 'cm-md-header-mark'},
+    {tag: tags.strong, class: 'cm-md-strong'},
+    {tag: tags.emphasis, class: 'cm-md-emphasis'},
+    {tag: tags.strikethrough, class: 'cm-md-strikethrough'},
+    {tag: markdownPercentMutedContentTag, class: 'cm-md-percent-muted'},
+    {tag: tags.contentSeparator, class: 'cm-md-hr'},
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
     {tag: tags.list, class: 'cm-md-list'},
     {tag: tags.monospace, class: 'cm-md-code'},
@@ -133,6 +195,10 @@ function buildBlockLineDecorations(view: EditorView): DecorationSet {
       }
       if (name === 'ListItem') {
         addLinesInRange(doc, cursor.from, cursor.to, lineClasses, 'cm-md-list-line');
+        return;
+      }
+      if (name === 'HorizontalRule') {
+        addLinesInRange(doc, cursor.from, cursor.to, lineClasses, 'cm-md-hr-line');
       }
     },
   });

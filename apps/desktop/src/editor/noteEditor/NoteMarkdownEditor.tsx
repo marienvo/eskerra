@@ -30,8 +30,8 @@ import {
   type NoteInboxAttachmentHost,
 } from '../../lib/noteInboxAttachmentHost';
 import {
-  markdownHeaderMarkParserExtension,
   noteMarkdownEditorAppearance,
+  noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
@@ -373,7 +373,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     const extensions = [
       markdown({
         base: commonmarkLanguage,
-        extensions: markdownHeaderMarkParserExtension,
+        extensions: noteMarkdownParserExtensions,
       }),
       ...noteMarkdownEditorAppearance,
       history(),
