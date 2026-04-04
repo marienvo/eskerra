@@ -462,91 +462,101 @@ export function EskerraTableEditDataGrid({
       className="cm-eskerra-table-rdg-shell"
       onPasteCapture={onPasteCapture}
     >
-      <div className="cm-eskerra-table__actions">
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-          data-tooltip="Add row"
-          aria-label="Add row"
-          onClick={e => {
-            e.preventDefault();
-            addRow();
-          }}
-        >
-          <MaterialIcon name="add_circle_outline" size={12} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger"
-          data-tooltip="Done"
-          aria-label="Done"
-          onClick={e => {
-            e.preventDefault();
-            if (isDirty) {
-              onCommit(gridRowsToCells(rows, colCount), false);
-            } else {
-              onDiscard();
-            }
-          }}
-        >
-          <MaterialIcon name="check" size={12} aria-hidden />
-        </button>
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-          data-tooltip="Edit as Markdown"
-          aria-label="Edit as Markdown"
-          onClick={e => {
-            e.preventDefault();
-            onLeaveMarkdown();
-          }}
-        >
-          <MaterialIcon name="code" size={12} aria-hidden />
-        </button>
-      </div>
-      {pasteNotice !== null && (
-        <p className="cm-eskerra-table__notice" role="status">
-          {pasteNotice}
-        </p>
-      )}
-      <div ref={wrapRef} className="cm-eskerra-table-rdg-wrap">
-        <DataGrid
-          ref={gridRef}
-          className="cm-eskerra-table-rdg rdg-light"
-          style={
-            {
-              blockSize: `${gridBlockPx}px`,
-              '--rdg-border-color': 'var(--color-border-subtle, var(--nb-editor-inline-code-border))',
-              '--rdg-border-width': '1px',
-              '--rdg-background-color': 'var(--nb-editor-paper)',
-              '--rdg-header-background-color': 'var(--nb-editor-paper)',
-              '--rdg-row-hover-background-color': 'color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper))',
-              '--rdg-row-selected-background-color':
-                'color-mix(in srgb, var(--color-accent) 14%, var(--nb-editor-paper))',
-              '--rdg-row-selected-hover-background-color':
-                'color-mix(in srgb, var(--color-accent) 20%, var(--nb-editor-paper))',
-              '--rdg-color': 'var(--nb-editor-text)',
-              '--rdg-font-size': 'inherit',
-              '--rdg-selection-color': 'var(--color-accent)',
-            } as CSSProperties
-          }
-          columns={columns}
-          rows={rows}
-          rowKeyGetter={r => r[ESKERRA_GRID_ROW_ID]}
-          onRowsChange={next => {
-            setRows(remapRowKeys(next as EskerraGridRow[]));
-          }}
-          onSelectedCellChange={({rowIdx, column}) => {
-            selectionRef.current = {rowIdx, colIdx: column.idx};
-          }}
-          onCellKeyDown={onCellKeyDown}
-          rowHeight={rowHeightForRow}
-          headerRowHeight={headerRowHeight}
-          rowClass={(_row, rowIdx) =>
-            rowIdx === 0 ? 'cm-eskerra-table-rdg__header-row' : undefined}
-          enableVirtualization={false}
-          aria-label="Table cells"
-        />
+      <div className="cm-eskerra-table__main">
+        <div className="cm-eskerra-table__content">
+          {pasteNotice !== null && (
+            <p className="cm-eskerra-table__notice" role="status">
+              {pasteNotice}
+            </p>
+          )}
+          <div ref={wrapRef} className="cm-eskerra-table-rdg-wrap">
+            <DataGrid
+              ref={gridRef}
+              className="cm-eskerra-table-rdg rdg-light"
+              style={
+                {
+                  blockSize: `${gridBlockPx}px`,
+                  '--rdg-border-color':
+                    'var(--color-border-subtle, var(--nb-editor-inline-code-border))',
+                  '--rdg-border-width': '1px',
+                  '--rdg-background-color': 'var(--nb-editor-paper)',
+                  '--rdg-header-background-color': 'var(--nb-editor-paper)',
+                  '--rdg-row-hover-background-color':
+                    'color-mix(in srgb, var(--nb-editor-text) 4%, var(--nb-editor-paper))',
+                  '--rdg-row-selected-background-color':
+                    'color-mix(in srgb, var(--color-accent) 14%, var(--nb-editor-paper))',
+                  '--rdg-row-selected-hover-background-color':
+                    'color-mix(in srgb, var(--color-accent) 20%, var(--nb-editor-paper))',
+                  '--rdg-color': 'var(--nb-editor-text)',
+                  '--rdg-font-size': 'inherit',
+                  '--rdg-selection-color': 'var(--color-accent)',
+                } as CSSProperties
+              }
+              columns={columns}
+              rows={rows}
+              rowKeyGetter={r => r[ESKERRA_GRID_ROW_ID]}
+              onRowsChange={next => {
+                setRows(remapRowKeys(next as EskerraGridRow[]));
+              }}
+              onSelectedCellChange={({rowIdx, column}) => {
+                selectionRef.current = {rowIdx, colIdx: column.idx};
+              }}
+              onCellKeyDown={onCellKeyDown}
+              rowHeight={rowHeightForRow}
+              headerRowHeight={headerRowHeight}
+              rowClass={(_row, rowIdx) =>
+                rowIdx === 0 ? 'cm-eskerra-table-rdg__header-row' : undefined}
+              enableVirtualization={false}
+              aria-label="Table cells"
+            />
+          </div>
+        </div>
+        <div className="cm-eskerra-table__rail">
+          <div className="cm-eskerra-table__rail-top">
+            <button
+              type="button"
+              className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+              data-tooltip="Edit as Markdown"
+              aria-label="Edit as Markdown"
+              onClick={e => {
+                e.preventDefault();
+                onLeaveMarkdown();
+              }}
+            >
+              <MaterialIcon name="code" size={12} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger"
+              data-tooltip="Done"
+              aria-label="Done"
+              onClick={e => {
+                e.preventDefault();
+                if (isDirty) {
+                  onCommit(gridRowsToCells(rows, colCount), false);
+                } else {
+                  onDiscard();
+                }
+              }}
+            >
+              <MaterialIcon name="check" size={12} aria-hidden />
+            </button>
+          </div>
+          <div className="cm-eskerra-table__rail-bottom">
+            <button
+              type="button"
+              className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+              data-tooltip="Add row"
+              aria-label="Add row"
+              onClick={e => {
+                e.preventDefault();
+                addRow();
+              }}
+            >
+              <MaterialIcon name="add" size={12} aria-hidden />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

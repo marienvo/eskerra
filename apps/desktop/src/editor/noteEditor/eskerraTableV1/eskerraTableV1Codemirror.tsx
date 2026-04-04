@@ -169,6 +169,13 @@ function appendMaterialIcon(button: HTMLButtonElement, ligature: string): void {
   button.append(icon);
 }
 
+function createRailSlotSpacer(): HTMLDivElement {
+  const el = document.createElement('div');
+  el.className = 'cm-eskerra-table__rail-slot-spacer';
+  el.setAttribute('aria-hidden', 'true');
+  return el;
+}
+
 /** Inline exit strip directly above a suppressed raw Markdown table (document order, not editor-global). */
 class TableRawMarkdownExitWidget extends WidgetType {
   private readonly headerLineFrom: number;
@@ -185,15 +192,30 @@ class TableRawMarkdownExitWidget extends WidgetType {
     );
   }
 
+  /** No vertical gap before the table lines; rail is absolutely positioned beside the first line. */
   get estimatedHeight(): number {
-    return 44;
+    return 0;
   }
 
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div');
-    wrap.className = 'cm-eskerra-table-raw-banner cm-eskerra-table__actions';
+    wrap.className = 'cm-eskerra-table-raw-banner';
 
     const tableFrom = this.headerLineFrom;
+
+    const showRenderedBtn = document.createElement('button');
+    showRenderedBtn.type = 'button';
+    showRenderedBtn.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
+    showRenderedBtn.setAttribute('data-tooltip', 'Show rendered table');
+    showRenderedBtn.setAttribute('aria-label', 'Show rendered table');
+    appendMaterialIcon(showRenderedBtn, 'code_off');
+    showRenderedBtn.addEventListener('click', e => {
+      e.preventDefault();
+      view.dispatch({
+        effects: clearTableSuppressionAt.of({lineFrom: tableFrom}),
+      });
+      view.focus();
+    });
 
     const editButton = document.createElement('button');
     editButton.type = 'button';
@@ -213,21 +235,10 @@ class TableRawMarkdownExitWidget extends WidgetType {
       view.focus();
     });
 
-    const showRenderedBtn = document.createElement('button');
-    showRenderedBtn.type = 'button';
-    showRenderedBtn.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
-    showRenderedBtn.setAttribute('data-tooltip', 'Show rendered table');
-    showRenderedBtn.setAttribute('aria-label', 'Show rendered table');
-    appendMaterialIcon(showRenderedBtn, 'code_off');
-    showRenderedBtn.addEventListener('click', e => {
-      e.preventDefault();
-      view.dispatch({
-        effects: clearTableSuppressionAt.of({lineFrom: tableFrom}),
-      });
-      view.focus();
-    });
-
-    wrap.append(editButton, showRenderedBtn);
+    const railTop = document.createElement('div');
+    railTop.className = 'cm-eskerra-table__rail-top';
+    railTop.append(showRenderedBtn, editButton, createRailSlotSpacer());
+    wrap.appendChild(railTop);
     return wrap;
   }
 }
@@ -399,8 +410,17 @@ class EskerraTableWidget extends WidgetType {
     }
 
     root.className = 'cm-eskerra-table cm-eskerra-table--render';
-    const actions = document.createElement('div');
-    actions.className = 'cm-eskerra-table__actions';
+
+    const markdownButton = document.createElement('button');
+    markdownButton.type = 'button';
+    markdownButton.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
+    markdownButton.setAttribute('data-tooltip', 'Edit as Markdown');
+    markdownButton.setAttribute('aria-label', 'Edit as Markdown');
+    appendMaterialIcon(markdownButton, 'code');
+    markdownButton.addEventListener('click', event => {
+      event.preventDefault();
+      this.leaveAsMarkdown(view);
+    });
 
     const editButton = document.createElement('button');
     editButton.type = 'button';
@@ -417,20 +437,25 @@ class EskerraTableWidget extends WidgetType {
       view.focus();
     });
 
-    const markdownButton = document.createElement('button');
-    markdownButton.type = 'button';
-    markdownButton.className = 'cm-eskerra-table__icon-btn app-tooltip-trigger';
-    markdownButton.setAttribute('data-tooltip', 'Edit as Markdown');
-    markdownButton.setAttribute('aria-label', 'Edit as Markdown');
-    appendMaterialIcon(markdownButton, 'code');
-    markdownButton.addEventListener('click', event => {
-      event.preventDefault();
-      this.leaveAsMarkdown(view);
-    });
+    const railTop = document.createElement('div');
+    railTop.className = 'cm-eskerra-table__rail-top';
+    railTop.append(markdownButton, editButton, createRailSlotSpacer());
 
-    actions.append(editButton, markdownButton);
-    root.appendChild(actions);
-    root.appendChild(this.renderTableFromModel(this.block.model));
+    const railBottom = document.createElement('div');
+    railBottom.className = 'cm-eskerra-table__rail-bottom';
+
+    const rail = document.createElement('div');
+    rail.className = 'cm-eskerra-table__rail';
+    rail.append(railTop, railBottom);
+
+    const content = document.createElement('div');
+    content.className = 'cm-eskerra-table__content';
+    content.appendChild(this.renderTableFromModel(this.block.model));
+
+    const main = document.createElement('div');
+    main.className = 'cm-eskerra-table__main';
+    main.append(content, rail);
+    root.appendChild(main);
     return root;
   }
 }

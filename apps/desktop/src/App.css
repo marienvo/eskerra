@@ -1426,6 +1426,54 @@ button.primary.destructive {
   padding: 0.5rem 0;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__main {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+/* Invisible slot so Markdown / Edit stay fixed across render vs cell-edit. */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__rail-slot-spacer {
+  box-sizing: border-box;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
+  flex-shrink: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__actions {
   display: flex;
   align-items: center;
@@ -1495,6 +1543,10 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-shell {
   box-sizing: border-box;
   width: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-shell .cm-eskerra-table__main {
+  min-height: 100%;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-rdg-wrap {
@@ -1730,19 +1782,31 @@ button.primary.destructive {
 }
 
 /*
- * Raw-Markdown strip: edit + show-rendered icons; reuse .cm-eskerra-table__actions and 0.5rem top
- * inset so icons line up with render / cells toolbars (no extra inline pad).
+ * Raw-Markdown controls: zero layout height (estimatedHeight 0) so table lines are not pushed down;
+ * rail sits at the top-end of the content column, beside the first line (same idea as table __rail).
  */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-raw-banner {
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  height: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-raw-banner.cm-eskerra-table__actions {
-  box-sizing: border-box;
-  width: 100%;
-  margin: 0;
-  padding-top:      0.5rem;
-  padding-inline:   0;
-  border-bottom:    1px solid var(--color-border-subtle);
-  background:       var(--color-panel-solid);
+  .cm-eskerra-table-raw-banner
+  .cm-eskerra-table__rail-top {
+  position: absolute;
+  /* Align with first line body (matches .cm-content padding-block start). */
+  top: 0.5rem;
+  right: 0;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 /*
