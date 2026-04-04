@@ -8,7 +8,10 @@ import {GluestackUIProvider} from '@gluestack-ui/themed';
 import {config} from '@gluestack-ui/config';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {KeyboardProvider} from 'react-native-keyboard-controller';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from 'react-native-safe-area-context';
 
 import {resolveInitialRoute} from './src/core/bootstrap/resolveInitialRoute';
 import {reportUnexpectedError} from './src/core/observability/reportUnexpectedError';
@@ -165,7 +168,7 @@ function App() {
   return (
     <GluestackUIProvider colorMode={isDarkMode ? 'dark' : 'light'} config={config}>
       <GestureHandlerRootView style={styles.container}>
-        <SafeAreaProvider>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
           <StatusBar
             barStyle={
               initialRoute === null

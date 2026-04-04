@@ -136,6 +136,7 @@ export default function App() {
     onInboxSaveShortcut,
     flushInboxSave,
     onWikiLinkActivate,
+    onMarkdownRelativeLinkActivate,
     deleteNote,
     renameNote,
     deleteFolder,
@@ -573,6 +574,7 @@ export default function App() {
                 inboxEditorResetNonce={inboxEditorResetNonce}
                 onEditorError={setErr}
                 onWikiLinkActivate={onWikiLinkActivate}
+                onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
                 onSaveShortcut={onInboxSaveShortcut}
                 busy={busy}
                 onDeleteNote={uri => {

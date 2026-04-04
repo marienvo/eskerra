@@ -1,5 +1,6 @@
 import {
   buildInboxWikiLinkResolveLookup,
+  planInboxRelativeMarkdownLinkRenameInMarkdown,
   planInboxWikiLinkRenameInMarkdown,
   type InboxWikiLinkNoteRef,
   type VaultFilesystem,
@@ -36,14 +37,26 @@ function yieldToBrowserFrame(): Promise<void> {
 }
 
 export function planVaultWikiLinkRenameMaintenance(options: {
+  vaultRoot: string;
   oldTargetUri: string;
   renamedStem: string;
+  /** Pass the post-rename note URI to rewrite relative `[](.md)` links; pass `oldTargetUri` to skip. */
+  newTargetUri: string;
   notes: ReadonlyArray<InboxWikiLinkNoteRef>;
   contentByUri: Readonly<Record<string, string>>;
   activeUri: string | null;
   activeBody: string;
 }): VaultWikiLinkRenamePlanResult {
-  const {oldTargetUri, renamedStem, notes, contentByUri, activeUri, activeBody} = options;
+  const {
+    vaultRoot,
+    oldTargetUri,
+    renamedStem,
+    newTargetUri,
+    notes,
+    contentByUri,
+    activeUri,
+    activeBody,
+  } = options;
   const lookup = buildInboxWikiLinkResolveLookup(notes);
   const updates: VaultWikiLinkRenameFileUpdate[] = [];
   let touchedBytes = 0;
@@ -55,22 +68,41 @@ export function planVaultWikiLinkRenameMaintenance(options: {
       activeUri != null && source.uri === activeUri
         ? activeBody
         : (contentByUri[source.uri] ?? '');
-    const rewrite = planInboxWikiLinkRenameInMarkdown({
+    const wikiRewrite = planInboxWikiLinkRenameInMarkdown({
       markdown: sourceBody,
       lookup,
       oldTargetUri,
       renamedStem,
     });
-    updatedLinkCount += rewrite.updatedLinkCount;
-    skippedAmbiguousLinkCount += rewrite.skippedAmbiguousLinkCount;
-    if (!rewrite.changed) {
+    skippedAmbiguousLinkCount += wikiRewrite.skippedAmbiguousLinkCount;
+    let markdown = wikiRewrite.changed ? wikiRewrite.markdown : sourceBody;
+    let fileLinkUpdates = wikiRewrite.updatedLinkCount;
+
+    if (newTargetUri !== oldTargetUri) {
+      const mdRewrite = planInboxRelativeMarkdownLinkRenameInMarkdown({
+        markdown,
+        sourceUri: source.uri,
+        oldTargetUri,
+        newTargetUri,
+        vaultRoot,
+        noteRefs: notes,
+      });
+      if (mdRewrite.changed) {
+        markdown = mdRewrite.markdown;
+        fileLinkUpdates += mdRewrite.updatedLinkCount;
+      }
+    }
+
+    updatedLinkCount += fileLinkUpdates;
+    const changed = markdown !== sourceBody;
+    if (!changed) {
       continue;
     }
-    touchedBytes += markdownUtf8ByteLength(rewrite.markdown);
+    touchedBytes += markdownUtf8ByteLength(markdown);
     updates.push({
       uri: source.uri,
-      markdown: rewrite.markdown,
-      updatedLinkCount: rewrite.updatedLinkCount,
+      markdown,
+      updatedLinkCount: fileLinkUpdates,
     });
   }
 

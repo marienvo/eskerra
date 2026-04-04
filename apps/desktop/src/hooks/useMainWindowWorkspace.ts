@@ -13,6 +13,7 @@ import {
   buildInboxMarkdownFromCompose,
   collectVaultMarkdownRefs,
   ensureDeviceInstanceId,
+  getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
   normalizeVaultBaseUri,
   parseComposeInput,
@@ -25,7 +26,10 @@ import {
 } from '@notebox/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
-import {openOrCreateInboxWikiLinkTarget} from '../lib/inboxWikiLinkNavigation';
+import {
+  openOrCreateInboxWikiLinkTarget,
+  openOrCreateVaultRelativeMarkdownLink,
+} from '../lib/inboxWikiLinkNavigation';
 import {
   createInboxAutosaveScheduler,
   INBOX_AUTOSAVE_DEBOUNCE_MS,
@@ -57,7 +61,7 @@ import {
   setVaultSession,
   startVaultWatch,
 } from '../lib/tauriVault';
-import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
+import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
 import {
   applyVaultWikiLinkRenameMaintenance,
   planVaultWikiLinkRenameMaintenance,
@@ -169,6 +173,8 @@ export type UseMainWindowWorkspaceResult = {
   flushInboxSave: () => Promise<void>;
   /** Editor intent entrypoint for wiki link open/create. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
+  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
   renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
@@ -287,7 +293,7 @@ export function useMainWindowWorkspace(options: {
   }, []);
 
   useEffect(() => {
-    if (composingNewEntry || !selectedUri) {
+    if (composingNewEntry || !selectedUri || !vaultRoot) {
       setSelectedNoteBacklinkUris([]);
       return;
     }
@@ -319,7 +325,8 @@ export function useMainWindowWorkspace(options: {
             return;
           }
 
-          const uris = listInboxWikiLinkBacklinkReferrersForTarget({
+          const uris = listInboxAllBacklinkReferrersForTarget({
+            vaultRoot,
             targetUri: selected,
             notes: refs.map(r => ({name: r.name, uri: r.uri})),
             contentByUri: expanded,
@@ -344,6 +351,7 @@ export function useMainWindowWorkspace(options: {
   }, [
     composingNewEntry,
     selectedUri,
+    vaultRoot,
     vaultMarkdownRefs,
     inboxContentByUri,
     backlinksActiveBody,
@@ -821,8 +829,10 @@ export function useMainWindowWorkspace(options: {
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
           ? planVaultWikiLinkRenameMaintenance({
+              vaultRoot,
               oldTargetUri: uri,
               renamedStem: plannedStem,
+              newTargetUri: uri,
               notes: wikiRefs,
               contentByUri: expandedContent,
               activeUri,
@@ -859,17 +869,25 @@ export function useMainWindowWorkspace(options: {
         const nextUri = await renameVaultMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
         const nextName = nextUri.split('/').pop();
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
-        const rewritePlan =
-          renamedStem && renamedStem !== plannedStem
-            ? planVaultWikiLinkRenameMaintenance({
-                oldTargetUri: uri,
-                renamedStem,
-                notes: wikiRefs,
-                contentByUri: expandedContent,
-                activeUri,
-                activeBody,
-              })
-            : preRenamePlan;
+        const rewritePlan = renamedStem
+          ? planVaultWikiLinkRenameMaintenance({
+              vaultRoot,
+              oldTargetUri: uri,
+              renamedStem,
+              newTargetUri: nextUri,
+              notes: wikiRefs,
+              contentByUri: expandedContent,
+              activeUri,
+              activeBody,
+            })
+          : {
+              updates: [],
+              scannedFileCount: wikiRefs.length,
+              touchedFileCount: 0,
+              touchedBytes: 0,
+              updatedLinkCount: 0,
+              skippedAmbiguousLinkCount: 0,
+            };
         const showLargeImpactProgress =
           rewritePlan.skippedAmbiguousLinkCount === 0 &&
           (rewritePlan.touchedFileCount >= LARGE_RENAME_MIN_TOUCHED_FILES ||
@@ -936,7 +954,7 @@ export function useMainWindowWorkspace(options: {
         if (applyResult.failed.length > 0) {
           const list = applyResult.failed.map(f => f.uri).join(', ');
           setErr(
-            `Renamed note, but wiki-link updates failed for ${applyResult.failed.length} file(s): ${list}`,
+            `Renamed note, but link updates failed for ${applyResult.failed.length} file(s): ${list}`,
           );
         } else if (rewritePlan.updatedLinkCount > 0) {
           const noteLabel = rewritePlan.touchedFileCount === 1 ? 'note' : 'notes';
@@ -1056,6 +1074,62 @@ export function useMainWindowWorkspace(options: {
       void activateWikiLink(payload);
     },
     [activateWikiLink],
+  );
+
+  const activateRelativeMarkdownLink = useCallback(
+    async ({href, at}: {href: string; at: number}) => {
+      if (!vaultRoot) {
+        return;
+      }
+      await flushInboxSaveRef.current();
+      const base = normalizeVaultBaseUri(vaultRoot);
+      const sourceMarkdownUriOrDir = composingNewEntryRef.current
+        ? getInboxDirectoryUri(base)
+        : (selectedUriRef.current ?? getInboxDirectoryUri(base));
+      try {
+        const result = await openOrCreateVaultRelativeMarkdownLink({
+          href,
+          notes: vaultMarkdownRefsRef.current.map(r => ({
+            name: r.name,
+            uri: r.uri,
+          })),
+          vaultRoot,
+          fs,
+          sourceMarkdownUriOrDir,
+        });
+        if (result.kind === 'open' || result.kind === 'created') {
+          if (result.kind === 'created') {
+            subtreeMarkdownCacheRef.current.invalidateForMutation(
+              vaultRoot,
+              result.uri,
+              'file',
+            );
+            await refreshNotes(vaultRoot);
+            setFsRefreshNonce(n => n + 1);
+          } else if (result.canonicalHref) {
+            inboxEditorRef.current?.replaceMarkdownLinkHrefAt({
+              at,
+              expectedHref: href,
+              replacementHref: result.canonicalHref,
+            });
+          }
+          setComposingNewEntry(false);
+          setSelectedUri(result.uri);
+          return;
+        }
+        setErr('This link is not a relative vault markdown note.');
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [vaultRoot, fs, refreshNotes, inboxEditorRef],
+  );
+
+  const onMarkdownRelativeLinkActivate = useCallback(
+    (payload: {href: string; at: number}) => {
+      void activateRelativeMarkdownLink(payload);
+    },
+    [activateRelativeMarkdownLink],
   );
 
   const deleteFolder = useCallback(
@@ -1479,6 +1553,7 @@ export function useMainWindowWorkspace(options: {
     onInboxSaveShortcut,
     flushInboxSave,
     onWikiLinkActivate,
+    onMarkdownRelativeLinkActivate,
     deleteNote,
     renameNote,
     subtreeMarkdownCache: subtreeMarkdownCacheRef.current,

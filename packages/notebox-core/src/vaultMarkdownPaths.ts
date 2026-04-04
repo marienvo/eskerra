@@ -56,6 +56,20 @@ export function assertVaultMarkdownNoteUriForCrud(
 }
 
 /**
+ * Same validation as {@link assertVaultMarkdownNoteUriForCrud}; returns normalized URI or `null`.
+ */
+export function tryAssertVaultMarkdownNoteUriForCrud(
+  vaultRootUri: string,
+  noteUri: string,
+): string | null {
+  try {
+    return assertVaultMarkdownNoteUriForCrud(vaultRootUri, noteUri);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validates a vault directory path for tree CRUD (rename / delete folder). Does not require `.md`;
  * rejects vault root, ignored segments, and hard-excluded directories.
  */

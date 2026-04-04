@@ -4,12 +4,16 @@ import type {RefObject} from 'react';
 import {useEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
-import {inboxWikiLinkTargetIsResolved} from '../lib/inboxWikiLinkNavigation';
+import {
+  inboxRelativeMarkdownLinkHrefIsResolved,
+  inboxWikiLinkTargetIsResolved,
+} from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
+  getInboxDirectoryUri,
   getNoteTitle,
   normalizeVaultBaseUri,
   type VaultFilesystem,
@@ -65,6 +69,7 @@ type VaultTabProps = {
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
@@ -109,6 +114,7 @@ export function VaultTab({
   inboxEditorResetNonce,
   onEditorError,
   onWikiLinkActivate,
+  onMarkdownRelativeLinkActivate,
   onSaveShortcut,
   busy,
   onDeleteNote,
@@ -135,6 +141,7 @@ export function VaultTab({
   const [renameDraft, setRenameDraft] = useState('');
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
+  const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -203,6 +210,26 @@ export function VaultTab({
         inner,
       ),
     [vaultMarkdownRefs],
+  );
+
+  const relativeMarkdownSourceUriOrDir = useMemo(() => {
+    if (composingNewEntry) {
+      return getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot));
+    }
+    return (
+      selectedUri ?? getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot))
+    );
+  }, [composingNewEntry, selectedUri, vaultRoot]);
+
+  const relativeMarkdownLinkHrefIsResolved = useMemo(
+    () => (href: string) =>
+      inboxRelativeMarkdownLinkHrefIsResolved(
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
+        relativeMarkdownSourceUriOrDir,
+        vaultRoot,
+        href,
+      ),
+    [vaultMarkdownRefs, relativeMarkdownSourceUriOrDir, vaultRoot],
   );
 
   const wikiLinkCompletionCandidates = useMemo(
@@ -408,7 +435,7 @@ export function VaultTab({
           <AlertDialog.Overlay className="alert-dialog-overlay" />
           <AlertDialog.Content className="alert-dialog-content">
             <AlertDialog.Title className="alert-dialog-title">
-              Ambiguous wiki links found
+              Ambiguous links found
             </AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               {wikiLinkAmbiguityRenamePrompt ? (
@@ -416,8 +443,8 @@ export function VaultTab({
                   This rename can safely update{' '}
                   {wikiLinkAmbiguityRenamePrompt.updatedLinkCount} link(s) across{' '}
                   {wikiLinkAmbiguityRenamePrompt.touchedFileCount} note(s), but{' '}
-                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} link(s) are
-                  ambiguous and will be skipped.
+                  {wikiLinkAmbiguityRenamePrompt.skippedAmbiguousLinkCount} wiki link(s)
+                  are ambiguous and will be skipped.
                 </>
               ) : null}
             </AlertDialog.Description>
@@ -638,49 +665,96 @@ export function VaultTab({
             {editorOpen ? (
               <>
                 <div className="editor note-markdown-editor-wrap">
-                  <NoteMarkdownEditor
-                    ref={inboxEditorRef}
-                    attachmentHost={inboxAttachmentHost}
-                    resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                    vaultRoot={vaultRoot}
-                    activeNotePath={composingNewEntry ? null : selectedUri}
-                    initialMarkdown={editorBody}
-                    sessionKey={inboxEditorResetNonce}
-                    onMarkdownChange={onEditorChange}
-                    onEditorError={onEditorError}
-                    onWikiLinkActivate={onWikiLinkActivate}
-                    wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                    wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                    onSaveShortcut={onSaveShortcut}
-                    placeholder={
-                      composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
-                    }
-                    busy={busy}
-                  />
+                  <div className="note-markdown-editor-scroll">
+                    <div className="note-markdown-editor-reading-column">
+                      <div className="note-markdown-editor-fold-bulk-anchor">
+                        <button
+                          type="button"
+                          className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                          onClick={() => {
+                            const ed = inboxEditorRef.current;
+                            if (!ed) {
+                              return;
+                            }
+                            if (editorHasFoldedRanges) {
+                              ed.unfoldAllFolds();
+                            } else {
+                              ed.collapseAllFolds();
+                            }
+                          }}
+                          disabled={busy}
+                          aria-label={
+                            editorHasFoldedRanges
+                              ? 'Expand all folds'
+                              : 'Collapse all folds'
+                          }
+                          data-tooltip={
+                            editorHasFoldedRanges
+                              ? 'Expand all folds'
+                              : 'Collapse all folds'
+                          }
+                          data-tooltip-placement="inline-end"
+                        >
+                          <MaterialIcon
+                            name={
+                              editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
+                            }
+                            size={12}
+                          />
+                        </button>
+                      </div>
+                      <NoteMarkdownEditor
+                        ref={inboxEditorRef}
+                        attachmentHost={inboxAttachmentHost}
+                        resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                        vaultRoot={vaultRoot}
+                        activeNotePath={composingNewEntry ? null : selectedUri}
+                        initialMarkdown={editorBody}
+                        sessionKey={inboxEditorResetNonce}
+                        onMarkdownChange={onEditorChange}
+                        onEditorError={onEditorError}
+                        onWikiLinkActivate={onWikiLinkActivate}
+                        onMarkdownRelativeLinkActivate={
+                          onMarkdownRelativeLinkActivate
+                        }
+                        relativeMarkdownLinkHrefIsResolved={
+                          relativeMarkdownLinkHrefIsResolved
+                        }
+                        wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                        wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                        onSaveShortcut={onSaveShortcut}
+                        placeholder={
+                          composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                        }
+                        busy={busy}
+                        onFoldedRangesPresentChange={setEditorHasFoldedRanges}
+                      />
+                      {!composingNewEntry && selectedUri ? (
+                        <section className="inbox-backlinks" aria-label="Backlinks">
+                          <div className="inbox-backlinks__header">Linked from</div>
+                          {backlinkRows.length === 0 ? (
+                            <p className="muted inbox-backlinks__empty">No incoming links.</p>
+                          ) : (
+                            <ul className="inbox-backlinks__list">
+                              {backlinkRows.map(row => (
+                                <li key={row.uri}>
+                                  <button
+                                    type="button"
+                                    className="inbox-backlinks__row"
+                                    onClick={() => onSelectNote(row.uri)}
+                                  >
+                                    <span className="inbox-backlinks__title">{row.title}</span>
+                                    <span className="inbox-backlinks__filename">{row.fileName}</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
-                {!composingNewEntry && selectedUri ? (
-                  <section className="inbox-backlinks" aria-label="Backlinks">
-                    <div className="inbox-backlinks__header">Linked from</div>
-                    {backlinkRows.length === 0 ? (
-                      <p className="muted inbox-backlinks__empty">No incoming links.</p>
-                    ) : (
-                      <ul className="inbox-backlinks__list">
-                        {backlinkRows.map(row => (
-                          <li key={row.uri}>
-                            <button
-                              type="button"
-                              className="inbox-backlinks__row"
-                              onClick={() => onSelectNote(row.uri)}
-                            >
-                              <span className="inbox-backlinks__title">{row.title}</span>
-                              <span className="inbox-backlinks__filename">{row.fileName}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
-                ) : null}
                 {composingNewEntry ? (
                   <div className="pane-footer">
                     <button

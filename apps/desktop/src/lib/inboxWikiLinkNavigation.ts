@@ -4,6 +4,8 @@ import {
   getInboxDirectoryUri,
   normalizeVaultBaseUri,
   resolveInboxWikiLinkTarget,
+  resolveVaultRelativeMarkdownHref,
+  stemFromMarkdownFileName,
   vaultPathDirname,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveResult,
@@ -85,4 +87,82 @@ export function inboxWikiLinkTargetIsResolved(
   inner: string,
 ): boolean {
   return resolveInboxWikiLinkTarget(notes, inner).kind === 'open';
+}
+
+export type InboxRelativeMarkdownLinkNavigationResult =
+  | {kind: 'open'; uri: string; canonicalHref?: string}
+  | {kind: 'created'; uri: string}
+  | {kind: 'unsupported'};
+
+function normVaultUri(u: string): string {
+  return u.trim().replace(/\\/g, '/');
+}
+
+/**
+ * Opens or creates the vault note targeted by a relative `[](*.md)` href from the current note
+ * (or Inbox directory when composing).
+ */
+export async function openOrCreateVaultRelativeMarkdownLink(options: {
+  href: string;
+  notes: ReadonlyArray<InboxWikiLinkNoteRef>;
+  vaultRoot: string;
+  fs: VaultFilesystem;
+  /** Directory or open `.md` URI — see `resolveVaultRelativeMarkdownHref` in `@notebox/core`. */
+  sourceMarkdownUriOrDir: string;
+}): Promise<InboxRelativeMarkdownLinkNavigationResult> {
+  const {href, notes, vaultRoot, fs, sourceMarkdownUriOrDir} = options;
+  const resolved = resolveVaultRelativeMarkdownHref(
+    vaultRoot,
+    sourceMarkdownUriOrDir,
+    href,
+    notes,
+  );
+  if (!resolved) {
+    return {kind: 'unsupported'};
+  }
+
+  const exists = notes.some(
+    n => normVaultUri(n.uri).toLowerCase() === normVaultUri(resolved.uri).toLowerCase(),
+  );
+
+  if (exists) {
+    return {
+      kind: 'open',
+      uri: resolved.uri,
+      canonicalHref: resolved.canonicalHref,
+    };
+  }
+
+  const fileName = resolved.uri.split('/').pop() ?? '';
+  const stem = stemFromMarkdownFileName(fileName);
+  const parentDir = vaultPathDirname(resolved.uri);
+  const markdown = buildInboxMarkdownFromCompose(stem, '');
+  const created = await createVaultMarkdownNoteInDirectory(
+    vaultRoot,
+    fs,
+    parentDir,
+    stem,
+    markdown,
+  );
+  return {kind: 'created', uri: created.uri};
+}
+
+export function inboxRelativeMarkdownLinkHrefIsResolved(
+  notes: ReadonlyArray<InboxWikiLinkNoteRef>,
+  sourceMarkdownUriOrDir: string,
+  vaultRoot: string,
+  href: string,
+): boolean {
+  const resolved = resolveVaultRelativeMarkdownHref(
+    vaultRoot,
+    sourceMarkdownUriOrDir,
+    href,
+    notes,
+  );
+  if (!resolved) {
+    return false;
+  }
+  return notes.some(
+    n => normVaultUri(n.uri).toLowerCase() === normVaultUri(resolved.uri).toLowerCase(),
+  );
 }

@@ -1,5 +1,11 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
-import {markdown} from '@codemirror/lang-markdown';
+import {
+  foldedRanges,
+  foldGutter,
+  foldKeymap,
+  unfoldAll,
+} from '@codemirror/language';
+import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {
   Compartment,
   EditorSelection,
@@ -21,7 +27,12 @@ import {
   useState,
 } from 'react';
 
-import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
+import {
+  isExternalMarkdownHref,
+  MARKDOWN_EXTENSION,
+  stripMarkdownLinkHrefToPathPart,
+  type InboxWikiLinkCompletionCandidate,
+} from '@notebox/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -29,9 +40,17 @@ import {
   isNoteAttachmentImageFilePath,
   type NoteInboxAttachmentHost,
 } from '../../lib/noteInboxAttachmentHost';
-import {noteMarkdownEditorAppearance} from './markdownEditorStyling';
+import {
+  noteMarkdownEditorAppearance,
+  noteMarkdownListItemFoldService,
+  noteMarkdownParserExtensions,
+} from './markdownEditorStyling';
+import {markdownNotebox} from './markdownNoteboxLanguage';
+import {nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
+import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {
@@ -41,6 +60,28 @@ import {
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
+
+function foldedRangesPresent(state: EditorState): boolean {
+  return foldedRanges(state).size > 0;
+}
+
+function createFoldGutterMarker(open: boolean): HTMLSpanElement {
+  const span = document.createElement('span');
+  span.textContent = open ? '⌄' : '›';
+  span.className = 'cm-foldGutter-marker app-tooltip-trigger';
+  span.setAttribute('data-tooltip', open ? 'Fold line' : 'Unfold line');
+  span.setAttribute('data-tooltip-placement', 'inline-end');
+  span.setAttribute('aria-label', open ? 'Fold line' : 'Unfold line');
+  return span;
+}
+
+function isActivatableRelativeMarkdownHref(href: string): boolean {
+  const part = stripMarkdownLinkHrefToPathPart(href);
+  if (part === '' || isExternalMarkdownHref(part)) {
+    return false;
+  }
+  return part.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase());
+}
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
@@ -54,6 +95,10 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  /** Shell-owned: relative `.md` href resolves to an existing indexed note (for styling). */
+  relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
+  /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
+  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
@@ -66,15 +111,29 @@ export type NoteMarkdownEditorProps = {
   attachmentHost: NoteInboxAttachmentHost;
   /** Shell-owned: Markdown image src → preview URL (for example `lib/resolveVaultImagePreviewUrl`). */
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
+  /** Called when the editor gains or loses at least one folded range (fold gutter, lists, etc.). */
+  onFoldedRangesPresentChange?: (present: boolean) => void;
 };
 
 export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
   loadMarkdown: (markdown: string) => void;
+  /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
+  unfoldAllFolds: () => boolean;
+  /**
+   * Folds every foldable range (lists, sections, etc.). H1 title sections are never foldable
+   * (see `markdownNotebox`).
+   */
+  collapseAllFolds: () => boolean;
   replaceWikiLinkInnerAt: (options: {
     at: number;
     expectedInner: string;
     replacementInner: string;
+  }) => boolean;
+  replaceMarkdownLinkHrefAt: (options: {
+    at: number;
+    expectedHref: string;
+    replacementHref: string;
   }) => boolean;
 };
 
@@ -90,11 +149,14 @@ const NoteMarkdownEditorImpl = forwardRef<
     onMarkdownChange,
     onEditorError,
     onWikiLinkActivate,
+    relativeMarkdownLinkHrefIsResolved,
+    onMarkdownRelativeLinkActivate,
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
     placeholder: placeholderText,
     busy,
+    onFoldedRangesPresentChange,
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -103,6 +165,10 @@ const NoteMarkdownEditorImpl = forwardRef<
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
   const wikiLinkTargetIsResolvedRef = useRef(wikiLinkTargetIsResolved);
   wikiLinkTargetIsResolvedRef.current = wikiLinkTargetIsResolved;
+  const relativeMarkdownLinkHrefIsResolvedRef = useRef(
+    relativeMarkdownLinkHrefIsResolved,
+  );
+  relativeMarkdownLinkHrefIsResolvedRef.current = relativeMarkdownLinkHrefIsResolved;
   const initialMarkdownRef = useRef(initialMarkdown);
   initialMarkdownRef.current = initialMarkdown;
 
@@ -121,8 +187,20 @@ const NoteMarkdownEditorImpl = forwardRef<
     onWikiLinkActivateRef.current = onWikiLinkActivate;
   }, [onWikiLinkActivate]);
 
+  const onMarkdownRelativeLinkActivateRef = useRef(onMarkdownRelativeLinkActivate);
+  useEffect(() => {
+    onMarkdownRelativeLinkActivateRef.current = onMarkdownRelativeLinkActivate;
+  }, [onMarkdownRelativeLinkActivate]);
+
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
+
+  const onFoldedRangesPresentChangeRef = useRef(
+    onFoldedRangesPresentChange,
+  );
+  useEffect(() => {
+    onFoldedRangesPresentChangeRef.current = onFoldedRangesPresentChange;
+  }, [onFoldedRangesPresentChange]);
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -148,6 +226,10 @@ const NoteMarkdownEditorImpl = forwardRef<
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
     wikiLinkCompartmentRef.current = new Compartment();
+  }
+  const relativeMdLinkCompartmentRef = useRef<Compartment | null>(null);
+  if (relativeMdLinkCompartmentRef.current === null) {
+    relativeMdLinkCompartmentRef.current = new Compartment();
   }
 
   useEffect(() => {
@@ -322,13 +404,26 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
       const inner = wikiLinkInnerAtDocPosition(view.state.doc, pos);
-      if (!inner) {
-        return false;
+      if (inner) {
+        e.preventDefault();
+        e.stopPropagation();
+        onWikiLinkActivateRef.current({inner, at: pos});
+        return true;
       }
-      e.preventDefault();
-      e.stopPropagation();
-      onWikiLinkActivateRef.current({inner, at: pos});
-      return true;
+      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, pos);
+      if (
+        linkUrl
+        && isActivatableRelativeMarkdownHref(linkUrl.href)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownRelativeLinkActivateRef.current({
+          href: linkUrl.href,
+          at: linkUrl.hrefFrom,
+        });
+        return true;
+      }
+      return false;
     };
 
     const runWikiLinkOpenAssist = (view: EditorView): boolean => {
@@ -362,14 +457,43 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
+      const sel = view.state.selection.main;
+      const linkUrl = markdownInlineLinkUrlAtPosition(view.state, sel.head);
+      if (
+        linkUrl == null
+        || !isActivatableRelativeMarkdownHref(linkUrl.href)
+      ) {
+        return false;
+      }
+      onMarkdownRelativeLinkActivateRef.current({
+        href: linkUrl.href,
+        at: linkUrl.hrefFrom,
+      });
+      return true;
+    };
+
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
     }
+    const relativeMdLinkCompartment = relativeMdLinkCompartmentRef.current;
+    if (!relativeMdLinkCompartment) {
+      throw new Error('relativeMdLinkCompartment must be initialized');
+    }
 
     const extensions = [
-      markdown(),
+      markdownNotebox({
+        base: commonmarkLanguage,
+        extensions: noteMarkdownParserExtensions,
+      }),
+      noteMarkdownListItemFoldService,
       ...noteMarkdownEditorAppearance,
+      foldGutter({
+        openText: '⌄',
+        closedText: '›',
+        markerDOM: open => createFoldGutterMarker(open),
+      }),
       history(),
       drawSelection(),
       keymap.of([
@@ -386,9 +510,12 @@ const NoteMarkdownEditorImpl = forwardRef<
         },
         {
           key: 'Mod-Enter',
-          run: runWikiLinkActivateFromCaret,
+          run: view =>
+            runWikiLinkActivateFromCaret(view)
+            || runMarkdownRelativeLinkActivateFromCaret(view),
         },
         indentWithTab,
+        ...foldKeymap,
         ...defaultKeymap,
         ...historyKeymap,
       ]),
@@ -396,6 +523,11 @@ const NoteMarkdownEditorImpl = forwardRef<
       placeholder(placeholderText),
       wikiLinkCompartment.of(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+      ),
+      relativeMdLinkCompartment.of(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolved,
+        ),
       ),
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
@@ -416,13 +548,24 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       EditorView.theme({
         '&': {
-          height: '100%',
+          height: 'auto',
+          minHeight: '6rem',
         },
         '&.cm-focused': {
           outline: 'none',
         },
+        '.cm-gutters': {
+          /* Opaque: do not rely on column gradient (stripe width can be narrower than real gutter). */
+          backgroundColor: 'var(--nb-editor-margin-bg)',
+          border: 'none',
+        },
+        '.cm-foldGutter': {
+          /* Width comes from `.cm-gutters` in App.css (must match reading-column stripe). */
+          flexShrink: 0,
+        },
         '.cm-scroller': {
           fontFamily: 'inherit',
+          overflow: 'visible',
         },
         '.cm-content': {
           caretColor: 'inherit',
@@ -438,6 +581,14 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
         }
+        const onFold = onFoldedRangesPresentChangeRef.current;
+        if (onFold) {
+          const prev = foldedRangesPresent(update.startState);
+          const next = foldedRangesPresent(update.state);
+          if (prev !== next) {
+            onFold(next);
+          }
+        }
       }),
     ];
 
@@ -451,8 +602,10 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
     });
     viewRef.current = view;
+    onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(view.state));
 
     return () => {
+      onFoldedRangesPresentChangeRef.current?.(false);
       view.destroy();
       viewRef.current = null;
       codemirrorBootExtensionsRef.current = null;
@@ -473,6 +626,21 @@ const NoteMarkdownEditorImpl = forwardRef<
     });
   }, [wikiLinkTargetIsResolved]);
 
+  useEffect(() => {
+    const compartment = relativeMdLinkCompartmentRef.current;
+    const view = viewRef.current;
+    if (!compartment || !view) {
+      return;
+    }
+    view.dispatch({
+      effects: compartment.reconfigure(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolved,
+        ),
+      ),
+    });
+  }, [relativeMarkdownLinkHrefIsResolved]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -481,8 +649,9 @@ const NoteMarkdownEditorImpl = forwardRef<
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
-        const compartment = wikiLinkCompartmentRef.current;
-        if (!view || !bootExtensions || !compartment) {
+        const wikiCompartment = wikiLinkCompartmentRef.current;
+        const relCompartment = relativeMdLinkCompartmentRef.current;
+        if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
         view.setState(
@@ -493,12 +662,36 @@ const NoteMarkdownEditorImpl = forwardRef<
           }),
         );
         view.dispatch({
-          effects: compartment.reconfigure(
-            wikiLinkResolvedHighlightExtensions(
-              wikiLinkTargetIsResolvedRef.current,
+          effects: [
+            wikiCompartment.reconfigure(
+              wikiLinkResolvedHighlightExtensions(
+                wikiLinkTargetIsResolvedRef.current,
+              ),
             ),
-          ),
+            relCompartment.reconfigure(
+              markdownRelativeLinkHighlightExtensions(
+                relativeMarkdownLinkHrefIsResolvedRef.current,
+              ),
+            ),
+          ],
         });
+        onFoldedRangesPresentChangeRef.current?.(
+          foldedRangesPresent(view.state),
+        );
+      },
+      unfoldAllFolds: () => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return unfoldAll(view);
+      },
+      collapseAllFolds: () => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return nestedCollapseAllFolds(view);
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
         if (replacementInner === expectedInner) {
@@ -517,6 +710,27 @@ const NoteMarkdownEditorImpl = forwardRef<
             from: match.innerFrom,
             to: match.innerTo,
             insert: replacementInner,
+          },
+        });
+        return true;
+      },
+      replaceMarkdownLinkHrefAt: ({at, expectedHref, replacementHref}) => {
+        if (replacementHref === expectedHref) {
+          return true;
+        }
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        const linkUrl = markdownInlineLinkUrlAtPosition(view.state, at);
+        if (!linkUrl || linkUrl.href !== expectedHref) {
+          return false;
+        }
+        view.dispatch({
+          changes: {
+            from: linkUrl.hrefFrom,
+            to: linkUrl.hrefTo,
+            insert: replacementHref,
           },
         });
         return true;

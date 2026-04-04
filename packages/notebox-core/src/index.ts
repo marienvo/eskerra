@@ -135,7 +135,21 @@ export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions
 export {
   assertVaultMarkdownNoteUriForCrud,
   assertVaultTreeDirectoryUriForCrud,
+  tryAssertVaultMarkdownNoteUriForCrud,
 } from './vaultMarkdownPaths';
+export {
+  extractInlineMarkdownLinksFromMarkdown,
+  isExternalMarkdownHref,
+  listInboxRelativeMarkdownLinkBacklinkReferrersForTarget,
+  planInboxRelativeMarkdownLinkRenameInMarkdown,
+  posixRelativeVaultPath,
+  posixResolveRelativeToDirectory,
+  resolveVaultRelativeMarkdownHref,
+  stripMarkdownLinkHrefToPathPart,
+  type InlineMarkdownLinkMatch,
+  type InboxRelativeMarkdownLinkRenameMarkdownPlan,
+  type ResolveVaultRelativeMarkdownHrefResult,
+} from './vaultRelativeMarkdownLink';
 export {
   collectVaultMarkdownRefs,
   type CollectVaultMarkdownRefsOptions,
