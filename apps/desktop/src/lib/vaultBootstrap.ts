@@ -524,6 +524,68 @@ export async function renameVaultMarkdownNote(
   return nextUri;
 }
 
+export type MoveVaultTreeItemResult = {
+  previousUri: string;
+  nextUri: string;
+  movedKind: 'folder' | 'article';
+};
+
+/**
+ * Moves a vault tree item (markdown note or user folder) into `targetDirectoryUri` via `renameFile`.
+ * Preserves the base name; rejects collisions and invalid moves (for example folder into itself).
+ */
+export async function moveVaultTreeItemToDirectory(
+  root: string,
+  fs: VaultFilesystem,
+  options: {
+    sourceUri: string;
+    sourceKind: 'folder' | 'article';
+    targetDirectoryUri: string;
+  },
+): Promise<MoveVaultTreeItemResult> {
+  const normTarget = assertVaultTreeDirectoryUriForCrud(root, options.targetDirectoryUri)
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '');
+
+  let normalizedSource: string;
+  let movedKind: 'folder' | 'article';
+  if (options.sourceKind === 'article') {
+    normalizedSource = assertVaultMarkdownNoteUriForCrud(root, options.sourceUri);
+    movedKind = 'article';
+  } else {
+    normalizedSource = assertVaultTreeDirectoryUriForCrud(
+      root,
+      options.sourceUri,
+    ).replace(/\\/g, '/').replace(/\/+$/, '');
+    movedKind = 'folder';
+  }
+
+  if (movedKind === 'folder' && normTarget === normalizedSource) {
+    return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};
+  }
+
+  const baseName = normalizedSource.split('/').pop() ?? '';
+  const nextUri = `${normTarget}/${baseName}`;
+
+  if (nextUri === normalizedSource) {
+    return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};
+  }
+
+  if (movedKind === 'folder') {
+    if (normTarget.startsWith(`${normalizedSource}/`)) {
+      throw new Error('Cannot move a folder into its own subfolder.');
+    }
+  }
+
+  if (await fs.exists(nextUri)) {
+    throw new Error('A folder or file with this name already exists.');
+  }
+
+  await fs.renameFile(normalizedSource, nextUri);
+  await syncInboxMarkdownIndex(root, fs);
+  return {previousUri: normalizedSource, nextUri, movedKind};
+}
+
 export async function saveNoteMarkdown(
   noteUri: string,
   fs: VaultFilesystem,

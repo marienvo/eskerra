@@ -67,6 +67,11 @@ type InboxTabProps = {
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
   onDeleteFolder: (directoryUri: string) => void | Promise<void>;
   onRenameFolder: (directoryUri: string, nextDisplayName: string) => void | Promise<void>;
+  onMoveVaultTreeItem: (
+    sourceUri: string,
+    sourceKind: 'folder' | 'article',
+    targetDirectoryUri: string,
+  ) => void | Promise<void>;
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
@@ -101,6 +106,7 @@ export function InboxTab({
   onRenameNote,
   onDeleteFolder,
   onRenameFolder,
+  onMoveVaultTreeItem,
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
@@ -506,6 +512,7 @@ export function InboxTab({
                 onDeleteFolderRequest={u => {
                   setConfirmDeleteFolderUri(u);
                 }}
+                onMoveVaultTreeItem={onMoveVaultTreeItem}
               />
             </div>
           </div>

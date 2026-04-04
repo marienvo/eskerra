@@ -38,6 +38,7 @@ import {
   deleteVaultMarkdownNote,
   deleteVaultTreeDirectory,
   listInboxNotes,
+  moveVaultTreeItemToDirectory,
   readVaultLocalSettings,
   readVaultSettings,
   renameVaultMarkdownNote,
@@ -167,6 +168,12 @@ export type UseMainWindowWorkspaceResult = {
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
   deleteFolder: (directoryUri: string) => Promise<void>;
   renameFolder: (directoryUri: string, nextDisplayName: string) => Promise<void>;
+  /** Single-item tree move (DnD): `renameFile` into target folder; stem unchanged (no wiki rewrites). */
+  moveVaultTreeItem: (
+    sourceUri: string,
+    sourceKind: 'folder' | 'article',
+    targetDirectoryUri: string,
+  ) => Promise<void>;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -1111,6 +1118,103 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, clearRenameNotice],
   );
 
+  const moveVaultTreeItem = useCallback(
+    async (
+      sourceUri: string,
+      sourceKind: 'folder' | 'article',
+      targetDirectoryUri: string,
+    ) => {
+      if (!vaultRoot) {
+        return;
+      }
+      autosaveSchedulerRef.current.cancel();
+      await flushInboxSaveRef.current();
+      setBusy(true);
+      setErr(null);
+      try {
+        const result = await moveVaultTreeItemToDirectory(vaultRoot, fs, {
+          sourceUri,
+          sourceKind,
+          targetDirectoryUri,
+        });
+        if (result.previousUri === result.nextUri) {
+          return;
+        }
+        const invKind = result.movedKind === 'article' ? 'file' : 'directory';
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          result.previousUri,
+          invKind,
+        );
+        subtreeMarkdownCacheRef.current.invalidateForMutation(
+          vaultRoot,
+          result.nextUri,
+          invKind,
+        );
+
+        if (result.movedKind === 'article') {
+          setInboxContentByUri(prev => {
+            if (prev[result.previousUri] === undefined) {
+              return prev;
+            }
+            const next = {...prev};
+            next[result.nextUri] = next[result.previousUri]!;
+            delete next[result.previousUri];
+            return next;
+          });
+          if (selectedUriRef.current === result.previousUri) {
+            selectedUriRef.current = result.nextUri;
+            setSelectedUri(result.nextUri);
+            const lp = lastPersistedRef.current;
+            if (lp && lp.uri === result.previousUri) {
+              lastPersistedRef.current = {...lp, uri: result.nextUri};
+            }
+          }
+        } else {
+          const oldUri = result.previousUri;
+          const newUri = result.nextUri;
+          setInboxContentByUri(prev => {
+            const next = {...prev};
+            for (const k of Object.keys(prev)) {
+              const mapped = replaceVaultUriPrefix(k, oldUri, newUri);
+              if (mapped && mapped !== k && prev[k] !== undefined) {
+                next[mapped] = prev[k]!;
+                delete next[k];
+              }
+            }
+            return next;
+          });
+          let nextSel: string | null = selectedUriRef.current;
+          if (nextSel) {
+            const mappedSel = replaceVaultUriPrefix(
+              nextSel.replace(/\\/g, '/'),
+              oldUri,
+              newUri,
+            );
+            nextSel = mappedSel ?? nextSel;
+          }
+          selectedUriRef.current = nextSel;
+          setSelectedUri(nextSel);
+          const lp = lastPersistedRef.current;
+          if (lp) {
+            const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, newUri);
+            if (mappedLp) {
+              lastPersistedRef.current = {...lp, uri: mappedLp};
+            }
+          }
+        }
+
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [vaultRoot, fs, refreshNotes],
+  );
+
   useEffect(() => {
     if (!vaultRoot) {
       setInboxShellRestored(true);
@@ -1195,6 +1299,7 @@ export function useMainWindowWorkspace(options: {
     subtreeMarkdownCache: subtreeMarkdownCacheRef.current,
     deleteFolder,
     renameFolder,
+    moveVaultTreeItem,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   };

@@ -141,6 +141,7 @@ export default function App() {
     renameNote,
     deleteFolder,
     renameFolder,
+    moveVaultTreeItem,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
   } = useMainWindowWorkspace({
@@ -584,6 +585,9 @@ export default function App() {
                 }}
                 onRenameFolder={(uri, nextDisplayName) => {
                   void renameFolder(uri, nextDisplayName);
+                }}
+                onMoveVaultTreeItem={(src, kind, destDir) => {
+                  void moveVaultTreeItem(src, kind, destDir);
                 }}
                 wikiLinkAmbiguityRenamePrompt={
                   pendingWikiLinkAmbiguityRename?.summary ?? null
