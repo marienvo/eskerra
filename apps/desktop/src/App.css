@@ -1155,6 +1155,8 @@ button.primary.destructive {
   --nb-editor-code-block-border: #92a1a17a;
   /* Left “margin column” width: fits ###### at editor base size; hashes sit right-aligned against body text. */
   --nb-editor-heading-gutter: 9.25ch;
+  /* Extra inline start per nested list level (`cm-md-list-line--nest-*`). */
+  --nb-editor-list-nest-step: 0.5rem;
 
   flex: 1;
   display: flex;
@@ -1389,10 +1391,64 @@ button.primary.destructive {
   font-synthesis: weight style;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-host .cm-md-list {
-  color: var(--nb-editor-accent);
-  font-size: 0.85em;
-  font-weight: 500;
+/*
+ * List markers (`-`, `1.`, task boxes): same gutter pull + column as `.cm-md-header-mark` so item text
+ * aligns with paragraph/heading body (no second full-gutter inline advance on top of `.cm-content` padding).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-list-mark {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--nb-editor-heading-gutter);
+  min-width: var(--nb-editor-heading-gutter);
+  margin-inline-start: calc(-1 * var(--nb-editor-heading-gutter));
+  margin-inline-end: -0.42em;
+  padding-right: 0.42em;
+  text-align: right;
+  white-space: pre;
+  vertical-align: baseline;
+  font-synthesis: none;
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+  font-size: 0.88em;
+  font-weight: 400;
+}
+
+/* Unordered: show a bullet; keep the real `-` in the tree (transparent) for caret and edits. */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet
+  .cm-md-list-mark {
+  position: relative;
+  color: transparent;
+  text-shadow: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet
+  .cm-md-list-mark::before {
+  content: '•';
+  position: absolute;
+  inset-inline-end: 0.42em;
+  top: 50%;
+  transform: translateY(-50%);
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+  font-size: 1.05em;
+  font-weight: 400;
+  line-height: 1;
+  pointer-events: none;
+  white-space: pre;
+  padding-right: .125rem;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--ordered
+  .cm-md-list-mark {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-list-mark.cm-md-strong {
+  font-weight: 400;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-strong {
@@ -1471,8 +1527,65 @@ button.primary.destructive {
   padding-bottom: 0.28em;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-host .cm-md-list-line {
-  padding-inline-start: 1.15rem;
+/* List: top-level uses mark pull only; nested items add strong visual indent per depth. */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-1 {
+  padding-inline-start: calc(1 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-2 {
+  padding-inline-start: calc(2 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-3 {
+  padding-inline-start: calc(3 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-4 {
+  padding-inline-start: calc(4 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-5 {
+  padding-inline-start: calc(5 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-6 {
+  padding-inline-start: calc(6 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-7 {
+  padding-inline-start: calc(7 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line--nest-8 {
+  padding-inline-start: calc(8 * var(--nb-editor-list-nest-step));
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-foldGutter {
+  color: var(--nb-editor-hash-tone);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-foldGutter .cm-gutterElement {
+  padding-inline: 0.15rem 0.35rem;
+  cursor: default;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-foldGutter span {
+  cursor: default;
+  opacity: 0.85;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-foldGutter .cm-gutterElement:hover span {
+  opacity: 1;
+  color: color-mix(in srgb, var(--nb-editor-text) 38%, var(--nb-editor-hash-tone) 62%);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-foldPlaceholder {
+  background: color-mix(in srgb, var(--nb-editor-paper) 72%, var(--nb-editor-inline-code-bg) 28%);
+  border: 1px solid var(--nb-editor-inline-code-border);
+  color: var(--nb-editor-faint);
+  cursor: default;
+  margin: 0;
+  padding-inline: 0.2em;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line {

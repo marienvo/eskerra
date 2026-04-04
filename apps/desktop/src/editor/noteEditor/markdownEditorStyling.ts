@@ -1,9 +1,12 @@
 import {markdownLanguage} from '@codemirror/lang-markdown';
 import {Strikethrough, type MarkdownConfig, type MarkdownExtension} from '@lezer/markdown';
+import type {SyntaxNode, Tree} from '@lezer/common';
 import {
   HighlightStyle,
   syntaxHighlighting,
   ensureSyntaxTree,
+  syntaxTree,
+  foldService,
 } from '@codemirror/language';
 import type {Extension, Range, Text} from '@codemirror/state';
 import {
@@ -23,6 +26,9 @@ const MARKDOWN_PUNCT_OR_SYMBOL =
 
 /** ATX `#` … `######` (and related header marks); split from other `processingInstruction` marks for Ulysses-style gutter styling. */
 export const markdownHeaderMarkTag = Tag.define();
+
+/** `-` / `1.` list markers and GFM `TaskMarker`; not `tags.list` (that colors whole list subtrees in Lezer). */
+export const markdownListMarkTag = Tag.define();
 
 /** Visible `%%…%%` span (Notebox extension); inner content is smaller gray text. */
 const markdownPercentMutedContentTag = Tag.define();
@@ -79,9 +85,20 @@ export const markdownHeaderMarkParserExtension: MarkdownExtension = {
   ],
 };
 
+/** Override Lezer defaults so `ListMark` is not grouped with `QuoteMark` as generic `processingInstruction` only. */
+export const markdownListMarkParserExtension: MarkdownExtension = {
+  props: [
+    styleTags({
+      ListMark: markdownListMarkTag,
+      TaskMarker: markdownListMarkTag,
+    }),
+  ],
+};
+
 /** Parser extensions for the vault markdown editor (header mark styling, GFM strikethrough, `%%` muted). */
 export const noteMarkdownParserExtensions: MarkdownExtension = [
   markdownHeaderMarkParserExtension,
+  markdownListMarkParserExtension,
   Strikethrough,
   noteboxPercentMutedExtension,
 ];
@@ -102,11 +119,32 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: markdownPercentMutedContentTag, class: 'cm-md-percent-muted'},
     {tag: tags.contentSeparator, class: 'cm-md-hr'},
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
-    {tag: tags.list, class: 'cm-md-list'},
+    {tag: markdownListMarkTag, class: 'cm-md-list-mark'},
     {tag: tags.monospace, class: 'cm-md-code'},
   ],
   {scope: markdownLanguage},
 );
+
+/** Same range as @codemirror/lang-markdown `foldNodeProp` for `ListItem`; foldService runs before syntax folding. */
+export const noteMarkdownListItemFoldService: Extension = foldService.of((state, _lineFrom, lineTo) => {
+  const tree = syntaxTree(state);
+  let node: SyntaxNode | null = tree.resolveInner(lineTo, -1);
+  while (node) {
+    if (node.type.name === 'ListItem') {
+      const firstLine = state.doc.lineAt(node.from);
+      const foldFrom = firstLine.to;
+      if (foldFrom < node.to) {
+        return {from: foldFrom, to: node.to};
+      }
+      return null;
+    }
+    node = node.parent;
+  }
+  return null;
+});
+
+/** Exposed for Vitest (`highlightTree` + list body must not use removed `tags.list` → `cm-md-list`). */
+export const noteMarkdownHighlightStyle = markdownHighlightStyle;
 
 function addLineClass(lineClasses: Map<number, Set<string>>, lineFrom: number, cls: string) {
   let bucket = lineClasses.get(lineFrom);
@@ -154,25 +192,92 @@ function addLinesInRange(
   }
 }
 
-function headingLevelFromNode(name: string): string | null {
-  const atx = /^ATXHeading(\d)$/.exec(name);
-  if (atx) {
-    return atx[1];
+/** Caps CSS classes `cm-md-list-line--nest-*` (_padding per level in App.css). */
+const LIST_NEST_DEPTH_CLASS_MAX = 8;
+
+function listItemNestDepth(item: SyntaxNode): number {
+  let depth = 0;
+  let n: SyntaxNode | null = item.parent;
+  while (n) {
+    if (n.type.name === 'ListItem') depth++;
+    n = n.parent;
   }
-  const setext = /^SetextHeading(\d)$/.exec(name);
-  if (setext) {
-    return setext[1];
+  return depth;
+}
+
+/** First `ListItem` when walking from `resolveInner(pos)` toward the root (the smallest item containing `pos`). */
+function innermostListItemCovering(tree: Tree, pos: number): SyntaxNode | null {
+  let current: SyntaxNode | null = tree.resolveInner(pos, 1);
+  while (current) {
+    if (current.type.name === 'ListItem') {
+      return current;
+    }
+    current = current.parent;
   }
   return null;
 }
 
-function buildBlockLineDecorations(view: EditorView): DecorationSet {
-  const {doc} = view.state;
-  const tree = ensureSyntaxTree(view.state, doc.length, SYNTAX_TREE_BUDGET_MS);
-  if (!tree) {
-    return Decoration.none;
-  }
+/** Prefer end-of-line so leading indent before `ListMark` still resolves to the nested item. */
+function listItemOwnerProbePos(line: {from: number; to: number}): number {
+  return line.to > line.from ? line.to - 1 : line.from;
+}
 
+function lineHasListOrTaskMark(tree: Tree, lineFrom: number, lineTo: number): boolean {
+  let found = false;
+  tree.iterate({
+    from: lineFrom,
+    to: lineTo,
+    enter(node) {
+      if (node.name === 'ListMark' || node.name === 'TaskMarker') {
+        found = true;
+        return false;
+      }
+    },
+  });
+  return found;
+}
+
+function addListItemLines(
+  doc: Text,
+  tree: Tree,
+  itemFrom: number,
+  itemTo: number,
+  listKind: 'bullet' | 'ordered',
+  nestDepth: number,
+  lineClasses: Map<number, Set<string>>,
+) {
+  const kindVariant =
+    listKind === 'ordered' ? 'cm-md-list-line--ordered' : 'cm-md-list-line--bullet';
+  const nestClass =
+    nestDepth > 0
+      ? `cm-md-list-line--nest-${Math.min(nestDepth, LIST_NEST_DEPTH_CLASS_MAX)}`
+      : null;
+  const end = Math.min(itemTo, doc.length);
+  let pos = itemFrom;
+  while (pos <= end) {
+    const line = doc.lineAt(pos);
+    const owner = innermostListItemCovering(tree, listItemOwnerProbePos(line));
+    if (owner == null || owner.from !== itemFrom) {
+      pos = line.to + 1;
+      continue;
+    }
+    const rowKind = lineHasListOrTaskMark(tree, line.from, Math.min(line.to, doc.length))
+      ? 'cm-md-list-line--mark'
+      : 'cm-md-list-line--continue';
+    addLineClass(lineClasses, line.from, 'cm-md-list-line');
+    addLineClass(lineClasses, line.from, kindVariant);
+    addLineClass(lineClasses, line.from, rowKind);
+    if (nestClass) {
+      addLineClass(lineClasses, line.from, nestClass);
+    }
+    pos = line.to + 1;
+  }
+}
+
+/**
+ * Line-level class map for block styling (headings, fences, lists). Exported for Vitest.
+ */
+export function markdownEditorBlockLineClasses(doc: Text, tree: Tree): Map<number, Set<string>> {
   const lineClasses = new Map<number, Set<string>>();
 
   tree.iterate({
@@ -194,14 +299,41 @@ function buildBlockLineDecorations(view: EditorView): DecorationSet {
         return;
       }
       if (name === 'ListItem') {
-        addLinesInRange(doc, cursor.from, cursor.to, lineClasses, 'cm-md-list-line');
-        return;
+        const parentName = cursor.node.parent?.type.name;
+        const listKind = parentName === 'OrderedList' ? 'ordered' : 'bullet';
+        const nestDepth = listItemNestDepth(cursor.node);
+        addListItemLines(doc, tree, cursor.from, cursor.to, listKind, nestDepth, lineClasses);
+        /* Do not return: nested ListItem nodes must be visited for line classes + nest depth. */
       }
       if (name === 'HorizontalRule') {
         addLinesInRange(doc, cursor.from, cursor.to, lineClasses, 'cm-md-hr-line');
       }
     },
   });
+
+  return lineClasses;
+}
+
+function headingLevelFromNode(name: string): string | null {
+  const atx = /^ATXHeading(\d)$/.exec(name);
+  if (atx) {
+    return atx[1];
+  }
+  const setext = /^SetextHeading(\d)$/.exec(name);
+  if (setext) {
+    return setext[1];
+  }
+  return null;
+}
+
+function buildBlockLineDecorations(view: EditorView): DecorationSet {
+  const {doc} = view.state;
+  const tree = ensureSyntaxTree(view.state, doc.length, SYNTAX_TREE_BUDGET_MS);
+  if (!tree) {
+    return Decoration.none;
+  }
+
+  const lineClasses = markdownEditorBlockLineClasses(doc, tree);
 
   const ranges: Range<Decoration>[] = [];
   const ordered = [...lineClasses.entries()].sort((a, b) => a[0] - b[0]);
@@ -222,7 +354,10 @@ const markdownBlockLineStyle = ViewPlugin.fromClass(
     }
 
     update(update: ViewUpdate) {
-      if (update.docChanged) {
+      if (
+        update.docChanged
+        || syntaxTree(update.startState) !== syntaxTree(update.state)
+      ) {
         this.decorations = buildBlockLineDecorations(update.view);
       }
     }

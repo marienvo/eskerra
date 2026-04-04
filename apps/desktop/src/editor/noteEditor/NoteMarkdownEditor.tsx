@@ -1,4 +1,5 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
+import {foldGutter, foldKeymap} from '@codemirror/language';
 import {commonmarkLanguage, markdown} from '@codemirror/lang-markdown';
 import {
   Compartment,
@@ -36,6 +37,7 @@ import {
 } from '../../lib/noteInboxAttachmentHost';
 import {
   noteMarkdownEditorAppearance,
+  noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
@@ -447,7 +449,12 @@ const NoteMarkdownEditorImpl = forwardRef<
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),
+      noteMarkdownListItemFoldService,
       ...noteMarkdownEditorAppearance,
+      foldGutter({
+        openText: '⌄',
+        closedText: '›',
+      }),
       history(),
       drawSelection(),
       keymap.of([
@@ -469,6 +476,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             || runMarkdownRelativeLinkActivateFromCaret(view),
         },
         indentWithTab,
+        ...foldKeymap,
         ...defaultKeymap,
         ...historyKeymap,
       ]),
