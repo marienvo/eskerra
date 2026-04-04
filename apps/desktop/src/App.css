@@ -2181,6 +2181,13 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host
+  .cm-md-hr-line::after {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
   .cm-md-fence-line,
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -2435,6 +2442,28 @@ button.primary.destructive {
   font-weight: 400;
 }
 
+/*
+ * Horizontal rule: same gutter column + pull as `.cm-md-header-mark`; rule line runs in the body column (`::after`).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line .cm-md-hr {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--nb-editor-heading-gutter);
+  min-width: var(--nb-editor-heading-gutter);
+  margin-inline-start: calc(-1 * var(--nb-editor-heading-gutter));
+  margin-inline-end: -0.42em;
+  padding-inline-end: 0.42em;
+  text-align: right;
+  white-space: pre;
+  color: var(--nb-editor-hash-tone);
+  font-weight: 700;
+  font-style: italic;
+  font-size: 1em;
+  letter-spacing: -0.03em;
+  vertical-align: baseline;
+  font-synthesis: weight style;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
@@ -2543,9 +2572,20 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line {
+  position: relative;
   padding-top: 1.35em;
   padding-bottom: 0.6em;
-  border-bottom: 1px solid color-mix(in srgb, var(--nb-editor-faint) 38%, var(--nb-editor-paper) 62%);
+  border-bottom: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr-line::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 19px;
+  height: 2px;
+  pointer-events: none;
+  background: var(--color-text);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line {
