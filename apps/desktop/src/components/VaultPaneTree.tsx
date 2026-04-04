@@ -8,7 +8,14 @@ import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
 import {normalizeVaultBaseUri, type VaultFilesystem} from '@notebox/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react';
 
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
 import {MaterialIcon} from './MaterialIcon';
@@ -17,6 +24,76 @@ import {MaterialIcon} from './MaterialIcon';
 const VAULT_TREE_ROW_HEIGHT_PX = 40;
 
 const VAULT_TREE_DND_MIME = 'application/x-notebox-vault-tree';
+
+function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | null>): void {
+  const el = hostRef.current;
+  if (el?.parentNode) {
+    el.parentNode.removeChild(el);
+  }
+  hostRef.current = null;
+}
+
+/**
+ * Off-screen host + `setDragImage` so the pointer shows a clear vault-row chip (icon + label).
+ */
+function mountVaultTreeDragGhost(options: {
+  isFolder: boolean;
+  label: string;
+  dataTransfer: DataTransfer;
+  pointerClientX: number;
+  pointerClientY: number;
+  sourceButton: HTMLButtonElement;
+  hostRef: MutableRefObject<HTMLDivElement | null>;
+}): void {
+  const {
+    isFolder,
+    label,
+    dataTransfer,
+    pointerClientX,
+    pointerClientY,
+    sourceButton,
+    hostRef,
+  } = options;
+  teardownVaultTreeDragGhost(hostRef);
+
+  const ghost = document.createElement('div');
+  ghost.className = 'vault-tree-drag-ghost';
+  ghost.setAttribute('aria-hidden', 'true');
+
+  const icon = document.createElement('span');
+  icon.className = 'material-icons vault-tree-drag-ghost__icon';
+  icon.textContent = isFolder ? 'folder' : 'description';
+
+  const text = document.createElement('span');
+  text.className = 'vault-tree-drag-ghost__label';
+  text.textContent = label;
+
+  ghost.appendChild(icon);
+  ghost.appendChild(text);
+  document.body.appendChild(ghost);
+  void ghost.offsetWidth;
+
+  const btnRect = sourceButton.getBoundingClientRect();
+  const relX = pointerClientX - btnRect.left;
+  const relY = pointerClientY - btnRect.top;
+  const gw = ghost.offsetWidth;
+  const gh = ghost.offsetHeight;
+  const scaleX = gw / Math.max(btnRect.width, 1);
+  const scaleY = gh / Math.max(btnRect.height, 1);
+  let imgX = Math.round(relX * scaleX);
+  let imgY = Math.round(relY * scaleY);
+  imgX = Math.max(0, Math.min(imgX, Math.max(0, gw - 1)));
+  imgY = Math.max(0, Math.min(imgY, Math.max(0, gh - 1)));
+
+  try {
+    dataTransfer.setDragImage(ghost, imgX, imgY);
+    hostRef.current = ghost;
+  } catch {
+    if (ghost.parentNode) {
+      ghost.parentNode.removeChild(ghost);
+    }
+  }
+}
 
 export type VaultPaneTreeProps = {
   vaultRoot: string;
@@ -72,15 +149,23 @@ export function VaultPaneTree({
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<TreeInstance<VaultTreeItemData> | null>(null);
+  const dragGhostHostRef = useRef<HTMLDivElement | null>(null);
   const [dropTargetUri, setDropTargetUri] = useState<string | null>(null);
+  const [draggingSourceUri, setDraggingSourceUri] = useState<string | null>(null);
 
   const clearDropTarget = () => setDropTargetUri(null);
 
+  const endVaultTreeDrag = useCallback(() => {
+    setDropTargetUri(null);
+    setDraggingSourceUri(null);
+    teardownVaultTreeDragGhost(dragGhostHostRef);
+  }, []);
+
   useEffect(() => {
-    const onDocDragEnd = () => clearDropTarget();
+    const onDocDragEnd = () => endVaultTreeDrag();
     document.addEventListener('dragend', onDocDragEnd);
     return () => document.removeEventListener('dragend', onDocDragEnd);
-  }, []);
+  }, [endVaultTreeDrag]);
 
   const tree = useTree<VaultTreeItemData>({
     rootItemId: rootId,
@@ -266,6 +351,7 @@ export function VaultPaneTree({
                 className={[
                   selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
                   isFolder && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
+                  draggingSourceUri === data.uri ? 'vault-tree-row--dragging' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
@@ -276,13 +362,23 @@ export function VaultPaneTree({
                   if (!canDragFromRow) {
                     return;
                   }
+                  setDraggingSourceUri(data.uri);
+                  mountVaultTreeDragGhost({
+                    isFolder,
+                    label: data.name,
+                    dataTransfer: e.dataTransfer,
+                    pointerClientX: e.clientX,
+                    pointerClientY: e.clientY,
+                    sourceButton: e.currentTarget,
+                    hostRef: dragGhostHostRef,
+                  });
                   e.dataTransfer.setData(
                     VAULT_TREE_DND_MIME,
                     JSON.stringify({uri: data.uri, kind: data.kind}),
                   );
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                onDragEnd={() => clearDropTarget()}
+                onDragEnd={() => endVaultTreeDrag()}
                 onDragOver={
                   isFolder
                     ? e => {

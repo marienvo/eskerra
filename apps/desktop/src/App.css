@@ -821,6 +821,52 @@ a:focus:not(:focus-visible) {
   background: var(--color-row-hover);
 }
 
+.vault-tree-row--dragging {
+  opacity: 0.45;
+}
+
+/* Detached drag preview for `setDragImage` (kept off-screen; browser snapshots for the drag cursor). */
+.vault-tree-drag-ghost {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  color: var(--color-text);
+  font-size: 0.84rem;
+  line-height: 20px;
+  max-width: min(320px, 70vw);
+  z-index: 100000;
+  pointer-events: none;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+.vault-tree-drag-ghost__icon {
+  font-size: 14px !important;
+  width: 14px;
+  height: 14px;
+  line-height: 14px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-muted);
+}
+
+.vault-tree-drag-ghost__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .vault-tree-row__chevron {
   flex: 0 0 20px;
   display: inline-flex;
