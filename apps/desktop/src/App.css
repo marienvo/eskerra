@@ -1810,11 +1810,21 @@ button.primary.destructive {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Column drag strip (header): keep --eskerra-col-handle-strip in sync with these parts. */
+  --eskerra-col-handle-pad-y: 0.12rem;
+  --eskerra-col-handle-min-block: 1.05rem;
+  --eskerra-col-handle-gap-after: 0.1rem;
+  --eskerra-col-handle-strip: calc(
+    var(--eskerra-col-handle-pad-y) + var(--eskerra-col-handle-min-block) +
+      var(--eskerra-col-handle-pad-y) + var(--eskerra-col-handle-gap-after)
+  );
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell__sheet {
   position: relative;
   box-sizing: border-box;
+  /* Padding (not margin) so block widget height matches hit-testing; see codemirror-desktop-layout.mdc */
+  padding-block-end: var(--eskerra-col-handle-strip);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table-shell--dragging {
@@ -1900,10 +1910,10 @@ button.primary.destructive {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  min-block-size: 1.05rem;
-  padding-block: 0.12rem;
+  min-block-size: var(--eskerra-col-handle-min-block);
+  padding-block: var(--eskerra-col-handle-pad-y);
   padding-inline: 0.15rem;
-  margin-block-end: 0.1rem;
+  margin-block-end: var(--eskerra-col-handle-gap-after);
   border-radius: 3px;
   opacity: 0;
   cursor: grab;
