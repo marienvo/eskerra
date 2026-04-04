@@ -394,7 +394,11 @@ class EskerraTableWidget extends WidgetType {
           this.commitDraft(view, cells, align, moveBelow);
         }}
         onTableGridLayoutChange={() => {
+          view.requestMeasure();
           queueMicrotask(() => {
+            view.requestMeasure();
+          });
+          requestAnimationFrame(() => {
             view.requestMeasure();
           });
         }}
@@ -489,7 +493,7 @@ function buildDecorations(state: EditorState): BuildResult {
         block: true,
       }),
     );
-    if (mode === 'render') {
+    if (mode === 'render' || mode === 'cells') {
       atomicBuilder.add(block.from, block.to, TableAtomicSpan.instance);
     }
   }

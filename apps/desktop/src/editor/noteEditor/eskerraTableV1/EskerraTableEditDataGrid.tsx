@@ -73,6 +73,17 @@ function remapRowKeys(list: EskerraGridRow[]): EskerraGridRow[] {
 
 const GRID_VIEWPORT_MAX_BLOCK_PX = 560;
 
+/** Focus moved to CodeMirror (e.g. click beside table); avoid selectCell+scrollIntoView or RDG can scroll the grid out of view. */
+function isFocusInCodemirrorOutsideShell(shell: HTMLElement, active: Element | null): boolean {
+  if (!(active instanceof Element)) {
+    return false;
+  }
+  if (shell.contains(active)) {
+    return false;
+  }
+  return active.closest('.cm-editor') !== null;
+}
+
 type TextareaEditorNav = {
   rowsRef: RefObject<EskerraGridRow[]>;
   gridRef: RefObject<DataGridHandle | null>;
@@ -81,6 +92,8 @@ type TextareaEditorNav = {
   onDiscard: EskerraTableEditDataGridProps['onDiscard'];
   /** Mirrors draft cell text into parent `rows` so `rowHeight` tracks typing (RDG keeps edit state internal until commit). */
   onLiveRowSync: (rowIdx: number, nextRow: EskerraGridRow) => void;
+  /** After closing a cell editor, ask CodeMirror to remeasure the table widget (avoids blank grid when selectCell is skipped). */
+  scheduleEditorRemeasure: () => void;
 };
 
 function EskerraTableTextareaEditor({
@@ -115,7 +128,10 @@ function EskerraTableTextareaEditor({
         onRowChange(next);
         nav.onLiveRowSync(rowIdx, next);
       }}
-      onBlur={() => onClose(true, false)}
+      onBlur={() => {
+        onClose(true, false);
+        nav.scheduleEditorRemeasure();
+      }}
       onKeyDown={e => {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -179,12 +195,17 @@ export function EskerraTableEditDataGrid({
     remapRowKeys(modelToGridRows(initialModel.cells)),
   );
   const [pasteNotice, setPasteNotice] = useState<string | null>(null);
+  /** Bumps when react-data-grid must fully remount after we skip selectCell (avoids stuck blank viewport). */
+  const [rdgRemountKey, setRdgRemountKey] = useState(0);
 
   const gridRef = useRef<DataGridHandle>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef({rowIdx: 0, colIdx: 0});
   const rowsRef = useRef(rows);
+  const layoutSyncRef = useRef<() => void>(() => {});
+  /** When selectCell is skipped (focus in CM outside shell), RDG can paint a blank grid; remount grid + remeasure. */
+  const healAfterSkippedSelectRef = useRef<() => void>(() => {});
 
   const [layoutMetrics, setLayoutMetrics] = useState<{
     gridWidthPx: number;
@@ -201,6 +222,38 @@ export function EskerraTableEditDataGrid({
   useLayoutEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useLayoutEffect(() => {
+    layoutSyncRef.current = () => {
+      queueMicrotask(() => {
+        onTableGridLayoutChange?.();
+        requestAnimationFrame(() => {
+          onTableGridLayoutChange?.();
+        });
+      });
+    };
+  }, [onTableGridLayoutChange]);
+
+  useLayoutEffect(() => {
+    healAfterSkippedSelectRef.current = () => {
+      queueMicrotask(() => {
+        const sel = selectionRef.current;
+        setRdgRemountKey(k => k + 1);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            gridRef.current?.selectCell(
+              {rowIdx: sel.rowIdx, idx: sel.colIdx},
+              {shouldFocusCell: false, enableEditor: false},
+            );
+            onTableGridLayoutChange?.();
+            requestAnimationFrame(() => {
+              onTableGridLayoutChange?.();
+            });
+          });
+        });
+      });
+    };
+  }, [onTableGridLayoutChange]);
 
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
@@ -260,6 +313,10 @@ export function EskerraTableEditDataGrid({
     });
   }, []);
 
+  const scheduleEditorRemeasure = useCallback(() => {
+    layoutSyncRef.current();
+  }, []);
+
   const editorNav = useMemo(
     (): TextareaEditorNav => ({
       rowsRef,
@@ -268,8 +325,9 @@ export function EskerraTableEditDataGrid({
       onCommit,
       onDiscard,
       onLiveRowSync,
+      scheduleEditorRemeasure,
     }),
-    [colCount, onCommit, onDiscard, onLiveRowSync],
+    [colCount, onCommit, onDiscard, onLiveRowSync, scheduleEditorRemeasure],
   );
 
   /** No RDG header row labels: Markdown row 0 is the real header (avoids duplicate “File | Contents”). */
@@ -399,6 +457,32 @@ export function EskerraTableEditDataGrid({
         if (active instanceof Node && shell.contains(active)) {
           return;
         }
+        if (isFocusInCodemirrorOutsideShell(shell, active)) {
+          healAfterSkippedSelectRef.current();
+          return;
+        }
+        if (active instanceof Element && active.tagName === 'BODY') {
+          requestAnimationFrame(() => {
+            const a2 = document.activeElement;
+            const sel = selectionRef.current;
+            if (a2 instanceof Node && shell.contains(a2)) {
+              gridRef.current?.selectCell(
+                {rowIdx: sel.rowIdx, idx: sel.colIdx},
+                {shouldFocusCell: false, enableEditor: false},
+              );
+              return;
+            }
+            if (isFocusInCodemirrorOutsideShell(shell, a2)) {
+              healAfterSkippedSelectRef.current();
+              return;
+            }
+            gridRef.current?.selectCell(
+              {rowIdx: sel.rowIdx, idx: sel.colIdx},
+              {shouldFocusCell: false, enableEditor: false},
+            );
+          });
+          return;
+        }
         const {rowIdx, colIdx} = selectionRef.current;
         gridRef.current?.selectCell(
           {rowIdx, idx: colIdx},
@@ -454,7 +538,15 @@ export function EskerraTableEditDataGrid({
 
   useLayoutEffect(() => {
     queueMicrotask(() => onTableGridLayoutChange?.());
-  }, [gridBlockPx, totalRowPixels, layoutMetrics.gridWidthPx, onTableGridLayoutChange]);
+  }, [
+    gridBlockPx,
+    totalRowPixels,
+    layoutMetrics.gridWidthPx,
+    onTableGridLayoutChange,
+    rows.length,
+    colCount,
+    widthForMath,
+  ]);
 
   const addRow = useCallback(() => {
     setRows(prev => {
@@ -490,6 +582,7 @@ export function EskerraTableEditDataGrid({
           )}
           <div ref={wrapRef} className="cm-eskerra-table-rdg-wrap">
             <DataGrid
+              key={rdgRemountKey}
               ref={gridRef}
               className="cm-eskerra-table-rdg rdg-light"
               style={
