@@ -3,6 +3,7 @@ import {
   hotkeysCoreFeature,
   selectionFeature,
   type AsyncDataLoaderDataRef,
+  type SelectionDataRef,
   type TreeInstance,
 } from '@headless-tree/core';
 import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
@@ -16,6 +17,7 @@ import {
   useRef,
   useState,
   type MutableRefObject,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
@@ -314,6 +316,7 @@ export function VaultPaneTree({
       <AssistiveTreeDescription tree={tree} className="visually-hidden" />
       <div
         {...containerProps}
+        aria-multiselectable="true"
         className="vault-tree"
         ref={el => {
           scrollRef.current = el;
@@ -353,6 +356,7 @@ export function VaultPaneTree({
               );
             }
             const rowProps = item.getProps();
+            const {onClick: rowAriaOnClick, ...rowButtonA11yProps} = rowProps;
             const level = item.getItemMeta().level;
             const pad = 8 + level * 14;
             const isFolder = data.kind === 'folder';
@@ -362,7 +366,7 @@ export function VaultPaneTree({
             const canDragFromRow = Boolean(data.uri) && data.uri !== rootId && !busy;
             const rowButton = (
               <button
-                {...rowProps}
+                {...rowButtonA11yProps}
                 type="button"
                 className={[
                   selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
@@ -374,6 +378,22 @@ export function VaultPaneTree({
                 style={{paddingInlineStart: pad}}
                 disabled={busy}
                 draggable={canDragFromRow}
+                onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                    if (e.shiftKey) {
+                      item.selectUpTo(e.ctrlKey || e.metaKey);
+                    } else {
+                      item.toggleSelect();
+                    }
+                    if (!e.shiftKey) {
+                      tree.getDataRef<SelectionDataRef>().current.selectUpToAnchorId =
+                        item.getId();
+                    }
+                    item.setFocused();
+                    return;
+                  }
+                  rowAriaOnClick?.(e.nativeEvent);
+                }}
                 onDragStart={e => {
                   if (!canDragFromRow) {
                     return;

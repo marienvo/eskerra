@@ -95,7 +95,7 @@ Do **not** implement multi-select and DnD in the same phase.
 - [ ] Phase 2: Vault tree UI (lazy, virtual, context menu, single select, prune cache)
 - [ ] Phase 3: wiki wired to index only; stem-only; file rename rewrite only; no folder-move rewrites
 - [x] Phase 4: single-item DnD
-- [ ] Phase 5: multi-select
+- [x] Phase 5: multi-select
 - [ ] Phase 6: bulk operations
 - [ ] Phase 7: desktop specs updated
 - [ ] Backlinks: separate plan when started; **not** part of this checklist
