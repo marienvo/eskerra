@@ -1,9 +1,6 @@
 import {
   filterVaultTreeDirEntries,
   isEligibleVaultMarkdownFileName,
-  shouldPruneVaultTreeSubdirectory,
-  type SubtreeMarkdownPresenceCache,
-  vaultSubtreeHasEligibleMarkdown,
   type VaultFilesystem,
 } from '@notebox/core';
 
@@ -16,14 +13,17 @@ export type VaultTreeItemData = {
   lastModified: number | null;
 };
 
+/**
+ * Lists visible children for the vault tree using one `listFiles` + non-recursive filters only.
+ * Subtree-based pruning (empty-looking folders) is deferred; expansion stays on the direct listing path.
+ */
 export async function loadVaultTreeVisibleChildIds(options: {
   parentUri: string;
   fs: VaultFilesystem;
-  subtreeCache: SubtreeMarkdownPresenceCache;
   itemStoreRef: MutableRefObject<Record<string, VaultTreeItemData>>;
   signal?: AbortSignal;
 }): Promise<string[]> {
-  const {parentUri, fs, subtreeCache, itemStoreRef, signal} = options;
+  const {parentUri, fs, itemStoreRef, signal} = options;
   const rows = await fs.listFiles(parentUri);
   signal?.throwIfAborted();
   const filtered = filterVaultTreeDirEntries(rows);
@@ -32,21 +32,6 @@ export async function loadVaultTreeVisibleChildIds(options: {
   const articles: Entry[] = [];
   for (const e of filtered) {
     if (e.type === 'directory') {
-      const childFiltered = filterVaultTreeDirEntries(await fs.listFiles(e.uri));
-      signal?.throwIfAborted();
-      const hasMd = await vaultSubtreeHasEligibleMarkdown(fs, e.uri, {
-        signal,
-        subtreeCache,
-        knownFilteredEntries: childFiltered,
-      });
-      if (
-        shouldPruneVaultTreeSubdirectory({
-          filteredChildEntries: childFiltered,
-          subtreeHasEligibleMarkdown: hasMd,
-        })
-      ) {
-        continue;
-      }
       folders.push(e);
     } else if (isEligibleVaultMarkdownFileName(e.name)) {
       articles.push(e);

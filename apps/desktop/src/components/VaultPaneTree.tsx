@@ -5,11 +5,7 @@ import {
   type TreeInstance,
 } from '@headless-tree/core';
 import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
-import {
-  normalizeVaultBaseUri,
-  type SubtreeMarkdownPresenceCache,
-  type VaultFilesystem,
-} from '@notebox/core';
+import {normalizeVaultBaseUri, type VaultFilesystem} from '@notebox/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {useEffect, useMemo, useRef} from 'react';
@@ -20,7 +16,6 @@ import {MaterialIcon} from './MaterialIcon';
 export type VaultPaneTreeProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
-  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
   /** Bumps when vault files change; expanded branches refetch without remounting the tree. */
   fsRefreshNonce: number;
   selectedMarkdownUri: string | null;
@@ -36,7 +31,6 @@ export type VaultPaneTreeProps = {
 export function VaultPaneTree({
   vaultRoot,
   fs,
-  subtreeMarkdownCache,
   fsRefreshNonce,
   selectedMarkdownUri,
   busy,
@@ -106,7 +100,6 @@ export function VaultPaneTree({
         loadVaultTreeVisibleChildIds({
           parentUri: parentId,
           fs,
-          subtreeCache: subtreeMarkdownCache,
           itemStoreRef,
         }),
     },

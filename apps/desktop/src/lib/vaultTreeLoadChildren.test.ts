@@ -1,7 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 
 import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
-import {SubtreeMarkdownPresenceCache} from '@notebox/core';
 
 import {loadVaultTreeVisibleChildIds, type VaultTreeItemData} from './vaultTreeLoadChildren';
 
@@ -14,7 +13,7 @@ function file(name: string, uri: string): VaultDirEntry {
 }
 
 describe('loadVaultTreeVisibleChildIds', () => {
-  it('lists folders first then markdown, and prunes dirs with no eligible markdown', async () => {
+  it('lists direct children only: folders first, then markdown; one listFiles per expand', async () => {
     const fs: VaultFilesystem = {
       exists: vi.fn(),
       mkdir: vi.fn(),
@@ -32,26 +31,20 @@ describe('loadVaultTreeVisibleChildIds', () => {
             file('a.md', '/v/a.md'),
           ];
         }
-        if (d === '/v/Empty') {
-          return [file('x.txt', '/v/Empty/x.txt')];
-        }
-        if (d === '/v/Zebra') {
-          return [file('z.md', '/v/Zebra/z.md')];
-        }
         return [];
       }),
     };
-    const subtreeCache = new SubtreeMarkdownPresenceCache();
     const itemStoreRef = {current: {} as Record<string, VaultTreeItemData>};
     const ids = await loadVaultTreeVisibleChildIds({
       parentUri: '/v',
       fs,
-      subtreeCache,
       itemStoreRef,
     });
-    expect(ids).toEqual(['/v/Zebra', '/v/a.md', '/v/b.md']);
+    expect(ids).toEqual(['/v/Empty', '/v/Zebra', '/v/a.md', '/v/b.md']);
+    expect(itemStoreRef.current['/v/Empty']).toMatchObject({kind: 'folder'});
     expect(itemStoreRef.current['/v/Zebra']).toMatchObject({kind: 'folder'});
     expect(itemStoreRef.current['/v/a.md']).toMatchObject({kind: 'article', name: 'a.md'});
-    expect(itemStoreRef.current['/v/Empty']).toBeUndefined();
+    expect(vi.mocked(fs.listFiles)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fs.listFiles)).toHaveBeenCalledWith('/v');
   });
 });

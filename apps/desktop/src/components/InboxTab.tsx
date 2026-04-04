@@ -12,7 +12,6 @@ import {
   extractFirstMarkdownH1,
   getNoteTitle,
   stemFromMarkdownFileName,
-  type SubtreeMarkdownPresenceCache,
   type VaultFilesystem,
 } from '@notebox/core';
 
@@ -40,7 +39,6 @@ type WikiLinkAmbiguityRenamePrompt = {
 type InboxTabProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
-  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
   fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   leftWidthPx: number;
@@ -74,7 +72,6 @@ type InboxTabProps = {
 export function InboxTab({
   vaultRoot,
   fs,
-  subtreeMarkdownCache,
   fsRefreshNonce,
   inboxEditorRef,
   leftWidthPx,
@@ -492,7 +489,6 @@ export function InboxTab({
               <VaultPaneTree
                 vaultRoot={vaultRoot}
                 fs={fs}
-                subtreeMarkdownCache={subtreeMarkdownCache}
                 fsRefreshNonce={fsRefreshNonce}
                 selectedMarkdownUri={composingNewEntry ? null : selectedUri}
                 busy={busy}

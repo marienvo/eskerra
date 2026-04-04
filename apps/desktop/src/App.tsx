@@ -138,7 +138,6 @@ export default function App() {
     onWikiLinkActivate,
     deleteNote,
     renameNote,
-    subtreeMarkdownCache,
     deleteFolder,
     renameFolder,
     inboxShellRestored,
@@ -551,7 +550,6 @@ export default function App() {
                 key={vaultRoot}
                 vaultRoot={vaultRoot}
                 fs={fs}
-                subtreeMarkdownCache={subtreeMarkdownCache}
                 fsRefreshNonce={fsRefreshNonce}
                 inboxEditorRef={inboxEditorRef}
                 leftWidthPx={layouts.inbox.leftWidthPx}
