@@ -16,7 +16,7 @@ Normative colors for the **desktop** shell (Tauri). Where these differ from [des
 ## Do not
 
 - Do **not** use `interactiveText` for primary/secondary buttons or icon buttons; keep the existing accent / neutral button system.
-- Do **not** use `interactiveText` for Eskerra table **active cell** outline or table-mode focus chrome in the editor; use `--color-accent`.
+- Do **not** use `interactiveText` for Eskerra structured table **widget** chrome (rail actions, in-document table mode marks) that should read as selected; use `--color-accent`. Table shell grid cells do not use a separate accent outline; focus uses normal editor styling.
 - Do **not** substitute `interactiveText` for semantic states (error, recording, success); those keep semantic tokens.
 
 ## Implementation

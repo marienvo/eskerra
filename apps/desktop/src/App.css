@@ -1842,13 +1842,6 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-eskerra-table-shell__cell--active {
-  background: color-mix(in srgb, var(--color-accent) 8%, var(--nb-editor-paper));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 28%, transparent);
-}
-
-[data-app-surface='capture']
-  .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host {
   box-sizing: border-box;
   min-block-size: 1.35em;
