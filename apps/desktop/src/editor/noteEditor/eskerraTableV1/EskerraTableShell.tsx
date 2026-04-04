@@ -31,7 +31,6 @@ import {
 } from './eskerraTableNestedCellEditors';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableParentLinkCompartments';
 import {
-  commitTableDraftFromShell,
   commitThenEditTableAsMarkdown,
   flushTableDraftToDocumentSilent,
   restoreTableBaseline,
@@ -151,26 +150,17 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     [parentView],
   );
 
-  const runDone = useCallback(
-    (moveCaretBelow: boolean) => {
-      const merged = snapshotAllCellDocs();
-      draftRef.current.cells = merged.map(r => [...r]);
-      setCells(merged.map(r => [...r]));
-      const model = modelFromDraft(
-        draftRef.current.cells,
-        draftRef.current.align,
-        colCount,
-      );
-      commitTableDraftFromShell(
-        parentView,
-        lineFromRef.current,
-        model,
-        moveCaretBelow,
-      );
-      return true;
-    },
-    [colCount, parentView, snapshotAllCellDocs],
-  );
+  const exitToMarkdownSource = useCallback(() => {
+    const merged = snapshotAllCellDocs();
+    draftRef.current.cells = merged.map(r => [...r]);
+    setCells(merged.map(r => [...r]));
+    const model = modelFromDraft(
+      draftRef.current.cells,
+      draftRef.current.align,
+      colCount,
+    );
+    commitThenEditTableAsMarkdown(parentView, lineFromRef.current, model);
+  }, [colCount, parentView, snapshotAllCellDocs]);
 
   const runEnterFrom = useCallback(
     (fromRow: number, fromCol: number) => {
@@ -188,9 +178,10 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         parentView.requestMeasure();
         return true;
       }
-      return runDone(true);
+      exitToMarkdownSource();
+      return true;
     },
-    [parentView, runDone],
+    [exitToMarkdownSource, parentView],
   );
 
   const flushDraft = useCallback(() => {
@@ -238,21 +229,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     parentView.requestMeasure();
   }, [parentView, snapshotAllCellDocs]);
 
-  const onEditMarkdown = useCallback(() => {
-    const merged = snapshotAllCellDocs();
-    draftRef.current.cells = merged.map(r => [...r]);
-    setCells(merged.map(r => [...r]));
-    const model = modelFromDraft(
-      draftRef.current.cells,
-      draftRef.current.align,
-      colCount,
-    );
-    commitThenEditTableAsMarkdown(parentView, lineFromRef.current, model);
-  }, [colCount, parentView, snapshotAllCellDocs]);
-
-  const onDoneClick = useCallback(() => {
-    runDone(false);
-  }, [runDone]);
+  const onEditMarkdown = exitToMarkdownSource;
 
   const onCellDocChange = useCallback((r: number, c: number, text: string) => {
     setCells(prev => {
@@ -348,42 +325,6 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
 
   return (
     <div className="cm-eskerra-table-shell">
-      <div className="cm-eskerra-table-shell__toolbar">
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-          data-tooltip="Edit as Markdown"
-          aria-label="Edit as Markdown"
-          onClick={onEditMarkdown}
-        >
-          <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-            code
-          </span>
-        </button>
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-          data-tooltip="Add row"
-          aria-label="Add row"
-          onClick={onAddRow}
-        >
-          <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-            add
-          </span>
-        </button>
-        <button
-          type="button"
-          className="cm-eskerra-table__icon-btn cm-eskerra-table__icon-btn--primary app-tooltip-trigger"
-          data-tooltip="Done"
-          aria-label="Done"
-          onClick={onDoneClick}
-        >
-          <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-            check
-          </span>
-        </button>
-      </div>
-
       {notice ? (
         <div className="cm-eskerra-table__notice" role="status">
           {notice}
@@ -409,7 +350,6 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                 activeCellRef={activeCellRef}
                 moveTabFrom={moveTabFrom}
                 runEnterFrom={runEnterFrom}
-                runDone={runDone}
                 baselineText={baselineText}
                 lineFromRef={lineFromRef}
                 onCellDocChange={onCellDocChange}
@@ -438,7 +378,6 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     activeCellRef={activeCellRef}
                     moveTabFrom={moveTabFrom}
                     runEnterFrom={runEnterFrom}
-                    runDone={runDone}
                     baselineText={baselineText}
                     lineFromRef={lineFromRef}
                     onCellDocChange={onCellDocChange}
@@ -449,6 +388,38 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           ))}
         </tbody>
       </table>
+
+      <div
+        className="cm-eskerra-table__rail cm-eskerra-table-shell__rail"
+        aria-label="Table actions"
+      >
+        <div className="cm-eskerra-table__rail-top">
+          <button
+            type="button"
+            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+            data-tooltip="Edit as Markdown"
+            aria-label="Edit as Markdown"
+            onClick={onEditMarkdown}
+          >
+            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
+              code
+            </span>
+          </button>
+        </div>
+        <div className="cm-eskerra-table__rail-bottom">
+          <button
+            type="button"
+            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+            data-tooltip="Add row"
+            aria-label="Add row"
+            onClick={onAddRow}
+          >
+            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
+              add
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -467,7 +438,6 @@ type ShellCellProps = {
   activeCellRef: MutableRefObject<{row: number; col: number}>;
   moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
   runEnterFrom: (row: number, col: number) => boolean;
-  runDone: (moveBelow: boolean) => boolean;
   baselineText: string;
   lineFromRef: MutableRefObject<number>;
   onCellDocChange: (row: number, col: number, text: string) => void;
@@ -488,7 +458,6 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     activeCellRef,
     moveTabFrom,
     runEnterFrom,
-    runDone,
     baselineText,
     lineFromRef,
     onCellDocChange,
@@ -499,7 +468,6 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
   const tableCallbacksRef = useRef<EskerraTableCellKeyboardCallbacks>({
     onTabFromCell: () => false,
     onEnterFromCell: () => false,
-    onDoneFromCell: () => false,
     onEscapeFromCell: () => false,
   });
   const tableCallbacksBox =
@@ -513,7 +481,6 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     const tc = tableCallbacksRef.current;
     tc.onTabFromCell = shift => moveTabFrom(row, col, shift);
     tc.onEnterFromCell = () => runEnterFrom(row, col);
-    tc.onDoneFromCell = () => runDone(false);
     tc.onEscapeFromCell = () => {
       restoreTableBaseline(parentView, lineFromRef.current, baselineText);
       return true;
@@ -525,7 +492,6 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     moveTabFrom,
     parentView,
     row,
-    runDone,
     runEnterFrom,
   ]);
 

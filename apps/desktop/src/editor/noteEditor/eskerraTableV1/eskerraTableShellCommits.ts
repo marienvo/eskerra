@@ -13,51 +13,6 @@ import {
 } from './eskerraTableV1DocBlocks';
 import {closeTableShellEffect, suppressTableWidgetAt} from './eskerraTableShellEffects';
 
-function cursorPosBelowTable(doc: EditorView['state']['doc'], block: {to: number}): number {
-  const lastLineNo = doc.lineAt(block.to).number;
-  if (lastLineNo < doc.lines) {
-    return doc.line(lastLineNo + 1).from;
-  }
-  return doc.length;
-}
-
-/**
- * Writes the draft model into the document and closes the table shell (Done / Enter on last row).
- */
-export function commitTableDraftFromShell(
-  view: EditorView,
-  headerLineFrom: number,
-  model: EskerraTableModelV1,
-  moveCaretBelow: boolean,
-): void {
-  const block = findEskerraTableDocBlockByLineFrom(view.state.doc, headerLineFrom);
-  if (!block) {
-    view.dispatch({effects: closeTableShellEffect.of(null)});
-    return;
-  }
-  const markdown = serializeEskerraTableV1ToMarkdown(model);
-  const insert = buildEskerraTableInsertWithBlankLines(view.state.doc, block, markdown);
-  const current = view.state.doc.sliceString(block.from, block.to);
-  const effects = [closeTableShellEffect.of(null)];
-
-  if (insert !== current) {
-    const head = moveCaretBelow ? block.from + insert.length : undefined;
-    view.dispatch({
-      changes: {from: block.from, to: block.to, insert},
-      effects,
-      selection: head == null ? undefined : EditorSelection.cursor(head),
-      scrollIntoView: true,
-    });
-  } else {
-    const head = moveCaretBelow ? cursorPosBelowTable(view.state.doc, block) : undefined;
-    view.dispatch({
-      effects,
-      selection: head == null ? undefined : EditorSelection.cursor(head),
-      scrollIntoView: moveCaretBelow,
-    });
-  }
-}
-
 /**
  * Persists draft if it serializes differently; does not close the shell. Used before save / close note.
  */

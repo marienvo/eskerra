@@ -114,4 +114,27 @@ describe('eskerra table shell focus', () => {
       expect(EditorView.findFromDOM(content as HTMLElement)).toBeTruthy();
     }
   });
+
+  it('mounts the table shell margin rail beside the grid', async () => {
+    const tableMd = makeTable('T', 2);
+    const md = `${tableMd}`;
+    const parentEl = document.createElement('div');
+    document.body.appendChild(parentEl);
+
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(4),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent: parentEl});
+    view.focus();
+    await doubleRaf();
+    await doubleRaf();
+    const rail = parentEl.querySelector('.cm-eskerra-table-shell__rail');
+    expect(rail).toBeTruthy();
+    const topBtn = rail?.querySelector('.cm-eskerra-table__rail-top button');
+    const bottomBtn = rail?.querySelector('.cm-eskerra-table__rail-bottom button');
+    expect(topBtn?.getAttribute('aria-label')).toBe('Edit as Markdown');
+    expect(bottomBtn?.getAttribute('aria-label')).toBe('Add row');
+  });
 });

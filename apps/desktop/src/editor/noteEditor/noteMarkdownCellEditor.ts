@@ -57,7 +57,6 @@ function sanitizeCellInsert(s: string): string {
 export type EskerraTableCellKeyboardCallbacks = {
   onTabFromCell: (shift: boolean) => boolean;
   onEnterFromCell: () => boolean;
-  onDoneFromCell: () => boolean;
   onEscapeFromCell: () => boolean;
 };
 
@@ -325,7 +324,6 @@ export function buildNoteMarkdownCellExtensions(
     {key: 'Tab', run: () => tc.current.onTabFromCell(false)},
     {key: 'Shift-Tab', run: () => tc.current.onTabFromCell(true)},
     {key: 'Enter', run: () => tc.current.onEnterFromCell()},
-    {key: 'Mod-Enter', run: () => tc.current.onDoneFromCell()},
     {key: 'Escape', run: () => tc.current.onEscapeFromCell()},
     {key: '|', run: () => true},
   ]);
