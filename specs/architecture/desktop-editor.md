@@ -64,6 +64,22 @@ The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tr
 
 ## Vertical layout and click coordinates
 
+### Markdown tables (v1)
+
+- **Scope:** Desktop vault editor only (`NoteMarkdownEditor`) via a CodeMirror block-widget extension (`apps/desktop/src/editor/noteEditor/eskerraTableV1/eskerraTableV1Codemirror.ts`).
+- **Source of truth:** Markdown text on disk remains authoritative; no hidden table store. Structured edits replace the original table source range with one CodeMirror transaction.
+- **Detection contract (strict subset):**
+  - contiguous non-empty lines that all start and end with `|`
+  - first line = header row
+  - second line = separator row; each cell is GFM-style (**at least three hyphens**, optional leading/trailing `:` for alignment), so padded cells like `------` or `-----------` are accepted the same as `---`
+  - remaining lines = body rows with the same column count
+  - escaped pipes (`\|`) and multiline cells are unsupported in v1; failed parse leaves raw source visible (fail-closed).
+- **UI modes:** `render` (calm read table) and `cells` (structured cell inputs). `Edit as Markdown` is an action that removes/suppresses the widget for that block and focuses the source text; there is no long-lived raw mode. While suppressed, an inline **Show rendered table** banner is shown immediately above that table block in document order (CodeMirror block widget decoration). Suppression is remapped across edits and dropped if the former header line no longer looks like a pipe row.
+- **Edit lifecycle:** `Done` commits, `Esc` discards, blur outside the widget refocuses back into table cells (no implicit commit/discard), and `Enter` on the last row commits and places the caret on a new line directly below the table block.
+- **Keyboard interactions:** `Tab`/`Shift+Tab` row-major wrap, `ArrowUp`/`ArrowDown` move between rows (same column), and `Mod+Enter` commits from cell mode.
+- **Clipboard:** TSV and HTML-table paste populate from the focused cell. Oversized paste clips to the current grid and must show an explicit notice (`Pasted m×n of M×N`).
+- **Normalization policy:** On commit, table markdown is serialized deterministically (fixed outer pipes, fixed inter-cell spacing, canonical separator tokens, LF newlines).
+
 CodeMirror 6 derives vertical layout from DOM measurements (for example line and block heights). Those measurements use the element border box: **`padding` and border count toward the measured height; CSS `margin` does not.** If vertical spacing is expressed only as margin on a `.cm-line`, a line decoration, or a block widget DOM node, the editor’s internal height map can be shorter than the visible layout. Clicks and cursor placement below that content then map to the wrong document positions (offset “phantom zone”).
 
 **Rule:** For the Vault markdown editor, do not use vertical **margin** on anything that defines how tall a logical line or block widget appears in the editor. Use **padding** (or other in-box spacing) instead. This applies at least to:

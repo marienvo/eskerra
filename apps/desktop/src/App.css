@@ -1420,6 +1420,122 @@ button.primary.destructive {
   border-radius: 4px;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding-bottom: 0.35rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__button {
+  cursor: default;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 0.45rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--color-panel-solid);
+  color: var(--color-text-primary);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__button--primary {
+  border-color: var(--color-interactive-text);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__notice {
+  margin: 0;
+  padding: 0 0 0.35rem;
+  color: var(--color-text-secondary);
+  font-size: 0.77rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table td {
+  border: 1px solid var(--color-border-subtle);
+  padding: 0.32rem 0.45rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th {
+  color: var(--color-text-primary);
+  font-weight: 620;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  padding: 0.08rem 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__input:focus {
+  outline: 1px solid var(--color-interactive-text);
+  outline-offset: 0;
+  border-radius: 0.2rem;
+  padding-inline: 0.15rem;
+}
+
+/*
+ * Banner when a table is shown as raw Markdown (Edit as Markdown escape hatch).
+ * Inline block widget directly above the suppressed pipe table (document order).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  margin: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-panel-solid);
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner
+  .cm-eskerra-table-raw-banner__text {
+  flex: 1 1 auto;
+  min-width: 12rem;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-raw-banner
+  .cm-eskerra-table-raw-banner__button {
+  cursor: default;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 0.45rem;
+  padding: 0.12rem 0.5rem;
+  background: var(--color-panel-solid);
+  color: var(--color-text-primary);
+  font-size: inherit;
+  line-height: inherit;
+}
+
 /*
  * Markdown syntax appearance (CodeMirror + Lezer); inbox editor lives under capture.
  * Do not use vertical margin on .cm-line (or line decorations): CodeMirror measures line

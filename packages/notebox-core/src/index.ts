@@ -61,6 +61,16 @@ export {
   startOfLocalDayMs,
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export type {
+  EskerraTableAlignment,
+  EskerraTableModelV1,
+  ParseEskerraTableV1FailureReason,
+  ParseEskerraTableV1Result,
+} from './markdown/eskerraTableV1';
+export {
+  parseEskerraTableV1FromLines,
+  serializeEskerraTableV1ToMarkdown,
+} from './markdown/eskerraTableV1';
 export {
   computeStartupBarDisplayGain,
   computeStartupSpectrumSample,

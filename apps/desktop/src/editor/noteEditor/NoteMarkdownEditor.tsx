@@ -53,6 +53,7 @@ import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
+import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {
   wikiLinkInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
@@ -160,6 +161,8 @@ const NoteMarkdownEditorImpl = forwardRef<
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
+  /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
+  const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
@@ -532,6 +535,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
       ),
+      ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
         activeNotePath: activeNotePathRef,
@@ -749,8 +753,6 @@ const NoteMarkdownEditorImpl = forwardRef<
   }, []);
 
   const [dropActive, setDropActive] = useState(false);
-
-  const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = hostRef.current;
