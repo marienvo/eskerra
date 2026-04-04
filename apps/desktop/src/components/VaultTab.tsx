@@ -12,7 +12,6 @@ import {
   extractFirstMarkdownH1,
   getNoteTitle,
   normalizeVaultBaseUri,
-  stemFromMarkdownFileName,
   type VaultFilesystem,
   type VaultMarkdownRef,
 } from '@notebox/core';
@@ -23,6 +22,7 @@ import {
 } from '../editor/noteEditor/NoteMarkdownEditor';
 
 import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
+import {renameDraftStemForMarkdownUri} from '../lib/renameDialogDraft';
 import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
@@ -42,7 +42,7 @@ type WikiLinkAmbiguityRenamePrompt = {
   skippedAmbiguousLinkCount: number;
 };
 
-type InboxTabProps = {
+type VaultTabProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
   fsRefreshNonce: number;
@@ -88,7 +88,7 @@ type InboxTabProps = {
   onCancelWikiLinkAmbiguityRename: () => void;
 };
 
-export function InboxTab({
+export function VaultTab({
   vaultRoot,
   fs,
   fsRefreshNonce,
@@ -124,7 +124,7 @@ export function InboxTab({
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
-}: InboxTabProps) {
+}: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
@@ -141,12 +141,12 @@ export function InboxTab({
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const openRenameDialog = (uri: string) => {
-    const row = notes.find(n => n.uri === uri);
-    if (!row) {
+    const draft = renameDraftStemForMarkdownUri(uri, vaultMarkdownRefs);
+    if (draft === null) {
       return;
     }
     setRenameTargetUri(uri);
-    setRenameDraft(stemFromMarkdownFileName(row.name));
+    setRenameDraft(draft);
   };
 
   const submitRename = () => {
@@ -230,27 +230,34 @@ export function InboxTab({
     return tail || 'Editor';
   }, [composingNewEntry, notes, selectedUri]);
 
-  const backlinkRows = useMemo(
-    () =>
-      backlinkUris
-        .map(uri => {
-          const row = notes.find(n => n.uri === uri);
-          if (!row) {
-            return null;
-          }
-          const markdownSource =
-            !composingNewEntry && row.uri === selectedUri
-              ? editorBody
-              : inboxContentByUri[row.uri];
-          const title =
-            markdownSource !== undefined
-              ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(row.name)
-              : getNoteTitle(row.name);
-          return {uri: row.uri, fileName: row.name, title};
-        })
-        .filter((row): row is {uri: string; fileName: string; title: string} => row != null),
-    [backlinkUris, notes, composingNewEntry, selectedUri, editorBody, inboxContentByUri],
-  );
+  const backlinkRows = useMemo(() => {
+    const norm = (u: string) => u.trim().replace(/\\/g, '/');
+    return backlinkUris
+      .map(uri => {
+        const ref = vaultMarkdownRefs.find(r => norm(r.uri) === norm(uri));
+        const fileName = (ref?.name ?? uri.split(/[/\\]/).pop() ?? '').trim();
+        if (!fileName) {
+          return null;
+        }
+        const markdownSource =
+          !composingNewEntry && uri === selectedUri
+            ? editorBody
+            : inboxContentByUri[uri];
+        const title =
+          markdownSource !== undefined
+            ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(fileName)
+            : getNoteTitle(fileName);
+        return {uri, fileName, title};
+      })
+      .filter((row): row is {uri: string; fileName: string; title: string} => row != null);
+  }, [
+    backlinkUris,
+    vaultMarkdownRefs,
+    composingNewEntry,
+    selectedUri,
+    editorBody,
+    inboxContentByUri,
+  ]);
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
 

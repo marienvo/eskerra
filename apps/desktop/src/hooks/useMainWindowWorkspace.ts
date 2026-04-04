@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -60,15 +59,18 @@ import {
 } from '../lib/tauriVault';
 import {listInboxWikiLinkBacklinkReferrersForTarget} from '../lib/inboxWikiLinkBacklinkIndex';
 import {
-  applyInboxWikiLinkRenameMaintenance,
-  planInboxWikiLinkRenameMaintenance,
-} from '../lib/inboxWikiLinkRenameMaintenance';
+  applyVaultWikiLinkRenameMaintenance,
+  planVaultWikiLinkRenameMaintenance,
+} from '../lib/vaultWikiLinkRenameMaintenance';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 /** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
 const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
+
+/** Debounce vault-wide backlink computation after selection / ref list changes (reads note bodies from disk). */
+const VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS = 320;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -149,7 +151,7 @@ export type UseMainWindowWorkspaceResult = {
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   deviceInstanceId: string;
-  inboxRenameNotice: string | null;
+  wikiRenameNotice: string | null;
   renameLinkProgress: RenameLinkProgress | null;
   pendingWikiLinkAmbiguityRename: PendingWikiLinkAmbiguityRename | null;
   confirmPendingWikiLinkAmbiguityRename: () => Promise<void>;
@@ -223,7 +225,10 @@ export function useMainWindowWorkspace(options: {
     useState(false);
   const [inboxShellRestored, setInboxShellRestored] = useState(true);
   const [backlinksActiveBody, setBacklinksActiveBody] = useState('');
-  const [inboxRenameNotice, setInboxRenameNotice] = useState<string | null>(null);
+  const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
+    readonly string[]
+  >([]);
+  const [wikiRenameNotice, setWikiRenameNotice] = useState<string | null>(null);
   const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
     null,
   );
@@ -245,6 +250,7 @@ export function useMainWindowWorkspace(options: {
   );
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
+  const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
 
   vaultRootRef.current = vaultRoot;
@@ -252,21 +258,22 @@ export function useMainWindowWorkspace(options: {
   composingNewEntryRef.current = composingNewEntry;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
+  backlinksActiveBodyRef.current = backlinksActiveBody;
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
       window.clearTimeout(renameNoticeTimeoutRef.current);
       renameNoticeTimeoutRef.current = null;
     }
-    setInboxRenameNotice(null);
+    setWikiRenameNotice(null);
   }, []);
 
   const setTransientRenameNotice = useCallback(
     (message: string) => {
       clearRenameNotice();
-      setInboxRenameNotice(message);
+      setWikiRenameNotice(message);
       renameNoticeTimeoutRef.current = window.setTimeout(() => {
-        setInboxRenameNotice(null);
+        setWikiRenameNotice(null);
         renameNoticeTimeoutRef.current = null;
       }, RENAME_NOTICE_TTL_MS);
     },
@@ -281,18 +288,69 @@ export function useMainWindowWorkspace(options: {
     };
   }, []);
 
-  const selectedNoteBacklinkUris = useMemo(() => {
+  useEffect(() => {
     if (composingNewEntry || !selectedUri) {
-      return [] as const;
+      setSelectedNoteBacklinkUris([]);
+      return;
     }
-    return listInboxWikiLinkBacklinkReferrersForTarget({
-      targetUri: selectedUri,
-      notes: notes.map(n => ({name: n.name, uri: n.uri})),
-      contentByUri: inboxContentByUri,
-      activeUri: selectedUri,
-      activeBody: backlinksActiveBody,
-    });
-  }, [composingNewEntry, selectedUri, notes, inboxContentByUri, backlinksActiveBody]);
+
+    const selected = selectedUri;
+    let cancelled = false;
+
+    const tid = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+      void (async () => {
+        try {
+          const refs = vaultMarkdownRefsRef.current;
+          const activeUri = selectedUriRef.current;
+          const activeBody = backlinksActiveBodyRef.current;
+          if (cancelled || activeUri !== selected) {
+            return;
+          }
+
+          const expanded = await loadMarkdownBodiesForWikiMaintenance(
+            fs,
+            refs,
+            inboxContentByUriRef.current,
+            activeUri,
+            activeBody,
+          );
+          if (cancelled || selectedUriRef.current !== selected) {
+            return;
+          }
+
+          const uris = listInboxWikiLinkBacklinkReferrersForTarget({
+            targetUri: selected,
+            notes: refs.map(r => ({name: r.name, uri: r.uri})),
+            contentByUri: expanded,
+            activeUri,
+            activeBody,
+          });
+          if (!cancelled && selectedUriRef.current === selected) {
+            setSelectedNoteBacklinkUris(uris);
+          }
+        } catch {
+          if (!cancelled && selectedUriRef.current === selected) {
+            setSelectedNoteBacklinkUris([]);
+          }
+        }
+      })();
+    }, VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(tid);
+    };
+  }, [
+    composingNewEntry,
+    selectedUri,
+    vaultMarkdownRefs,
+    inboxContentByUri,
+    backlinksActiveBody,
+    fs,
+  ]);
 
   useEffect(() => {
     vaultMarkdownRefsRef.current = vaultMarkdownRefs;
@@ -306,16 +364,6 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       setNotes(list);
-      setInboxContentByUri(prev => {
-        const keep = new Set(list.map(n => n.uri));
-        const next = {...prev};
-        for (const k of Object.keys(next)) {
-          if (!keep.has(k)) {
-            delete next[k];
-          }
-        }
-        return next;
-      });
     },
     [fs],
   );
@@ -771,7 +819,7 @@ export function useMainWindowWorkspace(options: {
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
         const preRenamePlan = plannedStem
-          ? planInboxWikiLinkRenameMaintenance({
+          ? planVaultWikiLinkRenameMaintenance({
               oldTargetUri: uri,
               renamedStem: plannedStem,
               notes: wikiRefs,
@@ -812,7 +860,7 @@ export function useMainWindowWorkspace(options: {
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
         const rewritePlan =
           renamedStem && renamedStem !== plannedStem
-            ? planInboxWikiLinkRenameMaintenance({
+            ? planVaultWikiLinkRenameMaintenance({
                 oldTargetUri: uri,
                 renamedStem,
                 notes: wikiRefs,
@@ -829,7 +877,7 @@ export function useMainWindowWorkspace(options: {
           setRenameLinkProgress({done: 0, total: rewritePlan.touchedFileCount});
         }
         const applyStartedAt = performance.now();
-        const applyResult = await applyInboxWikiLinkRenameMaintenance({
+        const applyResult = await applyVaultWikiLinkRenameMaintenance({
           fs,
           oldUri: uri,
           newUri: nextUri,
@@ -1415,7 +1463,7 @@ export function useMainWindowWorkspace(options: {
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
-    inboxRenameNotice,
+    wikiRenameNotice,
     renameLinkProgress,
     pendingWikiLinkAmbiguityRename,
     confirmPendingWikiLinkAmbiguityRename,

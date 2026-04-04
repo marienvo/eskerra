@@ -132,4 +132,23 @@ describe('listInboxWikiLinkBacklinkReferrersForTarget', () => {
       }),
     ).toEqual(['/vault/Inbox/A.md']);
   });
+
+  it('includes referrers outside the Inbox folder when they are in the note set', () => {
+    const vaultNotes = [
+      {name: 'InboxNote.md', uri: '/vault/Inbox/InboxNote.md'},
+      {name: 'Project.md', uri: '/vault/Projects/Project.md'},
+    ] as const;
+    expect(
+      listInboxWikiLinkBacklinkReferrersForTarget({
+        targetUri: '/vault/Inbox/InboxNote.md',
+        notes: vaultNotes,
+        contentByUri: {
+          '/vault/Inbox/InboxNote.md': '',
+          '/vault/Projects/Project.md': 'See [[InboxNote]]',
+        },
+        activeUri: null,
+        activeBody: '',
+      }),
+    ).toEqual(['/vault/Projects/Project.md']);
+  });
 });

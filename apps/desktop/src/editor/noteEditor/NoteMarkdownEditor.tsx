@@ -39,7 +39,7 @@ const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandi
 
 export type NoteMarkdownEditorProps = {
   vaultRoot: string;
-  /** Absolute path to the open inbox `.md` file, or `null` while composing a new note. */
+  /** Absolute path to the open vault `.md` file, or `null` while composing a new note. */
   activeNotePath: string | null;
   initialMarkdown: string;
   /** Bumped when the document should reload from `initialMarkdown` (note switch or new entry). */
@@ -49,9 +49,9 @@ export type NoteMarkdownEditorProps = {
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  /** Shell-owned: `[[inner]]` resolves to exactly one inbox note (for styling). */
+  /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
-  /** Shell-provided inbox notes for `[[` autocomplete (WL-3). */
+  /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;

@@ -18,7 +18,7 @@ import {
 
 import {DesktopStartupSplash} from './components/DesktopStartupSplash';
 import {DesktopPlayerDock} from './components/DesktopPlayerDock';
-import {InboxTab} from './components/InboxTab';
+import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
 import {AppStatusBar} from './components/AppStatusBar';
@@ -121,7 +121,7 @@ export default function App() {
     selectedNoteBacklinkUris,
     fsRefreshNonce,
     deviceInstanceId,
-    inboxRenameNotice,
+    wikiRenameNotice,
     renameLinkProgress,
     pendingWikiLinkAmbiguityRename,
     confirmPendingWikiLinkAmbiguityRename,
@@ -529,9 +529,9 @@ export default function App() {
           Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
         </div>
       ) : null}
-      {!err && !renameLinkProgress && inboxRenameNotice ? (
+      {!err && !renameLinkProgress && wikiRenameNotice ? (
         <div className="info-banner" aria-live="polite">
-          {inboxRenameNotice}
+          {wikiRenameNotice}
         </div>
       ) : null}
 
@@ -551,7 +551,7 @@ export default function App() {
         <div className="main-column">
           <main className="main-stage">
             <div className="tab-panel" hidden={mainTab !== 'inbox'}>
-              <InboxTab
+              <VaultTab
                 key={vaultRoot}
                 vaultRoot={vaultRoot}
                 fs={fs}

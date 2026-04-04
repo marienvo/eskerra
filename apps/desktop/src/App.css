@@ -82,7 +82,8 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   min-height: 40px;
   height: 40px;
-  padding: 0 0.3rem 0 0.42rem;
+  /* inline-start matches .rail padding so the logo centers on .rail-tab (40×40). */
+  padding: 0 0.3rem 0 0.34rem;
   box-sizing: border-box;
   border-bottom: none;
   background: var(--color-bg);
@@ -106,6 +107,8 @@ a:focus:not(:focus-visible) {
   cursor: default;
   -webkit-user-drag: none;
   /* 29px matches the app icon grid; avoids odd fractional raster sizes at 1x. */
+  /* Center 29px asset on the 40px rail tab column below (see .rail-tab width). */
+  margin-inline-start: calc((40px - 29px) / 2);
 }
 
 .window-title-bar-drag {
