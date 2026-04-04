@@ -30,9 +30,12 @@ export async function collectVaultMarkdownRefs(
   while (stack.length > 0) {
     signal?.throwIfAborted();
     const dirUri = stack.pop()!;
+    signal?.throwIfAborted();
     const rows = await fs.listFiles(dirUri);
+    signal?.throwIfAborted();
     const filtered = filterVaultTreeDirEntries(rows);
     for (const entry of filtered) {
+      signal?.throwIfAborted();
       if (entry.type === 'directory') {
         stack.push(entry.uri);
         continue;

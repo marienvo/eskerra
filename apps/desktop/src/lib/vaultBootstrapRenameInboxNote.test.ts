@@ -27,6 +27,7 @@ function createFsMock(existingUris: string[] = []): {
   return {fs, renames};
 }
 
+// Nested `.md` paths under the vault are allowed for vault-wide CRUD (not Inbox-list-only).
 describe('renameVaultMarkdownNote', () => {
   it('renames the note and refreshes the inbox index', async () => {
     const noteUri = '/vault/Inbox/old-name.md';

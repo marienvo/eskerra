@@ -64,6 +64,11 @@ export async function bootstrapVaultLayout(
   }
 }
 
+/**
+ * Rewrites `General/Inbox.md` from **top-level** `Inbox/*.md` filenames only (not nested paths).
+ * Vault-wide delete/rename still calls this so **flat** inbox notes stay listed in that index; for
+ * nested or non-inbox paths the scan is unchanged and the write is usually skipped (existing === body).
+ */
 export async function syncInboxMarkdownIndex(
   root: string,
   fs: VaultFilesystem,

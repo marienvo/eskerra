@@ -21,6 +21,7 @@ function createFsMock(): {fs: VaultFilesystem; unlinks: string[]} {
   return {fs, unlinks};
 }
 
+// Nested `.md` paths under the vault are allowed for vault-wide CRUD (not Inbox-list-only).
 describe('deleteVaultMarkdownNote', () => {
   it('unlinks the note and refreshes the inbox index', async () => {
     const {fs, unlinks} = createFsMock();
