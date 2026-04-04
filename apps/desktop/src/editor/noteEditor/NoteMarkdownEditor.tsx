@@ -1,6 +1,11 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {markdown} from '@codemirror/lang-markdown';
-import {Compartment, EditorSelection, EditorState} from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+} from '@codemirror/state';
 import {
   drawSelection,
   EditorView,
@@ -94,6 +99,10 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const parentRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
+  const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
+  const wikiLinkTargetIsResolvedRef = useRef(wikiLinkTargetIsResolved);
+  wikiLinkTargetIsResolvedRef.current = wikiLinkTargetIsResolved;
   const initialMarkdownRef = useRef(initialMarkdown);
   initialMarkdownRef.current = initialMarkdown;
 
@@ -432,6 +441,8 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
     ];
 
+    codemirrorBootExtensionsRef.current = extensions;
+
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -444,6 +455,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     return () => {
       view.destroy();
       viewRef.current = null;
+      codemirrorBootExtensionsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- remount via `sessionKey` wraps this component
   }, []);
@@ -468,16 +480,24 @@ const NoteMarkdownEditorImpl = forwardRef<
         viewRef.current?.state.doc.toString() ?? initialMarkdownRef.current,
       loadMarkdown: (markdown: string) => {
         const view = viewRef.current;
-        if (!view) {
+        const bootExtensions = codemirrorBootExtensionsRef.current;
+        const compartment = wikiLinkCompartmentRef.current;
+        if (!view || !bootExtensions || !compartment) {
           return;
         }
+        view.setState(
+          EditorState.create({
+            doc: markdown,
+            selection: EditorSelection.cursor(markdown.length),
+            extensions: bootExtensions,
+          }),
+        );
         view.dispatch({
-          changes: {
-            from: 0,
-            to: view.state.doc.length,
-            insert: markdown,
-          },
-          selection: EditorSelection.cursor(markdown.length),
+          effects: compartment.reconfigure(
+            wikiLinkResolvedHighlightExtensions(
+              wikiLinkTargetIsResolvedRef.current,
+            ),
+          ),
         });
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {

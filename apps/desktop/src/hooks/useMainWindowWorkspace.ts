@@ -554,11 +554,27 @@ export function useMainWindowWorkspace(options: {
     if (cached !== undefined) {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
+      setInboxEditorResetNonce(n => n + 1);
     } else {
       setEditorBody('');
+      lastPersistedRef.current = null;
     }
-    setInboxEditorResetNonce(n => n + 1);
   }, [vaultRoot, selectedUri]);
+
+  /**
+   * Clear the open note in CodeMirror when the shell has no cached body yet.
+   * Runs after `NoteMarkdownEditor`'s mount effect creates the view (parent layout is too early).
+   */
+  useEffect(() => {
+    if (!vaultRoot || !selectedUri) {
+      return;
+    }
+    if (inboxContentByUriRef.current[selectedUri] !== undefined) {
+      return;
+    }
+    inboxEditorRef.current?.loadMarkdown('');
+  }, [vaultRoot, selectedUri, inboxEditorRef]);
+
 
   useLayoutEffect(() => {
     if (composingNewEntry || !selectedUri) {
@@ -598,7 +614,7 @@ export function useMainWindowWorkspace(options: {
           });
           if (normalized !== editorBodyRef.current) {
             setEditorBody(normalized);
-            setInboxEditorResetNonce(n => n + 1);
+            inboxEditorRef.current?.loadMarkdown(normalized);
           }
         }
       } catch (e) {
@@ -610,7 +626,7 @@ export function useMainWindowWorkspace(options: {
     return () => {
       cancelled = true;
     };
-  }, [vaultRoot, selectedUri, fs]);
+  }, [vaultRoot, selectedUri, fs, inboxEditorRef]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
