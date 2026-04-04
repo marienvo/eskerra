@@ -137,14 +137,12 @@ describe('eskerra table shell focus', () => {
     const rail = parentEl.querySelector('[aria-label="Table actions"]');
     expect(rail).toBeTruthy();
     const topBtns = rail?.querySelectorAll('.cm-eskerra-table__rail-top button');
-    expect(topBtns?.length).toBe(2);
+    expect(topBtns?.length).toBe(1);
     expect(topBtns?.[0]?.getAttribute('aria-label')).toBe('Edit as Markdown');
-    expect(topBtns?.[1]?.getAttribute('aria-label')).toBe('Add column');
-    const bottomBtn = rail?.querySelector('.cm-eskerra-table__rail-bottom button');
-    expect(bottomBtn?.getAttribute('aria-label')).toBe('Add row');
+    expect(rail?.querySelector('.cm-eskerra-table__rail-bottom')).toBeNull();
   });
 
-  it('adds a new column of cell editors when Add column is clicked', async () => {
+  it('adds a new column of cell editors from column handle context menu', async () => {
     const tableMd = makeTable('T', 2);
     const md = `${tableMd}`;
     const parentEl = document.createElement('div');
@@ -159,11 +157,25 @@ describe('eskerra table shell focus', () => {
     view.focus();
     await doubleRaf();
     await doubleRaf();
-    const addColBtn = parentEl.querySelector(
-      '.cm-eskerra-table__rail-top button[aria-label="Add column"]',
+    const colHandle = parentEl.querySelector(
+      '.cm-eskerra-table-shell__col-handle',
     );
-    expect(addColBtn).toBeTruthy();
-    (addColBtn as HTMLButtonElement).click();
+    expect(colHandle).toBeTruthy();
+    colHandle!.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+      }),
+    );
+    await doubleRaf();
+    await doubleRaf();
+    const items = Array.from(document.body.querySelectorAll('[role="menuitem"]'));
+    const addRight = items.find(item =>
+      item.textContent?.includes('Add column to the right'),
+    );
+    expect(addRight).toBeTruthy();
+    (addRight as HTMLElement).click();
     await doubleRaf();
     await doubleRaf();
     const hosts = parentEl.querySelectorAll('.cm-eskerra-table-shell__cm-host');

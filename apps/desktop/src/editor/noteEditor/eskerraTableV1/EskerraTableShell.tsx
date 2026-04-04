@@ -342,53 +342,6 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     draftRef.current = {cells, align};
   }, [cells, align]);
 
-  const onAddRow = useCallback(() => {
-    const merged = snapshotAllCellDocs();
-    draftRef.current.cells = merged.map(r => [...r]);
-    const nextRowIndex = merged.length;
-    const nCols = merged[0]?.length ?? 0;
-    if (nCols === 0) {
-      return;
-    }
-    setCells(() => [
-      ...merged.map(r => [...r]),
-      Array.from({length: nCols}, () => ''),
-    ]);
-    activeCellRef.current = {
-      row: nextRowIndex,
-      col: activeCellRef.current.col,
-    };
-    parentView.requestMeasure();
-  }, [parentView, snapshotAllCellDocs]);
-
-  const onAddColumn = useCallback(() => {
-    const merged = snapshotAllCellDocs();
-    draftRef.current.cells = merged.map(r => [...r]);
-    const nCols = merged[0]?.length ?? 0;
-    const nRows = merged.length;
-    if (nCols === 0 || nRows === 0) {
-      return;
-    }
-    const newColIndex = nCols;
-    const focusRow = Math.min(
-      Math.max(activeCellRef.current.row, 0),
-      nRows - 1,
-    );
-    setAlign(prev => [
-      ...Array.from({length: nCols}, (_, i) => prev[i]),
-      undefined,
-    ]);
-    setCells(() => merged.map(r => [...r, '']));
-    activeCellRef.current = {row: focusRow, col: newColIndex};
-    parentView.requestMeasure();
-    requestAnimationFrame(() => {
-      const nextView = cellEditorsRef.current.get(
-        cellKey(focusRow, newColIndex),
-      );
-      nextView?.focus();
-    });
-  }, [parentView, snapshotAllCellDocs]);
-
   const onEditMarkdown = exitToMarkdownSource;
 
   const onCellDocChange = useCallback((r: number, c: number, text: string) => {
@@ -1233,44 +1186,20 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           className="cm-eskerra-table__rail cm-eskerra-table-shell__rail"
           aria-label="Table actions"
         >
-        <div className="cm-eskerra-table__rail-top">
-          <button
-            type="button"
-            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-            data-tooltip="Edit as Markdown"
-            aria-label="Edit as Markdown"
-            onClick={onEditMarkdown}
-          >
-            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-              code
-            </span>
-          </button>
-          <button
-            type="button"
-            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-            data-tooltip="Add column"
-            aria-label="Add column"
-            onClick={onAddColumn}
-          >
-            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-              add
-            </span>
-          </button>
+          <div className="cm-eskerra-table__rail-top">
+            <button
+              type="button"
+              className="cm-eskerra-table__icon-btn app-tooltip-trigger"
+              data-tooltip="Edit as Markdown"
+              aria-label="Edit as Markdown"
+              onClick={onEditMarkdown}
+            >
+              <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
+                code
+              </span>
+            </button>
+          </div>
         </div>
-        <div className="cm-eskerra-table__rail-bottom">
-          <button
-            type="button"
-            className="cm-eskerra-table__icon-btn app-tooltip-trigger"
-            data-tooltip="Add row"
-            aria-label="Add row"
-            onClick={onAddRow}
-          >
-            <span className="material-icons cm-eskerra-table__icon-glyph" aria-hidden="true">
-              add
-            </span>
-          </button>
-        </div>
-      </div>
       </div>
     </div>
   );
