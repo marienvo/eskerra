@@ -1199,7 +1199,8 @@ button.primary.destructive {
   flex-direction: row;
   align-items: stretch;
   flex: 1 0 0;
-  min-height: 0;
+  /* Let outer .note-markdown-editor-scroll grow with editor + “Linked from” on long notes. */
+  min-height: min-content;
 }
 
 .note-markdown-editor-fold-rail {
@@ -1272,7 +1273,7 @@ button.primary.destructive {
 }
 
 .note-markdown-editor-host {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   min-height: 8rem;
