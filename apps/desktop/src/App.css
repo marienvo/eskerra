@@ -538,6 +538,12 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
 }
 
+/* Left split panes must consume column height so inner scroll regions (vault tree, episodes) fill immediately. */
+.desktop-hsplit-left > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
 .panel-surface.inner {
   background: var(--color-editor-bg);
 }
@@ -767,7 +773,7 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   overflow: auto;
   /* Horizontal inset here (not row margin) keeps virtual row geometry aligned with estimateSize */
-  padding: 4px;
+  padding: 2px;
   box-sizing: border-box;
 }
 
@@ -789,22 +795,22 @@ a:focus:not(:focus-visible) {
   align-items: center;
   width: 100%;
   /* Fixed height must match VaultPaneTree VAULT_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
-  height: 40px;
-  min-height: 40px;
-  max-height: 40px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
   margin: 0;
   padding-block: 0;
-  padding-inline-end: 6px;
+  padding-inline-end: 4px;
   box-sizing: border-box;
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 0.84rem;
-  line-height: 20px;
+  font-size: 0.75rem;
+  line-height: 1.2;
   text-align: start;
   cursor: default;
-  gap: 2px;
-  border-radius: 6px;
+  gap: 1px;
+  border-radius: 4px;
 }
 
 .vault-tree-row:hover {
@@ -812,13 +818,31 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row--selected {
-  background: var(--color-accent-subtle-bg);
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.vault-tree-row--selected:hover {
+  background: color-mix(in srgb, var(--color-accent) 88%, #000);
+  color: #fff;
+}
+
+.vault-tree-row--selected .vault-tree-row__icon,
+.vault-tree-row--selected .vault-tree-row__chevron {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .vault-tree-row--drop-target {
   outline: 1px solid var(--color-accent, #3b82f6);
   outline-offset: -1px;
   background: var(--color-row-hover);
+}
+
+.vault-tree-row--selected.vault-tree-row--drop-target {
+  background: var(--color-accent);
+  color: #fff;
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
 }
 
 .vault-tree-row--dragging {
@@ -868,7 +892,7 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row__chevron {
-  flex: 0 0 20px;
+  flex: 0 0 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -876,11 +900,11 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row__chevron-spacer {
-  flex: 0 0 20px;
+  flex: 0 0 18px;
 }
 
 .vault-tree-row__icon {
-  flex: 0 0 22px;
+  flex: 0 0 18px;
   display: inline-flex;
   color: var(--color-muted);
 }
@@ -891,7 +915,7 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 20px;
+  line-height: 1.2;
 }
 
 .visually-hidden {

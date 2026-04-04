@@ -22,18 +22,18 @@ export function RailNav({
   return (
     <nav className="rail" aria-label="Main">
       <TabButton
-        active={active === 'podcasts'}
-        aria-label="Episodes"
-        icon="radio"
-        tooltip="Episodes"
-        onClick={() => onSelect('podcasts')}
-      />
-      <TabButton
         active={active === 'inbox'}
         aria-label="Vault"
         icon="edit_note"
         tooltip="Vault"
         onClick={() => onSelect('inbox')}
+      />
+      <TabButton
+        active={active === 'podcasts'}
+        aria-label="Episodes"
+        icon="radio"
+        tooltip="Episodes"
+        onClick={() => onSelect('podcasts')}
       />
       <div className="rail-spacer" aria-hidden />
       <TabButton

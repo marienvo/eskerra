@@ -28,7 +28,7 @@ import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaul
 import {MaterialIcon} from './MaterialIcon';
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
-const VAULT_TREE_ROW_HEIGHT_PX = 40;
+const VAULT_TREE_ROW_HEIGHT_PX = 26;
 
 const VAULT_TREE_DND_MIME = 'application/x-notebox-vault-tree';
 
@@ -404,7 +404,7 @@ export function VaultPaneTree({
             const rowProps = item.getProps();
             const {onClick: rowAriaOnClick, ...rowButtonA11yProps} = rowProps;
             const level = item.getItemMeta().level;
-            const pad = 8 + level * 14;
+            const pad = 6 + level * 12;
             const isFolder = data.kind === 'folder';
             const selected = item.isSelected();
             const isVaultRoot = data.uri === rootId;
