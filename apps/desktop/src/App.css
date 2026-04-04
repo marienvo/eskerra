@@ -1138,14 +1138,27 @@ button.primary.destructive {
   min-height: 0;
 }
 
+/* Red Graphite–inspired tokens (light); scoped so Vault tree / chrome are unaffected. */
 .note-markdown-editor-wrap {
+  --nb-editor-margin-bg: #eee;
+  --nb-editor-paper: #fbfbfb;
+  --nb-editor-text: rgb(44, 44, 44);
+  --nb-editor-header: rgb(44, 44, 44);
+  --nb-editor-faint: rgb(150, 150, 150);
+  --nb-editor-accent: rgb(203, 77, 73);
+  --nb-editor-inline-code-bg: rgb(240, 240, 240);
+  --nb-editor-inline-code-border: rgb(215, 215, 215);
+  --nb-editor-inline-code-text: rgb(45, 45, 45);
+  --nb-editor-code-block-bg: #ffffff;
+  --nb-editor-code-block-border: #92a1a17a;
+
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 120px;
   min-height: 0;
-  background: var(--color-editor-bg);
-  color: var(--color-editor-text);
+  background: var(--nb-editor-margin-bg);
+  color: var(--nb-editor-text);
 }
 
 .note-markdown-editor-host {
@@ -1174,13 +1187,14 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-editor {
   /* Opaque layer: WebKitGTK text over transparency can look thicker/fuzzier than the pane (see desktop-text-rendering.md). */
-  background: var(--color-editor-bg);
+  background: var(--nb-editor-margin-bg);
   color: inherit;
   min-height: 100%;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-scroller {
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
   /* Fixed size: fluid clamp with vw made text feel like it “zoomed” when resizing the window. */
   font-size: 16px;
   line-height: 1.6;
@@ -1190,13 +1204,18 @@ button.primary.destructive {
   /* Same WebKit tradeoff as .playlist-body / .section-heading: grayscale AA can look more even when
    * scrolling/compositing would otherwise muddle subpixel LCD antialiasing. */
   -webkit-font-smoothing: antialiased;
+  background: var(--nb-editor-margin-bg);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-content {
   min-height: 6rem;
-  /* Inset for text only: padding on the root wrapped .cm-scroller and pushed the scrollbar inward. */
+  max-width: 690px;
+  margin-inline: auto;
+  /* Inset for text only: padding on .cm-content keeps the scrollbar in the margin gutter. */
   padding: 0.5rem 0.6rem;
   box-sizing: border-box;
+  background: var(--nb-editor-paper);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.025);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-line {
@@ -1214,11 +1233,11 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--resolved {
-  color: var(--color-accent, #4fafe6);
+  color: var(--color-interactive-text);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--unresolved {
-  color: var(--color-muted);
+  color: var(--nb-editor-faint);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
@@ -1249,6 +1268,7 @@ button.primary.destructive {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-h2 {
@@ -1256,48 +1276,57 @@ button.primary.destructive {
   font-weight: 700;
   letter-spacing: -0.015em;
   line-height: 1.3;
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-h3 {
   font-size: 1.2em;
   font-weight: 650;
   line-height: 1.35;
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-h4 {
   font-size: 1.08em;
   font-weight: 650;
   line-height: 1.4;
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-h5 {
   font-size: 1em;
   font-weight: 600;
   line-height: 1.45;
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-h6 {
   font-size: 0.95em;
   font-weight: 600;
   line-height: 1.45;
-  color: color-mix(in srgb, var(--color-editor-text) 88%, var(--color-muted));
+  color: var(--nb-editor-header);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-syntax-mark {
-  color: var(--color-muted);
+  color: var(--nb-editor-faint);
   font-weight: 400;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-list {
-  font-weight: inherit;
+  color: var(--nb-editor-accent);
+  font-size: 0.85em;
+  font-weight: 500;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-code {
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
-  padding: 0.12em 0.34em;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  padding: 0.25em 0.34em;
+  border-radius: 4px;
+  border: 1px solid var(--nb-editor-inline-code-border);
+  background: var(--nb-editor-inline-code-bg);
+  color: var(--nb-editor-inline-code-text);
+  font-weight: 600;
   box-decoration-break: clone;
 }
 
@@ -1331,27 +1360,31 @@ button.primary.destructive {
   font-family: ui-monospace, monospace;
   font-size: 0.92em;
   line-height: 1.55;
-  /* Must stay translucent: opaque line backgrounds sit above the selection layer. */
-  background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  background: var(--nb-editor-code-block-bg);
+  color: var(--nb-editor-inline-code-text);
+  border-left: 1px solid var(--nb-editor-code-block-border);
+  border-right: 1px solid var(--nb-editor-code-block-border);
   padding-inline: 0.55rem;
   /* Replaces former margin-block: 0.06rem; padding is included in line height measurements. */
   padding-block: 0.03rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--first {
-  border-radius: 8px 8px 0 0;
+  border-top: 1px solid var(--nb-editor-code-block-border);
+  border-radius: 4px 4px 0 0;
   /* Former margin-top 0.35rem merged into padding (margin is not measured by CodeMirror). */
   padding-top: 0.7rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--last {
-  border-radius: 0 0 8px 8px;
+  border-bottom: 1px solid var(--nb-editor-code-block-border);
+  border-radius: 0 0 4px 4px;
   /* Former margin-bottom 0.35rem merged into padding. */
   padding-bottom: 0.75rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--first.cm-md-fence-line--last {
-  border-radius: 8px;
+  border-radius: 4px;
   /* Single-line fence: former margin-block 0.35rem + padding-block 0.4rem, no vertical margin. */
   padding: 0.75rem 0.55rem;
 }
