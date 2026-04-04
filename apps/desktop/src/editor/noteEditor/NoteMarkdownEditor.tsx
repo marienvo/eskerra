@@ -1,5 +1,6 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {
+  foldAll,
   foldedRanges,
   foldGutter,
   foldKeymap,
@@ -119,6 +120,11 @@ export type NoteMarkdownEditorHandle = {
   loadMarkdown: (markdown: string) => void;
   /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
   unfoldAllFolds: () => boolean;
+  /**
+   * Folds every foldable range (lists, sections, etc.). H1 title sections are never foldable
+   * (see `markdownNotebox`).
+   */
+  collapseAllFolds: () => boolean;
   replaceWikiLinkInnerAt: (options: {
     at: number;
     expectedInner: string;
@@ -679,6 +685,13 @@ const NoteMarkdownEditorImpl = forwardRef<
           return false;
         }
         return unfoldAll(view);
+      },
+      collapseAllFolds: () => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return foldAll(view);
       },
       replaceWikiLinkInnerAt: ({at, expectedInner, replacementInner}) => {
         if (replacementInner === expectedInner) {

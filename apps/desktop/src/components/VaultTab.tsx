@@ -667,23 +667,42 @@ export function VaultTab({
                 <div className="editor note-markdown-editor-wrap">
                   <div className="note-markdown-editor-scroll">
                     <div className="note-markdown-editor-reading-column">
-                      {editorHasFoldedRanges ? (
-                        <div className="note-markdown-editor-expand-folds-anchor">
-                          <button
-                            type="button"
-                            className="note-markdown-editor-expand-folds-btn app-tooltip-trigger"
-                            onClick={() => {
-                              inboxEditorRef.current?.unfoldAllFolds();
-                            }}
-                            disabled={busy}
-                            aria-label="Expand all folds"
-                            data-tooltip="Expand all folds"
-                            data-tooltip-placement="inline-end"
-                          >
-                            <MaterialIcon name="unfold_more" size={12} />
-                          </button>
-                        </div>
-                      ) : null}
+                      <div className="note-markdown-editor-fold-bulk-anchor">
+                        <button
+                          type="button"
+                          className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                          onClick={() => {
+                            const ed = inboxEditorRef.current;
+                            if (!ed) {
+                              return;
+                            }
+                            if (editorHasFoldedRanges) {
+                              ed.unfoldAllFolds();
+                            } else {
+                              ed.collapseAllFolds();
+                            }
+                          }}
+                          disabled={busy}
+                          aria-label={
+                            editorHasFoldedRanges
+                              ? 'Expand all folds'
+                              : 'Collapse all folds'
+                          }
+                          data-tooltip={
+                            editorHasFoldedRanges
+                              ? 'Expand all folds'
+                              : 'Collapse all folds'
+                          }
+                          data-tooltip-placement="inline-end"
+                        >
+                          <MaterialIcon
+                            name={
+                              editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
+                            }
+                            size={12}
+                          />
+                        </button>
+                      </div>
                       <NoteMarkdownEditor
                         ref={inboxEditorRef}
                         attachmentHost={inboxAttachmentHost}

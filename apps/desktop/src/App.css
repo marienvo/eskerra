@@ -1210,10 +1210,10 @@ button.primary.destructive {
 }
 
 /*
- * Expand-all: fold column + first-line band; sticky in scroll so it stays visible. Negative margin
- * keeps the editor laid out like the former absolute overlay.
+ * Bulk fold (expand all / collapse all): fold column + first-line band; sticky in scroll.
+ * Negative margin keeps the editor laid out like the former absolute overlay.
  */
-[data-app-surface='capture'] .note-markdown-editor-expand-folds-anchor {
+[data-app-surface='capture'] .note-markdown-editor-fold-bulk-anchor {
   position: sticky;
   top: 0;
   z-index: 6;
@@ -1231,7 +1231,7 @@ button.primary.destructive {
   background: var(--nb-editor-margin-bg);
 }
 
-[data-app-surface='capture'] .note-markdown-editor-expand-folds-btn {
+[data-app-surface='capture'] .note-markdown-editor-fold-bulk-btn {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
@@ -1248,16 +1248,16 @@ button.primary.destructive {
   cursor: default;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-expand-folds-btn:hover:not(:disabled) {
+[data-app-surface='capture'] .note-markdown-editor-fold-bulk-btn:hover:not(:disabled) {
   color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
 }
 
-[data-app-surface='capture'] .note-markdown-editor-expand-folds-btn:focus-visible {
+[data-app-surface='capture'] .note-markdown-editor-fold-bulk-btn:focus-visible {
   outline: 2px solid var(--nb-editor-accent);
   outline-offset: 1px;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-expand-folds-btn:disabled {
+[data-app-surface='capture'] .note-markdown-editor-fold-bulk-btn:disabled {
   opacity: 0.45;
   cursor: default;
 }
