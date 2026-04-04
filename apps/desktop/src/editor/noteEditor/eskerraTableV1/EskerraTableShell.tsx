@@ -1,5 +1,6 @@
 import type {EskerraTableAlignment, EskerraTableModelV1} from '@notebox/core';
-import {Compartment, EditorState} from '@codemirror/state';
+import {EditorState} from '@codemirror/state';
+import type {Compartment} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
 import {
   useCallback,
@@ -8,9 +9,16 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type MutableRefObject,
+  type RefObject,
 } from 'react';
 
-import type {EskerraTableCellKeyboardCallbacks} from '../noteMarkdownCellEditor';
+import type {
+  EskerraTableCellKeyboardCallbacks,
+  NoteMarkdownCellEditorCallbacks,
+} from '../noteMarkdownCellEditor';
+
+let nextEskerraCellPasteSession = 1;
 
 import {clipboardMatrixFromClipboardEvent} from './eskerraTableClipboard';
 import {
@@ -18,6 +26,10 @@ import {
   resolveEskerraTableCellExtensions,
 } from './eskerraTableCellBundleFacet';
 import {registerEskerraTableDraftFlusher} from './eskerraTableDraftFlush';
+import {
+  registerEskerraTableNestedCellEditor,
+} from './eskerraTableNestedCellEditors';
+import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableParentLinkCompartments';
 import {
   commitTableDraftFromShell,
   commitThenEditTableAsMarkdown,
@@ -50,6 +62,10 @@ function modelFromDraft(
   };
 }
 
+function cellKey(row: number, col: number): string {
+  return `${row},${col}`;
+}
+
 export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const {parentView, headerLineFrom, baselineText, initialCells, initialAlign} = props;
 
@@ -75,83 +91,75 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     align: [...initialAlign],
   });
 
-  const cellViewRef = useRef<EditorView | null>(null);
-  const cmHostRef = useRef<HTMLDivElement | null>(null);
-  const wikiCompartmentRef = useRef<Compartment | null>(null);
-  if (wikiCompartmentRef.current === null) {
-    wikiCompartmentRef.current = new Compartment();
-  }
-  const relCompartmentRef = useRef<Compartment | null>(null);
-  if (relCompartmentRef.current === null) {
-    relCompartmentRef.current = new Compartment();
-  }
-  const pasteSessionRef = useRef(0);
-  const skipInitialCellFocusRef = useRef(true);
+  const cellEditorsRef = useRef(new Map<string, EditorView>());
 
-  const tableCallbacksRef = useRef<EskerraTableCellKeyboardCallbacks>({
-    onTabFromCell: () => false,
-    onEnterFromCell: () => false,
-    onDoneFromCell: () => false,
-    onEscapeFromCell: () => false,
-  });
+  const linkCompartments = parentView.state.facet(
+    eskerraTableParentLinkCompartmentsFacet,
+  );
+  if (!linkCompartments) {
+    throw new Error(
+      'eskerraTableParentLinkCompartmentsFacet is missing: NoteMarkdownEditor must register parent wiki / relative link compartments.',
+    );
+  }
 
   const activeCellRef = useRef(activeCell);
 
-  const snapshotEditorToDraft = useCallback(() => {
-    const v = cellViewRef.current;
-    const ac = activeCellRef.current;
-    if (!v) {
-      return;
-    }
-    const t = v.state.doc.toString();
-    setCells(prev => {
-      const next = prev.map(r => [...r]);
-      if (next[ac.row]?.[ac.col] !== undefined) {
-        next[ac.row]![ac.col] = t;
+  const snapshotAllCellDocs = useCallback((): string[][] => {
+    const rowCount = draftRef.current.cells.length;
+    const nCols = draftRef.current.cells[0]?.length ?? 0;
+    const out: string[][] = Array.from({length: rowCount}, (_, r) =>
+      Array.from({length: nCols}, (_, c) => draftRef.current.cells[r]?.[c] ?? ''),
+    );
+    for (const [key, v] of cellEditorsRef.current) {
+      const parts = key.split(',');
+      const r = Number(parts[0]);
+      const c = Number(parts[1]);
+      if (r >= 0 && r < rowCount && c >= 0 && c < nCols) {
+        out[r]![c]! = v.state.doc.toString();
       }
-      return next;
-    });
+    }
+    return out;
   }, []);
 
-  const focusCell = useCallback(
-    (row: number, col: number) => {
-      snapshotEditorToDraft();
-      setActiveCell({row, col});
-      setNotice(null);
-    },
-    [snapshotEditorToDraft],
-  );
-
-  const rowCount = cells.length;
-
-  const moveTab = useCallback(
-    (shift: boolean) => {
-      if (rowCount === 0 || colCount === 0) {
+  const moveTabFrom = useCallback(
+    (fromRow: number, fromCol: number, shift: boolean) => {
+      const rowCount = draftRef.current.cells.length;
+      const nCols = draftRef.current.cells[0]?.length ?? 0;
+      if (rowCount === 0 || nCols === 0) {
         return true;
       }
-      let {row, col} = activeCellRef.current;
+      let row = fromRow;
+      let col = fromCol;
       const dir = shift ? -1 : 1;
       col += dir;
-      if (col >= colCount) {
+      if (col >= nCols) {
         col = 0;
         row += 1;
       } else if (col < 0) {
-        col = colCount - 1;
+        col = nCols - 1;
         row -= 1;
       }
       if (row < 0 || row >= rowCount) {
         return true;
       }
-      focusCell(row, col);
+      const nextView = cellEditorsRef.current.get(cellKey(row, col));
+      setActiveCell({row, col});
+      if (nextView) {
+        requestAnimationFrame(() => {
+          nextView.focus();
+        });
+      }
       parentView.requestMeasure();
       return true;
     },
-    [colCount, focusCell, parentView, rowCount],
+    [parentView],
   );
 
   const runDone = useCallback(
     (moveCaretBelow: boolean) => {
-      snapshotEditorToDraft();
+      const merged = snapshotAllCellDocs();
+      draftRef.current.cells = merged.map(r => [...r]);
+      setCells(merged.map(r => [...r]));
       const model = modelFromDraft(
         draftRef.current.cells,
         draftRef.current.align,
@@ -165,20 +173,33 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       );
       return true;
     },
-    [colCount, parentView, snapshotEditorToDraft],
+    [colCount, parentView, snapshotAllCellDocs],
   );
 
-  const runEnter = useCallback(() => {
-    const {row, col} = activeCellRef.current;
-    if (row < rowCount - 1) {
-      focusCell(row + 1, col);
-      parentView.requestMeasure();
-      return true;
-    }
-    return runDone(true);
-  }, [focusCell, parentView, rowCount, runDone]);
+  const runEnterFrom = useCallback(
+    (fromRow: number, fromCol: number) => {
+      const rowCount = draftRef.current.cells.length;
+      if (fromRow < rowCount - 1) {
+        const nextView = cellEditorsRef.current.get(
+          cellKey(fromRow + 1, fromCol),
+        );
+        setActiveCell({row: fromRow + 1, col: fromCol});
+        if (nextView) {
+          requestAnimationFrame(() => {
+            nextView.focus();
+          });
+        }
+        parentView.requestMeasure();
+        return true;
+      }
+      return runDone(true);
+    },
+    [parentView, runDone],
+  );
 
   const flushDraft = useCallback(() => {
+    const merged = snapshotAllCellDocs();
+    draftRef.current.cells = merged.map(r => [...r]);
     const model = modelFromDraft(
       draftRef.current.cells,
       draftRef.current.align,
@@ -192,7 +213,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     if (nextLine != null) {
       lineFromRef.current = nextLine;
     }
-  }, [colCount, parentView]);
+  }, [colCount, parentView, snapshotAllCellDocs]);
 
   useEffect(() => {
     return registerEskerraTableDraftFlusher(lineFromRef, flushDraft);
@@ -203,136 +224,103 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     activeCellRef.current = activeCell;
   }, [cells, align, activeCell]);
 
-  useLayoutEffect(() => {
-    const tc = tableCallbacksRef.current;
-    tc.onTabFromCell = shift => moveTab(shift);
-    tc.onEnterFromCell = () => runEnter();
-    tc.onDoneFromCell = () => runDone(false);
-    tc.onEscapeFromCell = () => {
-      restoreTableBaseline(parentView, lineFromRef.current, baselineText);
-      return true;
-    };
-  }, [baselineText, moveTab, parentView, runDone, runEnter]);
-
-  useLayoutEffect(() => {
-    const row = activeCell.row;
-    const col = activeCell.col;
-    const host = cmHostRef.current;
-    if (!host) {
-      return;
-    }
-    pasteSessionRef.current += 1;
-    const pasteSessionId = pasteSessionRef.current;
-    cellViewRef.current?.destroy();
-    cellViewRef.current = null;
-
-    const initialCellText = draftRef.current.cells[row]?.[col] ?? '';
-    const factory = parentView.state.facet(eskerraTableCellBundleFacet);
-    const extensions = resolveEskerraTableCellExtensions(
-      {
-        tableCallbacks: tableCallbacksRef,
-        wikiLinkCompartment: wikiCompartmentRef.current!,
-        relativeMdLinkCompartment: relCompartmentRef.current!,
-        onDocChanged: () => {},
-        onReportError: msg => {
-          setNotice(msg);
-          console.error(msg);
-        },
-        pasteSessionRef,
-        pasteSessionId,
-      },
-      factory,
-    );
-    const state = EditorState.create({
-      doc: initialCellText,
-      extensions,
-    });
-    const v = new EditorView({parent: host, state});
-    cellViewRef.current = v;
-    const skipFocus = skipInitialCellFocusRef.current;
-    skipInitialCellFocusRef.current = false;
-    if (!skipFocus) {
-      requestAnimationFrame(() => {
-        v.focus();
-      });
-    }
-    parentView.requestMeasure();
-    return () => {
-      const cur = cellViewRef.current;
-      if (cur) {
-        const textSnapshot = cur.state.doc.toString();
-        setCells(prev => {
-          const next = prev.map(r => [...r]);
-          if (next[row]?.[col] !== undefined) {
-            next[row]![col] = textSnapshot;
-          }
-          return next;
-        });
-        cur.destroy();
-      }
-      cellViewRef.current = null;
-    };
-  }, [activeCell.row, activeCell.col, parentView]);
-
   const onAddRow = useCallback(() => {
-    snapshotEditorToDraft();
-    const nextRowIndex = cells.length;
-    const nCols = cells[0]?.length ?? 0;
+    const merged = snapshotAllCellDocs();
+    draftRef.current.cells = merged.map(r => [...r]);
+    const nextRowIndex = merged.length;
+    const nCols = merged[0]?.length ?? 0;
     if (nCols === 0) {
       return;
     }
-    setCells(prev => [
-      ...prev.map(r => [...r]),
+    setCells(() => [
+      ...merged.map(r => [...r]),
       Array.from({length: nCols}, () => ''),
     ]);
     setActiveCell(ac => ({row: nextRowIndex, col: ac.col}));
     parentView.requestMeasure();
-  }, [cells, parentView, snapshotEditorToDraft]);
+  }, [parentView, snapshotAllCellDocs]);
 
   const onEditMarkdown = useCallback(() => {
-    snapshotEditorToDraft();
+    const merged = snapshotAllCellDocs();
+    draftRef.current.cells = merged.map(r => [...r]);
+    setCells(merged.map(r => [...r]));
     const model = modelFromDraft(
       draftRef.current.cells,
       draftRef.current.align,
       colCount,
     );
     commitThenEditTableAsMarkdown(parentView, lineFromRef.current, model);
-  }, [colCount, parentView, snapshotEditorToDraft]);
+  }, [colCount, parentView, snapshotAllCellDocs]);
 
   const onDoneClick = useCallback(() => {
     runDone(false);
   }, [runDone]);
+
+  const onCellDocChange = useCallback((r: number, c: number, text: string) => {
+    setCells(prev => {
+      if (prev[r]?.[c] === text) {
+        return prev;
+      }
+      const next = prev.map(row => [...row]);
+      if (next[r]?.[c] !== undefined) {
+        next[r]![c] = text;
+      }
+      return next;
+    });
+  }, []);
 
   const applyClipboardMatrix = useCallback(
     (matrix: string[][]) => {
       if (matrix.length === 0) {
         return;
       }
-      snapshotEditorToDraft();
-      setCells(prev => {
-        const next = prev.map(r => [...r]);
-        const {row: startR, col: startC} = activeCellRef.current;
-        const nCols0 = next[0]?.length ?? 0;
+      const merged = snapshotAllCellDocs();
+      const {row: startR, col: startC} = activeCellRef.current;
+      const next = merged.map(r => [...r]);
+      const nCols0 = next[0]?.length ?? 0;
+      for (let dr = 0; dr < matrix.length; dr += 1) {
+        const row = matrix[dr]!;
+        for (let dc = 0; dc < row.length; dc += 1) {
+          const r = startR + dr;
+          const c = startC + dc;
+          if (r >= next.length || c >= nCols0) {
+            continue;
+          }
+          const v = row[dc] ?? '';
+          if (v.includes('|') || v.includes('\n') || v.includes('\r')) {
+            continue;
+          }
+          next[r]![c] = v;
+        }
+      }
+      draftRef.current.cells = next.map(r => [...r]);
+      setCells(next.map(r => [...r]));
+      requestAnimationFrame(() => {
         for (let dr = 0; dr < matrix.length; dr += 1) {
           const row = matrix[dr]!;
           for (let dc = 0; dc < row.length; dc += 1) {
             const r = startR + dr;
             const c = startC + dc;
-            if (r >= next.length || c >= nCols0) {
+            const text = next[r]?.[c];
+            if (text === undefined) {
               continue;
             }
-            const v = row[dc] ?? '';
-            if (v.includes('|') || v.includes('\n') || v.includes('\r')) {
-              continue;
+            const cellView = cellEditorsRef.current.get(cellKey(r, c));
+            if (cellView && cellView.state.doc.toString() !== text) {
+              cellView.dispatch({
+                changes: {
+                  from: 0,
+                  to: cellView.state.doc.length,
+                  insert: text,
+                },
+              });
             }
-            next[r]![c] = v;
           }
         }
-        return next;
+        parentView.requestMeasure();
       });
-      parentView.requestMeasure();
     },
-    [parentView, snapshotEditorToDraft],
+    [parentView, snapshotAllCellDocs],
   );
 
   useEffect(() => {
@@ -410,14 +398,24 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             {headerRow?.map((text, ci) => (
               <EskerraShellCell
                 key={`h-${ci}`}
-                text={text}
+                row={0}
+                col={ci}
+                cellText={text}
                 isHeader
                 align={align[ci]}
                 isActive={activeCell.row === 0 && activeCell.col === ci}
-                cmHostRef={
-                  activeCell.row === 0 && activeCell.col === ci ? cmHostRef : undefined
-                }
-                onActivate={() => focusCell(0, ci)}
+                parentView={parentView}
+                wikiCompartment={linkCompartments.wikiLink}
+                relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
+                cellEditorsRef={cellEditorsRef}
+                setNotice={setNotice}
+                setActiveCell={setActiveCell}
+                moveTabFrom={moveTabFrom}
+                runEnterFrom={runEnterFrom}
+                runDone={runDone}
+                baselineText={baselineText}
+                lineFromRef={lineFromRef}
+                onCellDocChange={onCellDocChange}
               />
             ))}
           </tr>
@@ -430,14 +428,24 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                 return (
                   <EskerraShellCell
                     key={`c-${r}-${ci}`}
-                    text={text}
+                    row={r}
+                    col={ci}
+                    cellText={text}
                     isHeader={false}
                     align={align[ci]}
                     isActive={activeCell.row === r && activeCell.col === ci}
-                    cmHostRef={
-                      activeCell.row === r && activeCell.col === ci ? cmHostRef : undefined
-                    }
-                    onActivate={() => focusCell(r, ci)}
+                    parentView={parentView}
+                    wikiCompartment={linkCompartments.wikiLink}
+                    relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
+                    cellEditorsRef={cellEditorsRef}
+                    setNotice={setNotice}
+                    setActiveCell={setActiveCell}
+                    moveTabFrom={moveTabFrom}
+                    runEnterFrom={runEnterFrom}
+                    runDone={runDone}
+                    baselineText={baselineText}
+                    lineFromRef={lineFromRef}
+                    onCellDocChange={onCellDocChange}
                   />
                 );
               })}
@@ -449,19 +457,152 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   );
 }
 
-function EskerraShellCell(props: {
-  text: string;
+type ShellCellProps = {
+  row: number;
+  col: number;
+  cellText: string;
   isHeader: boolean;
   align: EskerraTableAlignment | undefined;
   isActive: boolean;
-  cmHostRef?: React.RefObject<HTMLDivElement | null>;
-  onActivate: () => void;
-}): ReactElement {
-  const {text, isHeader, align, isActive, cmHostRef, onActivate} = props;
+  parentView: EditorView;
+  wikiCompartment: Compartment;
+  relativeMdLinkCompartment: Compartment;
+  cellEditorsRef: RefObject<Map<string, EditorView>>;
+  setNotice: (msg: string | null) => void;
+  setActiveCell: (p: {row: number; col: number}) => void;
+  moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
+  runEnterFrom: (row: number, col: number) => boolean;
+  runDone: (moveBelow: boolean) => boolean;
+  baselineText: string;
+  lineFromRef: MutableRefObject<number>;
+  onCellDocChange: (row: number, col: number, text: string) => void;
+};
+
+function EskerraShellCell(props: ShellCellProps): ReactElement {
+  const {
+    row,
+    col,
+    cellText,
+    isHeader,
+    align,
+    isActive,
+    parentView,
+    wikiCompartment,
+    relativeMdLinkCompartment,
+    cellEditorsRef,
+    setNotice,
+    setActiveCell,
+    moveTabFrom,
+    runEnterFrom,
+    runDone,
+    baselineText,
+    lineFromRef,
+    onCellDocChange,
+  } = props;
+
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  const tableCallbacksRef = useRef<EskerraTableCellKeyboardCallbacks>({
+    onTabFromCell: () => false,
+    onEnterFromCell: () => false,
+    onDoneFromCell: () => false,
+    onEscapeFromCell: () => false,
+  });
+  const tableCallbacksBox =
+    tableCallbacksRef as unknown as NoteMarkdownCellEditorCallbacks;
+
+  const pasteSessionRef = useRef(0);
+  const onCellDocChangeRef = useRef(onCellDocChange);
+  onCellDocChangeRef.current = onCellDocChange;
+
+  useLayoutEffect(() => {
+    const tc = tableCallbacksRef.current;
+    tc.onTabFromCell = shift => moveTabFrom(row, col, shift);
+    tc.onEnterFromCell = () => runEnterFrom(row, col);
+    tc.onDoneFromCell = () => runDone(false);
+    tc.onEscapeFromCell = () => {
+      restoreTableBaseline(parentView, lineFromRef.current, baselineText);
+      return true;
+    };
+  }, [
+    baselineText,
+    col,
+    lineFromRef,
+    moveTabFrom,
+    parentView,
+    row,
+    runDone,
+    runEnterFrom,
+  ]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) {
+      return;
+    }
+    const pasteSessionId = nextEskerraCellPasteSession++;
+    pasteSessionRef.current = pasteSessionId;
+
+    const factory = parentView.state.facet(eskerraTableCellBundleFacet);
+    const key = cellKey(row, col);
+    const extensions = resolveEskerraTableCellExtensions(
+      {
+        tableCallbacks: tableCallbacksBox,
+        wikiLinkCompartment: wikiCompartment,
+        relativeMdLinkCompartment: relativeMdLinkCompartment,
+        onDocChanged: () => {
+          const v = viewRef.current;
+          if (!v) {
+            return;
+          }
+          onCellDocChangeRef.current(row, col, v.state.doc.toString());
+        },
+        onReportError: msg => {
+          setNotice(msg);
+          console.error(msg);
+        },
+        pasteSessionRef,
+        pasteSessionId,
+      },
+      factory,
+    );
+    const state = EditorState.create({
+      doc: cellText,
+      extensions,
+    });
+    const v = new EditorView({parent: host, state});
+    viewRef.current = v;
+    const cellMap = cellEditorsRef.current!;
+    cellMap.set(key, v);
+    const unregisterNested = registerEskerraTableNestedCellEditor(
+      parentView,
+      v,
+    );
+
+    parentView.requestMeasure();
+
+    return () => {
+      unregisterNested();
+      cellMap.delete(key);
+      viewRef.current = null;
+      v.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per cell; cellText synced below
+  }, [row, col, parentView, onCellDocChange]);
+
+  useEffect(() => {
+    const v = viewRef.current;
+    if (!v || v.state.doc.toString() === cellText) {
+      return;
+    }
+    v.dispatch({
+      changes: {from: 0, to: v.state.doc.length, insert: cellText},
+    });
+  }, [cellText]);
+
   const CellTag = isHeader ? 'th' : 'td';
   const ta =
     align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
-  const preview = text.trim() === '' ? '\u00a0' : text;
   return (
     <CellTag
       className={
@@ -470,18 +611,15 @@ function EskerraShellCell(props: {
           : 'cm-eskerra-table-shell__cell'
       }
       style={{textAlign: ta}}
-      onMouseDown={e => {
-        if (isActive || e.button !== 0) {
-          return;
-        }
-        onActivate();
-      }}
     >
-      {isActive && cmHostRef ? (
-        <div ref={cmHostRef} className="cm-eskerra-table-shell__cm-host" />
-      ) : (
-        <div className="cm-eskerra-table-shell__idle-text">{preview}</div>
-      )}
+      <div
+        ref={hostRef}
+        className="cm-eskerra-table-shell__cm-host"
+        data-eskerra-cell={`${row},${col}`}
+        onFocusCapture={() => {
+          setActiveCell({row, col});
+        }}
+      />
     </CellTag>
   );
 }

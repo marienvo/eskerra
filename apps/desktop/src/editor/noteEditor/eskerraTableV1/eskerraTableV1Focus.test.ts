@@ -1,4 +1,5 @@
 import {
+  Compartment,
   EditorState,
   EditorSelection,
   type Extension,
@@ -7,6 +8,7 @@ import {drawSelection, EditorView} from '@codemirror/view';
 import {afterEach, describe, expect, it} from 'vitest';
 
 import {eskerraTableCellBundleFacet} from './eskerraTableCellBundleFacet';
+import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableParentLinkCompartments';
 import {eskerraTableV1Extension} from './eskerraTableV1Codemirror';
 
 function makeTable(name: string, cols: number): string {
@@ -25,7 +27,13 @@ function doubleRaf(): Promise<void> {
 }
 
 function editorExtensions(): readonly Extension[] {
+  const wikiLink = new Compartment();
+  const relativeMarkdownLink = new Compartment();
   return [
+    eskerraTableParentLinkCompartmentsFacet.of({
+      wikiLink,
+      relativeMarkdownLink,
+    }),
     eskerraTableCellBundleFacet.of(() => [drawSelection(), EditorView.lineWrapping]),
     ...eskerraTableV1Extension(),
   ];
@@ -72,12 +80,38 @@ describe('eskerra table shell focus', () => {
     await doubleRaf();
     await doubleRaf();
     const nestedContent = parent.querySelector(
-      '.cm-eskerra-table-shell__cm-host .cm-content',
+      '.cm-eskerra-table-shell__cm-host[data-eskerra-cell="0,0"] .cm-content',
     );
     expect(nestedContent).toBeTruthy();
     const nestedView = EditorView.findFromDOM(nestedContent as HTMLElement);
     expect(nestedView).toBeTruthy();
     expect(nestedView!.hasFocus).toBe(true);
     expect(view.hasFocus).toBe(false);
+  });
+
+  it('mounts nested cell editors for every table cell', async () => {
+    const tableMd = makeTable('T', 2);
+    const md = `${tableMd}`;
+    const parentEl = document.createElement('div');
+    document.body.append(parentEl);
+
+    const anchorInTable = 4;
+    const state = EditorState.create({
+      doc: md,
+      selection: EditorSelection.cursor(anchorInTable),
+      extensions: editorExtensions(),
+    });
+    const view = new EditorView({state, parent: parentEl});
+    view.focus();
+    await doubleRaf();
+    await doubleRaf();
+    const hosts = parentEl.querySelectorAll('.cm-eskerra-table-shell__cm-host');
+    /* Header + body rows only (separator line is not a data row). 2×2 cells. */
+    expect(hosts.length).toBe(4);
+    for (const host of hosts) {
+      const content = host.querySelector('.cm-content');
+      expect(content).toBeTruthy();
+      expect(EditorView.findFromDOM(content as HTMLElement)).toBeTruthy();
+    }
   });
 });

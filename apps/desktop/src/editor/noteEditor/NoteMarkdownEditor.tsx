@@ -54,7 +54,9 @@ import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCod
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
+import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
@@ -535,6 +537,10 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolved,
         ),
       ),
+      eskerraTableParentLinkCompartmentsFacet.of({
+        wikiLink: wikiLinkCompartment,
+        relativeMarkdownLink: relativeMdLinkCompartment,
+      }),
       wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
       ),
@@ -646,11 +652,11 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!compartment || !view) {
       return;
     }
-    view.dispatch({
-      effects: compartment.reconfigure(
-        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
-      ),
-    });
+    const wikiEffect = compartment.reconfigure(
+      wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolved),
+    );
+    view.dispatch({effects: wikiEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: wikiEffect});
   }, [wikiLinkTargetIsResolved]);
 
   useEffect(() => {
@@ -659,13 +665,11 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!compartment || !view) {
       return;
     }
-    view.dispatch({
-      effects: compartment.reconfigure(
-        markdownRelativeLinkHighlightExtensions(
-          relativeMarkdownLinkHrefIsResolved,
-        ),
-      ),
-    });
+    const relEffect = compartment.reconfigure(
+      markdownRelativeLinkHighlightExtensions(relativeMarkdownLinkHrefIsResolved),
+    );
+    view.dispatch({effects: relEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
   useImperativeHandle(
@@ -693,20 +697,18 @@ const NoteMarkdownEditorImpl = forwardRef<
             extensions: bootExtensions,
           }),
         );
-        view.dispatch({
-          effects: [
-            wikiCompartment.reconfigure(
-              wikiLinkResolvedHighlightExtensions(
-                wikiLinkTargetIsResolvedRef.current,
-              ),
-            ),
-            relCompartment.reconfigure(
-              markdownRelativeLinkHighlightExtensions(
-                relativeMarkdownLinkHrefIsResolvedRef.current,
-              ),
-            ),
-          ],
-        });
+        const wikiEff = wikiCompartment.reconfigure(
+          wikiLinkResolvedHighlightExtensions(
+            wikiLinkTargetIsResolvedRef.current,
+          ),
+        );
+        const relEff = relCompartment.reconfigure(
+          markdownRelativeLinkHighlightExtensions(
+            relativeMarkdownLinkHrefIsResolvedRef.current,
+          ),
+        );
+        view.dispatch({effects: [wikiEff, relEff]});
+        dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
         onFoldedRangesPresentChangeRef.current?.(
           foldedRangesPresent(view.state),
         );
