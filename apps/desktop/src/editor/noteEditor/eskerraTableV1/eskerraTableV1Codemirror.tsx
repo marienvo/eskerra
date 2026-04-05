@@ -231,7 +231,7 @@ export function scheduleFocusTableCellEditor(hostView: EditorView): void {
       return;
     }
     const content = root.querySelector(
-      '.cm-eskerra-table-shell__cm-host[data-eskerra-cell="0,0"] .cm-content',
+      '.cm-eskerra-table-shell__cm-host .cm-content',
     );
     if (!(content instanceof HTMLElement)) {
       return;

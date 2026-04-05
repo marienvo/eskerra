@@ -3,7 +3,6 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import {EditorState} from '@codemirror/state';
 import type {Compartment} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
-import {flushSync} from 'react-dom';
 import {
   useCallback,
   useEffect,
@@ -14,7 +13,6 @@ import {
   type ReactElement,
   type MutableRefObject,
   type ReactNode,
-  type RefObject,
 } from 'react';
 
 import type {
@@ -56,10 +54,6 @@ import {
   sortBodyByColumn,
 } from './eskerraTableRowColOps';
 
-/** First paint: only this many body rows get nested CodeMirror; rest follow via rAF (spread main-thread cost). */
-const ESKERRA_TABLE_INITIAL_BODY_ROWS = 6;
-const ESKERRA_TABLE_BODY_ROW_HYDRATION_STEP = 14;
-
 export type EskerraTableShellProps = {
   parentView: EditorView;
   headerLineFrom: number;
@@ -83,10 +77,6 @@ function modelFromDraft(
     cells: cells.map(r => [...r]),
     align: alignOut,
   };
-}
-
-function cellKey(row: number, col: number): string {
-  return `${row},${col}`;
 }
 
 function isIdentityPermutation(perm: number[]): boolean {
@@ -192,47 +182,18 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, [headerLineFrom]);
 
   const colCount = cells[0]?.length ?? 0;
-  const bodyRowCount = Math.max(0, cells.length - 1);
-  const tableStructureKey = `${headerLineFrom}:${bodyRowCount}:${colCount}`;
-  const prevTableStructureKeyRef = useRef(tableStructureKey);
-  const [hydratedBodyRowCount, setHydratedBodyRowCount] = useState(() =>
-    Math.min(
-      ESKERRA_TABLE_INITIAL_BODY_ROWS,
-      Math.max(0, initialCells.length - 1),
-    ),
-  );
-
-  useEffect(() => {
-    if (prevTableStructureKeyRef.current !== tableStructureKey) {
-      prevTableStructureKeyRef.current = tableStructureKey;
-      setHydratedBodyRowCount(
-        Math.min(ESKERRA_TABLE_INITIAL_BODY_ROWS, bodyRowCount),
-      );
-    }
-  }, [tableStructureKey, bodyRowCount]);
-
-  useEffect(() => {
-    setHydratedBodyRowCount(c => Math.min(c, bodyRowCount));
-  }, [bodyRowCount]);
-
-  useEffect(() => {
-    if (hydratedBodyRowCount >= bodyRowCount) {
-      return;
-    }
-    const id = requestAnimationFrame(() => {
-      setHydratedBodyRowCount(n =>
-        Math.min(bodyRowCount, n + ESKERRA_TABLE_BODY_ROW_HYDRATION_STEP),
-      );
-    });
-    return () => cancelAnimationFrame(id);
-  }, [hydratedBodyRowCount, bodyRowCount]);
+  /** Which cell hosts the single nested CodeMirror (inactive cells are plain text until activated). */
+  const [activeCell, setActiveCell] = useState<{row: number; col: number}>({
+    row: 0,
+    col: 0,
+  });
 
   const draftRef = useRef({
     cells: initialCells.map(r => [...r]),
     align: [...initialAlign],
   });
 
-  const cellEditorsRef = useRef(new Map<string, EditorView>());
+  const activeCellEditorRef = useRef<EditorView | null>(null);
 
   const linkCompartments = parentView.state.facet(
     eskerraTableParentLinkCompartmentsFacet,
@@ -243,7 +204,12 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     );
   }
 
-  const activeCellRef = useRef<{row: number; col: number}>({row: 0, col: 0});
+  const activeCellRef = useRef<{row: number; col: number}>(activeCell);
+
+  const syncActiveCellCoords = useCallback((row: number, col: number) => {
+    activeCellRef.current = {row, col};
+    setActiveCell({row, col});
+  }, []);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const dragSessionRef = useRef<null | {kind: 'col' | 'row'; source: number}>(
     null,
@@ -270,16 +236,60 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     setHoveredBodyRow(h => (h === bodyIndex ? null : h));
   }, []);
 
+  const onCellDocChange = useCallback((r: number, c: number, text: string) => {
+    setCells(prev => {
+      if (prev[r]?.[c] === text) {
+        return prev;
+      }
+      const next = prev.map(row => [...row]);
+      if (next[r]?.[c] !== undefined) {
+        next[r]![c] = text;
+      }
+      draftRef.current = {
+        cells: next.map(row => [...row]),
+        align: [...draftRef.current.align],
+      };
+      return next;
+    });
+  }, []);
+
+  const navigateToCell = useCallback(
+    (row: number, col: number) => {
+      const v = activeCellEditorRef.current;
+      const prev = activeCellRef.current;
+      if (v && (prev.row !== row || prev.col !== col)) {
+        const text = v.state.doc.toString();
+        onCellDocChange(prev.row, prev.col, text);
+      }
+      syncActiveCellCoords(row, col);
+      requestAnimationFrame(() => {
+        activeCellEditorRef.current?.focus();
+      });
+    },
+    [onCellDocChange, syncActiveCellCoords],
+  );
+
+  const activateCell = useCallback(
+    (row: number, col: number) => {
+      const cur = activeCellRef.current;
+      if (cur.row === row && cur.col === col) {
+        requestAnimationFrame(() => activeCellEditorRef.current?.focus());
+        return;
+      }
+      navigateToCell(row, col);
+    },
+    [navigateToCell],
+  );
+
   const snapshotAllCellDocs = useCallback((): string[][] => {
     const rowCount = draftRef.current.cells.length;
     const nCols = draftRef.current.cells[0]?.length ?? 0;
     const out: string[][] = Array.from({length: rowCount}, (_, r) =>
       Array.from({length: nCols}, (_, c) => draftRef.current.cells[r]?.[c] ?? ''),
     );
-    for (const [key, v] of cellEditorsRef.current) {
-      const parts = key.split(',');
-      const r = Number(parts[0]);
-      const c = Number(parts[1]);
+    const v = activeCellEditorRef.current;
+    if (v) {
+      const {row: r, col: c} = activeCellRef.current;
       if (r >= 0 && r < rowCount && c >= 0 && c < nCols) {
         out[r]![c]! = v.state.doc.toString();
       }
@@ -308,27 +318,11 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       if (row < 0 || row >= rowCount) {
         return true;
       }
-      const nBody = Math.max(0, rowCount - 1);
-      let nextView = cellEditorsRef.current.get(cellKey(row, col));
-      if (!nextView && row >= 1) {
-        const bi = row - 1;
-        if (bi < nBody) {
-          flushSync(() => {
-            setHydratedBodyRowCount(nBody);
-          });
-          nextView = cellEditorsRef.current.get(cellKey(row, col));
-        }
-      }
-      activeCellRef.current = {row, col};
-      if (nextView) {
-        requestAnimationFrame(() => {
-          nextView.focus();
-        });
-      }
+      navigateToCell(row, col);
       parentView.requestMeasure();
       return true;
     },
-    [parentView],
+    [navigateToCell, parentView],
   );
 
   const exitToMarkdownSource = useCallback(() => {
@@ -347,35 +341,14 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     (fromRow: number, fromCol: number) => {
       const rowCount = draftRef.current.cells.length;
       if (fromRow < rowCount - 1) {
-        const nBody = Math.max(0, rowCount - 1);
-        const targetRow = fromRow + 1;
-        let nextView = cellEditorsRef.current.get(
-          cellKey(targetRow, fromCol),
-        );
-        if (!nextView && targetRow >= 1) {
-          const bi = targetRow - 1;
-          if (bi < nBody) {
-            flushSync(() => {
-              setHydratedBodyRowCount(nBody);
-            });
-            nextView = cellEditorsRef.current.get(
-              cellKey(targetRow, fromCol),
-            );
-          }
-        }
-        activeCellRef.current = {row: targetRow, col: fromCol};
-        if (nextView) {
-          requestAnimationFrame(() => {
-            nextView.focus();
-          });
-        }
+        navigateToCell(fromRow + 1, fromCol);
         parentView.requestMeasure();
         return true;
       }
       exitToMarkdownSource();
       return true;
     },
-    [exitToMarkdownSource, parentView],
+    [exitToMarkdownSource, navigateToCell, parentView],
   );
 
   const flushDraft = useCallback(() => {
@@ -407,19 +380,6 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
 
   const onEditMarkdown = exitToMarkdownSource;
 
-  const onCellDocChange = useCallback((r: number, c: number, text: string) => {
-    setCells(prev => {
-      if (prev[r]?.[c] === text) {
-        return prev;
-      }
-      const next = prev.map(row => [...row]);
-      if (next[r]?.[c] !== undefined) {
-        next[r]![c] = text;
-      }
-      return next;
-    });
-  }, []);
-
   const applyClipboardMatrix = useCallback(
     (matrix: string[][]) => {
       if (matrix.length === 0) {
@@ -445,31 +405,20 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         }
       }
       draftRef.current.cells = next.map(r => [...r]);
-      const nextBody = Math.max(0, next.length - 1);
-      flushSync(() => {
-        setHydratedBodyRowCount(nextBody);
-        setCells(next.map(r => [...r]));
-      });
+      setCells(next.map(r => [...r]));
       requestAnimationFrame(() => {
-        for (let dr = 0; dr < matrix.length; dr += 1) {
-          const row = matrix[dr]!;
-          for (let dc = 0; dc < row.length; dc += 1) {
-            const r = startR + dr;
-            const c = startC + dc;
-            const text = next[r]?.[c];
-            if (text === undefined) {
-              continue;
-            }
-            const cellView = cellEditorsRef.current.get(cellKey(r, c));
-            if (cellView && cellView.state.doc.toString() !== text) {
-              cellView.dispatch({
-                changes: {
-                  from: 0,
-                  to: cellView.state.doc.length,
-                  insert: text,
-                },
-              });
-            }
+        const v = activeCellEditorRef.current;
+        if (v) {
+          const {row: ar, col: ac} = activeCellRef.current;
+          const text = next[ar]?.[ac];
+          if (text !== undefined && v.state.doc.toString() !== text) {
+            v.dispatch({
+              changes: {
+                from: 0,
+                to: v.state.doc.length,
+                insert: text,
+              },
+            });
           }
         }
         parentView.requestMeasure();
@@ -573,7 +522,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       ro.observe(el);
     }
     return () => ro.disconnect();
-  }, [cells.length, notice, colCount, hydratedBodyRowCount]);
+  }, [cells.length, notice, colCount]);
 
   useEffect(() => {
     if (!isDraggingTable) {
@@ -650,7 +599,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           setCells(nc.map(r => [...r]));
           setAlign(na);
           const {row, col} = activeCellRef.current;
-          activeCellRef.current = {row, col: perm.indexOf(col)};
+          syncActiveCellCoords(row, perm.indexOf(col));
         }
       } else {
         const m = merged.length - 1;
@@ -668,18 +617,14 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             const {row, col} = activeCellRef.current;
             const oldB = row - 1;
             if (oldB >= 0) {
-              activeCellRef.current = {
-                row: perm.indexOf(oldB) + 1,
-                col,
-              };
+              syncActiveCellCoords(perm.indexOf(oldB) + 1, col);
             }
           }
         }
       }
       parentView.requestMeasure();
       requestAnimationFrame(() => {
-        const {row, col} = activeCellRef.current;
-        cellEditorsRef.current.get(cellKey(row, col))?.focus();
+        activeCellEditorRef.current?.focus();
       });
     };
 
@@ -703,12 +648,11 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     measureColumnRects,
     parentView,
     snapshotAllCellDocs,
+    syncActiveCellCoords,
   ]);
 
   const headerRow = cells[0];
   const bodyRows = cells.slice(1);
-  const visibleBodyRowCount = Math.min(hydratedBodyRowCount, bodyRowCount);
-
   const menuIcon = (name: string) => (
     <span className="material-icons eskerra-table-handle-menu__glyph" aria-hidden>
       {name}
@@ -836,7 +780,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     setAlign(out.align);
                     const {row, col} = activeCellRef.current;
                     if (col === ci) {
-                      activeCellRef.current = {row, col: col - 1};
+                      syncActiveCellCoords(row, col - 1);
                     }
                   }
                 });
@@ -859,7 +803,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     setAlign(out.align);
                     const {row, col} = activeCellRef.current;
                     if (col === ci) {
-                      activeCellRef.current = {row, col: col + 1};
+                      syncActiveCellCoords(row, col + 1);
                     }
                   }
                 });
@@ -950,7 +894,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                       col >= ci ? Math.max(0, col - 1) : col,
                       out.cells[0]!.length - 1,
                     );
-                    activeCellRef.current = {row, col: nextCol};
+                    syncActiveCellCoords(row, nextCol);
                   }
                 });
               }}
@@ -1039,7 +983,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   setCells(next.map(r => [...r]));
                   const {row, col} = activeCellRef.current;
                   if (row === bodyIndex + 1) {
-                    activeCellRef.current = {row: row - 1, col};
+                    syncActiveCellCoords(row - 1, col);
                   }
                 }
                 parentView.requestMeasure();
@@ -1059,7 +1003,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   setCells(next.map(r => [...r]));
                   const {row, col} = activeCellRef.current;
                   if (row === bodyIndex + 1) {
-                    activeCellRef.current = {row: row + 1, col};
+                    syncActiveCellCoords(row + 1, col);
                   }
                 }
                 parentView.requestMeasure();
@@ -1094,12 +1038,9 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   setCells(next.map(r => [...r]));
                   const {row, col} = activeCellRef.current;
                   if (row === bodyIndex + 1) {
-                    activeCellRef.current = {
-                      row: Math.max(1, row - 1),
-                      col,
-                    };
+                    syncActiveCellCoords(Math.max(1, row - 1), col);
                   } else if (row > bodyIndex + 1) {
-                    activeCellRef.current = {row: row - 1, col};
+                    syncActiveCellCoords(row - 1, col);
                   }
                 }
                 parentView.requestMeasure();
@@ -1192,6 +1133,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   row={0}
                   col={ci}
                   cellText={text}
+                  isActive={activeCell.row === 0 && activeCell.col === ci}
                   isHeader
                   headerColIndex={ci}
                   prepend={renderColumnHandle(ci)}
@@ -1199,9 +1141,9 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   parentView={parentView}
                   wikiCompartment={linkCompartments.wikiLink}
                   relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
-                  cellEditorsRef={cellEditorsRef}
+                  activeCellEditorRef={activeCellEditorRef}
                   setNotice={setNotice}
-                  activeCellRef={activeCellRef}
+                  onCellActivate={activateCell}
                   moveTabFrom={moveTabFrom}
                   runEnterFrom={runEnterFrom}
                   baselineText={baselineText}
@@ -1212,7 +1154,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             </tr>
           </thead>
           <tbody>
-            {bodyRows.slice(0, visibleBodyRowCount).map((row, ri) => (
+            {bodyRows.map((row, ri) => (
               <tr
                 key={`br-${ri}`}
                 className="cm-eskerra-table-shell__body-row"
@@ -1229,14 +1171,15 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                       row={r}
                       col={ci}
                       cellText={text}
+                      isActive={activeCell.row === r && activeCell.col === ci}
                       isHeader={false}
                       align={align[ci]}
                       parentView={parentView}
                       wikiCompartment={linkCompartments.wikiLink}
                       relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
-                      cellEditorsRef={cellEditorsRef}
+                      activeCellEditorRef={activeCellEditorRef}
                       setNotice={setNotice}
-                      activeCellRef={activeCellRef}
+                      onCellActivate={activateCell}
                       moveTabFrom={moveTabFrom}
                       runEnterFrom={runEnterFrom}
                       baselineText={baselineText}
@@ -1277,6 +1220,7 @@ type ShellCellProps = {
   row: number;
   col: number;
   cellText: string;
+  isActive: boolean;
   isHeader: boolean;
   headerColIndex?: number;
   prepend?: ReactNode;
@@ -1284,9 +1228,9 @@ type ShellCellProps = {
   parentView: EditorView;
   wikiCompartment: Compartment;
   relativeMdLinkCompartment: Compartment;
-  cellEditorsRef: RefObject<Map<string, EditorView>>;
+  activeCellEditorRef: MutableRefObject<EditorView | null>;
   setNotice: (msg: string | null) => void;
-  activeCellRef: MutableRefObject<{row: number; col: number}>;
+  onCellActivate: (row: number, col: number) => void;
   moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
   runEnterFrom: (row: number, col: number) => boolean;
   baselineText: string;
@@ -1299,6 +1243,7 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     row,
     col,
     cellText,
+    isActive,
     isHeader,
     headerColIndex,
     prepend,
@@ -1306,9 +1251,9 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     parentView,
     wikiCompartment,
     relativeMdLinkCompartment,
-    cellEditorsRef,
+    activeCellEditorRef,
     setNotice,
-    activeCellRef,
+    onCellActivate,
     moveTabFrom,
     runEnterFrom,
     baselineText,
@@ -1349,6 +1294,9 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
   ]);
 
   useEffect(() => {
+    if (!isActive) {
+      return;
+    }
     const host = hostRef.current;
     if (!host) {
       return;
@@ -1357,7 +1305,6 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     pasteSessionRef.current = pasteSessionId;
 
     const factory = parentView.state.facet(eskerraTableCellBundleFacet);
-    const key = cellKey(row, col);
     const extensions = resolveEskerraTableCellExtensions(
       {
         tableCallbacks: tableCallbacksBox,
@@ -1385,8 +1332,7 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     });
     const v = new EditorView({parent: host, state});
     viewRef.current = v;
-    const cellMap = cellEditorsRef.current!;
-    cellMap.set(key, v);
+    activeCellEditorRef.current = v;
     const unregisterNested = registerEskerraTableNestedCellEditor(
       parentView,
       v,
@@ -1394,22 +1340,22 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
 
     return () => {
       unregisterNested();
-      cellMap.delete(key);
+      activeCellEditorRef.current = null;
       viewRef.current = null;
       v.destroy();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per cell; cellText synced below
-  }, [row, col, parentView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cellText applied in follow-up effect; compartments stable per shell
+  }, [isActive, row, col, parentView]);
 
   useEffect(() => {
     const v = viewRef.current;
-    if (!v || v.state.doc.toString() === cellText) {
+    if (!isActive || !v || v.state.doc.toString() === cellText) {
       return;
     }
     v.dispatch({
       changes: {from: 0, to: v.state.doc.length, insert: cellText},
     });
-  }, [cellText]);
+  }, [cellText, isActive]);
 
   const CellTag = isHeader ? 'th' : 'td';
   const ta =
@@ -1429,14 +1375,27 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
       {...thProps}
     >
       {prepend}
-      <div
-        ref={hostRef}
-        className="cm-eskerra-table-shell__cm-host"
-        data-eskerra-cell={`${row},${col}`}
-        onFocusCapture={() => {
-          activeCellRef.current = {row, col};
-        }}
-      />
+      {isActive ? (
+        <div
+          ref={hostRef}
+          className="cm-eskerra-table-shell__cm-host"
+          data-eskerra-cell={`${row},${col}`}
+        />
+      ) : (
+        <div
+          className="cm-eskerra-table-shell__cell-static"
+          tabIndex={-1}
+          data-eskerra-cell={`${row},${col}`}
+          onPointerDown={e => {
+            if (e.button !== 0) {
+              return;
+            }
+            onCellActivate(row, col);
+          }}
+        >
+          {cellText}
+        </div>
+      )}
     </CellTag>
   );
 }

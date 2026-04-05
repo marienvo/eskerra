@@ -2128,6 +2128,36 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static {
+  box-sizing: border-box;
+  display: block;
+  min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  white-space: pre-wrap;
+  cursor: default;
+  outline: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static:focus-visible {
+  outline: 1px solid var(--color-interactive-text);
+  outline-offset: 0;
+  border-radius: 0.2rem;
+  padding-inline: 0.12rem;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host .cm-editor {
   background: transparent;
 }

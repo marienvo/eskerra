@@ -101,7 +101,7 @@ describe('eskerra table shell focus', () => {
     await doubleRaf();
     await doubleRaf();
     const nestedContent = parent.querySelector(
-      '.cm-eskerra-table-shell__cm-host[data-eskerra-cell="0,0"] .cm-content',
+      '.cm-eskerra-table-shell__cm-host .cm-content',
     );
     expect(nestedContent).toBeTruthy();
     const nestedView = EditorView.findFromDOM(nestedContent as HTMLElement);
@@ -110,7 +110,7 @@ describe('eskerra table shell focus', () => {
     expect(view.hasFocus).toBe(false);
   });
 
-  it('mounts nested cell editors for every table cell', async () => {
+  it('mounts one nested CodeMirror host; other cells are static placeholders', async () => {
     const tableMd = makeTable('T', 2);
     const md = `${tableMd}`;
     const parentEl = document.createElement('div');
@@ -127,12 +127,15 @@ describe('eskerra table shell focus', () => {
     await doubleRaf();
     await doubleRaf();
     const hosts = parentEl.querySelectorAll('.cm-eskerra-table-shell__cm-host');
-    /* Header + body rows only (separator line is not a data row). 2×2 cells. */
-    expect(hosts.length).toBe(4);
-    for (const host of hosts) {
-      const content = host.querySelector('.cm-content');
-      expect(content).toBeTruthy();
-      expect(EditorView.findFromDOM(content as HTMLElement)).toBeTruthy();
+    const staticCells = parentEl.querySelectorAll('.cm-eskerra-table-shell__cell-static');
+    /* Header + body: 2×2 cells; only the active cell (0,0) mounts CodeMirror. */
+    expect(hosts.length).toBe(1);
+    expect(staticCells.length).toBe(3);
+    const content = hosts[0]!.querySelector('.cm-content');
+    expect(content).toBeTruthy();
+    expect(EditorView.findFromDOM(content as HTMLElement)).toBeTruthy();
+    for (const el of staticCells) {
+      expect(el.querySelector('.cm-content')).toBeNull();
     }
   });
 
@@ -163,7 +166,7 @@ describe('eskerra table shell focus', () => {
     expect(rail?.querySelector('.cm-eskerra-table__rail-bottom')).toBeNull();
   });
 
-  it('adds a new column of cell editors from column handle context menu', async () => {
+  it('adds a new column from column handle context menu while keeping one CodeMirror host', async () => {
     const tableMd = makeTable('T', 2);
     const md = `${tableMd}`;
     const parentEl = document.createElement('div');
@@ -200,6 +203,8 @@ describe('eskerra table shell focus', () => {
     await doubleRaf();
     await doubleRaf();
     const hosts = parentEl.querySelectorAll('.cm-eskerra-table-shell__cm-host');
-    expect(hosts.length).toBe(6);
+    const staticCells = parentEl.querySelectorAll('.cm-eskerra-table-shell__cell-static');
+    expect(hosts.length).toBe(1);
+    expect(staticCells.length).toBe(5);
   });
 });
