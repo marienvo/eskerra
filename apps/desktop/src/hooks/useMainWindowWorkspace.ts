@@ -101,12 +101,23 @@ import {
   resolveInboxCachedBodyForEditor,
   classifyNoteDiskReconcile,
   fsChangePathsMayAffectUri,
+  normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
 } from './inboxNoteBodyCache';
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
   | {kind: 'restore'; top: number; left: number};
+
+/** Small stable fingerprint for debug logs (not crypto). */
+function fingerprintUtf16ForDebug(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+}
 
 function snapshotEditorShellScrollForOpenNote(
   scrollEl: HTMLDivElement | null,
@@ -232,7 +243,7 @@ async function loadMarkdownBodiesForWikiMaintenance(
     }
     try {
       const raw = await fs.readFile(uri, {encoding: 'utf8'});
-      out[uri] = raw.replace(/\n$/, '');
+      out[uri] = normalizeVaultMarkdownDiskRead(raw);
     } catch {
       out[uri] = '';
     }
@@ -838,7 +849,7 @@ export function useMainWindowWorkspace(options: {
           if (openGen !== openMarkdownGenerationRef.current) {
             return;
           }
-          prefetchBody = raw.replace(/\n$/, '');
+          prefetchBody = normalizeVaultMarkdownDiskRead(raw);
         } catch (e) {
           if (openGen !== openMarkdownGenerationRef.current) {
             return;
@@ -1165,6 +1176,11 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       const normPaths = rawPaths.map(p => p.trim().replace(/\\/g, '/')).filter(Boolean);
+      if (normPaths.length === 0) {
+        console.debug(
+          '[vault-files-changed] empty path batch: reconciling every open markdown tab (coarse invalidation); Rust watcher only emits non-empty batches today',
+        );
+      }
       const fullRefresh = normPaths.length === 0;
       const tabs = [...editorOpenTabUrisRef.current];
 
@@ -1198,7 +1214,7 @@ export function useMainWindowWorkspace(options: {
         let diskBody: string;
         try {
           const raw = await fs.readFile(normTab, {encoding: 'utf8'});
-          diskBody = raw.replace(/\n$/, '');
+          diskBody = normalizeVaultMarkdownDiskRead(raw);
         } catch {
           continue;
         }
@@ -1265,6 +1281,15 @@ export function useMainWindowWorkspace(options: {
 
         autosaveSchedulerRef.current.cancel();
         const conflict: DiskConflictState = {uri: normTab, diskMarkdown: diskBody};
+        console.debug('[disk-conflict]', {
+          uri: normTab,
+          diskLen: diskBody.length,
+          localLen: local.length,
+          lastPersistedLen: lp?.markdown.length ?? 0,
+          diskFp: fingerprintUtf16ForDebug(diskBody),
+          localFp: fingerprintUtf16ForDebug(local),
+          persistedFp: lp ? fingerprintUtf16ForDebug(lp.markdown) : null,
+        });
         setDiskConflict(conflict);
         diskConflictRef.current = conflict;
       }
@@ -1435,7 +1460,7 @@ export function useMainWindowWorkspace(options: {
       try {
         const raw = await fs.readFile(selectedUri, {encoding: 'utf8'});
         if (!cancelled) {
-          const normalized = raw.replace(/\n$/, '');
+          const normalized = normalizeVaultMarkdownDiskRead(raw);
           lastPersistedRef.current = {uri: selectedUri, markdown: normalized};
           setInboxContentByUri(prev => {
             if (prev[selectedUri] === normalized) {

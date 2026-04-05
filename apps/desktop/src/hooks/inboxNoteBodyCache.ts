@@ -7,6 +7,18 @@ import {normalizeVaultBaseUri} from '@eskerra/core';
 
 import {normalizeEditorDocUri} from '../lib/editorDocumentHistory';
 
+function normalizeMarkdownLineEndingsToLf(markdown: string): string {
+  return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+/**
+ * Canonical shape for vault markdown reads and reconcile compares: LF line endings, one trailing `\n` stripped.
+ * Matches historic `raw.replace(/\n$/, '')` after normalizing CRLF / lone CR (e.g. after git or editor quirks).
+ */
+export function normalizeVaultMarkdownDiskRead(raw: string): string {
+  return normalizeMarkdownLineEndingsToLf(raw).replace(/\n$/, '');
+}
+
 export type LastPersistedNote = {uri: string; markdown: string};
 
 /** How to reconcile the open editor when disk content may have diverged. */
@@ -20,8 +32,14 @@ export function mergeInboxNoteBodyIntoCache(
   uri: string,
   body: string,
 ): Record<string, string> | null {
-  if (prev[uri] === body) {
-    return null;
+  if (Object.prototype.hasOwnProperty.call(prev, uri)) {
+    const prevBody = prev[uri]!;
+    if (
+      prevBody === body ||
+      normalizeVaultMarkdownDiskRead(prevBody) === normalizeVaultMarkdownDiskRead(body)
+    ) {
+      return null;
+    }
   }
   return {...prev, [uri]: body};
 }
@@ -38,7 +56,7 @@ export function resolveInboxCachedBodyForEditor(
   if (
     lastPersisted != null &&
     lastPersisted.uri === selectedUri &&
-    lastPersisted.markdown !== cached
+    normalizeVaultMarkdownDiskRead(lastPersisted.markdown) !== normalizeVaultMarkdownDiskRead(cached)
   ) {
     return {markdown: lastPersisted.markdown, healedCache: true};
   }
@@ -105,19 +123,21 @@ export function classifyNoteDiskReconcile(input: {
 }): NoteDiskReconcileKind {
   const {noteUri, lastPersisted, diskMarkdown, localMarkdown} = input;
   if (lastPersisted == null || lastPersisted.uri !== noteUri) {
-    if (diskMarkdown === localMarkdown) {
+    const localCanon = normalizeVaultMarkdownDiskRead(localMarkdown);
+    if (diskMarkdown === localCanon) {
       return 'noop';
     }
     return 'reload_from_disk';
   }
-  // `diskMarkdown` comes from disk read after `replace(/\n$/, '')` (see workspace reconcile).
-  // `lastPersisted.markdown` is raw editor / post-save text; strip one trailing newline for compare.
-  const persistedNorm = lastPersisted.markdown.replace(/\n$/, '');
+  // `diskMarkdown` comes from `normalizeVaultMarkdownDiskRead(fs.readFile)` in workspace reconcile.
+  const persistedNorm = normalizeVaultMarkdownDiskRead(lastPersisted.markdown);
   const diskChanged = diskMarkdown !== persistedNorm;
   if (!diskChanged) {
     return 'noop';
   }
-  const localDirty = localMarkdown !== lastPersisted.markdown;
+  const localDirty =
+    normalizeMarkdownLineEndingsToLf(localMarkdown) !==
+    normalizeMarkdownLineEndingsToLf(lastPersisted.markdown);
   if (localDirty) {
     return 'conflict';
   }

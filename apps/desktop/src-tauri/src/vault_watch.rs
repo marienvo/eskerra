@@ -39,6 +39,9 @@ fn spawn_vault_debouncer(
             while let Ok(more) = rx.recv_timeout(Duration::from_millis(400)) {
                 acc.extend(more);
             }
+            // Non-empty: each `recv` batch only contains paths from notify events with non-empty
+            // `ev.paths` (see `tx.send` below). If this ever emitted an empty `paths` vec, the
+            // TypeScript listener would treat it as coarse full-vault invalidation.
             let paths: Vec<String> = acc.into_iter().collect();
             let _ = app_handle.emit(
                 "vault-files-changed",

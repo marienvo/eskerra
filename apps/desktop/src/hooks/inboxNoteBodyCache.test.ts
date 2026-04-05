@@ -5,6 +5,7 @@ import {
   resolveInboxCachedBodyForEditor,
   classifyNoteDiskReconcile,
   fsChangePathsMayAffectUri,
+  normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
 } from './inboxNoteBodyCache';
 
@@ -42,6 +43,13 @@ describe('mergeInboxNoteBodyIntoCache', () => {
     const next = mergeInboxNoteBodyIntoCache(prev, '/n.md', rewritten);
     expect(next).toEqual({'/n.md': rewritten});
   });
+
+  it('returns null when only line endings differ from the cached entry', () => {
+    const prev = {'/vault/Inbox/A.md': 'line one\n'};
+    expect(
+      mergeInboxNoteBodyIntoCache(prev, '/vault/Inbox/A.md', 'line one\r\n'),
+    ).toBeNull();
+  });
 });
 
 describe('resolveInboxCachedBodyForEditor', () => {
@@ -78,6 +86,15 @@ describe('resolveInboxCachedBodyForEditor', () => {
         markdown: 'from-disk',
       }),
     ).toEqual({markdown: 'from-disk', healedCache: true});
+  });
+
+  it('keeps cache when it disagrees with lastPersisted only by line endings', () => {
+    expect(
+      resolveInboxCachedBodyForEditor(uri, 'hello\r\n', {
+        uri,
+        markdown: 'hello\n',
+      }),
+    ).toEqual({markdown: 'hello\r\n', healedCache: false});
   });
 });
 
@@ -236,5 +253,29 @@ describe('classifyNoteDiskReconcile', () => {
         localMarkdown: persisted,
       }),
     ).toBe('noop');
+  });
+
+  it('returns noop when disk read normalized CRLF to match last persist (workspace-shaped disk body)', () => {
+    const fromDisk = normalizeVaultMarkdownDiskRead('hello\r\nworld\n');
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'hello\nworld'},
+        diskMarkdown: fromDisk,
+        localMarkdown: 'edited locally',
+      }),
+    ).toBe('noop');
+  });
+
+  it('returns reload_from_disk when disk has more content after CRLF normalize and editor matches last persist', () => {
+    const fromDisk = normalizeVaultMarkdownDiskRead('hello\r\nworld\r\nextra\r\n');
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'hello\nworld'},
+        diskMarkdown: fromDisk,
+        localMarkdown: 'hello\nworld',
+      }),
+    ).toBe('reload_from_disk');
   });
 });
