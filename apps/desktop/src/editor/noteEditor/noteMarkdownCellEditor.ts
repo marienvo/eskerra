@@ -15,7 +15,7 @@ import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
-import {MARKDOWN_EXTENSION, isExternalMarkdownHref, stripMarkdownLinkHrefToPathPart} from '@notebox/core';
+import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
   noteMarkdownEditorAppearance,
   noteMarkdownParserExtensions,
@@ -29,14 +29,6 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
-
-function isActivatableRelativeMarkdownHref(href: string): boolean {
-  const part = stripMarkdownLinkHrefToPathPart(href);
-  if (part === '' || isExternalMarkdownHref(part)) {
-    return false;
-  }
-  return part.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase());
-}
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {

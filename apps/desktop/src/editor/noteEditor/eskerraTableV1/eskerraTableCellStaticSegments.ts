@@ -1,0 +1,195 @@
+import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
+import {EditorState} from '@codemirror/state';
+import {highlightTree} from '@lezer/highlight';
+
+import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
+import {markdownNotebox} from '../markdownNoteboxLanguage';
+import {
+  noteMarkdownHighlightStyle,
+  noteMarkdownParserExtensions,
+} from '../markdownEditorStyling';
+import {relativeMarkdownLinkLabelSpan} from '../relativeMarkdownLinkLabelSpan';
+import {WIKI_LINK_LINE_RE} from '../wikiLinkCodemirror';
+
+const TREE_ENSURE_MS = 200;
+
+export type CellStaticSegment = {from: number; to: number; className: string};
+
+export type CellStaticResolvePredicates = {
+  wikiTargetIsResolved: (inner: string) => boolean;
+  relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
+};
+
+type StyledInterval = {from: number; to: number; priority: number; classes: string};
+
+function joinOrPush(
+  out: CellStaticSegment[],
+  a: number,
+  b: number,
+  className: string,
+): void {
+  const last = out[out.length - 1];
+  if (last && last.className === className && last.to === a) {
+    last.to = b;
+  } else {
+    out.push({from: a, to: b, className});
+  }
+}
+
+export function mergeStyledIntervals(
+  textLen: number,
+  intervals: StyledInterval[],
+): CellStaticSegment[] {
+  if (textLen === 0) {
+    return [];
+  }
+  const breaks = new Set<number>([0, textLen]);
+  for (const iv of intervals) {
+    const a = Math.max(0, Math.min(iv.from, textLen));
+    const b = Math.max(0, Math.min(iv.to, textLen));
+    if (a < b) {
+      breaks.add(a);
+      breaks.add(b);
+    }
+  }
+  const sorted = [...breaks].sort((x, y) => x - y);
+  const out: CellStaticSegment[] = [];
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const a = sorted[i]!;
+    const b = sorted[i + 1]!;
+    if (a === b) {
+      continue;
+    }
+    const covering = intervals.filter(iv => a >= iv.from && a < iv.to);
+    if (covering.length === 0) {
+      joinOrPush(out, a, b, '');
+      continue;
+    }
+    const maxP = Math.max(...covering.map(c => c.priority));
+    const winners = covering.filter(c => c.priority === maxP);
+    const classSet = new Set<string>();
+    for (const w of winners) {
+      for (const p of w.classes.split(/\s+/)) {
+        if (p) {
+          classSet.add(p);
+        }
+      }
+    }
+    joinOrPush(out, a, b, [...classSet].sort().join(' '));
+  }
+  return out;
+}
+
+function collectLezerIntervals(textLen: number, tree: Parameters<typeof highlightTree>[0]): StyledInterval[] {
+  const out: StyledInterval[] = [];
+  highlightTree(tree, noteMarkdownHighlightStyle, (from, to, classes) => {
+    if (!classes) {
+      return;
+    }
+    const t = Math.min(to, textLen);
+    if (from < t) {
+      out.push({from, to: t, priority: 0, classes});
+    }
+  });
+  return out;
+}
+
+function collectWikiIntervals(
+  doc: EditorState['doc'],
+  wikiResolved: (inner: string) => boolean,
+): StyledInterval[] {
+  const out: StyledInterval[] = [];
+  for (let i = 1; i <= doc.lines; i += 1) {
+    const line = doc.line(i);
+    const text = line.text;
+    WIKI_LINK_LINE_RE.lastIndex = 0;
+    let match = WIKI_LINK_LINE_RE.exec(text);
+    while (match) {
+      const start = match.index;
+      const fullLen = match[0].length;
+      const from = line.from + start;
+      const to = from + fullLen;
+      const inner = match[1]!;
+      const innerClass = wikiResolved(inner)
+        ? 'cm-wiki-link cm-wiki-link--resolved'
+        : 'cm-wiki-link cm-wiki-link--unresolved';
+      out.push({from, to: from + 2, priority: 2, classes: 'cm-md-wiki-bracket'});
+      out.push({from: from + 2, to: to - 2, priority: 2, classes: innerClass});
+      out.push({from: to - 2, to, priority: 2, classes: 'cm-md-wiki-bracket'});
+      match = WIKI_LINK_LINE_RE.exec(text);
+    }
+  }
+  return out;
+}
+
+function collectRelativeMdIntervals(
+  state: EditorState,
+  hrefIsResolved: (href: string) => boolean,
+): StyledInterval[] {
+  const tree = syntaxTree(state);
+  const out: StyledInterval[] = [];
+  tree.iterate({
+    enter(ref) {
+      if (ref.name !== 'URL') {
+        return;
+      }
+      const parent = ref.node.parent;
+      if (parent == null || parent.name !== 'Link') {
+        return;
+      }
+      const href = state.sliceDoc(ref.from, ref.to);
+      if (!isActivatableRelativeMarkdownHref(href)) {
+        return;
+      }
+      const labelClass = hrefIsResolved(href)
+        ? 'cm-md-rel-link cm-md-rel-link--resolved'
+        : 'cm-md-rel-link cm-md-rel-link--unresolved';
+      const hrefClass = `${labelClass} cm-md-rel-link-href`;
+      out.push({from: ref.from, to: ref.to, priority: 2, classes: hrefClass});
+      const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
+        state.sliceDoc(a, b),
+      );
+      if (labelSpan != null) {
+        out.push({
+          from: labelSpan.from,
+          to: labelSpan.to,
+          priority: 2,
+          classes: labelClass,
+        });
+      }
+    },
+  });
+  return out;
+}
+
+/**
+ * Build disjoint styled segments for an inactive table cell using the same markdown parse +
+ * class policy as nested CodeMirror (Lezer + wiki + relative-.md overlays).
+ */
+export function buildCellStaticSegments(
+  text: string,
+  resolve: CellStaticResolvePredicates,
+): CellStaticSegment[] {
+  const textLen = text.length;
+  if (textLen === 0) {
+    return [];
+  }
+  const state = EditorState.create({
+    doc: text,
+    extensions: [
+      markdownNotebox({
+        base: commonmarkLanguage,
+        extensions: noteMarkdownParserExtensions,
+      }),
+    ],
+  });
+  ensureSyntaxTree(state, textLen, TREE_ENSURE_MS);
+  const tree = syntaxTree(state);
+  const intervals: StyledInterval[] = [
+    ...collectLezerIntervals(textLen, tree),
+    ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
+    ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
+  ];
+  return mergeStyledIntervals(textLen, intervals);
+}

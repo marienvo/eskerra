@@ -9,6 +9,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type MouseEvent,
   type ReactElement,
   type MutableRefObject,
@@ -28,9 +29,14 @@ import {
   resolveEskerraTableCellExtensions,
 } from './eskerraTableCellBundleFacet';
 import {registerEskerraTableDraftFlusher} from './eskerraTableDraftFlush';
+import {EskerraTableCellStaticRichText} from './eskerraTableCellStaticRichText';
 import {
   registerEskerraTableNestedCellEditor,
 } from './eskerraTableNestedCellEditors';
+import {
+  getTableShellStaticPreviewVersion,
+  subscribeTableShellStaticPreview,
+} from './tableShellStaticPreviewStore';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableParentLinkCompartments';
 import {
   commitThenEditTableAsMarkdown,
@@ -167,6 +173,11 @@ function rowDropBarViewport(rects: DOMRect[], drop: number): {
 
 export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const {parentView, headerLineFrom, baselineText, initialCells, initialAlign} = props;
+
+  const staticRichPaintKey = useSyncExternalStore(
+    subscribeTableShellStaticPreview,
+    getTableShellStaticPreviewVersion,
+  );
 
   const [cells, setCells] = useState<string[][]>(() =>
     initialCells.map(r => [...r]),
@@ -1149,6 +1160,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   baselineText={baselineText}
                   lineFromRef={lineFromRef}
                   onCellDocChange={onCellDocChange}
+                  staticRichPaintKey={staticRichPaintKey}
                 />
               ))}
             </tr>
@@ -1185,6 +1197,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                       baselineText={baselineText}
                       lineFromRef={lineFromRef}
                       onCellDocChange={onCellDocChange}
+                      staticRichPaintKey={staticRichPaintKey}
                     />
                   );
                 })}
@@ -1236,6 +1249,7 @@ type ShellCellProps = {
   baselineText: string;
   lineFromRef: MutableRefObject<number>;
   onCellDocChange: (row: number, col: number, text: string) => void;
+  staticRichPaintKey: number;
 };
 
 function EskerraShellCell(props: ShellCellProps): ReactElement {
@@ -1259,6 +1273,7 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     baselineText,
     lineFromRef,
     onCellDocChange,
+    staticRichPaintKey,
   } = props;
 
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1387,13 +1402,17 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
           tabIndex={-1}
           data-eskerra-cell={`${row},${col}`}
           onPointerDown={e => {
-            if (e.button !== 0) {
+            if (e.button !== 0 || e.shiftKey) {
               return;
             }
             onCellActivate(row, col);
           }}
         >
-          {cellText}
+          <EskerraTableCellStaticRichText
+            parentView={parentView}
+            cellText={cellText}
+            staticRichPaintKey={staticRichPaintKey}
+          />
         </div>
       )}
     </CellTag>

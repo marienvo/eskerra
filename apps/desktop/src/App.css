@@ -2158,6 +2158,20 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich {
+  display: block;
+  box-sizing: border-box;
+  min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: default;
+  white-space: pre-wrap;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host .cm-editor {
   background: transparent;
 }

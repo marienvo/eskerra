@@ -1,6 +1,8 @@
 import type {TransactionSpec} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 
+import {bumpTableShellStaticPreview} from './tableShellStaticPreviewStore';
+
 const parentToCellViews = new Map<EditorView, Set<EditorView>>();
 
 /**
@@ -33,10 +35,10 @@ export function dispatchEskerraTableNestedCellEditors(
   spec: TransactionSpec,
 ): void {
   const set = parentToCellViews.get(parentView);
-  if (!set) {
-    return;
+  if (set) {
+    for (const v of set) {
+      v.dispatch(spec);
+    }
   }
-  for (const v of set) {
-    v.dispatch(spec);
-  }
+  bumpTableShellStaticPreview();
 }

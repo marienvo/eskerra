@@ -7,7 +7,8 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 
-const WIKI_LINK_LINE_RE = /\[\[([^[\]]+)\]\]/g;
+/** Shared with inactive cell rich preview (must match `wikiLinkMatchAtLineColumn`). */
+export const WIKI_LINK_LINE_RE = /\[\[([^[\]]+)\]\]/g;
 
 type WikiLinkTargetIsResolved = (inner: string) => boolean;
 

@@ -55,6 +55,7 @@ import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCod
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
+import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
@@ -570,6 +571,11 @@ const NoteMarkdownEditorImpl = forwardRef<
           ...partial,
         }),
       ),
+      eskerraTableShellLinkBridgeFacet.of({
+        onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+        onMarkdownRelativeLinkActivate: p =>
+          onMarkdownRelativeLinkActivateRef.current(p),
+      }),
       ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
