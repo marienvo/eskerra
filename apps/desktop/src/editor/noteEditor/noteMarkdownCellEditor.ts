@@ -26,6 +26,7 @@ import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
   noteMarkdownEditorAppearance,
+  noteMarkdownIndentUnit,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownEskerra} from './markdownEskerraLanguage';
@@ -364,6 +365,7 @@ export function buildNoteMarkdownCellExtensions(
   ]);
 
   return [
+    noteMarkdownIndentUnit,
     markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
     markdownEskerra({
       base: commonmarkLanguage,

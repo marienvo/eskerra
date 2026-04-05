@@ -44,6 +44,7 @@ import {
 } from '../../lib/noteInboxAttachmentHost';
 import {
   noteMarkdownEditorAppearance,
+  noteMarkdownIndentUnit,
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
@@ -503,6 +504,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
+      noteMarkdownIndentUnit,
       markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
