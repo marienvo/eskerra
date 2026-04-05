@@ -23,6 +23,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -189,7 +190,6 @@ const NoteMarkdownEditorImpl = forwardRef<
   const parentRef = useRef<HTMLDivElement>(null);
   /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
   const hostRef = useRef<HTMLDivElement>(null);
-  const deferEditorPaintRafRef = useRef<number | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
@@ -274,7 +274,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const parent = parentRef.current;
     if (!parent) {
       return;
@@ -701,13 +701,45 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
-  useEffect(() => {
-    return () => {
-      if (deferEditorPaintRafRef.current != null) {
-        cancelAnimationFrame(deferEditorPaintRafRef.current);
+  /**
+   * Apply `loadMarkdown` synchronously so the first browser paint after layout already has the real
+   * document. A deferred rAF apply runs after paint, which left the placeholder visible until the next frame
+   * or user interaction (WebKit/GTK).
+   */
+  const applyMarkdownLoadNow = useCallback(
+    (markdown: string, options?: {selection?: 'start' | 'end'}) => {
+      const v = viewRef.current;
+      const be = codemirrorBootExtensionsRef.current;
+      const wc = wikiLinkCompartmentRef.current;
+      const rc = relativeMdLinkCompartmentRef.current;
+      if (!v || !be || !wc || !rc) {
+        return;
       }
-    };
-  }, []);
+      const at = options?.selection === 'start' ? 0 : markdown.length;
+      v.setState(
+        EditorState.create({
+          doc: markdown,
+          selection: EditorSelection.cursor(at),
+          extensions: be,
+        }),
+      );
+      const wikiEff = wc.reconfigure(
+        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
+      );
+      const relEff = rc.reconfigure(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolvedRef.current,
+        ),
+      );
+      v.dispatch({effects: [wikiEff, relEff]});
+      dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
+      onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
+      onFoldableRangesPresentChangeRef.current?.(
+        foldableRangesPresent(v.state),
+      );
+    },
+    [],
+  );
 
   useImperativeHandle(
     ref,
@@ -727,47 +759,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
-        if (deferEditorPaintRafRef.current != null) {
-          cancelAnimationFrame(deferEditorPaintRafRef.current);
-          deferEditorPaintRafRef.current = null;
-        }
-        deferEditorPaintRafRef.current = requestAnimationFrame(() => {
-          deferEditorPaintRafRef.current = null;
-          const v = viewRef.current;
-          const be = codemirrorBootExtensionsRef.current;
-          const wc = wikiLinkCompartmentRef.current;
-          const rc = relativeMdLinkCompartmentRef.current;
-          if (!v || !be || !wc || !rc) {
-            return;
-          }
-          const at =
-            options?.selection === 'start' ? 0 : markdown.length;
-          v.setState(
-            EditorState.create({
-              doc: markdown,
-              selection: EditorSelection.cursor(at),
-              extensions: be,
-            }),
-          );
-          const wikiEff = wc.reconfigure(
-            wikiLinkResolvedHighlightExtensions(
-              wikiLinkTargetIsResolvedRef.current,
-            ),
-          );
-          const relEff = rc.reconfigure(
-            markdownRelativeLinkHighlightExtensions(
-              relativeMarkdownLinkHrefIsResolvedRef.current,
-            ),
-          );
-          v.dispatch({effects: [wikiEff, relEff]});
-          dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
-          onFoldedRangesPresentChangeRef.current?.(
-            foldedRangesPresent(v.state),
-          );
-          onFoldableRangesPresentChangeRef.current?.(
-            foldableRangesPresent(v.state),
-          );
-        });
+        applyMarkdownLoadNow(markdown, options);
       },
       unfoldAllFolds: () => {
         const view = viewRef.current;
@@ -826,7 +818,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         return true;
       },
     }),
-    [],
+    [applyMarkdownLoadNow],
   );
 
   const insertRelativePaths = useCallback((paths: readonly string[]) => {

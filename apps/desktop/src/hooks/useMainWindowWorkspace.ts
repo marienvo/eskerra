@@ -642,6 +642,14 @@ export function useMainWindowWorkspace(options: {
         });
       }
 
+      const resolvedEditorBody =
+        prefetchBody !== undefined
+          ? prefetchBody
+          : inboxContentByUriRef.current[targetNorm];
+      if (resolvedEditorBody !== undefined) {
+        setEditorBody(resolvedEditorBody);
+      }
+
       if (!options?.skipHistory) {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
