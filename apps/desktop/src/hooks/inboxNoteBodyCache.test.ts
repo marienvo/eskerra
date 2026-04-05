@@ -3,6 +3,9 @@ import {describe, expect, it} from 'vitest';
 import {
   mergeInboxNoteBodyIntoCache,
   resolveInboxCachedBodyForEditor,
+  classifyNoteDiskReconcile,
+  fsChangePathsMayAffectUri,
+  removeInboxNoteBodyFromCache,
 } from './inboxNoteBodyCache';
 
 describe('mergeInboxNoteBodyIntoCache', () => {
@@ -111,5 +114,101 @@ describe('inbox note body cache scenarios', () => {
       mergeInboxNoteBodyIntoCache({'/A.md': staleCache}, '/A.md', resolved.markdown) ??
       null;
     expect(healed).toEqual({'/A.md': 'v1 saved'});
+  });
+});
+
+describe('fsChangePathsMayAffectUri', () => {
+  const root = '/home/user/Vault';
+  const note = '/home/user/Vault/Inbox/Note.md';
+
+  it('returns true when the batch is empty (full refresh signal)', () => {
+    expect(fsChangePathsMayAffectUri([], note, root)).toBe(true);
+  });
+
+  it('returns true when the changed path equals the note URI', () => {
+    expect(fsChangePathsMayAffectUri([note], note, root)).toBe(true);
+  });
+
+  it('returns true when a parent directory changed', () => {
+    expect(
+      fsChangePathsMayAffectUri(
+        [`${root}/Inbox`],
+        note,
+        root,
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false when the note is outside the vault root', () => {
+    expect(fsChangePathsMayAffectUri([`${root}/Inbox/x.md`], '/tmp/other.md', root)).toBe(
+      false,
+    );
+  });
+
+  it('returns false when no path affects the note', () => {
+    expect(
+      fsChangePathsMayAffectUri([`${root}/Podcasts/foo`], note, root),
+    ).toBe(false);
+  });
+});
+
+describe('removeInboxNoteBodyFromCache', () => {
+  it('returns null when the URI is absent', () => {
+    expect(removeInboxNoteBodyFromCache({'/a.md': 'x'}, '/missing.md')).toBeNull();
+  });
+
+  it('returns a new map without the URI', () => {
+    const prev = {'/a.md': 'x', '/b.md': 'y'};
+    const next = removeInboxNoteBodyFromCache(prev, '/a.md');
+    expect(next).toEqual({'/b.md': 'y'});
+    expect(prev).toEqual({'/a.md': 'x', '/b.md': 'y'});
+  });
+});
+
+describe('classifyNoteDiskReconcile', () => {
+  const uri = '/vault/Inbox/N.md';
+
+  it('returns noop when disk matches last persisted', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'same'},
+        diskMarkdown: 'same',
+        localMarkdown: 'edited',
+      }),
+    ).toBe('noop');
+  });
+
+  it('returns reload_from_disk when disk changed and editor still matches last persist', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'old'},
+        diskMarkdown: 'new-from-disk',
+        localMarkdown: 'old',
+      }),
+    ).toBe('reload_from_disk');
+  });
+
+  it('returns conflict when disk and local both diverged from last persist', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'old'},
+        diskMarkdown: 'new-from-disk',
+        localMarkdown: 'local-edits',
+      }),
+    ).toBe('conflict');
+  });
+
+  it('returns reload_from_disk when there is no lastPersisted baseline but disk differs', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: null,
+        diskMarkdown: 'd',
+        localMarkdown: '',
+      }),
+    ).toBe('reload_from_disk');
   });
 });

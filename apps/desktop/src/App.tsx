@@ -94,6 +94,9 @@ export default function App() {
     inboxEditorResetNonce,
     busy,
     err,
+    diskConflict,
+    resolveDiskConflictReloadFromDisk,
+    resolveDiskConflictKeepLocal,
     composingNewEntry,
     inboxContentByUri,
     vaultMarkdownRefs,
@@ -658,12 +661,35 @@ export default function App() {
               {err}
             </div>
           ) : null}
-          {!err && renameLinkProgress ? (
+          {!err && diskConflict ? (
+            <div className="conflict-banner" role="alert">
+              <span>
+                This note was changed on disk while you have unsaved edits. Saving is paused until you
+                choose.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => resolveDiskConflictReloadFromDisk()}
+                >
+                  Reload from disk
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resolveDiskConflictKeepLocal()}
+                >
+                  Keep my edits
+                </button>
+              </span>
+            </div>
+          ) : null}
+          {!err && !diskConflict && renameLinkProgress ? (
             <div className="info-banner" aria-live="polite">
               Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
             </div>
           ) : null}
-          {!err && !renameLinkProgress && wikiRenameNotice ? (
+          {!err && !diskConflict && !renameLinkProgress && wikiRenameNotice ? (
             <div className="info-banner" aria-live="polite">
               {wikiRenameNotice}
             </div>

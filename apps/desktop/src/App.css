@@ -430,6 +430,27 @@ a:focus:not(:focus-visible) {
   font-size: 0.9rem;
 }
 
+.conflict-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, var(--color-accent-subtle-bg) 70%, var(--color-bg));
+  color: var(--color-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-interactive-text) 30%, var(--color-border));
+  font-size: 0.9rem;
+}
+
+.conflict-banner__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-inline-start: auto;
+}
+
 .app-body {
   display: flex;
   flex: 1;
