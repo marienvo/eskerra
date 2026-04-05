@@ -1,5 +1,5 @@
 import {invoke} from '@tauri-apps/api/core';
-import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
+import type {VaultDirEntry, VaultFilesystem} from '@eskerra/core';
 
 type ListRow = {
   uri: string;

@@ -4,7 +4,7 @@ import {
   type PlayerState,
   type PlaylistEntry,
   type VaultFilesystem,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 
 import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
@@ -40,7 +40,7 @@ export type DesktopPlayerLabel =
 
 export type UseDesktopPodcastPlaybackOptions = {
   vaultRoot: string | null;
-  /** From `.notebox/settings-local.json`; used as `playbackOwnerId` for control writes. */
+  /** From `.eskerra/settings-local.json`; used as `playbackOwnerId` for control writes. */
   deviceInstanceId: string;
   fs: VaultFilesystem;
   onError: (msg: string | null) => void;

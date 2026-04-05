@@ -21,8 +21,8 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
-      '@notebox/core': path.resolve(__dirname, '../../packages/notebox-core/src'),
-      '@notebox/brand': path.resolve(__dirname, '../../assets/brand'),
+      '@eskerra/core': path.resolve(__dirname, '../../packages/eskerra-core/src'),
+      '@eskerra/brand': path.resolve(__dirname, '../../assets/brand'),
     },
   },
 });

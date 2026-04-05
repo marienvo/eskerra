@@ -4,13 +4,13 @@ import TestRenderer, {act} from 'react-test-renderer';
 import {
   listGeneralMarkdownFiles,
   readPlaylistCoalesced,
-} from '../src/core/storage/noteboxStorage';
+} from '../src/core/storage/eskerraStorage';
 import {useVaultContext} from '../src/core/vault/VaultContext';
 import {takePodcastBootstrapPayload} from '../src/features/podcasts/services/podcastBootstrapCache';
 import {runPodcastPhase1} from '../src/features/podcasts/services/podcastPhase1';
 import {usePodcasts} from '../src/features/podcasts/hooks/usePodcasts';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   clearPlaylist: jest.fn(),
   listGeneralMarkdownFiles: jest.fn(),
   readPlaylistCoalesced: jest.fn(),

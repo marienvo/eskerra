@@ -11,7 +11,7 @@ Related plans: [desktop-shell-wiki-backlog.md](../plans/desktop-shell-wiki-backl
 
 ## Ownership boundaries
 
-- **`@notebox/core` owns semantics**
+- **`@eskerra/core` owns semantics**
   - wiki link parsing
   - normalization and identity rules
   - ambiguity behavior
@@ -31,7 +31,7 @@ Native implementations behind the seam (Rust/Kotlin) must remain mechanics-only 
 ## Runtime-first storage posture
 
 - Default: runtime or app-owned cache for link/index state.
-- Durable `.notebox` index artifacts are deferred until explicit productization with named ownership, retention, migration, and user-facing behavior.
+- Durable `.eskerra` index artifacts are deferred until explicit productization with named ownership, retention, migration, and user-facing behavior.
 
 ## Measurement gates
 

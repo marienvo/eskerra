@@ -8,7 +8,7 @@ type NativeVaultListingModule = {
   listMarkdownFiles: (
     directoryUri: string,
   ) => Promise<Array<{lastModified?: number | null; name: string; uri: string}>>;
-  prepareNoteboxSession?: (
+  prepareEskerraSession?: (
     baseUri: string,
   ) => Promise<
     | string
@@ -30,7 +30,7 @@ export type MarkdownFileRow = {
   uri: string;
 };
 
-export type PreparedNoteboxSessionNative = {
+export type PreparedEskerraSessionNative = {
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
   settingsJson: string;
@@ -59,7 +59,7 @@ export async function tryListMarkdownFilesNative(
     return null;
   }
 
-  const mod = NativeModules.NoteboxVaultListing as NativeVaultListingModule | undefined;
+  const mod = NativeModules.EskerraVaultListing as NativeVaultListingModule | undefined;
   if (mod?.listMarkdownFiles == null) {
     return null;
   }
@@ -77,16 +77,16 @@ export async function tryListMarkdownFilesNative(
 }
 
 /**
- * Ensures `.notebox/settings-shared.json` (or legacy `settings.json`) and (on current Android native)
+ * Ensures `.eskerra/settings-shared.json` (or legacy `settings.json`) and (on current Android native)
  * Inbox listing + General/Inbox.md
  * in one call. Returns `inboxPrefetch` when the native map includes `inboxNotes` so the first Vault
  * load can skip duplicate listing/index SAF work. Legacy native that returns only a string yields
  * `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android, or
- * native prepare fails (caller should fall back to initNotebox + readSettings).
+ * native prepare fails (caller should fall back to initEskerra + readSettings).
  */
-export async function tryPrepareNoteboxSessionNative(
+export async function tryPrepareEskerraSessionNative(
   baseUri: string,
-): Promise<PreparedNoteboxSessionNative | null> {
+): Promise<PreparedEskerraSessionNative | null> {
   if (Platform.OS !== 'android') {
     return null;
   }
@@ -97,13 +97,13 @@ export async function tryPrepareNoteboxSessionNative(
     return null;
   }
 
-  const mod = NativeModules.NoteboxVaultListing as NativeVaultListingModule | undefined;
-  if (mod?.prepareNoteboxSession == null) {
+  const mod = NativeModules.EskerraVaultListing as NativeVaultListingModule | undefined;
+  if (mod?.prepareEskerraSession == null) {
     return null;
   }
 
   try {
-    const raw = await mod.prepareNoteboxSession(baseUri);
+    const raw = await mod.prepareEskerraSession(baseUri);
     if (typeof raw === 'string') {
       return {inboxContentByUri: null, settingsJson: raw, inboxPrefetch: null};
     }

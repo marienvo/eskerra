@@ -2,22 +2,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
   normalizePlaylistEntryForSync,
-  parseNoteboxLocalSettings,
-  parseNoteboxSettings,
-  serializeNoteboxLocalSettings,
-  serializeNoteboxSettings,
-} from '@notebox/core';
+  parseEskerraLocalSettings,
+  parseEskerraSettings,
+  serializeEskerraLocalSettings,
+  serializeEskerraSettings,
+} from '@eskerra/core';
 
 import {
   NoteDetail,
   NoteSummary,
-  NoteboxLocalSettings,
-  NoteboxSettings,
+  EskerraLocalSettings,
+  EskerraSettings,
   PlaylistEntry,
   RootMarkdownFile,
 } from '../types';
 import {NOTES_DIRECTORY_URI_KEY} from '../core/storage/keys';
-import {pickNextInboxMarkdownFileName} from '../core/storage/noteboxStorage';
+import {pickNextInboxMarkdownFileName} from '../core/storage/eskerraStorage';
 import {
   DEV_MOCK_VAULT_URI,
   MOCK_LOCAL_SETTINGS,
@@ -26,7 +26,7 @@ import {
   MOCK_SETTINGS,
 } from './mockVaultData';
 
-const DEV_STORAGE_PREFIX = '@notebox_dev';
+const DEV_STORAGE_PREFIX = '@eskerra_dev';
 const DEV_SEEDED_KEY = `${DEV_STORAGE_PREFIX}:seeded`;
 const DEV_SETTINGS_KEY = `${DEV_STORAGE_PREFIX}:settings`;
 const DEV_LOCAL_SETTINGS_KEY = `${DEV_STORAGE_PREFIX}:local_settings`;
@@ -190,10 +190,10 @@ async function ensureSeeded(): Promise<void> {
 
   await writeNotesIndex(notesIndex);
   await writePodcastIndex(podcastIndex);
-  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeNoteboxSettings(MOCK_SETTINGS));
+  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeEskerraSettings(MOCK_SETTINGS));
   await AsyncStorage.setItem(
     DEV_LOCAL_SETTINGS_KEY,
-    serializeNoteboxLocalSettings(MOCK_LOCAL_SETTINGS),
+    serializeEskerraLocalSettings(MOCK_LOCAL_SETTINGS),
   );
   await AsyncStorage.setItem(DEV_SEEDED_KEY, '7');
 }
@@ -232,12 +232,12 @@ export function clearUri(): Promise<void> {
   return AsyncStorage.removeItem(NOTES_DIRECTORY_URI_KEY);
 }
 
-export async function initNotebox(baseUri: string): Promise<void> {
+export async function initEskerra(baseUri: string): Promise<void> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 }
 
-export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
+export async function readSettings(baseUri: string): Promise<EskerraSettings> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
@@ -247,20 +247,20 @@ export async function readSettings(baseUri: string): Promise<NoteboxSettings> {
     throw new Error('settings-shared.json was not found in dev mock vault.');
   }
 
-  return parseNoteboxSettings(rawSettings);
+  return parseEskerraSettings(rawSettings);
 }
 
 export async function writeSettings(
   baseUri: string,
-  settings: NoteboxSettings,
+  settings: EskerraSettings,
 ): Promise<void> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
-  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeNoteboxSettings(settings));
+  await AsyncStorage.setItem(DEV_SETTINGS_KEY, serializeEskerraSettings(settings));
 }
 
-export async function readLocalSettings(baseUri: string): Promise<NoteboxLocalSettings> {
+export async function readLocalSettings(baseUri: string): Promise<EskerraLocalSettings> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
@@ -270,19 +270,19 @@ export async function readLocalSettings(baseUri: string): Promise<NoteboxLocalSe
     throw new Error('settings-local.json was not found in dev mock vault.');
   }
 
-  return parseNoteboxLocalSettings(raw);
+  return parseEskerraLocalSettings(raw);
 }
 
 export async function writeLocalSettings(
   baseUri: string,
-  settings: NoteboxLocalSettings,
+  settings: EskerraLocalSettings,
 ): Promise<void> {
   assertMockBaseUri(baseUri);
   await ensureSeeded();
 
   await AsyncStorage.setItem(
     DEV_LOCAL_SETTINGS_KEY,
-    serializeNoteboxLocalSettings(settings),
+    serializeEskerraLocalSettings(settings),
   );
 }
 

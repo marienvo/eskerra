@@ -32,7 +32,7 @@ export const markdownHeaderMarkTag = Tag.define();
 /** `-` / `1.` list markers and GFM `TaskMarker`; not `tags.list` (that colors whole list subtrees in Lezer). */
 export const markdownListMarkTag = Tag.define();
 
-/** Visible `%%…%%` span (Notebox extension); inner content is smaller gray text. */
+/** Visible `%%…%%` span (Eskerra extension); inner content is smaller gray text. */
 const markdownPercentMutedContentTag = Tag.define();
 
 /** `%%` delimiter characters; separate from {@link tags.processingInstruction} so they can be tinted lighter. */
@@ -48,7 +48,7 @@ const PercentMutedDelim = {resolve: 'PercentMuted', mark: 'PercentMark'};
 
 const EqualHighlightDelim = {resolve: 'EqualHighlight', mark: 'EqualHighlightMark'};
 
-const noteboxPercentMutedExtension: MarkdownConfig = {
+const eskerraPercentMutedExtension: MarkdownConfig = {
   defineNodes: [
     {
       name: 'PercentMuted',
@@ -89,7 +89,7 @@ const noteboxPercentMutedExtension: MarkdownConfig = {
   ],
 };
 
-const noteboxEqualHighlightExtension: MarkdownConfig = {
+const eskerraEqualHighlightExtension: MarkdownConfig = {
   defineNodes: [
     {
       name: 'EqualHighlight',
@@ -154,8 +154,8 @@ export const noteMarkdownParserExtensions: MarkdownExtension = [
   markdownHeaderMarkParserExtension,
   markdownListMarkParserExtension,
   Strikethrough,
-  noteboxPercentMutedExtension,
-  noteboxEqualHighlightExtension,
+  eskerraPercentMutedExtension,
+  eskerraEqualHighlightExtension,
 ];
 
 const markdownHighlightStyle = HighlightStyle.define(

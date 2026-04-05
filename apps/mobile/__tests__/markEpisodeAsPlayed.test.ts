@@ -1,7 +1,7 @@
 import {
   readPodcastFileContent,
   writePodcastFileContent,
-} from '../src/core/storage/noteboxStorage';
+} from '../src/core/storage/eskerraStorage';
 import {
   markEpisodeAsPlayed,
   markEpisodeAsPlayedInContent,
@@ -9,7 +9,7 @@ import {
 } from '../src/features/podcasts/services/markEpisodeAsPlayed';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   readPodcastFileContent: jest.fn(),
   writePodcastFileContent: jest.fn(),
 }));

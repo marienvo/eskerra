@@ -1,7 +1,7 @@
 import {
   listInboxRelativeMarkdownLinkBacklinkReferrersForTarget,
   type InboxWikiLinkNoteRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {listInboxWikiLinkBacklinkReferrersForTarget} from './inboxWikiLinkBacklinkIndex';
 

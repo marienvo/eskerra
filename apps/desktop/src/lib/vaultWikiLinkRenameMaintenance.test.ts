@@ -5,7 +5,7 @@ import {
   planVaultWikiLinkRenameMaintenance,
 } from './vaultWikiLinkRenameMaintenance';
 
-import type {VaultFilesystem} from '@notebox/core';
+import type {VaultFilesystem} from '@eskerra/core';
 
 describe('planVaultWikiLinkRenameMaintenance', () => {
   const notes = [

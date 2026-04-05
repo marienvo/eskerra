@@ -1,8 +1,8 @@
 export type {
-  NoteboxLocalSettings,
-  NoteboxSettings,
+  EskerraLocalSettings,
+  EskerraSettings,
   PlaylistEntry,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 export type NoteSummary = {
   lastModified: number | null;

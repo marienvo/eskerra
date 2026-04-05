@@ -2,7 +2,7 @@ import {load} from '@tauri-apps/plugin-store';
 
 import {normalizeSeriesKey} from './rssParser';
 
-const STORE_PATH = 'notebox-desktop.json';
+const STORE_PATH = 'eskerra-desktop.json';
 
 const rssFeedUrlBySeriesName = new Map<string, string>();
 const rssFeedUrlByNormalizedSeriesName = new Map<string, string>();

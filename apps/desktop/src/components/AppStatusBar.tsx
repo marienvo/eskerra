@@ -1,5 +1,17 @@
 import {MaterialIcon} from './MaterialIcon';
 
+/** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
+export const APP_SHELL_TAGLINE = 'Think. Compose. Nothing else.';
+
+/** Bottom tagline on vault picker / loading only (no settings control). */
+export function AppSetupTagline() {
+  return (
+    <footer className="app-setup-tagline">
+      <p className="app-setup-tagline-text">{APP_SHELL_TAGLINE}</p>
+    </footer>
+  );
+}
+
 type AppStatusBarProps = {
   onOpenSettings: () => void;
 };
@@ -7,7 +19,7 @@ type AppStatusBarProps = {
 export function AppStatusBar({onOpenSettings}: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
-      <p className="app-status-bar-tagline">Think. Compose. Nothing else.</p>
+      <p className="app-status-bar-tagline">{APP_SHELL_TAGLINE}</p>
       <div className="app-status-bar-trailing">
         <button
           type="button"

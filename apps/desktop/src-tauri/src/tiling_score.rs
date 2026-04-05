@@ -1,7 +1,7 @@
 //! Half-tile inference: window outer rect vs monitor work area.
 //! Soft scores use **unified logical** px (single reference scale from the monitor).
 //! Hard gates use **physical** px in production so window and work area are never mixed-scale.
-//! Gate diagnostics: `NOTEBOX_DEBUG_TILING=1` prints per-gate deltas to stderr.
+//! Gate diagnostics: `ESKERRA_DEBUG_TILING=1` prints per-gate deltas to stderr.
 //!
 //! **Fallback (Option 3):** If physical gates still misclassify on a platform, revert to fuzzy-only:
 //! drop the hard-gate branch in `score_tiling` and raise `c_min` / `c_margin` slightly to limit
@@ -322,7 +322,7 @@ fn evaluate_hard_gates_dispatch(audit: &GeometryAudit, cfg: &TilingConfig, gate_
 
 fn eprintln_hard_gates(g: &HardGateEval, space: &str) {
     eprintln!(
-        "[notebox tiling gates] space={} common d_top={:.3} tol_v={:.3} pass={} | d_bot={:.3} tol_v={:.3} pass={} | d_wh_vs_ah={:.3} (diag only, not gated) | d_half_w={:.3} tol_w={:.3} pass={} | common_ok={}",
+        "[eskerra tiling gates] space={} common d_top={:.3} tol_v={:.3} pass={} | d_bot={:.3} tol_v={:.3} pass={} | d_wh_vs_ah={:.3} (diag only, not gated) | d_half_w={:.3} tol_w={:.3} pass={} | common_ok={}",
         space,
         g.d_top,
         g.tol_v,
@@ -337,7 +337,7 @@ fn eprintln_hard_gates(g: &HardGateEval, space: &str) {
         g.pass_common
     );
     eprintln!(
-        "[notebox tiling gates] space={} left d_wx_ax={:.3} tol_e={:.3} pass={} | d_inner_mid={:.3} tol_e={:.3} pass={} | left_ok={}",
+        "[eskerra tiling gates] space={} left d_wx_ax={:.3} tol_e={:.3} pass={} | d_inner_mid={:.3} tol_e={:.3} pass={} | left_ok={}",
         space,
         g.left_d_outer,
         g.tol_e,
@@ -348,7 +348,7 @@ fn eprintln_hard_gates(g: &HardGateEval, space: &str) {
         g.left_ok
     );
     eprintln!(
-        "[notebox tiling gates] space={} right d_wx_mid={:.3} tol_e={:.3} pass={} | d_wxww_axaw={:.3} tol_e={:.3} pass={} | right_ok={}",
+        "[eskerra tiling gates] space={} right d_wx_mid={:.3} tol_e={:.3} pass={} | d_wxww_axaw={:.3} tol_e={:.3} pass={} | right_ok={}",
         space,
         g.right_d_mid,
         g.tol_e,
@@ -406,7 +406,7 @@ fn score_side(
 
 /// Heuristic half-tile classification for left/right against the work area.
 ///
-/// `log_hard_gates`: print `common` / `left` / `right` gate deltas and pass flags to stderr (e.g. `NOTEBOX_DEBUG_TILING=1`).
+/// `log_hard_gates`: print `common` / `left` / `right` gate deltas and pass flags to stderr (e.g. `ESKERRA_DEBUG_TILING=1`).
 ///
 /// `gate_geom`: production should pass [`HardGateGeometry::Physical`] with raw monitor/window physical rects and monitor `scale_factor`.
 pub fn score_tiling(

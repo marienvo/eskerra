@@ -1,7 +1,7 @@
 import {
   listGeneralMarkdownFiles,
   readPodcastFileContent,
-} from '../../../core/storage/noteboxStorage';
+} from '../../../core/storage/eskerraStorage';
 import {PodcastEpisode, PodcastSection, RootMarkdownFile} from '../../../types';
 import {
   filterPodcastRelevantGeneralMarkdownFiles,

@@ -1,6 +1,6 @@
 # Phase 1 observability implementation spec (Sentry + ring buffer)
 
-This document is the **executable Phase 1 spec** for Notebox. It derives from the repository observability plan: **one backbone (Sentry)** plus a **small local ring buffer**. It does **not** replace that plan; it narrows Phase 1 to a minimal, high-signal slice.
+This document is the **executable Phase 1 spec** for Eskerra. It derives from the repository observability plan: **one backbone (Sentry)** plus a **small local ring buffer**. It does **not** replace that plan; it narrows Phase 1 to a minimal, high-signal slice.
 
 **Out of scope for this document:** implementation code, Phase 2+ features.
 
@@ -59,7 +59,7 @@ Implementers must **read the installed `@sentry/react-native` version’s option
 ### Release / dist / environment
 
 - **`environment`:** `development` | `production` (and `test` when `JEST_WORKER_ID` is set—**disable Sentry init** in Jest, see below).
-- **`release`:** Single string tying JS bundle + native binary, e.g. `notebox@<app_version>+<build_number>` from `app.json` / Gradle `versionName`+`versionCode` / Xcode `CFBundleShortVersionString`+`CFBundleVersion`. **Same `release` must be used** for uploaded source maps / debug files.
+- **`release`:** Single string tying JS bundle + native binary, e.g. `eskerra@<app_version>+<build_number>` from `app.json` / Gradle `versionName`+`versionCode` / Xcode `CFBundleShortVersionString`+`CFBundleVersion`. **Same `release` must be used** for uploaded source maps / debug files.
 - **`dist`:** Build number only (Android `versionCode`, iOS build number), if your Sentry project uses `dist` for symbol resolution; otherwise omit if wizard uses release-only.
 - **Development:** `debug: true` acceptable locally; **lower sample rate** or **disable** upload in dev if noisy (optional: `enabled: !__DEV__` for Sentry entirely in dev—**acceptance criteria** should include at least one **staging/production-like** build that verifies Sentry).
 
@@ -130,7 +130,7 @@ Set once after init (and update when vault state changes):
 
 | Key | Value |
 |-----|--------|
-| `app` | `{ name: 'notebox' }` |
+| `app` | `{ name: 'eskerra' }` |
 | `vault` | `{ has_session: boolean }` — **never** raw URI |
 | `device` | Use Sentry defaults; do not add custom serial numbers |
 
@@ -161,7 +161,7 @@ Set once after init (and update when vault state changes):
 
 ### File
 
-- **Path:** Cache directory (e.g. `CachesDirectoryPath` / Android `cacheDir`), filename `notebox-observability.ring.jsonl`.
+- **Path:** Cache directory (e.g. `CachesDirectoryPath` / Android `cacheDir`), filename `eskerra-observability.ring.jsonl`.
 - **Format:** JSON Lines: one JSON object per line, UTF-8.
 
 ### Schema (each line)
@@ -229,13 +229,13 @@ Only these in Phase 1; everything else waits.
 | **Non-fatal** | On **any** thrown error in `refreshSession` / `setSessionUri` path: `captureException` + tag `flow=vault_restore`. |
 | **Metadata** | Booleans only. |
 
-### 3. SAF / core storage (`noteboxStorage` — subset)
+### 3. SAF / core storage (`eskerraStorage` — subset)
 
 | Field | Spec |
 |-------|------|
-| **Scope** | Phase 1: **`initNotebox`**, **`readSettings`**, **`listNotes`** (or the single list entry used by vault)—**not** every helper. |
+| **Scope** | Phase 1: **`initEskerra`**, **`readSettings`**, **`listNotes`** (or the single list entry used by vault)—**not** every helper. |
 | **Begin / end** | One breadcrumb pair per **top-level** async call from feature code (implement at exported function boundary). |
-| **Failure** | `storage.op.fail` + `captureException` with `op` tag (`initNotebox`, `readSettings`, `listNotes`). |
+| **Failure** | `storage.op.fail` + `captureException` with `op` tag (`initEskerra`, `readSettings`, `listNotes`). |
 | **Metadata** | `duration_ms` optional in Phase 1—**omit** if it requires wrapping every call in timers (**defer timing to Phase 2**); breadcrumb without duration is OK. |
 
 ### 4. Markdown note load (`NoteDetailScreen` + `useNotes.read`)
@@ -329,7 +329,7 @@ Order respects dependencies: **observability core → init → navigation → bo
 | 5 | [`src/core/bootstrap/resolveInitialRoute.ts`](../../apps/mobile/src/core/bootstrap/resolveInitialRoute.ts) | Bootstrap breadcrumbs only. |
 | 6 | [`src/navigation/RootNavigator.tsx`](../../apps/mobile/src/navigation/RootNavigator.tsx) | `NavigationContainer` + Sentry integration; `onReady` optional. |
 | 7 | [`src/core/vault/VaultContext.tsx`](../../apps/mobile/src/core/vault/VaultContext.tsx) | Vault restore breadcrumbs + non-fatal on failure. |
-| 8 | [`src/core/storage/noteboxStorage.ts`](../../apps/mobile/src/core/storage/noteboxStorage.ts) | Selected function boundaries: breadcrumbs + failures. |
+| 8 | [`src/core/storage/eskerraStorage.ts`](../../apps/mobile/src/core/storage/eskerraStorage.ts) | Selected function boundaries: breadcrumbs + failures. |
 | 9 | [`src/features/vault/hooks/useNotes.ts`](../../apps/mobile/src/features/vault/hooks/useNotes.ts) or note read path | Note load breadcrumbs (if cleaner than screen-only). |
 | 10 | [`src/features/vault/screens/NoteDetailScreen.tsx`](../../apps/mobile/src/features/vault/screens/NoteDetailScreen.tsx) | Note load lifecycle breadcrumbs. |
 | 11 | [`src/features/podcasts/hooks/usePodcasts.ts`](../../apps/mobile/src/features/podcasts/hooks/usePodcasts.ts) | Refresh breadcrumbs + non-fatal. |

@@ -2,9 +2,11 @@ import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
+import {collectBareBrowserUrlIntervals} from '../markdownBareUrl';
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
-import {markdownNotebox} from '../markdownNoteboxLanguage';
+import {markdownEskerra} from '../markdownEskerraLanguage';
 import {
   noteMarkdownHighlightStyle,
   noteMarkdownParserExtensions,
@@ -163,6 +165,54 @@ function collectRelativeMdIntervals(
   return out;
 }
 
+function collectExternalMdIntervals(state: EditorState): StyledInterval[] {
+  const tree = syntaxTree(state);
+  const out: StyledInterval[] = [];
+  tree.iterate({
+    enter(ref) {
+      if (ref.name !== 'URL') {
+        return;
+      }
+      const parent = ref.node.parent;
+      if (parent == null || parent.name !== 'Link') {
+        return;
+      }
+      const href = state.sliceDoc(ref.from, ref.to);
+      if (!isBrowserOpenableMarkdownHref(href)) {
+        return;
+      }
+      const labelClass = 'cm-md-external-link';
+      const hrefClass = `${labelClass} cm-md-external-href`;
+      out.push({from: ref.from, to: ref.to, priority: 2, classes: hrefClass});
+      const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
+        state.sliceDoc(a, b),
+      );
+      if (labelSpan != null) {
+        out.push({
+          from: labelSpan.from,
+          to: labelSpan.to,
+          priority: 2,
+          classes: labelClass,
+        });
+      }
+    },
+  });
+  return out;
+}
+
+function collectBareBrowserStyledIntervals(state: EditorState): StyledInterval[] {
+  const out: StyledInterval[] = [];
+  for (const iv of collectBareBrowserUrlIntervals(state)) {
+    out.push({
+      from: iv.from,
+      to: iv.to,
+      priority: 2,
+      classes: 'cm-md-external-link',
+    });
+  }
+  return out;
+}
+
 /**
  * Build disjoint styled segments for an inactive table cell using the same markdown parse +
  * class policy as nested CodeMirror (Lezer + wiki + relative-.md overlays).
@@ -178,7 +228,7 @@ export function buildCellStaticSegments(
   const state = EditorState.create({
     doc: text,
     extensions: [
-      markdownNotebox({
+      markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),
@@ -188,8 +238,10 @@ export function buildCellStaticSegments(
   const tree = syntaxTree(state);
   const intervals: StyledInterval[] = [
     ...collectLezerIntervals(textLen, tree),
-    ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
-    ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
+      ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
+      ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
+      ...collectExternalMdIntervals(state),
+      ...collectBareBrowserStyledIntervals(state),
   ];
   return mergeStyledIntervals(textLen, intervals);
 }

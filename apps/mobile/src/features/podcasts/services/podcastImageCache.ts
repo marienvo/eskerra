@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {safUriExists} from '../../../core/storage/noteboxStorage';
+import {safUriExists} from '../../../core/storage/eskerraStorage';
 import {
   clearPodcastImageCacheEntry,
   podcastArtworkFileUriExists,
@@ -16,7 +16,7 @@ const ARTWORK_DOWNLOAD_TIMEOUT_MS = 10000;
 const inFlightArtworkRequests = new Map<string, Promise<string | null>>();
 const artworkUriMemoryCache = new Map<string, string | null>();
 const persistentArtworkWriteChains = new Map<string, Promise<void>>();
-const PERSISTENT_ARTWORK_CACHE_KEY_PREFIX = 'notebox:artworkUriCache:';
+const PERSISTENT_ARTWORK_CACHE_KEY_PREFIX = 'eskerra:artworkUriCache:';
 
 function getArtworkMemoryCacheKey(baseUri: string, rssFeedUrl: string): string {
   return `${baseUri}::${getPodcastImageCacheKey(rssFeedUrl)}`;

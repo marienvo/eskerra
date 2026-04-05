@@ -1,6 +1,6 @@
 # Desktop shell tooltips
 
-Normative rules for **hover/focus hints** in the Notebox desktop (Tauri) shell. Visual styling and timing are defined in CSS; this document states **when** to use that system and **accessibility** expectations.
+Normative rules for **hover/focus hints** in the Eskerra desktop (Tauri) shell. Visual styling and timing are defined in CSS; this document states **when** to use that system and **accessibility** expectations.
 
 ## Single pattern (required)
 

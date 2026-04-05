@@ -1,8 +1,8 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "Desktop companion for your local Notebox vault — notes, podcasts, and playback."
-authors = ["Notebox contributors"]
+description = "Desktop companion for your local Eskerra vault — notes, podcasts, and playback."
+authors = ["Eskerra contributors"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/marienvo/notebox.git"
 edition = "2021"
@@ -26,6 +26,7 @@ notify = "6"
 base64 = "0.22"
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-prevent-default = { version = "4", default-features = false }

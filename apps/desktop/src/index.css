@@ -119,7 +119,7 @@ body {
   -webkit-user-select: none;
 }
 
-/* Transparent shell behind rounded .app-root (Tauri main window only; see Root.tsx). */
+/* Transparent shell behind rounded .app-root — only while main shell is active (see App.tsx). */
 html.tauri-main-chrome {
   background: transparent;
 }

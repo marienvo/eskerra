@@ -11,7 +11,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('Notebox UI error:', error, info.componentStack);
+    console.error('Eskerra UI error:', error, info.componentStack);
   }
 
   render(): ReactNode {

@@ -4,7 +4,7 @@ import {
   assertVaultMarkdownNoteUriForCrud,
   assertVaultTreeDirectoryUriForCrud,
   buildInboxMarkdownIndexContent,
-  defaultNoteboxLocalSettings,
+  defaultEskerraLocalSettings,
   deleteR2PlaylistObject,
   ensureDeviceInstanceId,
   getAssetsAttachmentsDirectoryUri,
@@ -12,36 +12,36 @@ import {
   getInboxDirectoryUri,
   getInboxIndexUri,
   getLocalSettingsUri,
-  getNoteboxDirectoryUri,
+  getEskerraDirectoryUri,
   getPlaylistUri,
   getR2PlaylistObject,
   getSharedSettingsUri,
-  initNoteboxVault,
+  initEskerraVault,
   isRemotePlaylistNewerThanKnown,
   isSyncConflictFileName,
   isVaultR2PlaylistConfigured,
   MARKDOWN_EXTENSION,
   normalizePlaylistEntryForSync,
   normalizeVaultBaseUri,
-  parseNoteboxLocalSettings,
-  parseNoteboxSettings,
+  parseEskerraLocalSettings,
+  parseEskerraSettings,
   pickNewerPlaylistEntry,
   pickNextInboxMarkdownFileName,
   putR2PlaylistObject,
   readVaultSharedSettingsRaw,
   sanitizeFileName,
   sanitizeInboxNoteStem,
-  serializeNoteboxLocalSettings,
-  serializeNoteboxSettings,
+  serializeEskerraLocalSettings,
+  serializeEskerraSettings,
   serializePlaylistEntry,
   vaultPathDirname,
-  type NoteboxLocalSettings,
-  type NoteboxSettings,
+  type EskerraLocalSettings,
+  type EskerraSettings,
   type PlaylistEntry,
   type PlaylistWriteMode,
   type PlaylistWriteResult,
   type VaultFilesystem,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 const DESKTOP_R2_HTTP = {transport: desktopR2SignedTransport} as const;
 
@@ -50,7 +50,7 @@ export async function bootstrapVaultLayout(
   fs: VaultFilesystem,
 ): Promise<void> {
   const base = normalizeVaultBaseUri(root);
-  await initNoteboxVault(base, fs);
+  await initEskerraVault(base, fs);
   const inbox = getInboxDirectoryUri(base);
   const general = getGeneralDirectoryUri(base);
   if (!(await fs.exists(inbox))) {
@@ -106,7 +106,7 @@ async function migrateLegacySharedDisplayNameIfNeeded(
   root: string,
   fs: VaultFilesystem,
   rawShared: string,
-  normalizedSettings: NoteboxSettings,
+  normalizedSettings: EskerraSettings,
 ): Promise<void> {
   let loose: Record<string, unknown>;
   try {
@@ -134,10 +134,10 @@ async function migrateLegacySharedDisplayNameIfNeeded(
 export async function readVaultSettings(
   root: string,
   fs: VaultFilesystem,
-): Promise<NoteboxSettings> {
+): Promise<EskerraSettings> {
   const base = normalizeVaultBaseUri(root);
   const raw = await readVaultSharedSettingsRaw(base, fs);
-  const settings = parseNoteboxSettings(raw);
+  const settings = parseEskerraSettings(raw);
   await migrateLegacySharedDisplayNameIfNeeded(root, fs, raw, settings);
   return settings;
 }
@@ -145,11 +145,11 @@ export async function readVaultSettings(
 export async function writeVaultSettings(
   root: string,
   fs: VaultFilesystem,
-  settings: NoteboxSettings,
+  settings: EskerraSettings,
 ): Promise<void> {
   const base = normalizeVaultBaseUri(root);
   const settingsUri = getSharedSettingsUri(base);
-  await fs.writeFile(settingsUri, serializeNoteboxSettings(settings), {
+  await fs.writeFile(settingsUri, serializeEskerraSettings(settings), {
     encoding: 'utf8',
     mimeType: 'application/json',
   });
@@ -158,28 +158,28 @@ export async function writeVaultSettings(
 export async function readVaultLocalSettings(
   root: string,
   fs: VaultFilesystem,
-): Promise<NoteboxLocalSettings> {
+): Promise<EskerraLocalSettings> {
   const base = normalizeVaultBaseUri(root);
   const localUri = getLocalSettingsUri(base);
   if (!(await fs.exists(localUri))) {
-    return defaultNoteboxLocalSettings;
+    return defaultEskerraLocalSettings;
   }
   const raw = await fs.readFile(localUri, {encoding: 'utf8'});
-  return parseNoteboxLocalSettings(raw);
+  return parseEskerraLocalSettings(raw);
 }
 
 export async function writeVaultLocalSettings(
   root: string,
   fs: VaultFilesystem,
-  settings: NoteboxLocalSettings,
+  settings: EskerraLocalSettings,
 ): Promise<void> {
   const base = normalizeVaultBaseUri(root);
-  const noteboxDir = getNoteboxDirectoryUri(base);
-  if (!(await fs.exists(noteboxDir))) {
-    await fs.mkdir(noteboxDir);
+  const eskerraDir = getEskerraDirectoryUri(base);
+  if (!(await fs.exists(eskerraDir))) {
+    await fs.mkdir(eskerraDir);
   }
   const localUri = getLocalSettingsUri(base);
-  await fs.writeFile(localUri, serializeNoteboxLocalSettings(settings), {
+  await fs.writeFile(localUri, serializeEskerraLocalSettings(settings), {
     encoding: 'utf8',
     mimeType: 'application/json',
   });
@@ -262,9 +262,9 @@ async function writeLocalPlaylistOnlyDesktop(
 ): Promise<PlaylistEntry> {
   const base = normalizeVaultBaseUri(root);
   const uri = getPlaylistUri(base);
-  const noteboxDir = getNoteboxDirectoryUri(base);
-  if (!(await fs.exists(noteboxDir))) {
-    await fs.mkdir(noteboxDir);
+  const eskerraDir = getEskerraDirectoryUri(base);
+  if (!(await fs.exists(eskerraDir))) {
+    await fs.mkdir(eskerraDir);
   }
   await fs.writeFile(uri, serializePlaylistEntry(entry), {
     encoding: 'utf8',

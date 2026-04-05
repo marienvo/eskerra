@@ -8,7 +8,7 @@ import {
   PODCAST_IMAGE_CACHE_TTL_MS,
   PODCAST_IMAGE_REMOTE_FALLBACK_TTL_MS,
 } from '../src/features/podcasts/services/podcastImageCache';
-import {safUriExists} from '../src/core/storage/noteboxStorage';
+import {safUriExists} from '../src/core/storage/eskerraStorage';
 import {
   clearPodcastImageCacheEntry,
   podcastArtworkFileUriExists,
@@ -18,7 +18,7 @@ import {
 } from '../src/core/storage/podcastArtworkInternalStorage';
 import {fetchRssArtworkUrl} from '../src/features/podcasts/services/rssArtwork';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   safUriExists: jest.fn(),
 }));
 
@@ -251,7 +251,7 @@ describe('podcastImageCache', () => {
     );
 
     expect(asyncStorageGetItemMock).toHaveBeenCalledWith(
-      `notebox:artworkUriCache:${baseUri}`,
+      `eskerra:artworkUriCache:${baseUri}`,
     );
     expect(readCacheMock).not.toHaveBeenCalled();
   });
@@ -296,7 +296,7 @@ describe('podcastImageCache', () => {
 
     const expectedMemoryCacheKey = `${baseUri}::${getPodcastImageCacheKey(rssFeedUrl)}`;
     expect(asyncStorageSetItemMock).toHaveBeenCalledWith(
-      `notebox:artworkUriCache:${baseUri}`,
+      `eskerra:artworkUriCache:${baseUri}`,
       JSON.stringify({
         [expectedMemoryCacheKey]: expectedUri,
       }),
@@ -369,7 +369,7 @@ describe('podcastImageCache', () => {
 
     expect(peekCachedPodcastArtworkUriFromMemory(baseUri, rssFeedUrl)).toBeNull();
     expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith(
-      `notebox:artworkUriCache:${baseUri}`,
+      `eskerra:artworkUriCache:${baseUri}`,
     );
   });
 
@@ -389,7 +389,7 @@ describe('podcastImageCache', () => {
 
     expect(peekCachedPodcastArtworkUriFromMemory(baseUri, rssFeedUrl)).toBeNull();
     expect(asyncStorageRemoveItemMock).toHaveBeenCalledWith(
-      `notebox:artworkUriCache:${baseUri}`,
+      `eskerra:artworkUriCache:${baseUri}`,
     );
   });
 });

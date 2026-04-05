@@ -15,7 +15,7 @@ use crate::tiling_score::{
 use crate::tiling_gdk::gdk_edge_tiling_state;
 
 fn tiling_debug_enabled() -> bool {
-    std::env::var("NOTEBOX_DEBUG_TILING")
+    std::env::var("ESKERRA_DEBUG_TILING")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
 }
@@ -101,7 +101,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     let maximized = window.is_maximized().unwrap_or(false);
     if maximized {
         if debug_components {
-            eprintln!("[notebox tiling] maximized -> none");
+            eprintln!("[eskerra tiling] maximized -> none");
         }
         return TilingDetection {
             state: crate::tiling_score::TilingState::None,
@@ -113,7 +113,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     #[cfg(target_os = "linux")]
     if let Some(state) = gdk_edge_tiling_state(&window) {
         if debug_components {
-            eprintln!("[notebox tiling] gdk edge state -> {state:?} conf={GDK_TILING_CONFIDENCE:.3}");
+            eprintln!("[eskerra tiling] gdk edge state -> {state:?} conf={GDK_TILING_CONFIDENCE:.3}");
         }
         return TilingDetection {
             state,
@@ -127,7 +127,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
         Ok(p) => p,
         Err(e) => {
             if debug_components {
-                eprintln!("[notebox tiling] outer_position error: {e}");
+                eprintln!("[eskerra tiling] outer_position error: {e}");
             }
             return TilingDetection {
                 state: crate::tiling_score::TilingState::None,
@@ -140,7 +140,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
         Ok(s) => s,
         Err(e) => {
             if debug_components {
-                eprintln!("[notebox tiling] outer_size error: {e}");
+                eprintln!("[eskerra tiling] outer_size error: {e}");
             }
             return TilingDetection {
                 state: crate::tiling_score::TilingState::None,
@@ -156,7 +156,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
         Ok(Some(m)) => m,
         Ok(None) => {
             if debug_components {
-                eprintln!("[notebox tiling] no current_monitor");
+                eprintln!("[eskerra tiling] no current_monitor");
             }
             return TilingDetection {
                 state: crate::tiling_score::TilingState::None,
@@ -166,7 +166,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
         }
         Err(e) => {
             if debug_components {
-                eprintln!("[notebox tiling] current_monitor error: {e}");
+                eprintln!("[eskerra tiling] current_monitor error: {e}");
             }
             return TilingDetection {
                 state: crate::tiling_score::TilingState::None,
@@ -193,7 +193,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     ) {
         if debug_components {
             eprintln!(
-                "[notebox tiling] wayland unreliable outer position (physical=({},{})) -> none",
+                "[eskerra tiling] wayland unreliable outer position (physical=({},{})) -> none",
                 outer_pos.x, outer_pos.y
             );
         }
@@ -227,7 +227,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
 
     if debug_components {
         eprintln!(
-            "[notebox tiling] physical window=({:.1},{:.1}) {:.1}x{:.1} | work=({:.1},{:.1}) {:.1}x{:.1} | scale_window={:.2} scale_mon={:.2}",
+            "[eskerra tiling] physical window=({:.1},{:.1}) {:.1}x{:.1} | work=({:.1},{:.1}) {:.1}x{:.1} | scale_window={:.2} scale_mon={:.2}",
             window_physical.x,
             window_physical.y,
             window_physical.w,
@@ -240,7 +240,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
             scale_mon,
         );
         eprintln!(
-            "[notebox tiling] unified logical window=({:.1},{:.1}) {:.1}x{:.1} (scale_ref=mon {:.2}) | work=({:.1},{:.1}) {:.1}x{:.1} | state={:?} conf={:.3}",
+            "[eskerra tiling] unified logical window=({:.1},{:.1}) {:.1}x{:.1} (scale_ref=mon {:.2}) | work=({:.1},{:.1}) {:.1}x{:.1} | state={:?} conf={:.3}",
             window_outer.x,
             window_outer.y,
             window_outer.w,
@@ -254,7 +254,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
             detection.confidence,
         );
         if let Some(ref c) = detection.components {
-            eprintln!("[notebox tiling] components {c:?}");
+            eprintln!("[eskerra tiling] components {c:?}");
         }
     }
 

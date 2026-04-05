@@ -1,7 +1,7 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
-import logoEskerraUrl from '@notebox/brand/logo-eskerra.svg?url';
+import logoEskerraUrl from '@eskerra/brand/logo-eskerra.svg?url';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 

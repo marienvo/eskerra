@@ -3,9 +3,9 @@ import {
   fetchR2PlaylistConditional,
   isPlaylistR2PollEchoFromOwnDevice,
   isVaultR2PlaylistConfigured,
-  type NoteboxSettings,
+  type EskerraSettings,
   type PlaylistEntry,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {useEffect, useLayoutEffect, useRef} from 'react';
 
 import {desktopR2SignedTransport} from '../lib/desktopR2Transport';
@@ -14,7 +14,7 @@ import {useTauriMainWindowPollActive} from './useTauriMainWindowPollActive';
 
 type UseDesktopPlaylistR2EtagPollingParams = {
   vaultRoot: string | null;
-  vaultSettings: NoteboxSettings | null;
+  vaultSettings: EskerraSettings | null;
   /**
    * Used to ignore R2 ETag refreshes that only echo this device's own control writes.
    * Other devices use a different `deviceInstanceId` as `playbackOwnerId`.
@@ -106,7 +106,7 @@ export function useDesktopPlaylistR2EtagPolling({
 /** Composes window focus/visibility with R2 polling for the main app window. */
 export function useDesktopPlaylistR2EtagPollingForMainWindow(params: {
   vaultRoot: string | null;
-  vaultSettings: NoteboxSettings | null;
+  vaultSettings: EskerraSettings | null;
   deviceInstanceId: string;
   onRemotePlaylistChanged: () => void;
   allowPolling?: boolean;

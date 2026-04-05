@@ -9,6 +9,35 @@
   margin: 0 auto;
 }
 
+/* Vault picker + layout load: light typography on AppChromeBackground (native client area). */
+.app-root--setup {
+  color-scheme: dark;
+}
+
+.app-root--setup .setup-shell h1 {
+  color: var(--color-shell-icon);
+  font-weight: 700;
+}
+
+.app-root--setup .setup-shell .muted {
+  color: var(--color-shell-icon-muted);
+}
+
+.app-root--setup .setup-shell button.primary {
+  color: #fdfdfd;
+  border-color: color-mix(in srgb, #fff 50%, var(--color-primary-border));
+  background: color-mix(in srgb, var(--color-primary) 82%, #061525);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.app-root--setup .setup-shell button.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.app-root--setup .setup-shell .error {
+  color: #ffc9c9;
+}
+
 .app-root {
   box-sizing: border-box;
   position: relative;
@@ -93,13 +122,27 @@
   border-radius: 0;
 }
 
-/* Dev: sessionStorage noteboxDebugTiling=1 — see windowTiling.ts */
+/* Dev: sessionStorage eskerraDebugTiling=1 — see windowTiling.ts */
 .app-root.app-root--tiling-debug {
   outline: 2px dashed rgba(220, 90, 0, 0.55);
   outline-offset: -2px;
 }
 
-/* Tauri frameless: declarative drag on title bar strips uses WebKit regions; keep controls scrollable. */
+/*
+ * Vault picker / layout loading: native OS title bar (see App.tsx setDecorations).
+ * Square client area; no faux floating frame drawn in the webview.
+ */
+.app-root--tauri.app-root--setup {
+  border-radius: 0;
+}
+
+.app-root--tauri.app-root--setup:not(.app-root--tiled-left):not(
+    .app-root--tiled-right
+  ):not(.app-root--maximized)::after {
+  content: none !important;
+}
+
+/* Tauri frameless main shell: declarative drag on title bar; keep controls scrollable. */
 .app-root--tauri button,
 .app-root--tauri input,
 .app-root--tauri textarea,
@@ -159,7 +202,7 @@ a:focus:not(:focus-visible) {
   -webkit-user-drag: none;
   /* 29px matches the app icon grid; avoids odd fractional raster sizes at 1x. */
   /* Center 29px asset on the 40px rail tab column below (see .rail-tab width). */
-  margin-inline-start: calc((40px - 29px) / 2);
+  margin-inline-start: calc((40px - 29px) / 2 + 1px);
 }
 
 .window-title-bar-drag {
@@ -223,6 +266,35 @@ a:focus:not(:focus-visible) {
   align-self: stretch;
   flex-shrink: 0;
   gap: 0.15rem;
+}
+
+/* Setup / loading: tagline only (centered; no settings affordance). */
+.app-setup-tagline {
+  flex-shrink: 0;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
+  background: transparent;
+  transform: translateY(-8px);
+}
+
+.app-setup-tagline-text {
+  margin: 0;
+  max-width: calc(100% - 1rem);
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--color-shell-tagline);
+  line-height: 1.2;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-status-bar {
@@ -488,14 +560,36 @@ a:focus:not(:focus-visible) {
 }
 
 .rail-tab.active {
-  background: var(--color-accent);
+  background: transparent;
   color: #ffffff;
   box-shadow: none;
 }
 
+/* Translucent light pill; icon knocks out via destination-out so shell shows through glyphs. */
+.rail-tab.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.rail-tab.active .material-icons {
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  mix-blend-mode: destination-out;
+}
+
+.rail-tab.active:hover::before,
+.rail-tab.active:focus-visible::before {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .rail-tab.active:hover,
 .rail-tab.active:focus-visible {
-  background: color-mix(in srgb, var(--color-accent) 88%, #000000);
   color: #ffffff;
 }
 
@@ -506,6 +600,14 @@ a:focus:not(:focus-visible) {
   background: transparent;
   color: var(--color-shell-icon-disabled);
   box-shadow: none;
+}
+
+.rail-tab.active:disabled::before {
+  display: none;
+}
+
+.rail-tab.active:disabled .material-icons {
+  mix-blend-mode: normal;
 }
 
 .rail-tab:disabled:hover,
@@ -1023,6 +1125,11 @@ a:focus:not(:focus-visible) {
   border: 0;
 }
 
+/* First frame after `loadMarkdown`: workspace sets `inboxBacklinksDeferFirstPaint` (one rAF). */
+.inbox-backlinks.inbox-backlinks--defer-first-paint {
+  visibility: hidden;
+}
+
 .inbox-backlinks {
   flex: none;
   padding-block: 0.85rem 0.6rem;
@@ -1092,8 +1199,7 @@ a:focus:not(:focus-visible) {
   text-overflow: ellipsis;
 }
 
-/* Radix context menu + alert dialog: above tooltip pseudo-elements (z-index 60).
- * Delete overlay: under html.tauri-main-chrome, radius follows --shell-overlay-radius (set in App.tsx from maximize/tiling). */
+/* Radix context menu + alert dialog: above tooltip pseudo-elements (z-index 60). */
 .note-list-context-menu {
   z-index: 100;
   min-width: 9rem;
@@ -1133,7 +1239,7 @@ a:focus:not(:focus-visible) {
   background: rgba(0, 0, 0, 0.38);
 }
 
-/* Rounded translucent window corners: dim only inside the same round-rect as .app-root (not the sharp webview). */
+/* Dim only inside the same round-rect as .app-root when frameless (not setup). */
 html.tauri-main-chrome .alert-dialog-overlay {
   border-radius: var(--shell-overlay-radius, var(--window-radius));
 }
@@ -1363,6 +1469,11 @@ button.primary.destructive {
   background: transparent;
 }
 
+/* First frame after loadMarkdown: skip painting CM subtree (see NoteMarkdownEditor). */
+.note-markdown-editor-host.note-markdown-editor-host--defer-first-paint {
+  visibility: hidden;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-paper .note-markdown-editor-host {
   margin-inline-start: calc(-1 * var(--nb-editor-fold-gutter-width));
   width: calc(100% + var(--nb-editor-fold-gutter-width));
@@ -1468,42 +1579,46 @@ button.primary.destructive {
 }
 
 /*
- * Markdown syntax markers on non-focus lines (cm-notebox-marker-focus-line from
+ * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
  * take no space.
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-header-mark {
   visibility: hidden;
 }
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-syntax-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-percent-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-equal-highlight-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-hr,
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
-  .cm-md-rel-link-href {
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-rel-link-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-external-href {
   display: none;
 }
 
@@ -1546,13 +1661,20 @@ button.primary.destructive {
   color: var(--nb-editor-faint);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  color: var(--color-interactive-text);
+}
+
 /*
  * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
  * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-rel-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
@@ -1562,7 +1684,17 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
-  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-external-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-wiki-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
@@ -2259,7 +2391,7 @@ button.primary.destructive {
 
 /*
  * Inactive table cells: same marker / link presentation as non-marker-focus lines in the note editor
- * (.cm-line:not(.cm-notebox-marker-focus-line) rules ~1397–1420): hide syntax delimiters, wiki
+ * (.cm-line:not(.cm-eskerra-marker-focus-line) rules ~1397–1420): hide syntax delimiters, wiki
  * brackets, rule lines, and inline-link URL segments; keep list markers (cm-md-list-mark) visible.
  */
 [data-app-surface='capture']
@@ -2292,7 +2424,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-rel-link-href {
+  .cm-md-rel-link-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-external-href {
   display: none;
 }
 
@@ -2300,6 +2436,16 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-external-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);

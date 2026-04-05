@@ -23,16 +23,18 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
 
 import {
+  isBrowserOpenableMarkdownHref,
   isExternalMarkdownHref,
   MARKDOWN_EXTENSION,
   stripMarkdownLinkHrefToPathPart,
   type InboxWikiLinkCompletionCandidate,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -45,12 +47,14 @@ import {
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
+import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {
   markdownInlineCodeSurroundInputHandler,
@@ -114,6 +118,8 @@ export type NoteMarkdownEditorProps = {
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  /** Shell-owned: open `http` / `https` / `mailto` inline links in the system browser. */
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
@@ -134,12 +140,15 @@ export type NoteMarkdownEditorProps = {
 
 export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
-  loadMarkdown: (markdown: string) => void;
+  loadMarkdown: (
+    markdown: string,
+    options?: {selection?: 'start' | 'end'},
+  ) => void;
   /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
   unfoldAllFolds: () => boolean;
   /**
    * Folds every foldable range (lists, sections, etc.). H1 title sections are never foldable
-   * (see `markdownNotebox`).
+   * (see `markdownEskerra`).
    */
   collapseAllFolds: () => boolean;
   replaceWikiLinkInnerAt: (options: {
@@ -168,6 +177,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onWikiLinkActivate,
     relativeMarkdownLinkHrefIsResolved,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
@@ -211,6 +221,11 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onMarkdownRelativeLinkActivateRef.current = onMarkdownRelativeLinkActivate;
   }, [onMarkdownRelativeLinkActivate]);
+
+  const onMarkdownExternalLinkOpenRef = useRef(onMarkdownExternalLinkOpen);
+  useEffect(() => {
+    onMarkdownExternalLinkOpenRef.current = onMarkdownExternalLinkOpen;
+  }, [onMarkdownExternalLinkOpen]);
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
@@ -259,7 +274,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const parent = parentRef.current;
     if (!parent) {
       return;
@@ -389,7 +404,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         ) {
           e.preventDefault();
           reportEditorError(
-            'Pasting images into the vault requires the Notebox desktop app. Use `tauri dev` or the packaged app instead of a plain browser tab.',
+            'Pasting images into the vault requires the Eskerra desktop app. Use `tauri dev` or the packaged app instead of a plain browser tab.',
           );
           return true;
         }
@@ -451,6 +466,30 @@ const NoteMarkdownEditorImpl = forwardRef<
         });
         return true;
       }
+      const extHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isBrowserOpenableMarkdownHref,
+      );
+      const bareHit = markdownBareBrowserUrlAtPosition(view.state, pos);
+      if (extHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownExternalLinkOpenRef.current({
+          href: extHit.href,
+          at: extHit.hrefFrom,
+        });
+        return true;
+      }
+      if (bareHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownExternalLinkOpenRef.current({
+          href: bareHit.href,
+          at: bareHit.hrefFrom,
+        });
+        return true;
+      }
       return false;
     };
 
@@ -464,7 +503,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
-      markdownNotebox({
+      markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),
@@ -487,6 +526,8 @@ const NoteMarkdownEditorImpl = forwardRef<
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
+          onMarkdownExternalLinkOpen: p =>
+            onMarkdownExternalLinkOpenRef.current(p),
         }),
         indentWithTab,
         ...foldKeymap,
@@ -503,6 +544,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolved,
         ),
       ),
+      markdownExternalLinkHighlightExtension(),
       eskerraTableParentLinkCompartmentsFacet.of({
         wikiLink: wikiLinkCompartment,
         relativeMarkdownLink: relativeMdLinkCompartment,
@@ -526,6 +568,8 @@ const NoteMarkdownEditorImpl = forwardRef<
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
+          onMarkdownExternalLinkOpen: p =>
+            onMarkdownExternalLinkOpenRef.current(p),
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
           ...partial,
         }),
@@ -534,6 +578,8 @@ const NoteMarkdownEditorImpl = forwardRef<
         onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
         onMarkdownRelativeLinkActivate: p =>
           onMarkdownRelativeLinkActivateRef.current(p),
+        onMarkdownExternalLinkOpen: p =>
+          onMarkdownExternalLinkOpenRef.current(p),
       }),
       ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
@@ -655,6 +701,46 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
+  /**
+   * Apply `loadMarkdown` synchronously so the first browser paint after layout already has the real
+   * document. A deferred rAF apply runs after paint, which left the placeholder visible until the next frame
+   * or user interaction (WebKit/GTK).
+   */
+  const applyMarkdownLoadNow = useCallback(
+    (markdown: string, options?: {selection?: 'start' | 'end'}) => {
+      const v = viewRef.current;
+      const be = codemirrorBootExtensionsRef.current;
+      const wc = wikiLinkCompartmentRef.current;
+      const rc = relativeMdLinkCompartmentRef.current;
+      if (!v || !be || !wc || !rc) {
+        return;
+      }
+      const at = options?.selection === 'start' ? 0 : markdown.length;
+      v.setState(
+        EditorState.create({
+          doc: markdown,
+          selection: EditorSelection.cursor(at),
+          extensions: be,
+        }),
+      );
+      const wikiEff = wc.reconfigure(
+        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
+      );
+      const relEff = rc.reconfigure(
+        markdownRelativeLinkHighlightExtensions(
+          relativeMarkdownLinkHrefIsResolvedRef.current,
+        ),
+      );
+      v.dispatch({effects: [wikiEff, relEff]});
+      dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
+      onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
+      onFoldableRangesPresentChangeRef.current?.(
+        foldableRangesPresent(v.state),
+      );
+    },
+    [],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
@@ -665,7 +751,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         }
         return view?.state.doc.toString() ?? initialMarkdownRef.current;
       },
-      loadMarkdown: (markdown: string) => {
+      loadMarkdown: (markdown: string, options?: {selection?: 'start' | 'end'}) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
         const wikiCompartment = wikiLinkCompartmentRef.current;
@@ -673,31 +759,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
-        view.setState(
-          EditorState.create({
-            doc: markdown,
-            selection: EditorSelection.cursor(markdown.length),
-            extensions: bootExtensions,
-          }),
-        );
-        const wikiEff = wikiCompartment.reconfigure(
-          wikiLinkResolvedHighlightExtensions(
-            wikiLinkTargetIsResolvedRef.current,
-          ),
-        );
-        const relEff = relCompartment.reconfigure(
-          markdownRelativeLinkHighlightExtensions(
-            relativeMarkdownLinkHrefIsResolvedRef.current,
-          ),
-        );
-        view.dispatch({effects: [wikiEff, relEff]});
-        dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
-        onFoldedRangesPresentChangeRef.current?.(
-          foldedRangesPresent(view.state),
-        );
-        onFoldableRangesPresentChangeRef.current?.(
-          foldableRangesPresent(view.state),
-        );
+        applyMarkdownLoadNow(markdown, options);
       },
       unfoldAllFolds: () => {
         const view = viewRef.current;
@@ -756,7 +818,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         return true;
       },
     }),
-    [],
+    [applyMarkdownLoadNow],
   );
 
   const insertRelativePaths = useCallback((paths: readonly string[]) => {
@@ -884,12 +946,16 @@ const NoteMarkdownEditorImpl = forwardRef<
     };
   }, [attachmentHost, busy, insertRelativePaths, reportEditorError]);
 
-  const rootClass = dropActive
+  const hostClassName = dropActive
     ? 'note-markdown-editor-host note-markdown-editor-host--drop-target'
     : 'note-markdown-editor-host';
 
   return (
-    <div ref={hostRef} className={rootClass} data-note-markdown-editor>
+    <div
+      ref={hostRef}
+      className={hostClassName}
+      data-note-markdown-editor
+    >
       <div ref={parentRef} className="note-markdown-editor-cm-root" />
     </div>
   );

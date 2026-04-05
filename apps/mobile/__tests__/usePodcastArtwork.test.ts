@@ -62,10 +62,10 @@ describe('usePodcastArtwork', () => {
 
   test('returns memory peek synchronously on first paint when available', async () => {
     peekCachedPodcastArtworkUriFromMemoryMock.mockReturnValue(
-      'content://vault/.notebox/podcast-images/rss-peek.jpg',
+      'content://vault/.eskerra/podcast-images/rss-peek.jpg',
     );
     getCachedPodcastArtworkUriMock.mockResolvedValueOnce(
-      'content://vault/.notebox/podcast-images/rss-peek.jpg',
+      'content://vault/.eskerra/podcast-images/rss-peek.jpg',
     );
     const values: Array<string | null> = [];
 
@@ -80,13 +80,13 @@ describe('usePodcastArtwork', () => {
       await flushPromises();
     });
 
-    expect(values[0]).toBe('content://vault/.notebox/podcast-images/rss-peek.jpg');
+    expect(values[0]).toBe('content://vault/.eskerra/podcast-images/rss-peek.jpg');
     expect(getPodcastArtworkUriMock).not.toHaveBeenCalled();
   });
 
   test('returns cached artwork asynchronously without fetching RSS', async () => {
     getCachedPodcastArtworkUriMock.mockResolvedValueOnce(
-      'content://vault/.notebox/podcast-images/rss-abc.jpg',
+      'content://vault/.eskerra/podcast-images/rss-abc.jpg',
     );
     const values: Array<string | null> = [];
 
@@ -102,7 +102,7 @@ describe('usePodcastArtwork', () => {
     });
 
     expect(values[0]).toBeNull();
-    expect(values).toContain('content://vault/.notebox/podcast-images/rss-abc.jpg');
+    expect(values).toContain('content://vault/.eskerra/podcast-images/rss-abc.jpg');
     expect(getPodcastArtworkUriMock).not.toHaveBeenCalled();
   });
 
@@ -126,7 +126,7 @@ describe('usePodcastArtwork', () => {
   test('can fetch artwork in background when explicitly allowed', async () => {
     getCachedPodcastArtworkUriMock.mockResolvedValueOnce(null);
     getPodcastArtworkUriMock.mockResolvedValueOnce(
-      'content://vault/.notebox/podcast-images/rss-fetched.jpg',
+      'content://vault/.eskerra/podcast-images/rss-fetched.jpg',
     );
     const values: Array<string | null> = [];
 
@@ -144,7 +144,7 @@ describe('usePodcastArtwork', () => {
     });
 
     expect(values[0]).toBeNull();
-    expect(values).toContain('content://vault/.notebox/podcast-images/rss-fetched.jpg');
+    expect(values).toContain('content://vault/.eskerra/podcast-images/rss-fetched.jpg');
     expect(getPodcastArtworkUriMock).toHaveBeenCalledWith(
       'content://vault',
       'https://feed.example.com/rss.xml',

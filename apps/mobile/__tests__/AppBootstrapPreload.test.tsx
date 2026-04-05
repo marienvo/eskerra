@@ -3,7 +3,7 @@ import TestRenderer, {act} from 'react-test-renderer';
 
 import {resolveInitialRoute} from '../src/core/bootstrap/resolveInitialRoute';
 import {prepareVaultSession} from '../src/core/vault/applyVaultSession';
-import {readPlaylistCoalesced} from '../src/core/storage/noteboxStorage';
+import {readPlaylistCoalesced} from '../src/core/storage/eskerraStorage';
 import {setPodcastBootstrapPayload} from '../src/features/podcasts/services/podcastBootstrapCache';
 import {runPodcastPhase1} from '../src/features/podcasts/services/podcastPhase1';
 import {appBreadcrumb} from '../src/core/observability/appBreadcrumb';
@@ -36,7 +36,7 @@ jest.mock('../src/core/vault/applyVaultSession', () => ({
   prepareVaultSession: jest.fn(),
 }));
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   readPlaylistCoalesced: jest.fn(),
   writePlaylist: jest.fn(),
   clearPlaylist: jest.fn(),

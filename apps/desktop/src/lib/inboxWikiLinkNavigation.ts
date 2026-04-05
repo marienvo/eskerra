@@ -10,7 +10,7 @@ import {
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveResult,
   type VaultFilesystem,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {createVaultMarkdownNoteInDirectory} from './vaultBootstrap';
 
@@ -107,7 +107,7 @@ export async function openOrCreateVaultRelativeMarkdownLink(options: {
   notes: ReadonlyArray<InboxWikiLinkNoteRef>;
   vaultRoot: string;
   fs: VaultFilesystem;
-  /** Directory or open `.md` URI — see `resolveVaultRelativeMarkdownHref` in `@notebox/core`. */
+  /** Directory or open `.md` URI — see `resolveVaultRelativeMarkdownHref` in `@eskerra/core`. */
   sourceMarkdownUriOrDir: string;
 }): Promise<InboxRelativeMarkdownLinkNavigationResult> {
   const {href, notes, vaultRoot, fs, sourceMarkdownUriOrDir} = options;

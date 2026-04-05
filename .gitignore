@@ -87,4 +87,4 @@ yarn-error.log
 .me
 
 # Per-device vault settings (copy from settings-local.example.json locally)
-mock-vault/.notebox/settings-local.json
+mock-vault/.eskerra/settings-local.json

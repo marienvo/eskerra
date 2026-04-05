@@ -1,14 +1,14 @@
-# Notebox
+# Eskerra
 
-Notebox is a **notes + podcast** companion with two apps in one repo:
+Eskerra is a **notes + podcast** companion with two apps in one repo:
 
 | App | Location | Stack |
 | --- | --- | --- |
 | **Mobile** | [`apps/mobile/`](apps/mobile/) | React Native (**Android only**) |
 | **Desktop** | [`apps/desktop/`](apps/desktop/) | Tauri 2 + Vite + React (Linux-first; Fedora / GNOME is the reference) |
-| **Shared logic** | [`packages/notebox-core/`](packages/notebox-core/) | TypeScript (vault paths, settings, `VaultFilesystem`, audio types) |
+| **Shared logic** | [`packages/eskerra-core/`](packages/eskerra-core/) | TypeScript (vault paths, settings, `VaultFilesystem`, audio types) |
 
-Both apps use the same **vault layout** on disk: user-chosen root folder, then `Inbox/`, `General/`, and `/.notebox/settings-shared.json` plus per-device `/.notebox/settings-local.json` (see [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)).
+Both apps use the same **vault layout** on disk: user-chosen root folder, then `Inbox/`, `General/`, and `/.eskerra/settings-shared.json` plus per-device `/.eskerra/settings-local.json` (see [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md)).
 
 ---
 
@@ -27,14 +27,14 @@ Both apps use the same **vault layout** on disk: user-chosen root folder, then `
 | `npm run mobile:android` | Build/run the Android app on a device or emulator |
 | `npm run desktop` | **Desktop:** `tauri dev` (Vite + native window) |
 | `npm run desktop:build` | **Desktop:** production web build + `tauri build` |
-| `npm test` | `@notebox/core` (Vitest) + mobile (Jest) + release helper tests |
+| `npm test` | `@eskerra/core` (Vitest) + mobile (Jest) + release helper tests |
 | `npm run lint` | ESLint for mobile + desktop |
 
 Workspace-scoped scripts (same as above, explicit):
 
 ```bash
-npm run start -w @notebox/mobile
-npm run desktop:dev -w @notebox/desktop
+npm run start -w @eskerra/mobile
+npm run desktop:dev -w @eskerra/desktop
 ```
 
 ---
@@ -45,7 +45,7 @@ npm run desktop:dev -w @notebox/desktop
 
 - Select a Notes directory with the Android folder picker (SAF).
 - Persist the selected tree URI in AsyncStorage.
-- Create/update `/.notebox/settings-shared.json` (optional R2 fields only on the shared file) and `/.notebox/settings-local.json` for per-device `deviceName` and `displayName` (both default to empty strings).
+- Create/update `/.eskerra/settings-shared.json` (optional R2 fields only on the shared file) and `/.eskerra/settings-local.json` for per-device `deviceName` and `displayName` (both default to empty strings).
 - Debug APK build/install scripts live under [`scripts/`](scripts/) and call Gradle in [`apps/mobile/android/`](apps/mobile/android/).
 
 ### Extra prerequisites (Android only)
@@ -78,10 +78,10 @@ Press `r` in the Metro terminal for a full reload if Fast Refresh gets stuck.
 **Debug** (expects Metro in dev; for quick installs):
 
 ```bash
-npm run build:apk -w @notebox/mobile
-npm run install:apk -w @notebox/mobile
+npm run build:apk -w @eskerra/mobile
+npm run install:apk -w @eskerra/mobile
 # or both:
-npm run apk -w @notebox/mobile
+npm run apk -w @eskerra/mobile
 ```
 
 APK output: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
@@ -89,9 +89,9 @@ APK output: `apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk`
 **Release** (JS bundled into the APK; no Metro on the device):
 
 ```bash
-npm run build:apk-release -w @notebox/mobile
-npm run install:apk-release -w @notebox/mobile
-npm run apk-release -w @notebox/mobile
+npm run build:apk-release -w @eskerra/mobile
+npm run install:apk-release -w @eskerra/mobile
+npm run apk-release -w @eskerra/mobile
 ```
 
 APK output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
@@ -103,7 +103,7 @@ Release signing defaults to the **debug keystore** in [`apps/mobile/android/app/
 ### First-launch check (mobile)
 
 1. Open the app, tap **Choose Notes Directory**, pick a folder.
-2. Confirm `/.notebox/settings-shared.json` (and `settings-local.json`) exist after first init.
+2. Confirm `/.eskerra/settings-shared.json` (and `settings-local.json`) exist after first init.
 3. Change `displayName`, save, force-close and reopen to verify persistence.
 
 If Android revokes SAF access, the app should clear the saved URI and send you back to setup.
@@ -152,7 +152,7 @@ Production-style build:
 npm run desktop:build
 ```
 
-Vault selection, `.notebox` settings, inbox notes, MP3 streaming, and Linux **MPRIS** (play/pause from GNOME) are described in [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md).
+Vault selection, `.eskerra` settings, inbox notes, MP3 streaming, and Linux **MPRIS** (play/pause from GNOME) are described in [`specs/architecture/desktop-mobile-parity.md`](specs/architecture/desktop-mobile-parity.md).
 
 ---
 
@@ -194,7 +194,7 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 
 ---
 
-## Comparison: This app vs others
+## Philosophy
 
 I want a Markdown app that is fast, predictable, and works out of the box. 
 No plugins required for the basics, no waiting, no hidden complexity.

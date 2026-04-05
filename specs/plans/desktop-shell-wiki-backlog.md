@@ -6,7 +6,7 @@
 
 **Authoritative architecture (keep in sync with code):**
 
-- [extension-readiness.md](../architecture/extension-readiness.md) — layers, `.notebox` rules, editor constraints.
+- [extension-readiness.md](../architecture/extension-readiness.md) — layers, `.eskerra` rules, editor constraints.
 - [wiki-link-indexing-architecture.md](../architecture/wiki-link-indexing-architecture.md) — indexing seam, ownership, **measurement gates**.
 - [desktop-editor.md](../architecture/desktop-editor.md) — inbox editor behavior and flush rules.
 - [desktop-import-boundaries.md](../rules/desktop-import-boundaries.md) — target ESLint zones.
@@ -38,7 +38,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
    - Rename planning latency and **touched bytes** (logging exists; formalize pass/fail against gates or record why targets were relaxed).
 3. **Decision:** If measurements fail the gates after basic optimization (batching, debounce, avoid redundant scans), introduce a **runtime-only** inverted index or incremental invalidation behind the existing shell-owned seam—not ahead of evidence.
 
-**Non-goal:** Building a durable `.notebox` link index or native acceleration without a benchmark-backed decision (see architecture doc).
+**Non-goal:** Building a durable `.eskerra` link index or native acceleration without a benchmark-backed decision (see architecture doc).
 
 ---
 
@@ -76,7 +76,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
 **Likely work:**
 
 - **Picker UI** when resolving a wiki link from the editor hits `ambiguous` (today users mainly see an error string). Rename already has a confirmation path for ambiguous *skips* during link maintenance; activation should get comparable clarity.
-- **Done (subset):** Relative inline **`[label](./note.md)`** targets: resolve, editor activation, rename maintenance, backlinks, and `@notebox/core` tests — see [desktop-editor.md](../architecture/desktop-editor.md) (Relative Markdown links). Remaining WL-6 items: wiki ambiguity picker, reference-style markdown links, optional broader path rules.
+- **Done (subset):** Relative inline **`[label](./note.md)`** targets: resolve, editor activation, rename maintenance, backlinks, and `@eskerra/core` tests — see [desktop-editor.md](../architecture/desktop-editor.md) (Relative Markdown links). Remaining WL-6 items: wiki ambiguity picker, reference-style markdown links, optional broader path rules.
 
 **Exclude:** Full-text search platform, fuzzy vault-wide ranking as a product.
 
@@ -117,7 +117,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
 
 - Third-party **plugin host**, manifests, or dynamic loading.
 - **iOS** or multi-mobile parity (see [platform-targets.md](../architecture/platform-targets.md)).
-- **Durable `.notebox` link caches** without explicit product ownership, retention, and user-visible behavior ([extension-readiness.md](../architecture/extension-readiness.md)).
+- **Durable `.eskerra` link caches** without explicit product ownership, retention, and user-visible behavior ([extension-readiness.md](../architecture/extension-readiness.md)).
 - Replacing `App.tsx` with a full router or DI framework “big bang” refactor.
 
 ---
@@ -126,7 +126,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
 
 | Document | Role |
 |----------|------|
-| [extension-readiness.md](../architecture/extension-readiness.md) | Principles, layers, `.notebox` rules |
+| [extension-readiness.md](../architecture/extension-readiness.md) | Principles, layers, `.eskerra` rules |
 | [extension-readiness-pr.md](../review-checklists/extension-readiness-pr.md) | PR checklist |
 | [desktop-import-boundaries.md](../rules/desktop-import-boundaries.md) | Zone model and ESLint target |
 | [wiki-link-indexing-architecture.md](../architecture/wiki-link-indexing-architecture.md) | Indexing seam, benchmark gates |

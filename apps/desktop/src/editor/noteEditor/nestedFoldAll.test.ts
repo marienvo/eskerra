@@ -4,7 +4,7 @@ import {EditorState} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
 import {afterEach, describe, expect, it} from 'vitest';
 
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {
   collectFoldableRanges,
   foldableRangesPresent,
@@ -14,7 +14,7 @@ import {
 import {noteMarkdownListItemFoldService, noteMarkdownParserExtensions} from './markdownEditorStyling';
 
 const foldExtensions = [
-  markdownNotebox({
+  markdownEskerra({
     base: commonmarkLanguage,
     extensions: noteMarkdownParserExtensions,
   }),

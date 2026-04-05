@@ -24,10 +24,10 @@ describe('ensureLocalArtworkFileForDisplay', () => {
     jest.clearAllMocks();
     clearPodcastArtworkDisplayUriCacheForTesting();
     setPlatformOs('android');
-    (NativeModules as {NoteboxPodcastArtworkCache?: unknown}).NoteboxPodcastArtworkCache = {
+    (NativeModules as {EskerraPodcastArtworkCache?: unknown}).EskerraPodcastArtworkCache = {
       ensureLocalArtworkFile: ensureMock,
     };
-    ensureMock.mockResolvedValue('file:///data/user/0/com.notebox/cache/podcast-artwork/abc123');
+    ensureMock.mockResolvedValue('file:///data/user/0/com.eskerra/cache/podcast-artwork/abc123');
   });
 
   afterAll(() => {
@@ -45,15 +45,15 @@ describe('ensureLocalArtworkFileForDisplay', () => {
 
   test('copies renderable content:// URIs on Android', async () => {
     const content =
-      'content://com.android.externalstorage.documents/tree/primary%3ANotes/document/primary%3ANotes%2F.notebox%2Fx.jpg';
+      'content://com.android.externalstorage.documents/tree/primary%3ANotes/document/primary%3ANotes%2F.eskerra%2Fx.jpg';
     await expect(ensureLocalArtworkFileForDisplay(content)).resolves.toBe(
-      'file:///data/user/0/com.notebox/cache/podcast-artwork/abc123',
+      'file:///data/user/0/com.eskerra/cache/podcast-artwork/abc123',
     );
     expect(ensureMock).toHaveBeenCalledTimes(1);
     expect(ensureMock).toHaveBeenCalledWith(content);
 
     await expect(ensureLocalArtworkFileForDisplay(content)).resolves.toBe(
-      'file:///data/user/0/com.notebox/cache/podcast-artwork/abc123',
+      'file:///data/user/0/com.eskerra/cache/podcast-artwork/abc123',
     );
     expect(ensureMock).toHaveBeenCalledTimes(1);
   });

@@ -1,16 +1,16 @@
-# Notebox MVP: Architecture
+# Eskerra MVP: Architecture
 
 ## Application shape
 
 Keep architecture intentionally small and explicit:
 
-- The repository is an **npm workspace**: `apps/mobile` (React Native Android), `apps/desktop` (Tauri + React), and `packages/notebox-core` (shared TypeScript). See [desktop-mobile parity](desktop-mobile-parity.md).
+- The repository is an **npm workspace**: `apps/mobile` (React Native Android), `apps/desktop` (Tauri + React), and `packages/eskerra-core` (shared TypeScript). See [desktop-mobile parity](desktop-mobile-parity.md).
 - `App.tsx` (under `apps/mobile/`) bootstraps initial route resolution and renders the root navigator.
 - `RootStack` gates onboarding (`Setup`) vs. app shell (`MainTabs`).
 - `MainTabs` hosts five feature stacks: Podcasts, Playlist, Vault, Note (`AddNoteTab`), Settings.
 - `VaultProvider` stores selected SAF URI and current settings for all features.
 - `NotesProvider` stores shared Inbox note list state for Inbox and Vault.
-- `core/storage/noteboxStorage.ts` owns all SAF note and settings operations.
+- `core/storage/eskerraStorage.ts` owns all SAF note and settings operations.
 
 This keeps business logic near features while keeping device/storage logic centralized.
 
@@ -30,7 +30,7 @@ SetupScreen
   -> Choose Notes Directory
   -> openDocumentTree(true)
   -> save URI in AsyncStorage
-  -> init .notebox/settings-shared.json and settings-local.json
+  -> init .eskerra/settings-shared.json and settings-local.json
   -> set VaultProvider session
   -> navigate MainTabs (Vault tab)
 ```
@@ -55,7 +55,7 @@ VaultScreen
 
 ```text
 SettingsScreen
-  -> edit display name in .notebox/settings.json
+  -> edit display name in .eskerra/settings.json
   -> optional "Change directory" clears URI and routes to Setup
 ```
 
@@ -86,7 +86,7 @@ apps/mobile/src/
 │   ├── storage/
 │   │   ├── appStorage.ts
 │   │   ├── keys.ts
-│   │   └── noteboxStorage.ts
+│   │   └── eskerraStorage.ts
 │   └── vault/{VaultContext,NotesContext}.tsx
 ├── features/
 │   ├── setup/screens/SetupScreen.tsx
@@ -106,7 +106,7 @@ apps/mobile/src/
 │   └── types.ts
 └── types.ts
 
-packages/notebox-core/src/   # shared vault paths, settings parse, AudioPlayer types, VaultFilesystem
+packages/eskerra-core/src/   # shared vault paths, settings parse, AudioPlayer types, VaultFilesystem
 
 apps/desktop/src/            # Tauri UI + invoke-backed vault + HTML audio / MPRIS bridge
 ```
@@ -114,7 +114,7 @@ apps/desktop/src/            # Tauri UI + invoke-backed vault + HTML audio / MPR
 ## Android directory ownership model
 
 - The selected Notes directory is user-owned external/shared storage.
-- App-owned settings live in `/.notebox/settings-shared.json` and `/.notebox/settings-local.json` under that directory.
+- App-owned settings live in `/.eskerra/settings-shared.json` and `/.eskerra/settings-local.json` under that directory.
 - Notes are `.md` files in the selected directory's `/Inbox` folder and are the source of truth.
 - App sandbox storage (AsyncStorage) stores only `notesDirectoryUri`.
 

@@ -8,6 +8,7 @@ import {
   type ViewUpdate,
 } from '@codemirror/view';
 
+import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {relativeMarkdownLinkLabelSpan} from './relativeMarkdownLinkLabelSpan';
 
 const TREE_ENSURE_BUDGET_MS = 200;
@@ -39,6 +40,9 @@ export function buildRelativeMdLinkDecorations(view: EditorView): DecorationSet 
         return;
       }
       const href = view.state.sliceDoc(ref.from, ref.to);
+      if (!isActivatableRelativeMarkdownHref(href)) {
+        return;
+      }
       const labelClass = isResolved(href)
         ? 'cm-md-rel-link cm-md-rel-link--resolved'
         : 'cm-md-rel-link cm-md-rel-link--unresolved';

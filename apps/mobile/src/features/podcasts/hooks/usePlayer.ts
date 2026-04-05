@@ -1,11 +1,11 @@
-import {buildPlaylistEntryForWrite, MIN_PLAYLIST_PERSIST_POSITION_MS} from '@notebox/core';
+import {buildPlaylistEntryForWrite, MIN_PLAYLIST_PERSIST_POSITION_MS} from '@eskerra/core';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {
   clearPlaylist,
   readPlaylistCoalesced,
   writePlaylist,
-} from '../../../core/storage/noteboxStorage';
+} from '../../../core/storage/eskerraStorage';
 import {PlaylistEntry, PodcastEpisode} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {getAudioPlayer, PlayerProgress, PlayerState} from '../services/audioPlayer';

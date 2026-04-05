@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type RefObject,
 } from 'react';
 
@@ -21,16 +22,18 @@ import {
   sanitizeInboxNoteStem,
   stemFromMarkdownFileName,
   SubtreeMarkdownPresenceCache,
-  type NoteboxSettings,
+  isBrowserOpenableMarkdownHref,
+  type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
 import {
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
 } from '../lib/inboxWikiLinkNavigation';
+import {openSystemBrowserUrl} from '../lib/openSystemBrowserUrl';
 import {
   createInboxAutosaveScheduler,
   INBOX_AUTOSAVE_DEBOUNCE_MS,
@@ -63,6 +66,7 @@ import {
   startVaultWatch,
 } from '../lib/tauriVault';
 import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
+import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
 import {
   applyVaultWikiLinkRenameMaintenance,
   planVaultWikiLinkRenameMaintenance,
@@ -77,7 +81,65 @@ import {
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
 
-const STORE_PATH = 'notebox-desktop.json';
+export type InboxEditorShellScrollDirective =
+  | {kind: 'snapTop'}
+  | {kind: 'restore'; top: number; left: number};
+
+function snapshotEditorShellScrollForOpenNote(
+  scrollEl: HTMLDivElement | null,
+  selectedUri: string | null,
+  composingNewEntry: boolean,
+  into: Map<string, {top: number; left: number}>,
+) {
+  if (!scrollEl || !selectedUri || composingNewEntry) {
+    return;
+  }
+  into.set(normalizeEditorDocUri(selectedUri), {
+    top: scrollEl.scrollTop,
+    left: scrollEl.scrollLeft,
+  });
+}
+
+function remapEditorShellScrollMapExact(
+  map: Map<string, {top: number; left: number}>,
+  fromUri: string,
+  toUri: string,
+) {
+  const from = normalizeEditorDocUri(fromUri);
+  const to = normalizeEditorDocUri(toUri);
+  if (from === to) {
+    return;
+  }
+  const v = map.get(from);
+  if (v === undefined) {
+    return;
+  }
+  map.delete(from);
+  map.set(to, v);
+}
+
+function remapEditorShellScrollMapTreePrefix(
+  map: Map<string, {top: number; left: number}>,
+  oldPrefix: string,
+  newPrefix: string,
+) {
+  const oldP = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  const newP = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (oldP === newP) {
+    return;
+  }
+  const next = new Map<string, {top: number; left: number}>();
+  for (const [k, v] of map) {
+    const mapped = remapVaultUriPrefix(k, oldP, newP);
+    next.set(mapped ?? k, v);
+  }
+  map.clear();
+  for (const [k, v] of next) {
+    map.set(k, v);
+  }
+}
+
+const STORE_PATH = 'eskerra-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 /** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
@@ -137,7 +199,7 @@ async function loadMarkdownBodiesForWikiMaintenance(
 
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
-  vaultSettings: NoteboxSettings | null;
+  vaultSettings: EskerraSettings | null;
   settingsName: string;
   notes: NoteRow[];
   selectedUri: string | null;
@@ -172,6 +234,8 @@ export type UseMainWindowWorkspaceResult = {
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  /** Editor intent entrypoint for `http` / `https` / `mailto` inline links. */
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
   renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
@@ -198,11 +262,23 @@ export type UseMainWindowWorkspaceResult = {
   editorHistoryCanGoForward: boolean;
   editorHistoryGoBack: () => void;
   editorHistoryGoForward: () => void;
+  /**
+   * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
+   * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
+   */
+  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
+  /**
+   * True for one frame after each `loadMarkdown` (note body committed to CodeMirror): hides "Linked from"
+   * for that frame so it does not raster with the fresh editor subtree.
+   */
+  inboxBacklinksDeferFirstPaint: boolean;
 };
 
 export function useMainWindowWorkspace(options: {
   fs: VaultFilesystem;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  /** `.note-markdown-editor-scroll`: used to snapshot and restore scroll offsets per note URI. */
+  inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   restoredInboxState: {
     vaultRoot: string;
     composingNewEntry: boolean;
@@ -210,10 +286,16 @@ export function useMainWindowWorkspace(options: {
   } | null;
   inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
-  const {fs, inboxEditorRef, restoredInboxState, inboxRestoreEnabled} = options;
+  const {
+    fs,
+    inboxEditorRef,
+    inboxEditorShellScrollRef,
+    restoredInboxState,
+    inboxRestoreEnabled,
+  } = options;
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
-  const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
-  const [settingsName, setSettingsName] = useState('Notebox');
+  const [vaultSettings, setVaultSettings] = useState<EskerraSettings | null>(null);
+  const [settingsName, setSettingsName] = useState('Eskerra');
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [selectedUri, setSelectedUri] = useState<string | null>(null);
   const [editorBody, setEditorBody] = useState('');
@@ -233,6 +315,8 @@ export function useMainWindowWorkspace(options: {
   const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
     readonly string[]
   >([]);
+  const [inboxBacklinksDeferFirstPaint, setInboxBacklinksDeferFirstPaint] =
+    useState(false);
   const [wikiRenameNotice, setWikiRenameNotice] = useState<string | null>(null);
   const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
     null,
@@ -244,6 +328,8 @@ export function useMainWindowWorkspace(options: {
   );
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
+  /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
+  const vaultBacklinkDiskBodyCacheRef = useRef<Record<string, string>>({});
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRefsBuildGenRef = useRef(0);
   const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
@@ -261,6 +347,14 @@ export function useMainWindowWorkspace(options: {
   const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
   const editorDocumentHistoryRef = useRef(emptyEditorDocumentHistory());
+  const editorShellScrollByUriRef = useRef(
+    new Map<string, {top: number; left: number}>(),
+  );
+  const inboxEditorShellScrollDirectiveRef =
+    useRef<InboxEditorShellScrollDirective | null>(null);
+  /** Invalidates in-flight `openMarkdownInEditor` work when a newer open supersedes it. */
+  const openMarkdownGenerationRef = useRef(0);
+  const inboxBacklinksDeferAfterLoadRafRef = useRef<number | null>(null);
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
@@ -301,6 +395,34 @@ export function useMainWindowWorkspace(options: {
     };
   }, []);
 
+  const scheduleBacklinksDeferOneFrameAfterLoad = useCallback(() => {
+    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+    }
+    setInboxBacklinksDeferFirstPaint(true);
+    inboxBacklinksDeferAfterLoadRafRef.current = requestAnimationFrame(() => {
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+      setInboxBacklinksDeferFirstPaint(false);
+    });
+  }, []);
+
+  const clearInboxBacklinksDeferAfterLoad = useCallback(() => {
+    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+    }
+    setInboxBacklinksDeferFirstPaint(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+        cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (composingNewEntry || !selectedUri || !vaultRoot) {
       setSelectedNoteBacklinkUris([]);
@@ -323,13 +445,22 @@ export function useMainWindowWorkspace(options: {
             return;
           }
 
+          const seed = mergeVaultBacklinkBodySeed(
+            vaultBacklinkDiskBodyCacheRef.current,
+            inboxContentByUriRef.current,
+          );
           const expanded = await loadMarkdownBodiesForWikiMaintenance(
             fs,
             refs,
-            inboxContentByUriRef.current,
+            seed,
             activeUri,
             activeBody,
           );
+          const pruned: Record<string, string> = {};
+          for (const {uri} of refs) {
+            pruned[uri] = expanded[uri] ?? '';
+          }
+          vaultBacklinkDiskBodyCacheRef.current = pruned;
           if (cancelled || selectedUriRef.current !== selected) {
             return;
           }
@@ -407,6 +538,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (md !== raw) {
           inboxEditorRef.current?.loadMarkdown(md);
+          scheduleBacklinksDeferOneFrameAfterLoad();
           setEditorBody(md);
         }
         await saveNoteMarkdown(uri, fs, md);
@@ -423,7 +555,7 @@ export function useMainWindowWorkspace(options: {
     const next = saveChainRef.current.then(run);
     saveChainRef.current = next.catch(() => undefined);
     await next;
-  }, [fs, refreshNotes, inboxEditorRef]);
+  }, [fs, refreshNotes, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
 
   const flushInboxSave = useCallback(async () => {
     autosaveSchedulerRef.current.cancel();
@@ -434,25 +566,111 @@ export function useMainWindowWorkspace(options: {
 
   const openMarkdownInEditor = useCallback(
     async (uri: string, options?: {skipHistory?: boolean}) => {
-      await flushInboxSaveRef.current();
+      const openGen = ++openMarkdownGenerationRef.current;
+      autosaveSchedulerRef.current.cancel();
+      await saveChainRef.current.catch(() => undefined);
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
+      snapshotEditorShellScrollForOpenNote(
+        inboxEditorShellScrollRef.current,
+        selectedUriRef.current,
+        composingNewEntryRef.current,
+        editorShellScrollByUriRef.current,
+      );
+      const targetNorm = normalizeEditorDocUri(uri);
+      if (options?.skipHistory) {
+        const saved =
+          editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
+        inboxEditorShellScrollDirectiveRef.current = {
+          kind: 'restore',
+          top: saved.top,
+          left: saved.left,
+        };
+      } else {
+        inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
+      }
+      const root = vaultRootRef.current;
+      const curUri = selectedUriRef.current;
+      const needsPersist =
+        root != null &&
+        curUri != null &&
+        !composingNewEntryRef.current &&
+        (() => {
+          const raw =
+            inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+          const prev = lastPersistedRef.current;
+          return !(prev && prev.uri === curUri && prev.markdown === raw);
+        })();
+      if (needsPersist) {
+        await enqueueInboxPersist();
+      }
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
+
+      let prefetchBody: string | undefined;
+      if (
+        root != null &&
+        inboxContentByUriRef.current[targetNorm] === undefined
+      ) {
+        try {
+          const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
+          if (openGen !== openMarkdownGenerationRef.current) {
+            return;
+          }
+          prefetchBody = raw.replace(/\n$/, '');
+        } catch (e) {
+          if (openGen !== openMarkdownGenerationRef.current) {
+            return;
+          }
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      }
+
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
+
+      if (prefetchBody !== undefined) {
+        lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
+        setInboxContentByUri(prev => {
+          if (prev[targetNorm] === prefetchBody) {
+            return prev;
+          }
+          return {...prev, [targetNorm]: prefetchBody!};
+        });
+      }
+
+      const resolvedEditorBody =
+        prefetchBody !== undefined
+          ? prefetchBody
+          : inboxContentByUriRef.current[targetNorm];
+      if (resolvedEditorBody !== undefined) {
+        setEditorBody(resolvedEditorBody);
+      }
+
       if (!options?.skipHistory) {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
       setComposingNewEntry(false);
-      setSelectedUri(normalizeEditorDocUri(uri));
+      setSelectedUri(targetNorm);
     },
-    [],
+    [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef],
   );
 
   const hydrateVault = useCallback(
     async (root: string) => {
       await flushInboxSaveRef.current();
+      editorShellScrollByUriRef.current = new Map();
+      inboxEditorShellScrollDirectiveRef.current = null;
       setBusy(true);
       setErr(null);
       clearRenameNotice();
       setRenameLinkProgress(null);
       setPendingWikiLinkAmbiguityRename(null);
       subtreeMarkdownCacheRef.current.invalidateAll();
+      vaultBacklinkDiskBodyCacheRef.current = {};
       setVaultSettings(null);
       try {
         await setVaultSession(root);
@@ -468,7 +686,7 @@ export function useMainWindowWorkspace(options: {
         }
         setDeviceInstanceId(local.deviceInstanceId);
         const label = local.displayName.trim();
-        setSettingsName(label !== '' ? label : 'Notebox');
+        setSettingsName(label !== '' ? label : 'Eskerra');
         await refreshNotes(root);
         setEditorDocumentHistory(emptyEditorDocumentHistory());
         setSelectedUri(null);
@@ -523,6 +741,7 @@ export function useMainWindowWorkspace(options: {
     let cancelled = false;
     void listen('vault-files-changed', () => {
       subtreeMarkdownCacheRef.current.invalidateAll();
+      vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       void (async () => {
@@ -576,18 +795,27 @@ export function useMainWindowWorkspace(options: {
 
   useLayoutEffect(() => {
     if (!vaultRoot || !selectedUri) {
+      clearInboxBacklinksDeferAfterLoad();
       return;
     }
     const cached = inboxContentByUriRef.current[selectedUri];
     if (cached !== undefined) {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
-      setInboxEditorResetNonce(n => n + 1);
+      inboxEditorRef.current?.loadMarkdown(cached, {selection: 'start'});
+      scheduleBacklinksDeferOneFrameAfterLoad();
     } else {
+      clearInboxBacklinksDeferAfterLoad();
       setEditorBody('');
       lastPersistedRef.current = null;
     }
-  }, [vaultRoot, selectedUri]);
+  }, [
+    vaultRoot,
+    selectedUri,
+    inboxEditorRef,
+    clearInboxBacklinksDeferAfterLoad,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   /**
    * Clear the open note in CodeMirror when the shell has no cached body yet.
@@ -600,8 +828,9 @@ export function useMainWindowWorkspace(options: {
     if (inboxContentByUriRef.current[selectedUri] !== undefined) {
       return;
     }
-    inboxEditorRef.current?.loadMarkdown('');
-  }, [vaultRoot, selectedUri, inboxEditorRef]);
+    inboxEditorRef.current?.loadMarkdown('', {selection: 'start'});
+    scheduleBacklinksDeferOneFrameAfterLoad();
+  }, [vaultRoot, selectedUri, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
 
 
   useLayoutEffect(() => {
@@ -627,6 +856,9 @@ export function useMainWindowWorkspace(options: {
     if (!vaultRoot || !selectedUri) {
       return;
     }
+    if (inboxContentByUriRef.current[selectedUri] !== undefined) {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -642,7 +874,8 @@ export function useMainWindowWorkspace(options: {
           });
           if (normalized !== editorBodyRef.current) {
             setEditorBody(normalized);
-            inboxEditorRef.current?.loadMarkdown(normalized);
+            inboxEditorRef.current?.loadMarkdown(normalized, {selection: 'start'});
+            scheduleBacklinksDeferOneFrameAfterLoad();
           }
         }
       } catch (e) {
@@ -654,7 +887,13 @@ export function useMainWindowWorkspace(options: {
     return () => {
       cancelled = true;
     };
-  }, [vaultRoot, selectedUri, fs, inboxEditorRef]);
+  }, [
+    vaultRoot,
+    selectedUri,
+    fs,
+    inboxEditorRef,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
@@ -708,6 +947,7 @@ export function useMainWindowWorkspace(options: {
     void (async () => {
       await flushInboxSaveRef.current();
       setErr(null);
+      inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
       setComposingNewEntry(true);
       setSelectedUri(null);
       setEditorBody('');
@@ -753,6 +993,7 @@ export function useMainWindowWorkspace(options: {
     }
     if (body !== rawBody) {
       inboxEditorRef.current?.loadMarkdown(body);
+      scheduleBacklinksDeferOneFrameAfterLoad();
       setEditorBody(body);
     }
     const {titleLine, bodyAfterBlank} = parseComposeInput(body);
@@ -762,7 +1003,13 @@ export function useMainWindowWorkspace(options: {
     }
     const fullMarkdown = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     await addNote(titleLine, fullMarkdown);
-  }, [addNote, editorBody, inboxEditorRef, vaultRoot]);
+  }, [
+    addNote,
+    editorBody,
+    inboxEditorRef,
+    vaultRoot,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   const onInboxSaveShortcut = useCallback(() => {
     if (composingNewEntryRef.current) {
@@ -780,6 +1027,7 @@ export function useMainWindowWorkspace(options: {
       autosaveSchedulerRef.current.cancel();
       const wasOpen = selectedUri === uri;
       if (wasOpen) {
+        editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(uri));
         selectedUriRef.current = null;
         composingNewEntryRef.current = false;
         lastPersistedRef.current = null;
@@ -975,6 +1223,11 @@ export function useMainWindowWorkspace(options: {
           }
         }
         if (nextUri !== uri) {
+          remapEditorShellScrollMapExact(
+            editorShellScrollByUriRef.current,
+            uri,
+            nextUri,
+          );
           setEditorDocumentHistory(prev =>
             remapEditorHistoryPrefix(prev, uri, nextUri),
           );
@@ -1158,6 +1411,19 @@ export function useMainWindowWorkspace(options: {
     [activateRelativeMarkdownLink],
   );
 
+  const onMarkdownExternalLinkOpen = useCallback(
+    (payload: {href: string; at: number}) => {
+      const href = payload.href.trim();
+      if (!isBrowserOpenableMarkdownHref(href)) {
+        return;
+      }
+      void openSystemBrowserUrl(href).catch(e => {
+        setErr(e instanceof Error ? e.message : String(e));
+      });
+    },
+    [setErr],
+  );
+
   const deleteFolder = useCallback(
     async (directoryUri: string) => {
       if (!vaultRoot) {
@@ -1256,6 +1522,11 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        remapEditorShellScrollMapTreePrefix(
+          editorShellScrollByUriRef.current,
+          oldUri,
+          normalizedNext,
+        );
         {
           let nextSel: string | null = selectedUriRef.current;
           if (nextSel) {
@@ -1317,6 +1588,11 @@ export function useMainWindowWorkspace(options: {
           delete next[result.previousUri];
           return next;
         });
+        remapEditorShellScrollMapExact(
+          editorShellScrollByUriRef.current,
+          result.previousUri,
+          result.nextUri,
+        );
         if (selectedUriRef.current === result.previousUri) {
           selectedUriRef.current = result.nextUri;
           setSelectedUri(result.nextUri);
@@ -1339,6 +1615,11 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        remapEditorShellScrollMapTreePrefix(
+          editorShellScrollByUriRef.current,
+          oldUri,
+          newUri,
+        );
         let nextSel: string | null = selectedUriRef.current;
         if (nextSel) {
           const mappedSel = remapVaultUriPrefix(
@@ -1482,6 +1763,12 @@ export function useMainWindowWorkspace(options: {
             vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
           ),
         );
+        const sm = editorShellScrollByUriRef.current;
+        for (const key of [...sm.keys()]) {
+          if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
+            sm.delete(key);
+          }
+        }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
         setVaultTreeSelectionClearNonce(n => n + 1);
@@ -1669,6 +1956,7 @@ export function useMainWindowWorkspace(options: {
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     deleteNote,
     renameNote,
     subtreeMarkdownCache: subtreeMarkdownCacheRef.current,
@@ -1684,5 +1972,7 @@ export function useMainWindowWorkspace(options: {
     editorHistoryCanGoForward,
     editorHistoryGoBack,
     editorHistoryGoForward,
+    inboxEditorShellScrollDirectiveRef,
+    inboxBacklinksDeferFirstPaint,
   };
 }

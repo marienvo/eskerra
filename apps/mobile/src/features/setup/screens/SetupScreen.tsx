@@ -13,7 +13,7 @@ import {openDocumentTree} from 'react-native-saf-x';
 
 import {RootStackParamList} from '../../../navigation/types';
 import {saveUri} from '../../../core/storage/appStorage';
-import {initNotebox} from '../../../core/storage/noteboxStorage';
+import {initEskerra} from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 
 type SetupNavigation = StackNavigationProp<RootStackParamList, 'Setup'>;
@@ -43,7 +43,7 @@ export function SetupScreen() {
       }
 
       await saveUri(selectedDirectory.uri);
-      await initNotebox(selectedDirectory.uri);
+      await initEskerra(selectedDirectory.uri);
       await setSessionUri(selectedDirectory.uri);
       navigation.replace('MainTabs', {screen: 'PodcastsTab'});
     } catch (error) {
@@ -57,9 +57,9 @@ export function SetupScreen() {
 
   return (
     <Box style={styles.container}>
-      <Text style={styles.title}>Set up Notebox</Text>
+      <Text style={styles.title}>Set up Eskerra</Text>
       <Text style={styles.description}>
-        Choose the directory where Notebox can store app settings and entries.
+        Choose the directory where Eskerra can store app settings and entries.
       </Text>
       {!isAndroid ? (
         <Text style={styles.statusText}>

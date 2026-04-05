@@ -1,7 +1,7 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import type {RefObject} from 'react';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import type {MutableRefObject, RefObject} from 'react';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {
@@ -18,7 +18,7 @@ import {
   normalizeVaultBaseUri,
   type VaultFilesystem,
   type VaultMarkdownRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {
   NoteMarkdownEditor,
@@ -31,6 +31,8 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
+
+import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
 
 import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {MaterialIcon} from './MaterialIcon';
@@ -51,6 +53,8 @@ type VaultTabProps = {
   fs: VaultFilesystem;
   fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
+  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
   leftWidthPx: number;
   onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
@@ -70,6 +74,7 @@ type VaultTabProps = {
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
@@ -94,6 +99,8 @@ type VaultTabProps = {
   editorHistoryCanGoForward: boolean;
   onEditorHistoryGoBack: () => void;
   onEditorHistoryGoForward: () => void;
+  /** Workspace: hide "Linked from" for one frame after `loadMarkdown`. */
+  inboxBacklinksDeferFirstPaint: boolean;
 };
 
 export function VaultTab({
@@ -101,6 +108,8 @@ export function VaultTab({
   fs,
   fsRefreshNonce,
   inboxEditorRef,
+  inboxEditorShellScrollRef,
+  inboxEditorShellScrollDirectiveRef,
   leftWidthPx,
   onLeftWidthPxChanged,
   notes,
@@ -119,6 +128,7 @@ export function VaultTab({
   onEditorError,
   onWikiLinkActivate,
   onMarkdownRelativeLinkActivate,
+  onMarkdownExternalLinkOpen,
   onSaveShortcut,
   busy,
   onDeleteNote,
@@ -136,6 +146,7 @@ export function VaultTab({
   editorHistoryCanGoForward,
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
+  inboxBacklinksDeferFirstPaint,
 }: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -294,6 +305,39 @@ export function VaultTab({
   ]);
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
+
+  useLayoutEffect(() => {
+    if (!editorOpen) {
+      return;
+    }
+    const el = inboxEditorShellScrollRef.current;
+    if (!el) {
+      return;
+    }
+    const directive = inboxEditorShellScrollDirectiveRef.current;
+    if (directive == null) {
+      return;
+    }
+    inboxEditorShellScrollDirectiveRef.current = null;
+    const apply = () => {
+      if (directive.kind === 'snapTop') {
+        el.scrollTop = 0;
+        el.scrollLeft = 0;
+      } else {
+        el.scrollTop = directive.top;
+        el.scrollLeft = directive.left;
+      }
+    };
+    apply();
+    const raf = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(raf);
+  }, [
+    editorOpen,
+    selectedUri,
+    composingNewEntry,
+    inboxEditorShellScrollDirectiveRef,
+    inboxEditorShellScrollRef,
+  ]);
 
   return (
     <div className="inbox-root" data-app-surface="capture">
@@ -704,7 +748,10 @@ export function VaultTab({
             {editorOpen ? (
               <>
                 <div className="editor note-markdown-editor-wrap">
-                  <div className="note-markdown-editor-scroll">
+                  <div
+                    ref={inboxEditorShellScrollRef}
+                    className="note-markdown-editor-scroll"
+                  >
                     <div className="note-markdown-editor-page">
                       <div className="note-markdown-editor-fold-rail">
                         {editorHasFoldedRanges || editorHasFoldableRanges ? (
@@ -763,6 +810,7 @@ export function VaultTab({
                           onMarkdownRelativeLinkActivate={
                             onMarkdownRelativeLinkActivate
                           }
+                          onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                           relativeMarkdownLinkHrefIsResolved={
                             relativeMarkdownLinkHrefIsResolved
                           }
@@ -779,7 +827,14 @@ export function VaultTab({
                           }
                         />
                         {!composingNewEntry && selectedUri ? (
-                          <section className="inbox-backlinks" aria-label="Backlinks">
+                          <section
+                            aria-hidden={inboxBacklinksDeferFirstPaint}
+                            aria-label="Backlinks"
+                            className={
+                              inboxBacklinksDeferFirstPaint
+                                ? 'inbox-backlinks inbox-backlinks--defer-first-paint'
+                                : 'inbox-backlinks'
+                            }>
                             <div className="inbox-backlinks__header">Linked from</div>
                             {backlinkRows.length === 0 ? (
                               <p className="muted inbox-backlinks__empty">No incoming links.</p>

@@ -189,7 +189,7 @@ function createStubHost(): NoteInboxAttachmentHost {
     readNativeClipboardPaste: async () => ({
       kind: 'fail',
       message:
-        'Vault image clipboard is unavailable outside the Notebox desktop app.',
+        'Vault image clipboard is unavailable outside the Eskerra desktop app.',
     }),
     importDroppedFiles: none,
     importDroppedAbsolutePaths: none,

@@ -16,7 +16,7 @@ import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {getNoteTitle} from '../../../core/storage/noteboxStorage';
+import {getNoteTitle} from '../../../core/storage/eskerraStorage';
 import {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,

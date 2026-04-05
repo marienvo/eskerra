@@ -3,11 +3,11 @@ import {load} from '@tauri-apps/plugin-store';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 
 import {
-  defaultNoteboxLocalSettings,
-  defaultNoteboxSettings,
-  type NoteboxLocalSettings,
-  type NoteboxSettings,
-} from '@notebox/core';
+  defaultEskerraLocalSettings,
+  defaultEskerraSettings,
+  type EskerraLocalSettings,
+  type EskerraSettings,
+} from '@eskerra/core';
 
 import {
   bootstrapVaultLayout,
@@ -19,7 +19,7 @@ import {
 import {createTauriVaultFilesystem, getVaultSession, setVaultSession, startVaultWatch} from '../lib/tauriVault';
 import {SettingsContent} from './SettingsContent';
 
-const STORE_PATH = 'notebox-desktop.json';
+const STORE_PATH = 'eskerra-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 /**
@@ -28,8 +28,8 @@ const STORE_KEY_VAULT = 'vaultRoot';
 export function SettingsWindowApp() {
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
-  const [vaultSettings, setVaultSettings] = useState<NoteboxSettings>(defaultNoteboxSettings);
-  const [localSettings, setLocalSettings] = useState<NoteboxLocalSettings>(defaultNoteboxLocalSettings);
+  const [vaultSettings, setVaultSettings] = useState<EskerraSettings>(defaultEskerraSettings);
+  const [localSettings, setLocalSettings] = useState<EskerraLocalSettings>(defaultEskerraLocalSettings);
   /** Bumps to remount [SettingsContent] so form state reloads from disk after save/refresh. */
   const [settingsFormKey, setSettingsFormKey] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -115,7 +115,7 @@ export function SettingsWindowApp() {
     }
   };
 
-  const handleSave = async (shared: NoteboxSettings, local: NoteboxLocalSettings) => {
+  const handleSave = async (shared: EskerraSettings, local: EskerraLocalSettings) => {
     if (!vaultRoot) {
       throw new Error('No vault folder selected.');
     }

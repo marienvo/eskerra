@@ -85,7 +85,7 @@ describe('VaultProvider initialSession hydration', () => {
     const initialSession: VaultInitialSession = {
       uri: 'content://vault-root',
       settings: {},
-      localSettings: {deviceName: '', displayName: 'Dev Notebox'},
+      localSettings: {deviceName: '', displayName: 'Dev Eskerra'},
       inboxContentByUri: null,
       inboxPrefetch: initialInboxPrefetch,
     };

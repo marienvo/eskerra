@@ -5,7 +5,7 @@ import {StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {ACCENT_COLOR} from '../../../core/ui/accentColor';
-import {formatRelativeCalendarLabelFromIsoDate} from '@notebox/core';
+import {formatRelativeCalendarLabelFromIsoDate} from '@eskerra/core';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {usePlayerContext} from '../context/PlayerContext';
 import {PodcastArtworkImage} from './PodcastArtworkImage';

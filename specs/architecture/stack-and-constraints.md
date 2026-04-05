@@ -1,4 +1,4 @@
-# Notebox MVP: Recommendation and Stack
+# Eskerra MVP: Recommendation and Stack
 
 ## Platform targets
 
@@ -33,7 +33,7 @@ Two separate things are required:
 Practical MVP approach:
 
 - Store only `notesDirectoryUri` in AsyncStorage.
-- Store all app settings/state in `.notebox` inside the selected Notes directory.
+- Store all app settings/state in `.eskerra` inside the selected Notes directory.
 
 ### Permissions and what not to do
 

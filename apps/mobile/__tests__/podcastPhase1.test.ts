@@ -1,7 +1,7 @@
 import {
   listGeneralMarkdownFiles,
   readPodcastFileContent,
-} from '../src/core/storage/noteboxStorage';
+} from '../src/core/storage/eskerraStorage';
 import {runPodcastPhase1} from '../src/features/podcasts/services/podcastPhase1';
 import {
   loadPersistentArtworkUriCache,
@@ -16,7 +16,7 @@ import {
 } from '../src/features/podcasts/services/generalPodcastMarkdownIndexCache';
 import {isPodcastFile, parsePodcastFile} from '../src/features/podcasts/services/podcastParser';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   listGeneralMarkdownFiles: jest.fn(),
   readPodcastFileContent: jest.fn(),
 }));

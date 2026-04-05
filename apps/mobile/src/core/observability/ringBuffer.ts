@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {isObservabilityDisabled} from './env';
 
-const STORAGE_KEY = 'notebox.observability.ring.v1';
-const LAST_SENT_KEY = 'notebox.observability.ring.lastSentAt';
+const STORAGE_KEY = 'eskerra.observability.ring.v1';
+const LAST_SENT_KEY = 'eskerra.observability.ring.lastSentAt';
 const MAX_LINES = 400;
 const MAX_CHARS = 480_000;
 const FLUSH_DEBOUNCE_MS = 400;

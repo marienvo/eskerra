@@ -1,6 +1,6 @@
 # Desktop companion shell patterns
 
-Conventions for the **primary** Notebox desktop window (`apps/desktop`). Settings and other surfaces may use a **separate Tauri window**; this document is about the main shell.
+Conventions for the **primary** Eskerra desktop window (`apps/desktop`). Settings and other surfaces may use a **separate Tauri window**; this document is about the main shell.
 
 ## Vault tab: tree vs wiki index (two-model rule)
 
@@ -10,7 +10,7 @@ The second **rail** tab is the **Vault** workspace (see **`RailNav`** in **`apps
 
 | Model | Role | Performance |
 |--------|------|--------------|
-| **Vault tree** | **Lazy and expansion-driven:** each expanded folder loads children with **`listFiles`** plus tree visibility rules (`filterVaultTreeDirEntries` and related helpers in **`@notebox/core`**). | Must stay cheap on expand; no vault-wide crawl in the UI thread for navigation. |
+| **Vault tree** | **Lazy and expansion-driven:** each expanded folder loads children with **`listFiles`** plus tree visibility rules (`filterVaultTreeDirEntries` and related helpers in **`@eskerra/core`**). | Must stay cheap on expand; no vault-wide crawl in the UI thread for navigation. |
 | **Wiki reference index** | **Vault-wide and asynchronous:** flat **`vaultMarkdownRefs`** (`{ name, uri }[]` for eligible `.md` paths), built in the background (`collectVaultMarkdownRefs` in **`useMainWindowWorkspace`**). | Must not block first paint or tree interaction; resolve/autocomplete may be briefly stale until the index catches up. |
 
 - **Do not** drive tree expansion from the wiki index, or walk the whole vault from the tree to serve wiki resolve.
@@ -27,7 +27,7 @@ flowchart LR
   asyncIndex --> userEdit
 ```
 
-Implementation pointers: tree load **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**; vault markdown refs **`packages/notebox-core/src/vaultMarkdownRefs.ts`**.
+Implementation pointers: tree load **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**; vault markdown refs **`packages/eskerra-core/src/vaultMarkdownRefs.ts`**.
 
 ## No modal overlays in the main window
 
@@ -45,7 +45,7 @@ Creating a new capture note uses the **same Editor pane UI** as editing (single 
 
 - Pane header title: **New entry**.
 - Trailing control: **Material `clear`**, ghost icon button (same treatment as **Add entry** in the Vault pane header), to **cancel** compose without saving.
-- **Compose model** matches the Android **Add note** screen: the **first line** is the title (drives the **`.md` filename stem** via `sanitizeFileName`, which preserves case and spaces but strips filesystem-dangerous characters); the rest is body. On save, the file is written as `# Title` + body, using **`parseComposeInput`**, **`buildInboxMarkdownFromCompose`**, and related helpers from **`@notebox/core`** (shared with the mobile app).
+- **Compose model** matches the Android **Add note** screen: the **first line** is the title (drives the **`.md` filename stem** via `sanitizeFileName`, which preserves case and spaces but strips filesystem-dangerous characters); the rest is body. On save, the file is written as `# Title` + body, using **`parseComposeInput`**, **`buildInboxMarkdownFromCompose`**, and related helpers from **`@eskerra/core`** (shared with the mobile app).
 
 ## Resizable main splits (Vault tab, Podcasts)
 

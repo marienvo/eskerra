@@ -1,4 +1,4 @@
-import type {EskerraTableAlignment, EskerraTableModelV1} from '@notebox/core';
+import type {EskerraTableAlignment, EskerraTableModelV1} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {EditorState} from '@codemirror/state';
 import type {Compartment} from '@codemirror/state';

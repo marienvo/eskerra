@@ -20,19 +20,19 @@ This spec defines how the Podcasts screen loads data, when the small initial spi
 - `podcastImageCache`: resolves artwork URI through memory cache, persistent caches (`AsyncStorage`), optional network fallback, and app-internal image files (not vault / SAF).
 - `rssFeedUrlCache`: holds RSS feed URL maps per vault and persists them to `AsyncStorage`.
 - `generalPodcastMarkdownIndexCache`: persists a **small** snapshot of podcast-relevant files under `General` (legacy `*- podcasts.md` and `📻 … .md` only) so cold starts avoid `listFiles` over tens of thousands of unrelated markdown files.
-- **Android:** `listGeneralMarkdownFiles` (and Inbox `listNotes`) may call `NoteboxVaultListing` so **SAF directory listing and markdown filtering run off the JS thread** when `DocumentFile` accepts the same directory URIs as `react-native-saf-x`. If native fails, returns empty while SAF says the folder exists, or is skipped, listing uses the existing JS path (`exists`, `listFiles`, filters in [`noteboxStorage.ts`](../../src/core/storage/noteboxStorage.ts)). **Rationale:** reduce cold-start jank from large `listFiles` results being processed on the single JS thread alongside podcast load; see [architecture / known-risks](../architecture/known-risks.md) section 7.
+- **Android:** `listGeneralMarkdownFiles` (and Inbox `listNotes`) may call `EskerraVaultListing` so **SAF directory listing and markdown filtering run off the JS thread** when `DocumentFile` accepts the same directory URIs as `react-native-saf-x`. If native fails, returns empty while SAF says the folder exists, or is skipped, listing uses the existing JS path (`exists`, `listFiles`, filters in [`eskerraStorage.ts`](../../src/core/storage/eskerraStorage.ts)). **Rationale:** reduce cold-start jank from large `listFiles` results being processed on the single JS thread alongside podcast load; see [architecture / known-risks](../architecture/known-risks.md) section 7.
 
 ## Native RSS vault sync (Android)
 
-Optional **user-triggered** job (not on the startup path): Kotlin module `NoteboxPodcastRssSync` batch-reads and writes `General/` via SAF on a background thread. Pull-to-refresh on the **Podcasts** tab runs this when supported (Android, real SAF vault, native module linked); Inbox / vault listing refresh does **not** invoke it. The TypeScript entry `runSerializedPodcastVaultRefresh` in [`podcastRssVaultSync.ts`](../../src/features/podcasts/services/podcastRssVaultSync.ts) **serializes** the full chain (optional native sync, cache clear, `refreshPodcasts`) so overlapping pull refreshes or a future scheduled job share one in-flight run instead of stacking parallel work. **Primary pull-to-refresh feedback** is a thin progress strip fixed under the Podcasts **tab** header (not inside the list), driven by shared UI state on `PlayerContext` (`podcastsVaultRefreshVisible` / `podcastsVaultRefreshPercent`) for the whole serialized run; native sync forwards `onProgress` percent when available, otherwise the strip stays indeterminate. The strip fill uses the app **accent** color (`#4FAFE6`; see [accent colors](../design/accent-colors.md)). The list `RefreshControl` uses **default** platform styling during the pull gesture (same family as Inbox). While the serialized vault refresh runs, `refreshing` stays **false** on the control so there is no second, list-attached spinner; the header strip is the ongoing cue.
+Optional **user-triggered** job (not on the startup path): Kotlin module `EskerraPodcastRssSync` batch-reads and writes `General/` via SAF on a background thread. Pull-to-refresh on the **Podcasts** tab runs this when supported (Android, real SAF vault, native module linked); Inbox / vault listing refresh does **not** invoke it. The TypeScript entry `runSerializedPodcastVaultRefresh` in [`podcastRssVaultSync.ts`](../../src/features/podcasts/services/podcastRssVaultSync.ts) **serializes** the full chain (optional native sync, cache clear, `refreshPodcasts`) so overlapping pull refreshes or a future scheduled job share one in-flight run instead of stacking parallel work. **Primary pull-to-refresh feedback** is a thin progress strip fixed under the Podcasts **tab** header (not inside the list), driven by shared UI state on `PlayerContext` (`podcastsVaultRefreshVisible` / `podcastsVaultRefreshPercent`) for the whole serialized run; native sync forwards `onProgress` percent when available, otherwise the strip stays indeterminate. The strip fill uses the app **accent** color (`#4FAFE6`; see [accent colors](../design/accent-colors.md)). The list `RefreshControl` uses **default** platform styling during the pull gesture (same family as Inbox). While the serialized vault refresh runs, `refreshing` stays **false** on the control so there is no second, list-attached spinner; the header strip is the ongoing cue.
 
 - **Discovery:** For each `YYYY Section - podcasts.md` matching `isPodcastFile` for the current or next calendar year, the companion hub is `YYYY Section.md` in the same folder.
 - **Checkbox semantics (do not conflate):**
   - **Companion hub (`YYYY Section.md`):** On task lines `- [ ] [[…]]` / `- [x] [[…]]`, the checkbox means **include** vs **exclude** that linked `📻 … .md` from native RSS refresh and from the set of feeds merged into the matching `YYYY Section - podcasts.md`. Unchecked (`[ ]`) = included; checked (`[x]`) = excluded.
-  - **`YYYY Section - podcasts.md` (aggregate stub):** On episode bullet lines, `[ ]` / `[x]` mean **not played** / **played** for that episode. This is separate from hub subscription checkboxes and is handled when parsing and merging stub content ([`PodcastsMdMerge.kt`](../../apps/mobile/android/app/src/main/java/com/notebox/podcast/rss/PodcastsMdMerge.kt), TypeScript played-marking, etc.).
+  - **`YYYY Section - podcasts.md` (aggregate stub):** On episode bullet lines, `[ ]` / `[x]` mean **not played** / **played** for that episode. This is separate from hub subscription checkboxes and is handled when parsing and merging stub content ([`PodcastsMdMerge.kt`](../../apps/mobile/android/app/src/main/java/com/eskerra/podcast/rss/PodcastsMdMerge.kt), TypeScript played-marking, etc.).
 - **📻 refresh:** From the hub, every unchecked task line `- [ ] [[…]]` that resolves to an existing `📻 … .md` file triggers an RSS refresh for that file. Frontmatter may list multiple `rssFeedUrl` values (scalar or YAML list); feeds are merged and sorted by publication time into day sections. Body content older than `daysAgo` (default 7, local calendar) is omitted. Only frontmatter field updated by the sync is `rssFetchedAt` (ISO-8601 UTC with `Z`).
-- **Aggregate `*- podcasts.md`:** For each hub, the same **unchecked** task-linked `📻 … .md` files as for 📻 refresh are read and merged into the section’s `*- podcasts.md` using date and **stub** played-state rules (today/yesterday vs older-than-yesterday vs seven-day cutoff) documented in code ([`PodcastsMdMerge.kt`](../../apps/mobile/android/app/src/main/java/com/notebox/podcast/rss/PodcastsMdMerge.kt)). Task lines marked `[x]` on the hub do not contribute new merge input for that run. Rows are deduplicated by **calendar date plus visible episode title** after normalizing the title to lowercase ASCII letters and digits only (spaces, punctuation, and other characters are ignored for the key), not by MP3 URL. **Collision risk:** two different episodes on the **same** day whose titles normalize the same can collapse to one row. Episode lines and per-show RSS markdown use **literal `&`** in link URLs (not `&amp;`); shared sanitizer: [`PodcastMarkdownLinks.kt`](../../apps/mobile/android/app/src/main/java/com/notebox/podcast/rss/PodcastMarkdownLinks.kt).
-- **Progress:** Native emits `NoteboxPodcastRssSyncProgress` on the RN device event bus with `{ jobId, percent, phase, detail? }`. Percent reaches 99 after the last 📻 file in the deduped refresh set, then 100 with `phase: "complete"` after aggregation.
+- **Aggregate `*- podcasts.md`:** For each hub, the same **unchecked** task-linked `📻 … .md` files as for 📻 refresh are read and merged into the section’s `*- podcasts.md` using date and **stub** played-state rules (today/yesterday vs older-than-yesterday vs seven-day cutoff) documented in code ([`PodcastsMdMerge.kt`](../../apps/mobile/android/app/src/main/java/com/eskerra/podcast/rss/PodcastsMdMerge.kt)). Task lines marked `[x]` on the hub do not contribute new merge input for that run. Rows are deduplicated by **calendar date plus visible episode title** after normalizing the title to lowercase ASCII letters and digits only (spaces, punctuation, and other characters are ignored for the key), not by MP3 URL. **Collision risk:** two different episodes on the **same** day whose titles normalize the same can collapse to one row. Episode lines and per-show RSS markdown use **literal `&`** in link URLs (not `&amp;`); shared sanitizer: [`PodcastMarkdownLinks.kt`](../../apps/mobile/android/app/src/main/java/com/eskerra/podcast/rss/PodcastMarkdownLinks.kt).
+- **Progress:** Native emits `EskerraPodcastRssSyncProgress` on the RN device event bus with `{ jobId, percent, phase, detail? }`. Percent reaches 99 after the last 📻 file in the deduped refresh set, then 100 with `phase: "complete"` after aggregation.
 - **TypeScript:** [`androidPodcastRssSync.ts`](../../src/core/storage/androidPodcastRssSync.ts) wraps the native call and listener; [`podcastRssVaultSync.ts`](../../src/features/podcasts/services/podcastRssVaultSync.ts) clears [`clearPodcastMarkdownFileContentCache`](../../src/features/podcasts/services/podcastPhase1.ts) and runs `refreshPodcasts({ forceFullScan: true })` afterward. Not available for the dev mock vault (no SAF).
 
 ## Cache Layers
@@ -40,7 +40,7 @@ Optional **user-triggered** job (not on the startup path): Kotlin module `Notebo
 ### Persistent podcast markdown index (General)
 
 - Location: `AsyncStorage`.
-- Key: `notebox:generalPodcastMarkdownIndex:${baseUri}`.
+- Key: `eskerra:generalPodcastMarkdownIndex:${baseUri}`.
 - Value: JSON `{ v: 1, snapshottedAt, entries: RootMarkdownFile[] }` where `entries` is only files matching `isPodcastFile` or the RSS emoji filename pattern (not the full `General` listing).
 - **Fast path:** `refresh()` loads this snapshot first; if present, it **does not** call `listGeneralMarkdownFiles` on the critical path before showing episodes (still reads each podcast markdown body via SAF as today).
 - **Background reconcile:** A full `listGeneralMarkdownFiles` runs asynchronously; if the derived podcast-relevant set differs from what was shown, state is rebuilt and the snapshot is updated.
@@ -68,7 +68,7 @@ Optional **user-triggered** job (not on the startup path): Kotlin module `Notebo
 ### Persistent RSS Feed URL Cache
 
 - Location: `AsyncStorage`.
-- Key: `notebox:rssFeedUrlBySeries:${baseUri}`.
+- Key: `eskerra:rssFeedUrlBySeries:${baseUri}`.
 - Value: JSON `{ v: 1, bySeries, byNormalized }` with series display names and normalized keys (without the `baseUri::` prefix inside each record).
 - Lifetime: across app restarts for the same app install.
 - Write-through: `persistRssFeedUrl` schedules a chained `setItem` (same pattern as artwork URI persistence).
@@ -86,18 +86,18 @@ Optional **user-triggered** job (not on the startup path): Kotlin module `Notebo
 ### Persistent Artwork URI Cache
 
 - Location: `AsyncStorage`.
-- Key: `notebox:artworkUriCache:${baseUri}`.
+- Key: `eskerra:artworkUriCache:${baseUri}`.
 - Value: serialized map of non-empty artwork URIs keyed by memory cache key.
 - Lifetime: across app restarts for the same app install.
 - Purpose: hydrate memory cache early so warm restarts can render artwork without reading vault artwork files.
-- **Local file validation:** Cached `content://` document URIs (legacy installs) are checked with `safUriExists`. Cached `file://` internal artwork URIs are checked with `NoteboxPodcastArtworkCache.fileUriExists`. Stale pointers are removed from memory and this map rewritten on load when validation fails.
+- **Local file validation:** Cached `content://` document URIs (legacy installs) are checked with `safUriExists`. Cached `file://` internal artwork URIs are checked with `EskerraPodcastArtworkCache.fileUriExists`. Stale pointers are removed from memory and this map rewritten on load when validation fails.
 
 ### Podcast image metadata (app-internal)
 
 - Location: `AsyncStorage`.
-- Key: `notebox:podcastImageMeta:${baseUri}` (dev mock uses `@notebox_dev:podcastImageMeta:${baseUri}`).
+- Key: `eskerra:podcastImageMeta:${baseUri}` (dev mock uses `@eskerra_dev:podcastImageMeta:${baseUri}`).
 - Value: JSON `{ v: 1, byKey: Record<cacheKey, PodcastImageCacheEntry> }` (TTL, remote URL, optional `localImageUri`, `mimeType`).
-- Image bytes: Android `context.filesDir/podcast-artwork-files/{sha256(baseUri)}/{cacheKey}.{ext}` via native `writeArtworkFile` (see [`podcastArtworkInternalStorage.ts`](../../src/core/storage/podcastArtworkInternalStorage.ts)). Not written under `.notebox/` in the vault.
+- Image bytes: Android `context.filesDir/podcast-artwork-files/{sha256(baseUri)}/{cacheKey}.{ext}` via native `writeArtworkFile` (see [`podcastArtworkInternalStorage.ts`](../../src/core/storage/podcastArtworkInternalStorage.ts)). Not written under `.eskerra/` in the vault.
 
 ## Loading Phases
 
@@ -146,7 +146,7 @@ After phase 1 state is rendered:
 
 - New artwork resolves to **`file://`** URIs under app-internal storage; **`http(s)`** pass through unchanged. Legacy vault artwork may still appear as SAF **`content://…/document/…`** until TTL refresh re-downloads.
 - **Do not pass vault `content://` URIs directly to React Native `Image`.** Fresco can trigger synchronous `ContentResolver` work on the UI thread during layout, which risks **ANRs** on some devices.
-- `PodcastArtworkImage` uses `usePodcastArtworkDisplayUri`: internal **`file://`** and remote URLs are used as-is on first paint. For legacy **`content://`** artwork only, it calls **`NoteboxPodcastArtworkCache.ensureLocalArtworkFile`** to copy bytes to **`context.cacheDir/podcast-artwork/`** on a background thread and passes the resulting **`file://`** URI to `Image`.
+- `PodcastArtworkImage` uses `usePodcastArtworkDisplayUri`: internal **`file://`** and remote URLs are used as-is on first paint. For legacy **`content://`** artwork only, it calls **`EskerraPodcastArtworkCache.ensureLocalArtworkFile`** to copy bytes to **`context.cacheDir/podcast-artwork/`** on a background thread and passes the resulting **`file://`** URI to `Image`.
 - In-memory deduplication for that legacy copy path lives in [`androidPodcastArtworkCache.ts`](../../src/core/storage/androidPodcastArtworkCache.ts).
 
 ## Artwork Resolution Rules

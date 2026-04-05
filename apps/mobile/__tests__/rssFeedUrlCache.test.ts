@@ -42,7 +42,7 @@ describe('rssFeedUrlCache', () => {
     await flushPromises();
 
     expect(asyncStorageSetItemMock).toHaveBeenCalledWith(
-      'notebox:rssFeedUrlBySeries:content://vault-a',
+      'eskerra:rssFeedUrlBySeries:content://vault-a',
       JSON.stringify({
         byNormalized: {'my show': 'https://example.com/feed.xml'},
         bySeries: {'My Show': 'https://example.com/feed.xml'},

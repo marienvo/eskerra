@@ -25,7 +25,7 @@ import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
-import {AppStatusBar} from './components/AppStatusBar';
+import {AppSetupTagline, AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
 import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
@@ -61,51 +61,21 @@ type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 const TITLE_BAR_SKIP_MS = 10_000;
 const MAIN_WINDOW_LABEL = 'main';
 
-/** Wayland often fails `set_position` inside window-state; plugin aborts before `set_size` if POSITION runs first. */
-const WINDOW_RESTORE_FLAGS_NO_POSITION = StateFlags.ALL & ~StateFlags.POSITION;
+/**
+ * Wayland often fails `set_position` inside window-state; plugin aborts before `set_size` if POSITION runs first.
+ * Omit DECORATIONS so persisted `decorated: false` from the old frameless build does not disable native chrome.
+ */
+const WINDOW_RESTORE_FLAGS_NO_POSITION =
+  StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
 
 export default function App() {
   const {maximized} = useTauriWindowMaximized();
   const {tiling, tilingDebug} = useTauriWindowTiling();
-  const appRootClassName = useMemo(() => {
-    const parts = ['app-root'];
-    if (isTauri()) {
-      parts.push('app-root--tauri');
-    }
-    if (maximized) {
-      parts.push('app-root--maximized');
-    }
-    if (tiling === 'left') {
-      parts.push('app-root--tiled-left');
-    }
-    if (tiling === 'right') {
-      parts.push('app-root--tiled-right');
-    }
-    if (tilingDebug) {
-      parts.push('app-root--tiling-debug');
-    }
-    return parts.join(' ');
-  }, [maximized, tiling, tilingDebug]);
-
-  /* Modal dim: match the frameless window’s rounded mask (--window-radius), not the webview rectangle. */
-  useLayoutEffect(() => {
-    if (!isTauri()) {
-      return;
-    }
-    const rounded =
-      !maximized && tiling !== 'left' && tiling !== 'right';
-    document.documentElement.style.setProperty(
-      '--shell-overlay-radius',
-      rounded ? 'var(--window-radius)' : '0px',
-    );
-    return () => {
-      document.documentElement.style.removeProperty('--shell-overlay-radius');
-    };
-  }, [maximized, tiling]);
 
   const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
+  const inboxEditorShellScrollRef = useRef<HTMLDivElement | null>(null);
   const [layoutsReady, setLayoutsReady] = useState(false);
   const [restoredInboxState, setRestoredInboxState] = useState<{
     vaultRoot: string;
@@ -144,6 +114,7 @@ export default function App() {
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     deleteNote,
     renameNote,
     deleteFolder,
@@ -158,12 +129,40 @@ export default function App() {
     editorHistoryCanGoForward,
     editorHistoryGoBack,
     editorHistoryGoForward,
+    inboxEditorShellScrollDirectiveRef,
+    inboxBacklinksDeferFirstPaint,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
+    inboxEditorShellScrollRef,
     restoredInboxState,
     inboxRestoreEnabled: layoutsReady,
   });
+
+  const appRootClassName = useMemo(() => {
+    const parts = ['app-root'];
+    if (isTauri()) {
+      parts.push('app-root--tauri');
+    }
+    if (!vaultRoot || !layoutsReady) {
+      parts.push('app-root--setup');
+    }
+    if (maximized) {
+      parts.push('app-root--maximized');
+    }
+    if (tiling === 'left') {
+      parts.push('app-root--tiled-left');
+    }
+    if (tiling === 'right') {
+      parts.push('app-root--tiled-right');
+    }
+    if (tilingDebug) {
+      parts.push('app-root--tiling-debug');
+    }
+    return parts.join(' ');
+  }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
+
+  const mainShellReady = Boolean(vaultRoot && layoutsReady);
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
   useEditorHistoryMouseButtons({
@@ -237,6 +236,51 @@ export default function App() {
     onTogglePlay: () => void desktopPlayback.togglePause(),
     onSeekForward: () => void desktopPlayback.seekBy(TITLE_BAR_SKIP_MS),
   };
+
+  /* Setup / loading: native OS decorations; main shell: frameless + transparent HTML chrome. */
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    void getCurrentWindow().setDecorations(!mainShellReady);
+  }, [mainShellReady]);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!isTauri()) {
+      return;
+    }
+    if (mainShellReady) {
+      root.classList.add('tauri-main-chrome');
+    } else {
+      root.classList.remove('tauri-main-chrome');
+    }
+    return () => {
+      root.classList.remove('tauri-main-chrome');
+    };
+  }, [mainShellReady]);
+
+  /* Modal dim: match frameless rounded mask; only used when tauri-main-chrome is active. */
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    if (!mainShellReady) {
+      document.documentElement.style.removeProperty('--shell-overlay-radius');
+      return () => {
+        document.documentElement.style.removeProperty('--shell-overlay-radius');
+      };
+    }
+    const rounded =
+      !maximized && tiling !== 'left' && tiling !== 'right';
+    document.documentElement.style.setProperty(
+      '--shell-overlay-radius',
+      rounded ? 'var(--window-radius)' : '0px',
+    );
+    return () => {
+      document.documentElement.style.removeProperty('--shell-overlay-radius');
+    };
+  }, [mainShellReady, maximized, tiling]);
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: desktopPlayback.playerLabel !== 'playing',
@@ -355,7 +399,7 @@ export default function App() {
               pathExists: boolean;
               mainWidth?: number;
               mainHeight?: number;
-            }>('notebox_peek_window_state_file');
+            }>('eskerra_peek_window_state_file');
             if (v.pathExists) {
               diskMainW = v.mainWidth;
               diskMainH = v.mainHeight;
@@ -522,16 +566,15 @@ export default function App() {
         <div ref={appRootRef} className={appRootClassName}>
           <AppChromeBackground />
           <div className="app-root-chrome">
-            <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
             <div className="shell setup-shell">
               <h1>{settingsName}</h1>
-              <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
+              <p className="muted">Choose your notes folder (vault root). Settings are stored in `.eskerra/` inside it.</p>
               <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
                 Choose folder…
               </button>
               {err ? <p className="error">{err}</p> : null}
             </div>
-            <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
+            <AppSetupTagline />
           </div>
         </div>
       </>
@@ -545,11 +588,10 @@ export default function App() {
         <div ref={appRootRef} className={appRootClassName}>
           <AppChromeBackground />
           <div className="app-root-chrome">
-            <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
             <div className="shell setup-shell">
               <p className="muted">Loading…</p>
             </div>
-            <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
+            <AppSetupTagline />
           </div>
         </div>
       </>
@@ -602,6 +644,10 @@ export default function App() {
                     fs={fs}
                     fsRefreshNonce={fsRefreshNonce}
                     inboxEditorRef={inboxEditorRef}
+                    inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+                    inboxEditorShellScrollDirectiveRef={
+                      inboxEditorShellScrollDirectiveRef
+                    }
                     leftWidthPx={layouts.inbox.leftWidthPx}
                     onLeftWidthPxChanged={persistInboxLeftWidthPx}
                     notes={notes}
@@ -620,6 +666,7 @@ export default function App() {
                     onEditorError={setErr}
                     onWikiLinkActivate={onWikiLinkActivate}
                     onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                    onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                     onSaveShortcut={onInboxSaveShortcut}
                     busy={busy}
                     onDeleteNote={uri => {
@@ -657,6 +704,7 @@ export default function App() {
                     editorHistoryCanGoForward={editorHistoryCanGoForward}
                     onEditorHistoryGoBack={editorHistoryGoBack}
                     onEditorHistoryGoForward={editorHistoryGoForward}
+                    inboxBacklinksDeferFirstPaint={inboxBacklinksDeferFirstPaint}
                   />
                 </div>
                 {podcastsTabMounted ? (

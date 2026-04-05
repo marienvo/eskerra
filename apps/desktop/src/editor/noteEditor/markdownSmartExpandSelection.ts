@@ -18,11 +18,11 @@ import {EditorView} from '@codemirror/view';
 import {
   findSectionEnd,
   markdownHeadingLevel,
-} from './markdownNoteboxLanguage';
+} from './markdownEskerraLanguage';
 import {wikiLinkMatchAtDocPosition} from './wikiLinkInnerAtDocPosition';
 
-export const SMART_EXPAND_USER_EVENT = 'notebox.smartExpand.expand';
-export const SMART_SHRINK_USER_EVENT = 'notebox.smartExpand.shrink';
+export const SMART_EXPAND_USER_EVENT = 'eskerra.smartExpand.expand';
+export const SMART_SHRINK_USER_EVENT = 'eskerra.smartExpand.shrink';
 
 const SMART_EXPAND_STACK_CAP = 50;
 

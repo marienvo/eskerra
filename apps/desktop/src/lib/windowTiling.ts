@@ -12,10 +12,10 @@ export async function getWindowTilingDetection(): Promise<TilingDetection> {
   return invoke<TilingDetection>('get_window_tiling_detection');
 }
 
-/** Dev-only: set `sessionStorage.setItem('noteboxDebugTiling', '1')` then reload to highlight layout + console.log. */
+/** Dev-only: set `sessionStorage.setItem('eskerraDebugTiling', '1')` then reload to highlight layout + console.log. */
 export function windowTilingDebugEnabled(): boolean {
   if (!import.meta.env.DEV || typeof sessionStorage === 'undefined') {
     return false;
   }
-  return sessionStorage.getItem('noteboxDebugTiling') === '1';
+  return sessionStorage.getItem('eskerraDebugTiling') === '1';
 }

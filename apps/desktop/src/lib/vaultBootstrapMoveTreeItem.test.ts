@@ -2,7 +2,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {moveVaultTreeItemToDirectory} from './vaultBootstrap';
 
-import type {VaultFilesystem} from '@notebox/core';
+import type {VaultFilesystem} from '@eskerra/core';
 
 function createFsMock(): {
   fs: VaultFilesystem;

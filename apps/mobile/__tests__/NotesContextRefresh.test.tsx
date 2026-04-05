@@ -1,16 +1,16 @@
 import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
-import {tryPrepareNoteboxSessionNative} from '../src/core/storage/androidVaultListing';
-import {listInboxNotesAndSyncIndex} from '../src/core/storage/noteboxStorage';
+import {tryPrepareEskerraSessionNative} from '../src/core/storage/androidVaultListing';
+import {listInboxNotesAndSyncIndex} from '../src/core/storage/eskerraStorage';
 import {NotesProvider, useNotesContext} from '../src/core/vault/NotesContext';
 import {VaultProvider, useVaultContext} from '../src/core/vault/VaultContext';
 
 jest.mock('../src/core/storage/androidVaultListing', () => ({
-  tryPrepareNoteboxSessionNative: jest.fn(),
+  tryPrepareEskerraSessionNative: jest.fn(),
 }));
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   createNote: jest.fn(),
   deleteInboxNotes: jest.fn(),
   listInboxNotesAndSyncIndex: jest.fn(),
@@ -22,8 +22,8 @@ jest.mock('../src/core/storage/appStorage', () => ({
   getSavedUri: jest.fn(() => Promise.resolve('content://v')),
 }));
 
-const tryPrepareMock = tryPrepareNoteboxSessionNative as jest.MockedFunction<
-  typeof tryPrepareNoteboxSessionNative
+const tryPrepareMock = tryPrepareEskerraSessionNative as jest.MockedFunction<
+  typeof tryPrepareEskerraSessionNative
 >;
 const listInboxMock = listInboxNotesAndSyncIndex as jest.MockedFunction<
   typeof listInboxNotesAndSyncIndex

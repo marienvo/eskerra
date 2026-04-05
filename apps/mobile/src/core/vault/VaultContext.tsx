@@ -15,10 +15,10 @@ import {getSavedUri} from '../storage/appStorage';
 import {
   clearAllPlaylistReadCoalescer,
   invalidatePlaylistReadCache,
-} from '../storage/noteboxStorage';
+} from '../storage/eskerraStorage';
 import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
-import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
+import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 import {prepareVaultSession} from './applyVaultSession';
 
 type InboxContentCacheSession = {
@@ -39,10 +39,10 @@ type VaultContextValue = {
   ) => void;
   setInboxNoteContentInCache: (noteUri: string, content: string) => void;
   setSessionUri: (nextUri: string | null) => Promise<void>;
-  settings: NoteboxSettings | null;
-  setSettings: (nextSettings: NoteboxSettings) => void;
-  localSettings: NoteboxLocalSettings | null;
-  setLocalSettings: (next: NoteboxLocalSettings) => void;
+  settings: EskerraSettings | null;
+  setSettings: (nextSettings: EskerraSettings) => void;
+  localSettings: EskerraLocalSettings | null;
+  setLocalSettings: (next: EskerraLocalSettings) => void;
   playlistSyncGeneration: number;
   notifyPlaylistSyncAfterVaultRefresh: () => void;
 };
@@ -53,8 +53,8 @@ type VaultProviderProps = {
   children: ReactNode;
   initialSession?: {
     uri: string;
-    settings: NoteboxSettings;
-    localSettings: NoteboxLocalSettings;
+    settings: EskerraSettings;
+    localSettings: EskerraLocalSettings;
     inboxContentByUri: Record<string, string> | null;
     inboxPrefetch: NoteSummary[] | null;
   } | null;
@@ -81,10 +81,10 @@ function recordToInboxContentCache(
 export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const [baseUri, setBaseUri] = useState<string | null>(initialSession?.uri ?? null);
   const [isLoading, setIsLoading] = useState<boolean>(initialSession != null ? false : true);
-  const [settings, setSettings] = useState<NoteboxSettings | null>(
+  const [settings, setSettings] = useState<EskerraSettings | null>(
     initialSession?.settings ?? null,
   );
-  const [localSettings, setLocalSettings] = useState<NoteboxLocalSettings | null>(
+  const [localSettings, setLocalSettings] = useState<EskerraLocalSettings | null>(
     initialSession?.localSettings ?? null,
   );
   const [playlistSyncGeneration, setPlaylistSyncGeneration] = useState(0);

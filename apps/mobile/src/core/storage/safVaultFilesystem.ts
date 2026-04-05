@@ -3,7 +3,7 @@ import type {
   VaultFilesystem,
   VaultReadOptions,
   VaultWriteOptions,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {
   exists,
   listFiles,

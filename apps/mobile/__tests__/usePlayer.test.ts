@@ -5,13 +5,13 @@ import {
   clearPlaylist,
   readPlaylistCoalesced,
   writePlaylist,
-} from '../src/core/storage/noteboxStorage';
+} from '../src/core/storage/eskerraStorage';
 import {useVaultContext} from '../src/core/vault/VaultContext';
 import {usePlayer} from '../src/features/podcasts/hooks/usePlayer';
 import {getAudioPlayer} from '../src/features/podcasts/services/audioPlayer';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   clearPlaylist: jest.fn(),
   readPlaylistCoalesced: jest.fn(),
   writePlaylist: jest.fn(),

@@ -10,11 +10,11 @@ This note records the **triage decision** and **developer workflow** for Android
 
 ## Reproduction and profiling (Phase B)
 
-1. Install a build matching the reported **release** (for example `notebox@0.0.1` from `package.json` / Gradle `versionName`).
+1. Install a build matching the reported **release** (for example `eskerra@0.0.1` from `package.json` / Gradle `versionName`).
 2. Use a **physical** Android device when possible (especially lower-RAM ARM devices).
 3. Exercise **cold start** and **resume** with a **saved vault** (`session` present), matching Sentry tags when available.
 4. **Android Studio:** CPU Profiler / **System Trace** during launch and first navigation after vault restore; inspect the **main thread** for long stalls.
-5. **Debug builds:** `StrictMode` is enabled in [`MainApplication.kt`](../../apps/mobile/android/app/src/main/java/com/notebox/MainApplication.kt) (`penaltyLog` only). Watch **Logcat** for `StrictMode` violations (main-thread disk/network).
+5. **Debug builds:** `StrictMode` is enabled in [`MainApplication.kt`](../../apps/mobile/android/app/src/main/java/com/eskerra/MainApplication.kt) (`penaltyLog` only). Watch **Logcat** for `StrictMode` violations (main-thread disk/network).
 
 ## Observability (Phase C)
 

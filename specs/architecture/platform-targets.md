@@ -1,6 +1,6 @@
-# Notebox: Platform Targets
+# Eskerra: Platform Targets
 
-This document records product and engineering decisions about which platforms Notebox supports and which are explicitly out of scope. It exists so future work does not spend effort on targets we will not ship.
+This document records product and engineering decisions about which platforms Eskerra supports and which are explicitly out of scope. It exists so future work does not spend effort on targets we will not ship.
 
 ## Mobile: Android only
 

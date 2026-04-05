@@ -1,6 +1,6 @@
 import {
   parseEskerraTableV1FromLines,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {
   RangeSetBuilder,
   StateField,

@@ -1,8 +1,8 @@
 import {useCallback, useState} from 'react';
 
 import {clearUri} from '../../../core/storage/appStorage';
-import {writeLocalSettings, writeSettings} from '../../../core/storage/noteboxStorage';
-import {NoteboxLocalSettings, NoteboxSettings} from '../../../types';
+import {writeLocalSettings, writeSettings} from '../../../core/storage/eskerraStorage';
+import {EskerraLocalSettings, EskerraSettings} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 
 /** Persist full shared settings (including optional `r2`) so disk JSON is not stripped. */
@@ -18,7 +18,7 @@ export function useSettings() {
   const [isSaving, setIsSaving] = useState(false);
 
   const saveSettings = useCallback(
-    async (nextSettings: NoteboxSettings) => {
+    async (nextSettings: EskerraSettings) => {
       if (!baseUri) {
         throw new Error('No vault directory selected.');
       }
@@ -35,7 +35,7 @@ export function useSettings() {
   );
 
   const saveLocalSettings = useCallback(
-    async (next: NoteboxLocalSettings) => {
+    async (next: EskerraLocalSettings) => {
       if (!baseUri) {
         throw new Error('No vault directory selected.');
       }

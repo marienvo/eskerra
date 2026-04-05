@@ -3,7 +3,7 @@ import {StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
-import {formatRelativeCalendarLabelFromIsoDate} from '@notebox/core';
+import {formatRelativeCalendarLabelFromIsoDate} from '@eskerra/core';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {PodcastEpisode} from '../../../types';
 import {PodcastArtworkImage} from './PodcastArtworkImage';

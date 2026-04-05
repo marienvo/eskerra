@@ -1,8 +1,8 @@
-import type {EskerraTableModelV1} from '@notebox/core';
+import type {EskerraTableModelV1} from '@eskerra/core';
 import {
   parseEskerraTableV1FromLines,
   serializeEskerraTableV1ToMarkdown,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {EditorSelection} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 

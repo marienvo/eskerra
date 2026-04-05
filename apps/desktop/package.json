@@ -1,5 +1,5 @@
 {
-  "name": "@notebox/desktop",
+  "name": "@eskerra/desktop",
   "private": true,
   "license": "AGPL-3.0-only",
   "version": "0.1.0",
@@ -25,7 +25,7 @@
     "@codemirror/view": "^6.41.0",
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
-    "@notebox/core": "*",
+    "@eskerra/core": "*",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -33,6 +33,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-window-state": "^2.4.1",
     "material-icons": "^1.13.14",

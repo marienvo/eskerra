@@ -5,7 +5,7 @@ import {
   clearPlaylist,
   listGeneralMarkdownFiles,
   readPlaylistCoalesced,
-} from '../../../core/storage/noteboxStorage';
+} from '../../../core/storage/eskerraStorage';
 import {PodcastEpisode, PodcastSection, RootMarkdownFile} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {
@@ -28,8 +28,8 @@ export type {RefreshPodcastsOptions};
 
 /** Defer full General/ SAF listing so it does not compete with vault session prepare on cold start. */
 function backgroundGeneralReconcileDelayMs(): number {
-  const g = globalThis as {__NOTEBOX_JEST__?: boolean; jest?: unknown};
-  if (g.__NOTEBOX_JEST__ === true) {
+  const g = globalThis as {__ESKERRA_JEST__?: boolean; jest?: unknown};
+  if (g.__ESKERRA_JEST__ === true) {
     return 0;
   }
   if (typeof g.jest !== 'undefined') {

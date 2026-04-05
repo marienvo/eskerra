@@ -9,7 +9,7 @@ Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-sh
 ## Product core
 
 - **Source of truth:** plain `.md` files in the vault, legible outside the app.
-- **Foundation:** filesystem layout and naming ([`packages/notebox-core`](../../packages/notebox-core) vault layout helpers).
+- **Foundation:** filesystem layout and naming ([`packages/eskerra-core`](../../packages/eskerra-core) vault layout helpers).
 - **Git:** optional; not required for correctness.
 
 ## Invariants
@@ -22,11 +22,11 @@ Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-sh
 6. **Keybindings:** no ad hoc global shortcuts that bypass a future central policy when that exists.
 7. **Background work:** avoid silent perpetual processors unless justified as core; prefer explicit triggers and deferred work after first paint (see `.cursor/rules/performance.mdc`).
 8. **Do not let ad hoc features own sync or global state models**—when sync exists, it gets a single owner.
-9. **`.notebox` stays intentional** (see below)—not a cache for ephemeral UI or runtime session.
+9. **`.eskerra` stays intentional** (see below)—not a cache for ephemeral UI or runtime session.
 
-## `.notebox` and vault clutter
+## `.eskerra` and vault clutter
 
-**Allowed in `.notebox` and co-located vault metadata files**
+**Allowed in `.eskerra` and co-located vault metadata files**
 
 - **Durable, small, vault-scoped artifacts** the user can reason about: shared/local settings, device identity needed for shared files, playlist or index files that are **defined product behavior**, migration helpers tied to vault layout.
 - Content should remain **inspectable** (JSON/Markdown/text) where practical.
@@ -37,18 +37,18 @@ Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-sh
 - **High-churn scratch or logs** used only to optimize UI.
 - **“We might need this later” blobs** without a named owner and retention rule.
 
-**Rule of thumb:** if losing it is annoying but not destructive, it belongs in **app storage** (for example `notebox-desktop.json`), not `.notebox`.
+**Rule of thumb:** if losing it is annoying but not destructive, it belongs in **app storage** (for example `eskerra-desktop.json`), not `.eskerra`.
 
 ## Settings vs runtime state
 
 | Kind | Examples | Storage |
 |------|-----------|---------|
-| Settings | theme, keybindings, pointer to vault root | app settings and/or `.notebox` per existing product rules |
+| Settings | theme, keybindings, pointer to vault root | app settings and/or `.eskerra` per existing product rules |
 | Runtime | tabs, splits, selection, playback progress signals tied to UI session, catalog refresh hints | **app store** unless the product explicitly defines vault-backed runtime (document that exception) |
 
 ## Layer model (desktop)
 
-### `packages/notebox-core`
+### `packages/eskerra-core`
 
 **Owns:** vault path algebra, `VaultFilesystem` typing, portable Markdown/Crypto-agnostic helpers, attachment naming rules, playlist entry **pure** logic, small parsers.
 
@@ -92,7 +92,7 @@ Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-sh
 ### Runtime-first storage posture
 
 - Default assumption: link/index state is runtime or app-owned cache.
-- Durable `.notebox` index artifacts are allowed only when explicitly productized with named ownership, retention, and user-facing behavior.
+- Durable `.eskerra` index artifacts are allowed only when explicitly productized with named ownership, retention, and user-facing behavior.
 - Do not add durable vault artifacts “just in case” a later feature might need them.
 
 Explicitly **out of scope until needed:** third-party plugin manifests, dynamic loading, sandboxing, alternate pluggable editors.

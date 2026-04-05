@@ -2,7 +2,7 @@ import {
   filterVaultTreeDirEntries,
   isEligibleVaultMarkdownFileName,
   type VaultFilesystem,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import type {MutableRefObject} from 'react';
 

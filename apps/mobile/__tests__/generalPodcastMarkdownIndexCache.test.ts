@@ -79,7 +79,7 @@ describe('generalPodcastMarkdownIndexCache', () => {
     removeMock.mockResolvedValue();
     await clearPersistedPodcastMarkdownIndexForTesting('content://v');
     expect(removeMock).toHaveBeenCalledWith(
-      'notebox:generalPodcastMarkdownIndex:content://v',
+      'eskerra:generalPodcastMarkdownIndex:content://v',
     );
   });
 });

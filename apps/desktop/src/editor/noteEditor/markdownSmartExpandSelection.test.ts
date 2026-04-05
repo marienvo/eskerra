@@ -4,7 +4,7 @@ import {EditorSelection, EditorState, Transaction} from '@codemirror/state';
 import {EditorView, keymap} from '@codemirror/view';
 import {afterEach, describe, expect, it} from 'vitest';
 
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
 import {markdownSelectionAllowMultipleRanges} from './markdownSelectionSurround';
 import {
@@ -16,7 +16,7 @@ import {
 
 function editorExtensions() {
   return [
-    markdownNotebox({
+    markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),

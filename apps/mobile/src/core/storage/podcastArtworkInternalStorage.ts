@@ -7,11 +7,11 @@ import {
   writePodcastArtworkFileNative,
 } from './androidPodcastArtworkCache';
 
-const PODCAST_IMAGE_META_PREFIX = 'notebox:podcastImageMeta:';
+const PODCAST_IMAGE_META_PREFIX = 'eskerra:podcastImageMeta:';
 
-const DEV_PODCAST_IMAGE_META_PREFIX = '@notebox_dev:podcastImageMeta:';
-const DEV_PODCAST_FILE_PAYLOAD_PREFIX = '@notebox_dev:podcastArtworkPayload:';
-const DEV_FILE_URI_PREFIX = 'file:///notebox-dev-podcast/';
+const DEV_PODCAST_IMAGE_META_PREFIX = '@eskerra_dev:podcastImageMeta:';
+const DEV_PODCAST_FILE_PAYLOAD_PREFIX = '@eskerra_dev:podcastArtworkPayload:';
+const DEV_FILE_URI_PREFIX = 'file:///eskerra-dev-podcast/';
 
 type PodcastImageMetaBlob = {
   v: number;

@@ -5,7 +5,7 @@ import {
   filterInboxWikiLinkCompletionCandidates,
   type InboxWikiLinkCompletionCandidate,
   WIKI_LINK_COMPLETION_MAX_OPTIONS,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 /** Match an unfinished wiki target right after `[[` (no `|` in the target segment). */
 const wikiTargetPrefix = /\[\[([^\]|]*)$/;

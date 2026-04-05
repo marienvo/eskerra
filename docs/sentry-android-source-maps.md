@@ -1,6 +1,6 @@
 # Sentry Android: source maps and symbolicated stack traces
 
-This document explains why JavaScript stack traces in Sentry sometimes show minified bundle locations (`index.android.bundle`, `InternalBytecode.js`) instead of your TypeScript files, and what you need to fix it. It applies to the Notebox React Native app using Hermes and `@sentry/react-native`.
+This document explains why JavaScript stack traces in Sentry sometimes show minified bundle locations (`index.android.bundle`, `InternalBytecode.js`) instead of your TypeScript files, and what you need to fix it. It applies to the Eskerra React Native app using Hermes and `@sentry/react-native`.
 
 **Monorepo paths:** Android Gradle and Kotlin live under [`apps/mobile/android/`](apps/mobile/android/). TypeScript sources for the mobile app live under [`apps/mobile/src/`](apps/mobile/src/).
 
@@ -45,7 +45,7 @@ Sentry ties uploaded artifacts to a **`release`** string and usually a **`dist`*
 
 In `apps/mobile/src/core/observability/registerSentry.ts`, the SDK sets:
 
-- `release`: `notebox@<version>` where `<version>` comes from `apps/mobile/package.json` (for example `notebox@0.0.1`).
+- `release`: `eskerra@<version>` where `<version>` comes from `apps/mobile/package.json` (for example `eskerra@0.0.1`).
 
 Events may also include **`dist`** (for example `1`) from the native layer, aligned with Android `versionCode` when configured.
 
@@ -55,15 +55,15 @@ The Sentry React Native Gradle script (`node_modules/@sentry/react-native/sentry
 
 - `defaultReleaseName = "${applicationId}@${versionName}+${versionCode}"`
 
-For this project’s `apps/mobile/android/app/build.gradle`, with `applicationId "com.notebox"`, `versionName "1.0"`, and `versionCode 1`, that is:
+For this project’s `apps/mobile/android/app/build.gradle`, with `applicationId "com.eskerra"`, `versionName "1.0"`, and `versionCode 1`, that is:
 
-- **`com.notebox@1.0+1`**
+- **`com.eskerra@1.0+1`**
 
 You can override upload naming with environment variables such as **`SENTRY_RELEASE`** and **`SENTRY_DIST`** (see Sentry’s React Native / Gradle docs).
 
 ### Why this matters
 
-If uploads are stored under **`com.notebox@1.0+1`** but events are tagged with **`notebox@0.0.1`**, Sentry will **not** find the right source maps for those events, even when uploads succeed.
+If uploads are stored under **`com.eskerra@1.0+1`** but events are tagged with **`eskerra@0.0.1`**, Sentry will **not** find the right source maps for those events, even when uploads succeed.
 
 **Action:** use **one** convention for `release` (and `dist`) across:
 
@@ -109,7 +109,7 @@ To get symbolicated stacks for a given release, run a **release** build **with**
 
 Track these in a dedicated PR when you are ready:
 
-1. Make **JavaScript** `Sentry.init` `release` (and `dist` if set) match **Gradle** upload defaults, **or** set `SENTRY_RELEASE` / `SENTRY_DIST` in CI to match `notebox@…` from `package.json`, consistently everywhere.
+1. Make **JavaScript** `Sentry.init` `release` (and `dist` if set) match **Gradle** upload defaults, **or** set `SENTRY_RELEASE` / `SENTRY_DIST` in CI to match `eskerra@…` from `package.json`, consistently everywhere.
 2. Re-run a **release** build with **`SENTRY_AUTH_TOKEN`** and verify artifacts in Sentry for the **exact** release string shown on events.
 
 Until then, expect symbolication issues if event `release` and upload `release` differ.

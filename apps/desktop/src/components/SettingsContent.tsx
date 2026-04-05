@@ -1,16 +1,16 @@
 import {useEffect, useId, useState} from 'react';
 
 import {
-  buildNoteboxSettingsFromForm,
-  type NoteboxLocalSettings,
-  type NoteboxSettings,
+  buildEskerraSettingsFromForm,
+  type EskerraLocalSettings,
+  type EskerraSettings,
   type R2Jurisdiction,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 type SettingsContentProps = {
-  vaultSettings: NoteboxSettings;
-  localSettings: NoteboxLocalSettings;
-  onSave: (shared: NoteboxSettings, local: NoteboxLocalSettings) => Promise<void>;
+  vaultSettings: EskerraSettings;
+  localSettings: EskerraLocalSettings;
+  onSave: (shared: EskerraSettings, local: EskerraLocalSettings) => Promise<void>;
   onChangeFolder: () => void;
   onRefreshVault: () => void;
   busy: boolean;
@@ -65,7 +65,7 @@ export function SettingsContent({
 
   const handleSave = async () => {
     setSaveOk(null);
-    const shared = buildNoteboxSettingsFromForm({
+    const shared = buildEskerraSettingsFromForm({
       endpoint: r2Endpoint,
       bucket: r2Bucket,
       accessKeyId: r2AccessKeyId,
@@ -78,7 +78,7 @@ export function SettingsContent({
     }
     setInlineError(null);
     try {
-      const nextLocal: NoteboxLocalSettings = {
+      const nextLocal: EskerraLocalSettings = {
         deviceName: deviceName.trimEnd(),
         deviceInstanceId: localSettings.deviceInstanceId,
         displayName: displayName.trim(),
@@ -114,7 +114,7 @@ export function SettingsContent({
         <h3 className="settings-section-title" id={`${sharedId}-title`}>
           Vault (shared)
         </h3>
-        <p className="settings-hint muted small">Stored in .notebox/settings-shared.json</p>
+        <p className="settings-hint muted small">Stored in .eskerra/settings-shared.json</p>
         <h4 className="settings-subsection-title">Cloudflare R2 (optional)</h4>
         <p className="settings-hint muted small">
           Values are stored as plain JSON in your vault. Leave all fields empty to clear R2 from shared
@@ -180,7 +180,7 @@ export function SettingsContent({
         <h3 className="settings-section-title" id={`${deviceId}-title`}>
           This device
         </h3>
-        <p className="settings-hint muted small">Stored in .notebox/settings-local.json</p>
+        <p className="settings-hint muted small">Stored in .eskerra/settings-local.json</p>
         <label className="field">
           Display name
           <input
@@ -217,7 +217,7 @@ export function SettingsContent({
         </button>
       </div>
       <p className="muted small">
-        Vault settings live under <code>.notebox/</code> in your selected folder. Use refresh if file watching
+        Vault settings live under <code>.eskerra/</code> in your selected folder. Use refresh if file watching
         misses changes (network drives).
       </p>
     </div>
