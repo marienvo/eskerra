@@ -11,35 +11,86 @@
 
 .app-root {
   box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  border: 1px solid var(--color-window-border-floating);
+  border: none;
   border-radius: var(--window-radius);
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-text);
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
-.app-root--maximized {
-  border: none;
-  border-radius: 0;
+/* Window edge: draws above AppChromeBackground so 50% black composites on the shell background. */
+.app-root:not(.app-root--maximized)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-sizing: border-box;
 }
 
-/* Tiled: no border on screen edges; only the split seam with the other half. */
-.app-root--tiled-left:not(.app-root--maximized) {
-  border-radius: 0;
+.app-root:not(.app-root--maximized):not(.app-root--tiled-left):not(.app-root--tiled-right)::after {
+  border: 1px solid var(--color-window-border-floating);
+}
+
+.app-root--tiled-left:not(.app-root--maximized)::after {
   border: none;
   border-right: 1px solid var(--color-window-border);
+  border-radius: 0;
 }
 
-.app-root--tiled-right:not(.app-root--maximized) {
-  border-radius: 0;
+.app-root--tiled-right:not(.app-root--maximized)::after {
   border: none;
   border-left: 1px solid var(--color-window-border);
+  border-radius: 0;
+}
+
+.app-root--maximized::after {
+  content: none;
+}
+
+.app-chrome-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.app-chrome-background__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Stacking context above AppChromeBackground + frame ::after; replaces direct flex children of .app-root */
+.app-root-chrome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
+.app-root--maximized {
+  border-radius: 0;
+}
+
+/* Tiled: no border on screen edges; split seam uses ::after (see .app-root rules above). */
+.app-root--tiled-left:not(.app-root--maximized),
+.app-root--tiled-right:not(.app-root--maximized) {
+  border-radius: 0;
 }
 
 /* Dev: sessionStorage noteboxDebugTiling=1 — see windowTiling.ts */
@@ -86,7 +137,7 @@ a:focus:not(:focus-visible) {
   padding: 0 0.3rem 0 0.34rem;
   box-sizing: border-box;
   border-bottom: none;
-  background: var(--color-bg);
+  background: transparent;
   user-select: none;
 }
 
@@ -182,7 +233,7 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   /* Bottom inset matches rail offset from window edge (see .rail padding-inline-start). */
   padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 /* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
@@ -307,7 +358,7 @@ a:focus:not(:focus-visible) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 /*
@@ -467,7 +518,7 @@ a:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 .main-stage {
@@ -476,7 +527,7 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: transparent;
   position: relative;
 }
 

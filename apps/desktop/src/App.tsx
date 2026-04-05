@@ -16,6 +16,7 @@ import {
   useState,
 } from 'react';
 
+import {AppChromeBackground} from './components/AppChromeBackground';
 import {
   DesktopStartupSplash,
   type DesktopStartupSplashPhase,
@@ -519,16 +520,19 @@ export default function App() {
       <>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
-          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
-          <div className="shell setup-shell">
-            <h1>{settingsName}</h1>
-            <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
-            <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
-              Choose folder…
-            </button>
-            {err ? <p className="error">{err}</p> : null}
+          <AppChromeBackground />
+          <div className="app-root-chrome">
+            <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+            <div className="shell setup-shell">
+              <h1>{settingsName}</h1>
+              <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
+              <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
+                Choose folder…
+              </button>
+              {err ? <p className="error">{err}</p> : null}
+            </div>
+            <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
           </div>
-          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
         </div>
       </>
     );
@@ -539,11 +543,14 @@ export default function App() {
       <>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
-          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
-          <div className="shell setup-shell">
-            <p className="muted">Loading…</p>
+          <AppChromeBackground />
+          <div className="app-root-chrome">
+            <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+            <div className="shell setup-shell">
+              <p className="muted">Loading…</p>
+            </div>
+            <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
           </div>
-          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
         </div>
       </>
     );
@@ -553,136 +560,139 @@ export default function App() {
     <>
       {startupOverlay}
       <div ref={appRootRef} className={appRootClassName}>
-      <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+        <AppChromeBackground />
+        <div className="app-root-chrome">
+          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
 
-      {err ? (
-        <div className="error-banner" role="alert">
-          {err}
-        </div>
-      ) : null}
-      {!err && renameLinkProgress ? (
-        <div className="info-banner" aria-live="polite">
-          Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
-        </div>
-      ) : null}
-      {!err && !renameLinkProgress && wikiRenameNotice ? (
-        <div className="info-banner" aria-live="polite">
-          {wikiRenameNotice}
-        </div>
-      ) : null}
-
-      <div className="app-body">
-        <RailNav
-          active={mainTab}
-          onSelect={tab => {
-            setMainTab(tab);
-            if (tab === 'podcasts') {
-              setPodcastsTabMounted(true);
-            }
-          }}
-          onTogglePlayerDock={() => setPlayerDockVisible(v => !v)}
-          playerDockVisible={playerDockVisible}
-          playerToggleDisabled={desktopPlayback.activeEpisode == null}
-        />
-        <div className="main-column">
-          <main className="main-stage">
-            <div className="tab-panel" hidden={mainTab !== 'inbox'}>
-              <VaultTab
-                key={vaultRoot}
-                vaultRoot={vaultRoot}
-                fs={fs}
-                fsRefreshNonce={fsRefreshNonce}
-                inboxEditorRef={inboxEditorRef}
-                leftWidthPx={layouts.inbox.leftWidthPx}
-                onLeftWidthPxChanged={persistInboxLeftWidthPx}
-                notes={notes}
-                vaultMarkdownRefs={vaultMarkdownRefs}
-                inboxContentByUri={inboxContentByUri}
-                backlinkUris={selectedNoteBacklinkUris}
-                selectedUri={selectedUri}
-                onSelectNote={selectNote}
-                onAddEntry={startNewEntry}
-                composingNewEntry={composingNewEntry}
-                onCancelNewEntry={cancelNewEntry}
-                onCreateNewEntry={() => void submitNewEntry()}
-                editorBody={editorBody}
-                onEditorChange={setEditorBody}
-                inboxEditorResetNonce={inboxEditorResetNonce}
-                onEditorError={setErr}
-                onWikiLinkActivate={onWikiLinkActivate}
-                onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                onSaveShortcut={onInboxSaveShortcut}
-                busy={busy}
-                onDeleteNote={uri => {
-                  void deleteNote(uri);
-                }}
-                onRenameNote={(uri, nextDisplayName) => {
-                  void renameNote(uri, nextDisplayName);
-                }}
-                onDeleteFolder={uri => {
-                  void deleteFolder(uri);
-                }}
-                onRenameFolder={(uri, nextDisplayName) => {
-                  void renameFolder(uri, nextDisplayName);
-                }}
-                onMoveVaultTreeItem={(src, kind, destDir) => {
-                  void moveVaultTreeItem(src, kind, destDir);
-                }}
-                onBulkMoveVaultTreeItems={(items, destDir) => {
-                  void bulkMoveVaultTreeItems(items, destDir);
-                }}
-                onBulkDeleteVaultTreeItems={items => {
-                  void bulkDeleteVaultTreeItems(items);
-                }}
-                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-                wikiLinkAmbiguityRenamePrompt={
-                  pendingWikiLinkAmbiguityRename?.summary ?? null
-                }
-                onConfirmWikiLinkAmbiguityRename={() => {
-                  void confirmPendingWikiLinkAmbiguityRename();
-                }}
-                onCancelWikiLinkAmbiguityRename={
-                  cancelPendingWikiLinkAmbiguityRename
-                }
-                editorHistoryCanGoBack={editorHistoryCanGoBack}
-                editorHistoryCanGoForward={editorHistoryCanGoForward}
-                onEditorHistoryGoBack={editorHistoryGoBack}
-                onEditorHistoryGoForward={editorHistoryGoForward}
-              />
+          {err ? (
+            <div className="error-banner" role="alert">
+              {err}
             </div>
-            {podcastsTabMounted ? (
-              <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
-                <PodcastsTab
-                  key={vaultRoot}
-                  vaultRoot={vaultRoot}
-                  fs={fs}
-                  leftWidthPx={layouts.podcastsMain.leftWidthPx}
-                  onLeftWidthPxChanged={persistPodcastsLeftWidthPx}
-                  onConsumeCatalogState={onConsumeCatalogState}
-                  onError={setErr}
-                  fsRefreshNonce={fsRefreshNonce}
-                  playEpisode={desktopPlayback.playEpisode}
-                  playlistRevision={playlistDiskRevision}
-                  resumeFromVault={desktopPlayback.resumeFromVault}
-                  episodeSelectLocked={desktopPlayback.playerLabel === 'playing'}
-                />
-              </div>
-            ) : null}
-          </main>
-          {playerDockVisible && desktopPlayback.activeEpisode != null ? (
-            <DesktopPlayerDock
-              activeEpisode={desktopPlayback.activeEpisode}
-              durationMs={desktopPlayback.durationMs}
-              playerLabel={desktopPlayback.playerLabel}
-              positionMs={desktopPlayback.positionMs}
-              onTogglePause={desktopPlayback.togglePause}
-            />
           ) : null}
+          {!err && renameLinkProgress ? (
+            <div className="info-banner" aria-live="polite">
+              Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
+            </div>
+          ) : null}
+          {!err && !renameLinkProgress && wikiRenameNotice ? (
+            <div className="info-banner" aria-live="polite">
+              {wikiRenameNotice}
+            </div>
+          ) : null}
+
+          <div className="app-body">
+            <RailNav
+              active={mainTab}
+              onSelect={tab => {
+                setMainTab(tab);
+                if (tab === 'podcasts') {
+                  setPodcastsTabMounted(true);
+                }
+              }}
+              onTogglePlayerDock={() => setPlayerDockVisible(v => !v)}
+              playerDockVisible={playerDockVisible}
+              playerToggleDisabled={desktopPlayback.activeEpisode == null}
+            />
+            <div className="main-column">
+              <main className="main-stage">
+                <div className="tab-panel" hidden={mainTab !== 'inbox'}>
+                  <VaultTab
+                    key={vaultRoot}
+                    vaultRoot={vaultRoot}
+                    fs={fs}
+                    fsRefreshNonce={fsRefreshNonce}
+                    inboxEditorRef={inboxEditorRef}
+                    leftWidthPx={layouts.inbox.leftWidthPx}
+                    onLeftWidthPxChanged={persistInboxLeftWidthPx}
+                    notes={notes}
+                    vaultMarkdownRefs={vaultMarkdownRefs}
+                    inboxContentByUri={inboxContentByUri}
+                    backlinkUris={selectedNoteBacklinkUris}
+                    selectedUri={selectedUri}
+                    onSelectNote={selectNote}
+                    onAddEntry={startNewEntry}
+                    composingNewEntry={composingNewEntry}
+                    onCancelNewEntry={cancelNewEntry}
+                    onCreateNewEntry={() => void submitNewEntry()}
+                    editorBody={editorBody}
+                    onEditorChange={setEditorBody}
+                    inboxEditorResetNonce={inboxEditorResetNonce}
+                    onEditorError={setErr}
+                    onWikiLinkActivate={onWikiLinkActivate}
+                    onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                    onSaveShortcut={onInboxSaveShortcut}
+                    busy={busy}
+                    onDeleteNote={uri => {
+                      void deleteNote(uri);
+                    }}
+                    onRenameNote={(uri, nextDisplayName) => {
+                      void renameNote(uri, nextDisplayName);
+                    }}
+                    onDeleteFolder={uri => {
+                      void deleteFolder(uri);
+                    }}
+                    onRenameFolder={(uri, nextDisplayName) => {
+                      void renameFolder(uri, nextDisplayName);
+                    }}
+                    onMoveVaultTreeItem={(src, kind, destDir) => {
+                      void moveVaultTreeItem(src, kind, destDir);
+                    }}
+                    onBulkMoveVaultTreeItems={(items, destDir) => {
+                      void bulkMoveVaultTreeItems(items, destDir);
+                    }}
+                    onBulkDeleteVaultTreeItems={items => {
+                      void bulkDeleteVaultTreeItems(items);
+                    }}
+                    vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
+                    wikiLinkAmbiguityRenamePrompt={
+                      pendingWikiLinkAmbiguityRename?.summary ?? null
+                    }
+                    onConfirmWikiLinkAmbiguityRename={() => {
+                      void confirmPendingWikiLinkAmbiguityRename();
+                    }}
+                    onCancelWikiLinkAmbiguityRename={
+                      cancelPendingWikiLinkAmbiguityRename
+                    }
+                    editorHistoryCanGoBack={editorHistoryCanGoBack}
+                    editorHistoryCanGoForward={editorHistoryCanGoForward}
+                    onEditorHistoryGoBack={editorHistoryGoBack}
+                    onEditorHistoryGoForward={editorHistoryGoForward}
+                  />
+                </div>
+                {podcastsTabMounted ? (
+                  <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
+                    <PodcastsTab
+                      key={vaultRoot}
+                      vaultRoot={vaultRoot}
+                      fs={fs}
+                      leftWidthPx={layouts.podcastsMain.leftWidthPx}
+                      onLeftWidthPxChanged={persistPodcastsLeftWidthPx}
+                      onConsumeCatalogState={onConsumeCatalogState}
+                      onError={setErr}
+                      fsRefreshNonce={fsRefreshNonce}
+                      playEpisode={desktopPlayback.playEpisode}
+                      playlistRevision={playlistDiskRevision}
+                      resumeFromVault={desktopPlayback.resumeFromVault}
+                      episodeSelectLocked={desktopPlayback.playerLabel === 'playing'}
+                    />
+                  </div>
+                ) : null}
+              </main>
+              {playerDockVisible && desktopPlayback.activeEpisode != null ? (
+                <DesktopPlayerDock
+                  activeEpisode={desktopPlayback.activeEpisode}
+                  durationMs={desktopPlayback.durationMs}
+                  playerLabel={desktopPlayback.playerLabel}
+                  positionMs={desktopPlayback.positionMs}
+                  onTogglePause={desktopPlayback.togglePause}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
         </div>
       </div>
-
-      <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
-    </div>
     </>
   );
 }

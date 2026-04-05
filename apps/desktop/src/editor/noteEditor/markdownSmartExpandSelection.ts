@@ -859,7 +859,8 @@ function findParentSectionHeading(
   let best: SyntaxNode | null = null;
   let bestFrom = -1;
   syntaxTree(state).iterate({
-    enter(node) {
+    enter(ref) {
+      const node = ref.node;
       const L = markdownHeadingLevel(node.type.name);
       if (L == null || L <= 1 || L >= childLevel || node.from >= child.from) {
         return;

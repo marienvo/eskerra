@@ -9,6 +9,9 @@ html {
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
   line-height: 1.45;
 
+  /* Deepest tone of the main-window chrome gradient; HTML backdrop + preload flash (see AppChromeBackground). */
+  --color-app-chrome-backdrop: #031226;
+
   /* Brand (desktop) — see specs/design/brand-tokens-desktop.md */
   /* Shell: soft gray; panels use bright surface (inverted vs. earlier soft-white shell + gray panels). */
   --color-brand-bg: #f2f2f2;
@@ -34,10 +37,9 @@ html {
   --color-editor-bg: rgb(250, 250, 250);
   --color-editor-text: #111418;
 
-  /* Window chrome (frameless webview edge) */
-  --color-window-border: #1a1c1e;
-  /* Floating window: blends with shell background (stronger seam when tiled uses --color-window-border). */
-  --color-window-border-floating: color-mix(in srgb, var(--color-text) 11%, var(--color-bg));
+  /* Window chrome (frameless webview edge): 50% black over app chrome (.app-root::after; see App.css). */
+  --color-window-border: color-mix(in srgb, #000000 15%, transparent);
+  --color-window-border-floating: var(--color-window-border);
   --window-radius: 8px;
 
   /* Chrome (rail strip uses shell background — no separate rail fill) */
@@ -92,13 +94,13 @@ html {
   --panel-grid-padding: 5px;
 
   color: var(--color-text);
-  background: var(--color-bg);
+  background: var(--color-app-chrome-backdrop);
 }
 
 body {
   margin: 0;
   color: var(--color-text);
-  background: var(--color-bg);
+  background: var(--color-app-chrome-backdrop);
   text-rendering: auto;
   user-select: none;
   -webkit-user-select: none;
