@@ -160,6 +160,21 @@ function sentenceSliceContainingParagraphOffset(
   return slices[slices.length - 1] ?? {from: 0, to: text.length};
 }
 
+/** Length of ordered `1. ` / `1) ` or bullet `- ` prefix on the first line only (paragraph-local offsets). */
+function listMarkerTrimOffsetInParagraph(text: string): number {
+  const lineEnd = text.indexOf('\n');
+  const firstLine = lineEnd < 0 ? text : text.slice(0, lineEnd);
+  const m = firstLine.match(/^(\s*)(?:(?:\d{1,9}[.)]\s+)|(?:[-*+]\s+))/);
+  return m ? m[0].length : 0;
+}
+
+function trimSentenceSliceForListMarker(
+  slice: {from: number; to: number},
+  trim: number,
+): {from: number; to: number} {
+  return {from: Math.max(slice.from, trim), to: slice.to};
+}
+
 function candidateWord(state: EditorState, main: SelectionRange): SelectionRange | null {
   const w = state.wordAt(main.head);
   if (!w || w.from >= w.to) {
@@ -722,7 +737,11 @@ function candidateSentenceBody(state: EditorState, main: SelectionRange): Select
   }
   const text = state.sliceDoc(para.from, para.to);
   const rel = main.head - para.from;
-  const {from, to} = sentenceSliceContainingParagraphOffset(text, rel);
+  const trim = listMarkerTrimOffsetInParagraph(text);
+  const {from, to} = trimSentenceSliceForListMarker(
+    sentenceSliceContainingParagraphOffset(text, rel),
+    trim,
+  );
   if (from >= to) {
     return null;
   }
@@ -757,7 +776,11 @@ function candidateSentenceFull(state: EditorState, main: SelectionRange): Select
   }
   const text = state.sliceDoc(para.from, para.to);
   const rel = main.head - para.from;
-  const {from, to} = sentenceSliceContainingParagraphOffset(text, rel);
+  const trim = listMarkerTrimOffsetInParagraph(text);
+  const {from, to} = trimSentenceSliceForListMarker(
+    sentenceSliceContainingParagraphOffset(text, rel),
+    trim,
+  );
   if (from >= to) {
     return null;
   }
@@ -792,24 +815,128 @@ function candidateListItem(state: EditorState, main: SelectionRange): SelectionR
   return strictlyWider(r, main) ? r : null;
 }
 
-function candidateSection(state: EditorState, main: SelectionRange): SelectionRange | null {
+/**
+ * Deepest H2+ heading whose section [heading.from, {@link findSectionEnd}) fully contains the
+ * current selection. Uses full range so a large selection (e.g. entire subsection body) still
+ * resolves to the enclosing outline node, not a nested heading that only contains the caret.
+ */
+function innermostHeadingWhoseSectionContainsSelection(
+  state: EditorState,
+  main: SelectionRange,
+): SyntaxNode | null {
+  const selA = Math.min(main.anchor, main.head);
+  const selB = Math.max(main.anchor, main.head);
   ensureSyntaxTree(state, state.doc.length);
-  let n: SyntaxNode | null = syntaxTree(state).resolveInner(main.head, -1);
-  for (; n; n = n.parent) {
-    const level = markdownHeadingLevel(n.type.name);
-    if (level == null) {
-      continue;
-    }
-    if (level <= 1) {
-      continue;
-    }
-    const end = findSectionEnd(n, level);
-    const r = asRange(n.from, end);
-    if (strictlyWider(r, main)) {
-      return r;
-    }
+  let best: SyntaxNode | null = null;
+  let bestFrom = -1;
+  syntaxTree(state).iterate({
+    enter(ref) {
+      const L = markdownHeadingLevel(ref.type.name);
+      if (L == null || L <= 1) {
+        return;
+      }
+      const header = ref.node;
+      const end = findSectionEnd(header, L);
+      if (selA < ref.from || selB > end) {
+        return;
+      }
+      if (ref.from > bestFrom) {
+        bestFrom = ref.from;
+        best = header;
+      }
+    },
+  });
+  return best;
+}
+
+/** Nearest heading before `child` with a strictly lower level number (outline parent). */
+function findParentSectionHeading(
+  state: EditorState,
+  child: SyntaxNode,
+  childLevel: number,
+): SyntaxNode | null {
+  ensureSyntaxTree(state, state.doc.length);
+  let best: SyntaxNode | null = null;
+  let bestFrom = -1;
+  syntaxTree(state).iterate({
+    enter(node) {
+      const L = markdownHeadingLevel(node.type.name);
+      if (L == null || L <= 1 || L >= childLevel || node.from >= child.from) {
+        return;
+      }
+      if (node.from > bestFrom) {
+        bestFrom = node.from;
+        best = node;
+      }
+    },
+  });
+  return best;
+}
+
+function candidateSectionBody(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
   }
-  return null;
+  const H = innermostHeadingWhoseSectionContainsSelection(state, main);
+  if (!H) {
+    return null;
+  }
+  const L = markdownHeadingLevel(H.type.name)!;
+  const end = findSectionEnd(H, L);
+  const r = asRange(H.to, end);
+  return strictlyWider(r, main) ? r : null;
+}
+
+function candidateSectionWithHeading(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const H = innermostHeadingWhoseSectionContainsSelection(state, main);
+  if (!H) {
+    return null;
+  }
+  const L = markdownHeadingLevel(H.type.name)!;
+  const end = findSectionEnd(H, L);
+  const r = asRange(H.from, end);
+  return strictlyWider(r, main) ? r : null;
+}
+
+function candidateParentSectionBody(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const H = innermostHeadingWhoseSectionContainsSelection(state, main);
+  if (!H) {
+    return null;
+  }
+  const childLevel = markdownHeadingLevel(H.type.name)!;
+  const P = findParentSectionHeading(state, H, childLevel);
+  if (!P) {
+    return null;
+  }
+  const Lp = markdownHeadingLevel(P.type.name)!;
+  const end = findSectionEnd(P, Lp);
+  const r = asRange(P.to, end);
+  return strictlyWider(r, main) ? r : null;
+}
+
+function candidateParentSectionWithHeading(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const H = innermostHeadingWhoseSectionContainsSelection(state, main);
+  if (!H) {
+    return null;
+  }
+  const childLevel = markdownHeadingLevel(H.type.name)!;
+  const P = findParentSectionHeading(state, H, childLevel);
+  if (!P) {
+    return null;
+  }
+  const Lp = markdownHeadingLevel(P.type.name)!;
+  const end = findSectionEnd(P, Lp);
+  const r = asRange(P.from, end);
+  return strictlyWider(r, main) ? r : null;
 }
 
 function candidateDocument(state: EditorState, main: SelectionRange): SelectionRange | null {
@@ -831,13 +958,16 @@ function computeNextExpandRange(
     candidateWikiInner,
     candidateWikiFull,
     candidateClause,
-    candidateSyntaxInner,
     candidateSentenceBody,
     candidateSentenceFull,
+    candidateSyntaxInner,
     candidateLines,
-    candidateParagraph,
     candidateListItem,
-    candidateSection,
+    candidateParagraph,
+    candidateSectionBody,
+    candidateSectionWithHeading,
+    candidateParentSectionBody,
+    candidateParentSectionWithHeading,
     candidateDocument,
   ];
   for (const step of steps) {

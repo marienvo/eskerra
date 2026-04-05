@@ -350,4 +350,65 @@ describe('markdownSmartExpandSelection', () => {
     expand(view);
     expect(mainSpan(view)).toEqual({from: openQuote, to: openQuote + 4});
   });
+
+  it('ordered list: sentence step span does not include the numeral marker', () => {
+    const doc = '1. First sentence. More on the same line.\n';
+    const first = doc.indexOf('First');
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(first + 1),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    let saw = false;
+    for (let s = 0; s < 24; s++) {
+      const before = mainSpan(view);
+      expand(view);
+      const after = mainSpan(view);
+      if (before.from === after.from && before.to === after.to) {
+        break;
+      }
+      const t = doc.slice(after.from, after.to);
+      if (t.includes('First') && t.includes('sentence') && !t.includes('1.')) {
+        saw = true;
+        break;
+      }
+    }
+    expect(saw).toBe(true);
+  });
+
+  it('multi-line list under heading: list item before full doc; section steps include body then heading line', () => {
+    const doc = ['## Kop', '', '- item one', '  more line', '', 'Tail para.'].join('\n');
+    const cursor = doc.indexOf('more') + 1;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    const spans: string[] = [];
+    let prev = mainSpan(view);
+    for (let i = 0; i < 40; i++) {
+      expand(view);
+      const span = mainSpan(view);
+      if (span.from === prev.from && span.to === prev.to) {
+        break;
+      }
+      spans.push(doc.slice(span.from, span.to));
+      prev = span;
+    }
+    const docIdx = spans.indexOf(doc);
+    expect(docIdx).toBeGreaterThanOrEqual(0);
+    const multiLineItemIdx = spans.findIndex(
+      t => t.includes('item one') && t.includes('more line') && t.includes('\n'),
+    );
+    expect(multiLineItemIdx).toBeGreaterThanOrEqual(0);
+    expect(docIdx).toBeGreaterThan(multiLineItemIdx);
+    expect(spans.some(t => t.includes('item one') && !t.includes('##'))).toBe(true);
+    expect(spans.some(t => t.includes('## Kop'))).toBe(true);
+  });
 });
