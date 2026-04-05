@@ -171,19 +171,20 @@ function candidateWord(state: EditorState, main: SelectionRange): SelectionRange
   return w;
 }
 
-function candidateClause(state: EditorState, main: SelectionRange): SelectionRange | null {
-  const para = findAncestorNamed(state, main.head, 'Paragraph');
-  if (!para || inOpaqueBlock(state, main.head)) {
+/** Comma/semicolon/newline-delimited span within [sliceStart, sliceEnd) (paragraph-local offsets). */
+function computeClauseInTextSlice(
+  text: string,
+  rel: number,
+  sliceStart: number,
+  sliceEnd: number,
+): {left: number; right: number} | null {
+  if (sliceStart >= sliceEnd || rel < 0 || rel > text.length) {
     return null;
   }
-  const text = state.sliceDoc(para.from, para.to);
-  const rel = main.head - para.from;
-  if (rel < 0 || rel > text.length) {
-    return null;
-  }
-  let left = 0;
-  let right = text.length;
-  for (let i = rel - 1; i >= 0; i--) {
+  const relClamped = Math.min(Math.max(rel, sliceStart), sliceEnd - 1);
+  let left = sliceStart;
+  let right = sliceEnd;
+  for (let i = relClamped - 1; i >= sliceStart; i--) {
     const c = text[i];
     if (c === ',' || c === ';') {
       left = i + 1;
@@ -194,7 +195,7 @@ function candidateClause(state: EditorState, main: SelectionRange): SelectionRan
       break;
     }
   }
-  for (let i = rel; i < text.length; i++) {
+  for (let i = relClamped; i < sliceEnd; i++) {
     const c = text[i];
     if (c === ',' || c === ';') {
       right = i;
@@ -214,28 +215,152 @@ function candidateClause(state: EditorState, main: SelectionRange): SelectionRan
   if (left >= right) {
     return null;
   }
-  const r = asRange(para.from + left, para.from + right);
+  return {left, right};
+}
+
+function candidateClause(state: EditorState, main: SelectionRange): SelectionRange | null {
+  const focus = Math.min(main.anchor, main.head);
+  const para = findAncestorNamed(state, focus, 'Paragraph');
+  if (!para || inOpaqueBlock(state, focus)) {
+    return null;
+  }
+  const text = state.sliceDoc(para.from, para.to);
+  const rel = focus - para.from;
+  if (rel < 0 || rel > text.length) {
+    return null;
+  }
+
+  const ia = Math.min(main.anchor, main.head);
+  const ib = Math.max(main.anchor, main.head);
+
+  let sliceStart = 0;
+  let sliceEnd = text.length;
+
+  if (!wikiLinkMatchAtDocPosition(state.doc, focus)) {
+    const m = tryMatchBracketsForExpand(state, main);
+    if (m?.matched && m.end) {
+      if (ia <= m.start.from && ib >= m.end.to) {
+        // Selection already spans the full matched pair; defer to sentence / larger steps.
+        return null;
+      }
+      if (ia >= m.start.to && ib <= m.end.from) {
+        const innerFrom = m.start.to - para.from;
+        const innerTo = m.end.from - para.from;
+        sliceStart = Math.max(0, innerFrom);
+        sliceEnd = Math.min(text.length, innerTo);
+      }
+    }
+  }
+
+  const window = computeClauseInTextSlice(text, rel, sliceStart, sliceEnd);
+  if (!window) {
+    return null;
+  }
+  const r = asRange(para.from + window.left, para.from + window.right);
   return strictlyWider(r, main) ? r : null;
 }
 
-function tryMatchBrackets(
+type ParenPairMatch = NonNullable<ReturnType<typeof matchBrackets>>;
+
+/**
+ * When Lezer token types differ inside prose, {@link matchBrackets} often yields null. Scan plain `(` `)`
+ * within the current paragraph so smart expand still respects parentheses (see plan: v1 text scan).
+ */
+function matchRoundParensTextFallback(
   state: EditorState,
-  head: number,
-): ReturnType<typeof matchBrackets> | null {
-  return matchBrackets(state, head, 1) ?? matchBrackets(state, head, -1);
+  docPos: number,
+): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
+  if (inOpaqueBlock(state, docPos)) {
+    return null;
+  }
+  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
+    return null;
+  }
+  const para = findAncestorNamed(state, docPos, 'Paragraph');
+  if (!para) {
+    return null;
+  }
+  const base = para.from;
+  const text = state.sliceDoc(para.from, para.to);
+  const rel = docPos - base;
+  if (rel < 0 || rel >= text.length) {
+    return null;
+  }
+  let depth = 0;
+  let openRel = -1;
+  for (let i = rel; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === ')') {
+      depth++;
+    } else if (ch === '(') {
+      if (depth === 0) {
+        openRel = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (openRel < 0) {
+    return null;
+  }
+  depth = 0;
+  let closeRel = -1;
+  for (let i = openRel + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      if (depth === 0) {
+        closeRel = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (closeRel < 0 || rel < openRel || rel > closeRel) {
+    return null;
+  }
+  return {
+    start: {from: base + openRel, to: base + openRel + 1},
+    end: {from: base + closeRel, to: base + closeRel + 1},
+  };
+}
+
+function tryParenPairForSmartExpand(state: EditorState, docPos: number): ParenPairMatch | null {
+  const cm = matchBrackets(state, docPos, 1) ?? matchBrackets(state, docPos, -1);
+  if (cm?.matched && cm.end) {
+    return cm;
+  }
+  const fb = matchRoundParensTextFallback(state, docPos);
+  if (fb) {
+    return {matched: true, start: fb.start, end: fb.end};
+  }
+  return null;
+}
+
+/** Prefer the selection start and the last in-range char before `)` so probe is never stuck on a closer. */
+function tryMatchBracketsForExpand(state: EditorState, main: SelectionRange): ParenPairMatch | null {
+  const lo = Math.min(main.anchor, main.head);
+  const hi = Math.max(main.anchor, main.head);
+  return (
+    tryParenPairForSmartExpand(state, lo) ??
+    (hi > lo ? tryParenPairForSmartExpand(state, hi - 1) : null) ??
+    tryParenPairForSmartExpand(state, hi)
+  );
 }
 
 function candidateBracketInner(
   state: EditorState,
   main: SelectionRange,
 ): SelectionRange | null {
-  if (inOpaqueBlock(state, main.head)) {
+  const focus = Math.min(main.anchor, main.head);
+  if (inOpaqueBlock(state, focus)) {
     return null;
   }
-  if (wikiLinkMatchAtDocPosition(state.doc, main.head)) {
+  if (wikiLinkMatchAtDocPosition(state.doc, focus)) {
     return null;
   }
-  const m = tryMatchBrackets(state, main.head);
+  const m = tryMatchBracketsForExpand(state, main);
   if (!m?.matched || !m.end) {
     return null;
   }
@@ -247,13 +372,14 @@ function candidateBracketOuter(
   state: EditorState,
   main: SelectionRange,
 ): SelectionRange | null {
-  if (inOpaqueBlock(state, main.head)) {
+  const focus = Math.min(main.anchor, main.head);
+  if (inOpaqueBlock(state, focus)) {
     return null;
   }
-  if (wikiLinkMatchAtDocPosition(state.doc, main.head)) {
+  if (wikiLinkMatchAtDocPosition(state.doc, focus)) {
     return null;
   }
-  const m = tryMatchBrackets(state, main.head);
+  const m = tryMatchBracketsForExpand(state, main);
   if (!m?.matched || !m.end) {
     return null;
   }
@@ -333,7 +459,46 @@ function candidateSyntaxInner(
   return null;
 }
 
-function candidateSentence(state: EditorState, main: SelectionRange): SelectionRange | null {
+/**
+ * Sentence slice up to (but not including) terminal `.` `!` `?` when that punct ends the segment
+ * (same heuristic as {@link sentenceSlicesInParagraph}). Skips when body would equal full slice.
+ */
+function candidateSentenceBody(state: EditorState, main: SelectionRange): SelectionRange | null {
+  const para = findAncestorNamed(state, main.head, 'Paragraph');
+  if (!para || inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const text = state.sliceDoc(para.from, para.to);
+  const rel = main.head - para.from;
+  const {from, to} = sentenceSliceContainingParagraphOffset(text, rel);
+  if (from >= to) {
+    return null;
+  }
+  let i = to - 1;
+  while (i > from && /\s/.test(text[i])) {
+    i--;
+  }
+  if (i <= from) {
+    return null;
+  }
+  while (i > from && (text[i] === '"' || text[i] === "'")) {
+    i--;
+  }
+  if (i <= from || !'.!?'.includes(text[i])) {
+    return null;
+  }
+  let bodyRight = i;
+  while (bodyRight > from && /\s/.test(text[bodyRight - 1])) {
+    bodyRight--;
+  }
+  if (bodyRight <= from) {
+    return null;
+  }
+  const r = asRange(para.from + from, para.from + bodyRight);
+  return strictlyWider(r, main) ? r : null;
+}
+
+function candidateSentenceFull(state: EditorState, main: SelectionRange): SelectionRange | null {
   const para = findAncestorNamed(state, main.head, 'Paragraph');
   if (!para || inOpaqueBlock(state, main.head)) {
     return null;
@@ -407,13 +572,14 @@ function computeNextExpandRange(
   ensureSyntaxTree(state, state.doc.length);
   const steps: ((s: EditorState, m: SelectionRange) => SelectionRange | null)[] = [
     candidateWord,
-    candidateClause,
     candidateBracketInner,
     candidateBracketOuter,
     candidateWikiInner,
     candidateWikiFull,
+    candidateClause,
     candidateSyntaxInner,
-    candidateSentence,
+    candidateSentenceBody,
+    candidateSentenceFull,
     candidateLines,
     candidateParagraph,
     candidateListItem,

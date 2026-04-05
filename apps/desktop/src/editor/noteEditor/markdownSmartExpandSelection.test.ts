@@ -174,6 +174,102 @@ describe('markdownSmartExpandSelection', () => {
     expect(view.state.selection.ranges.length).toBe(1);
   });
 
+  it('Dutch: cursor in parenthesized Share expands word, paren inner, outer, then sentence without ? then with ?', () => {
+    const doc = 'De tool Share (ook bij Share), en iconen laten verschijnen?';
+    const open = doc.indexOf('(');
+    const close = doc.indexOf(')', open);
+    const innerShare = doc.indexOf('Share', open);
+    const cursor = innerShare + 1; // "h" in inner "Share"
+    const q = doc.indexOf('?');
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: innerShare, to: innerShare + 5});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: open + 1, to: close});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: open, to: close + 1});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: q});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: doc.length});
+  });
+
+  it('does not duplicate sentence-body step when the segment has no terminal punct', () => {
+    const doc = 'Alleen tekst zonder leesteken aan het eind';
+    const w = doc.indexOf('zonder');
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(w + 1),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: w, to: w + 6});
+    const spans: {from: number; to: number}[] = [];
+    for (let steps = 0; steps < 10; steps++) {
+      const before = mainSpan(view);
+      expand(view);
+      const after = mainSpan(view);
+      if (before.from === after.from && before.to === after.to) {
+        break;
+      }
+      spans.push(after);
+    }
+    const sawBodyWithoutPunct = spans.some(
+      s => s.to < doc.length && doc.slice(s.from, s.to).trimEnd().match(/[.!?]$/) == null && s.to > w + 6,
+    );
+    expect(sawBodyWithoutPunct).toBe(false);
+    expect(spans[spans.length - 1]).toEqual({from: 0, to: doc.length});
+  });
+
+  it('expands nested parentheses outward from inner word', () => {
+    const doc = '((a))';
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(2),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 2, to: 3});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 1, to: 4});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: 5});
+  });
+
+  it('comma-bounded clause then sentence body excludes period then full sentence', () => {
+    const doc = 'a, bee, c.';
+    const bee = doc.indexOf('bee');
+    const cursor = bee + 1;
+    const dot = doc.indexOf('.');
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: bee, to: bee + 3});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: dot});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: doc.length});
+  });
+
   it('applies expand then shrink transactions with smart-expand user events', () => {
     const doc = 'hi';
     const events: string[] = [];
