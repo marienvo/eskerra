@@ -159,7 +159,7 @@ a:focus:not(:focus-visible) {
   -webkit-user-drag: none;
   /* 29px matches the app icon grid; avoids odd fractional raster sizes at 1x. */
   /* Center 29px asset on the 40px rail tab column below (see .rail-tab width). */
-  margin-inline-start: calc((40px - 29px) / 2);
+  margin-inline-start: calc((40px - 29px) / 2 + 1px);
 }
 
 .window-title-bar-drag {
@@ -488,14 +488,36 @@ a:focus:not(:focus-visible) {
 }
 
 .rail-tab.active {
-  background: var(--color-accent);
+  background: transparent;
   color: #ffffff;
   box-shadow: none;
 }
 
+/* Translucent light pill; icon knocks out via destination-out so shell shows through glyphs. */
+.rail-tab.active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 0;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.rail-tab.active .material-icons {
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  mix-blend-mode: destination-out;
+}
+
+.rail-tab.active:hover::before,
+.rail-tab.active:focus-visible::before {
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .rail-tab.active:hover,
 .rail-tab.active:focus-visible {
-  background: color-mix(in srgb, var(--color-accent) 88%, #000000);
   color: #ffffff;
 }
 
@@ -506,6 +528,14 @@ a:focus:not(:focus-visible) {
   background: transparent;
   color: var(--color-shell-icon-disabled);
   box-shadow: none;
+}
+
+.rail-tab.active:disabled::before {
+  display: none;
+}
+
+.rail-tab.active:disabled .material-icons {
+  mix-blend-mode: normal;
 }
 
 .rail-tab:disabled:hover,
