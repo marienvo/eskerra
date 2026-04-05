@@ -185,7 +185,7 @@ export function MainTabNavigator() {
           headerTintColor: '#ffffff',
           headerTitleStyle: styles.tabHeaderTitle,
           tabBarActiveTintColor: '#ffffff',
-          tabBarInactiveTintColor: 'rgba(255,255,255,0.55)',
+          tabBarInactiveTintColor: 'rgba(255,255,255,0.72)',
           tabBarLabelStyle: styles.tabBarLabel,
           tabBarShowLabel: true,
           tabBarStyle: styles.tabBar,

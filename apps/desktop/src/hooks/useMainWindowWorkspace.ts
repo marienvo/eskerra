@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -66,6 +67,15 @@ import {
   applyVaultWikiLinkRenameMaintenance,
   planVaultWikiLinkRenameMaintenance,
 } from '../lib/vaultWikiLinkRenameMaintenance';
+import {
+  emptyEditorDocumentHistory,
+  normalizeEditorDocUri,
+  pushEditorHistoryEntry,
+  remapEditorHistoryPrefix,
+  remapVaultUriPrefix,
+  removeEditorHistoryUris,
+  vaultUriDeletedByTreeChange,
+} from '../lib/editorDocumentHistory';
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
@@ -123,19 +133,6 @@ async function loadMarkdownBodiesForWikiMaintenance(
     }
   }
   return out;
-}
-
-function replaceVaultUriPrefix(uri: string, oldPrefix: string, newPrefix: string): string | null {
-  const u = uri.replace(/\\/g, '/');
-  const o = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
-  const n = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
-  if (u === o) {
-    return n;
-  }
-  if (u.startsWith(`${o}/`)) {
-    return `${n}/${u.slice(o.length + 1)}`;
-  }
-  return null;
 }
 
 export type UseMainWindowWorkspaceResult = {
@@ -197,6 +194,10 @@ export type UseMainWindowWorkspaceResult = {
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
+  editorHistoryCanGoBack: boolean;
+  editorHistoryCanGoForward: boolean;
+  editorHistoryGoBack: () => void;
+  editorHistoryGoForward: () => void;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -238,6 +239,9 @@ export function useMainWindowWorkspace(options: {
   );
   const [pendingWikiLinkAmbiguityRename, setPendingWikiLinkAmbiguityRename] =
     useState<PendingWikiLinkAmbiguityRename | null>(null);
+  const [editorDocumentHistory, setEditorDocumentHistory] = useState(() =>
+    emptyEditorDocumentHistory(),
+  );
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   const inboxBodyPrefetchGenRef = useRef(0);
@@ -256,6 +260,7 @@ export function useMainWindowWorkspace(options: {
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
+  const editorDocumentHistoryRef = useRef(emptyEditorDocumentHistory());
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
@@ -263,6 +268,10 @@ export function useMainWindowWorkspace(options: {
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
   backlinksActiveBodyRef.current = backlinksActiveBody;
+
+  useLayoutEffect(() => {
+    editorDocumentHistoryRef.current = editorDocumentHistory;
+  }, [editorDocumentHistory]);
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
@@ -423,6 +432,18 @@ export function useMainWindowWorkspace(options: {
 
   flushInboxSaveRef.current = flushInboxSave;
 
+  const openMarkdownInEditor = useCallback(
+    async (uri: string, options?: {skipHistory?: boolean}) => {
+      await flushInboxSaveRef.current();
+      if (!options?.skipHistory) {
+        setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
+      }
+      setComposingNewEntry(false);
+      setSelectedUri(normalizeEditorDocUri(uri));
+    },
+    [],
+  );
+
   const hydrateVault = useCallback(
     async (root: string) => {
       await flushInboxSaveRef.current();
@@ -449,6 +470,7 @@ export function useMainWindowWorkspace(options: {
         const label = local.displayName.trim();
         setSettingsName(label !== '' ? label : 'Notebox');
         await refreshNotes(root);
+        setEditorDocumentHistory(emptyEditorDocumentHistory());
         setSelectedUri(null);
         setComposingNewEntry(false);
         setEditorBody('');
@@ -672,15 +694,14 @@ export function useMainWindowWorkspace(options: {
         );
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
-        setSelectedUri(created.uri);
-        setComposingNewEntry(false);
+        await openMarkdownInEditor(created.uri);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
   );
 
   const startNewEntry = useCallback(() => {
@@ -704,13 +725,12 @@ export function useMainWindowWorkspace(options: {
     })();
   }, []);
 
-  const selectNote = useCallback((uri: string) => {
-    void (async () => {
-      await flushInboxSaveRef.current();
-      setComposingNewEntry(false);
-      setSelectedUri(uri);
-    })();
-  }, []);
+  const selectNote = useCallback(
+    (uri: string) => {
+      void openMarkdownInEditor(uri);
+    },
+    [openMarkdownInEditor],
+  );
 
   const submitNewEntry = useCallback(async () => {
     if (!vaultRoot) {
@@ -782,6 +802,9 @@ export function useMainWindowWorkspace(options: {
         });
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
+        setEditorDocumentHistory(prev =>
+          removeEditorHistoryUris(prev, u => u === normalizeEditorDocUri(uri)),
+        );
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -951,6 +974,11 @@ export function useMainWindowWorkspace(options: {
             lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
           }
         }
+        if (nextUri !== uri) {
+          setEditorDocumentHistory(prev =>
+            remapEditorHistoryPrefix(prev, uri, nextUri),
+          );
+        }
         if (applyResult.failed.length > 0) {
           const list = applyResult.failed.map(f => f.uri).join(', ');
           setErr(
@@ -1044,8 +1072,7 @@ export function useMainWindowWorkspace(options: {
               replacementInner: result.canonicalInner,
             });
           }
-          setComposingNewEntry(false);
-          setSelectedUri(result.uri);
+          await openMarkdownInEditor(result.uri);
           return;
         }
         if (result.kind === 'ambiguous') {
@@ -1066,7 +1093,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -1113,8 +1140,7 @@ export function useMainWindowWorkspace(options: {
               replacementHref: result.canonicalHref,
             });
           }
-          setComposingNewEntry(false);
-          setSelectedUri(result.uri);
+          await openMarkdownInEditor(result.uri);
           return;
         }
         setErr('This link is not a relative vault markdown note.');
@@ -1122,7 +1148,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
@@ -1173,6 +1199,12 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        setEditorDocumentHistory(prev =>
+          removeEditorHistoryUris(prev, u => {
+            const f = normDir;
+            return u === f || u.startsWith(`${f}/`);
+          }),
+        );
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -1216,7 +1248,7 @@ export function useMainWindowWorkspace(options: {
         setInboxContentByUri(prev => {
           const next = {...prev};
           for (const k of Object.keys(prev)) {
-            const mapped = replaceVaultUriPrefix(k, oldUri, normalizedNext);
+            const mapped = remapVaultUriPrefix(k, oldUri, normalizedNext);
             if (mapped && mapped !== k && prev[k] !== undefined) {
               next[mapped] = prev[k]!;
               delete next[k];
@@ -1227,7 +1259,7 @@ export function useMainWindowWorkspace(options: {
         {
           let nextSel: string | null = selectedUriRef.current;
           if (nextSel) {
-            const mappedSel = replaceVaultUriPrefix(
+            const mappedSel = remapVaultUriPrefix(
               nextSel.replace(/\\/g, '/'),
               oldUri,
               normalizedNext,
@@ -1239,11 +1271,14 @@ export function useMainWindowWorkspace(options: {
         }
         const lp = lastPersistedRef.current;
         if (lp) {
-          const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, normalizedNext);
+          const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, normalizedNext);
           if (mappedLp) {
             lastPersistedRef.current = {...lp, uri: mappedLp};
           }
         }
+        setEditorDocumentHistory(prev =>
+          remapEditorHistoryPrefix(prev, oldUri, normalizedNext),
+        );
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -1296,7 +1331,7 @@ export function useMainWindowWorkspace(options: {
         setInboxContentByUri(prev => {
           const next = {...prev};
           for (const k of Object.keys(prev)) {
-            const mapped = replaceVaultUriPrefix(k, oldUri, newUri);
+            const mapped = remapVaultUriPrefix(k, oldUri, newUri);
             if (mapped && mapped !== k && prev[k] !== undefined) {
               next[mapped] = prev[k]!;
               delete next[k];
@@ -1306,7 +1341,7 @@ export function useMainWindowWorkspace(options: {
         });
         let nextSel: string | null = selectedUriRef.current;
         if (nextSel) {
-          const mappedSel = replaceVaultUriPrefix(
+          const mappedSel = remapVaultUriPrefix(
             nextSel.replace(/\\/g, '/'),
             oldUri,
             newUri,
@@ -1317,12 +1352,15 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(nextSel);
         const lp = lastPersistedRef.current;
         if (lp) {
-          const mappedLp = replaceVaultUriPrefix(lp.uri, oldUri, newUri);
+          const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, newUri);
           if (mappedLp) {
             lastPersistedRef.current = {...lp, uri: mappedLp};
           }
         }
       }
+      setEditorDocumentHistory(prev =>
+        remapEditorHistoryPrefix(prev, result.previousUri, result.nextUri),
+      );
     },
     [vaultRoot],
   );
@@ -1428,6 +1466,22 @@ export function useMainWindowWorkspace(options: {
             });
           }
         }
+        const deletedFiles = new Set<string>();
+        const deletedFolders: string[] = [];
+        for (const entry of plan) {
+          if (entry.kind === 'article') {
+            deletedFiles.add(normalizeEditorDocUri(entry.uri));
+          } else {
+            deletedFolders.push(
+              entry.uri.replace(/\\/g, '/').replace(/\/+$/, ''),
+            );
+          }
+        }
+        setEditorDocumentHistory(prev =>
+          removeEditorHistoryUris(prev, u =>
+            vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
+          ),
+        );
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
         setVaultTreeSelectionClearNonce(n => n + 1);
@@ -1474,6 +1528,67 @@ export function useMainWindowWorkspace(options: {
     },
     [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
   );
+
+  const editorHistoryCanGoBack = useMemo(() => {
+    const {entries, index} = editorDocumentHistory;
+    if (entries.length === 0) {
+      return false;
+    }
+    if (composingNewEntry) {
+      return index >= 0;
+    }
+    return index > 0;
+  }, [composingNewEntry, editorDocumentHistory]);
+
+  const editorHistoryCanGoForward = useMemo(() => {
+    const {entries, index} = editorDocumentHistory;
+    if (busy || composingNewEntry) {
+      return false;
+    }
+    return index >= 0 && index < entries.length - 1;
+  }, [busy, composingNewEntry, editorDocumentHistory]);
+
+  const editorHistoryGoBack = useCallback(() => {
+    void (async () => {
+      await flushInboxSaveRef.current();
+      const snap = editorDocumentHistoryRef.current;
+      if (composingNewEntryRef.current) {
+        if (snap.entries.length === 0 || snap.index < 0) {
+          return;
+        }
+        const uri = snap.entries[snap.index]!;
+        setComposingNewEntry(false);
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+        await openMarkdownInEditor(uri, {skipHistory: true});
+        return;
+      }
+      if (snap.index <= 0) {
+        return;
+      }
+      const nextIndex = snap.index - 1;
+      const uri = snap.entries[nextIndex]!;
+      setEditorDocumentHistory(prev => ({...prev, index: nextIndex}));
+      await openMarkdownInEditor(uri, {skipHistory: true});
+    })();
+  }, [openMarkdownInEditor]);
+
+  const editorHistoryGoForward = useCallback(() => {
+    void (async () => {
+      if (composingNewEntryRef.current) {
+        return;
+      }
+      await flushInboxSaveRef.current();
+      const snap = editorDocumentHistoryRef.current;
+      if (snap.index < 0 || snap.index >= snap.entries.length - 1) {
+        return;
+      }
+      const nextIndex = snap.index + 1;
+      const uri = snap.entries[nextIndex]!;
+      setEditorDocumentHistory(prev => ({...prev, index: nextIndex}));
+      await openMarkdownInEditor(uri, {skipHistory: true});
+    })();
+  }, [openMarkdownInEditor]);
 
   useEffect(() => {
     if (!vaultRoot) {
@@ -1565,5 +1680,9 @@ export function useMainWindowWorkspace(options: {
     vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
+    editorHistoryCanGoBack,
+    editorHistoryCanGoForward,
+    editorHistoryGoBack,
+    editorHistoryGoForward,
   };
 }

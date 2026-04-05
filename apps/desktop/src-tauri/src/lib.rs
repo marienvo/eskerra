@@ -19,6 +19,9 @@ fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         .build()
 }
 
+/// Release builds only block the context menu here. Editor shortcuts (e.g. Cmd+W smart shrink/expand
+/// in the vault CodeMirror surface) rely on JS `preventDefault` instead—**macOS:** manually verify
+/// Cmd+W does not close the window while the note editor is focused.
 #[cfg(all(not(mobile), not(debug_assertions)))]
 fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     use tauri_plugin_prevent_default::Flags;

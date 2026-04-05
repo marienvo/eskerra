@@ -1,4 +1,4 @@
-import {Box, Pressable, Text, useColorMode} from '@gluestack-ui/themed';
+import {Box, Pressable, Text} from '@gluestack-ui/themed';
 import Slider from '@react-native-community/slider';
 import {useCallback, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
@@ -14,6 +14,16 @@ import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 const SKIP_MS = 10_000;
 const SKIP_ICON_SIZE = 34;
 const PLAY_ICON_SIZE = 52;
+
+/** Match bottom tab bar dark chrome; transport uses light fg so enabled/disabled read on dark in all color modes. */
+const MINI_PLAYER_BG = '#1d1d1d';
+const MINI_PLAYER_BORDER = '#2d2d2d';
+const MINI_PLAYER_PROGRESS_TRACK = '#383838';
+const MINI_PLAYER_TITLE = '#ffffff';
+const MINI_PLAYER_MUTED = 'rgba(255,255,255,0.72)';
+const MINI_PLAYER_TRANSPORT = '#ffffff';
+const MINI_PLAYER_TRANSPORT_DISABLED = 'rgba(255,255,255,0.4)';
+const MINI_PLAYER_PLACEHOLDER_BG = '#3a3a3a';
 
 /**
  * Approximate total height when MiniPlayer is visible. Used for keyboard footer offset;
@@ -60,7 +70,6 @@ export function MiniPlayer() {
     toggleMiniPlayerArtworkSelection,
     togglePlayback,
   } = usePlayerContext();
-  const colorMode = useColorMode();
   const artworkUri = usePodcastArtwork(baseUri, activeEpisode?.rssFeedUrl, {
     allowBackgroundFetch: true,
   });
@@ -97,10 +106,7 @@ export function MiniPlayer() {
     durationMs > 0 ? durationMs : Math.max(progress.positionMs, 1);
   const sliderValueMs = sliderDragging ? sliderDragMs : progress.positionMs;
 
-  const backgroundColor = colorMode === 'dark' ? '#1f1f1f' : '#ffffff';
-  const borderColor = colorMode === 'dark' ? '#3f3f3f' : '#d7d7d7';
-  const progressTrackColor = colorMode === 'dark' ? '#383838' : '#ebebeb';
-  const mutedTextColor = colorMode === 'dark' ? '#c8c8c8' : '#616161';
+  const transportIconColor = playbackLoading ? MINI_PLAYER_TRANSPORT_DISABLED : MINI_PLAYER_TRANSPORT;
   const artworkBorderColor = miniPlayerArtworkSelected ? ACCENT_COLOR : 'transparent';
   const elapsedLabel = formatClockFromMs(sliderValueMs);
   const durationLabel =
@@ -113,8 +119,8 @@ export function MiniPlayer() {
       style={[
         styles.container,
         {
-          backgroundColor,
-          borderColor,
+          backgroundColor: MINI_PLAYER_BG,
+          borderColor: MINI_PLAYER_BORDER,
         },
       ]}>
       <View style={styles.topRow}>
@@ -131,19 +137,22 @@ export function MiniPlayer() {
           />
         </Pressable>
         <View style={styles.textWrap}>
-          <Text ellipsizeMode="tail" numberOfLines={1} style={styles.title}>
+          <Text
+            ellipsizeMode="tail"
+            numberOfLines={1}
+            style={[styles.title, {color: MINI_PLAYER_TITLE}]}>
             {activeEpisode.title}
           </Text>
-          <Text numberOfLines={1} style={[styles.subtitle, {color: mutedTextColor}]}>
+          <Text numberOfLines={1} style={[styles.subtitle, {color: MINI_PLAYER_MUTED}]}>
             {activeEpisode.seriesName}
           </Text>
-          <Text numberOfLines={1} style={[styles.dateLine, {color: mutedTextColor}]}>
+          <Text numberOfLines={1} style={[styles.dateLine, {color: MINI_PLAYER_MUTED}]}>
             {formatRelativeCalendarLabelFromIsoDate(activeEpisode.date)}
           </Text>
         </View>
       </View>
       <Slider
-        maximumTrackTintColor={progressTrackColor}
+        maximumTrackTintColor={MINI_PLAYER_PROGRESS_TRACK}
         maximumValue={sliderMaxMs}
         minimumTrackTintColor={ACCENT_COLOR}
         minimumValue={0}
@@ -160,7 +169,7 @@ export function MiniPlayer() {
         value={Math.min(sliderValueMs, sliderMaxMs)}
       />
       <View style={styles.transportRow}>
-        <Text style={[styles.transportTime, {color: mutedTextColor}]}>{elapsedLabel}</Text>
+        <Text style={[styles.transportTime, {color: MINI_PLAYER_MUTED}]}>{elapsedLabel}</Text>
         <View style={styles.transportCenter}>
           <Pressable
             accessibilityLabel="Rewind 10 seconds"
@@ -170,7 +179,7 @@ export function MiniPlayer() {
               handleSeekBy(-SKIP_MS);
             }}
             style={styles.skipButton}>
-            <MaterialIcons color={mutedTextColor} name="replay-10" size={SKIP_ICON_SIZE} />
+            <MaterialIcons color={transportIconColor} name="replay-10" size={SKIP_ICON_SIZE} />
           </Pressable>
           <Pressable
             disabled={playbackLoading}
@@ -179,7 +188,7 @@ export function MiniPlayer() {
             }}
             style={styles.playButton}>
             <MaterialIcons
-              color={mutedTextColor}
+              color={transportIconColor}
               name={isPlaying ? 'pause-circle-filled' : 'play-circle-filled'}
               size={PLAY_ICON_SIZE}
             />
@@ -192,10 +201,10 @@ export function MiniPlayer() {
               handleSeekBy(SKIP_MS);
             }}
             style={styles.skipButton}>
-            <MaterialIcons color={mutedTextColor} name="forward-10" size={SKIP_ICON_SIZE} />
+            <MaterialIcons color={transportIconColor} name="forward-10" size={SKIP_ICON_SIZE} />
           </Pressable>
         </View>
-        <Text style={[styles.transportTime, styles.transportTimeEnd, {color: mutedTextColor}]}>
+        <Text style={[styles.transportTime, styles.transportTimeEnd, {color: MINI_PLAYER_MUTED}]}>
           {durationLabel}
         </Text>
       </View>
@@ -211,7 +220,7 @@ const styles = StyleSheet.create({
   },
   artworkPlaceholder: {
     alignItems: 'center',
-    backgroundColor: '#e2e2e2',
+    backgroundColor: MINI_PLAYER_PLACEHOLDER_BG,
     borderRadius: 8,
     height: 64,
     justifyContent: 'center',

@@ -49,12 +49,14 @@ function getCodeParser(
   };
 }
 
-function markdownHeadingLevel(typeName: string): number | null {
+/** Exported for smart-expand and other heading-section consumers; matches fold logic. */
+export function markdownHeadingLevel(typeName: string): number | null {
   const m = /^(?:ATX|Setext)Heading(\d)$/.exec(typeName);
   return m ? +m[1] : null;
 }
 
-function findSectionEnd(headerNode: SyntaxNode, level: number): number {
+/** Exclusive end offset of the section headed by `headerNode` (sibling blocks up to next same-or-higher heading). */
+export function findSectionEnd(headerNode: SyntaxNode, level: number): number {
   let last = headerNode;
   for (;;) {
     const next = last.nextSibling;

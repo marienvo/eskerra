@@ -11,35 +11,86 @@
 
 .app-root {
   box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  border: 1px solid var(--color-window-border-floating);
+  border: none;
   border-radius: var(--window-radius);
-  background: var(--color-bg);
+  background: transparent;
   color: var(--color-text);
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
-.app-root--maximized {
-  border: none;
-  border-radius: 0;
+/* Window edge: draws above AppChromeBackground so 50% black composites on the shell background. */
+.app-root:not(.app-root--maximized)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-sizing: border-box;
 }
 
-/* Tiled: no border on screen edges; only the split seam with the other half. */
-.app-root--tiled-left:not(.app-root--maximized) {
-  border-radius: 0;
+.app-root:not(.app-root--maximized):not(.app-root--tiled-left):not(.app-root--tiled-right)::after {
+  border: 1px solid var(--color-window-border-floating);
+}
+
+.app-root--tiled-left:not(.app-root--maximized)::after {
   border: none;
   border-right: 1px solid var(--color-window-border);
+  border-radius: 0;
 }
 
-.app-root--tiled-right:not(.app-root--maximized) {
-  border-radius: 0;
+.app-root--tiled-right:not(.app-root--maximized)::after {
   border: none;
   border-left: 1px solid var(--color-window-border);
+  border-radius: 0;
+}
+
+.app-root--maximized::after {
+  content: none;
+}
+
+.app-chrome-background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.app-chrome-background__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Stacking context above AppChromeBackground + frame ::after; replaces direct flex children of .app-root */
+.app-root-chrome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
+.app-root--maximized {
+  border-radius: 0;
+}
+
+/* Tiled: no border on screen edges; split seam uses ::after (see .app-root rules above). */
+.app-root--tiled-left:not(.app-root--maximized),
+.app-root--tiled-right:not(.app-root--maximized) {
+  border-radius: 0;
 }
 
 /* Dev: sessionStorage noteboxDebugTiling=1 — see windowTiling.ts */
@@ -86,7 +137,7 @@ a:focus:not(:focus-visible) {
   padding: 0 0.3rem 0 0.34rem;
   box-sizing: border-box;
   border-bottom: none;
-  background: var(--color-bg);
+  background: transparent;
   user-select: none;
 }
 
@@ -147,18 +198,19 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .titlebar-transport-btn:disabled {
   cursor: default;
-  opacity: 0.42;
+  opacity: 1;
+  color: var(--color-shell-icon-disabled);
 }
 
 .titlebar-transport-btn:not(:disabled):hover {
-  background: var(--color-titlebar-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .titlebar-transport-btn--play {
@@ -182,7 +234,7 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   /* Bottom inset matches rail offset from window edge (see .rail padding-inline-start). */
   padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 /* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
@@ -195,7 +247,7 @@ a:focus:not(:focus-visible) {
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--color-muted);
+  color: var(--color-shell-tagline);
   line-height: 1.2;
   pointer-events: none;
   user-select: none;
@@ -225,12 +277,16 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border-radius: 6px;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .app-status-bar-settings:hover:not(:disabled) {
-  color: var(--color-text);
+  color: var(--color-shell-icon);
+}
+
+.app-status-bar-settings.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-shell-hover-bg);
 }
 
 .window-title-bar-controls {
@@ -251,13 +307,13 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .window-ctrl:hover {
-  background: var(--color-titlebar-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .window-ctrl-close:hover {
@@ -307,7 +363,7 @@ a:focus:not(:focus-visible) {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 /*
@@ -364,6 +420,10 @@ a:focus:not(:focus-visible) {
     transform 0.14s ease 0.55s;
 }
 
+.app-tooltip-trigger[data-tooltip]:disabled::after {
+  content: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-tooltip-trigger[data-tooltip]::after {
     transition:
@@ -411,7 +471,7 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
   font: inherit;
   box-shadow: none;
@@ -419,8 +479,8 @@ a:focus:not(:focus-visible) {
 
 .rail-tab:hover:not(.active),
 .rail-tab:focus-visible:not(.active) {
-  background: var(--color-row-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .rail-tab:focus-visible {
@@ -442,9 +502,9 @@ a:focus:not(:focus-visible) {
 .rail-tab:disabled,
 .rail-tab.active:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: 1;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-disabled);
   box-shadow: none;
 }
 
@@ -453,7 +513,7 @@ a:focus:not(:focus-visible) {
 .rail-tab.active:disabled:hover,
 .rail-tab.active:disabled:focus-visible {
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-disabled);
 }
 
 .main-column {
@@ -463,7 +523,7 @@ a:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-bg);
+  background: transparent;
 }
 
 .main-stage {
@@ -472,7 +532,7 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
+  background: transparent;
   position: relative;
 }
 
@@ -620,6 +680,21 @@ a:focus:not(:focus-visible) {
   padding: 0.32rem 0.48rem;
   border-bottom: 1px solid var(--color-border-soft, var(--color-border));
   background: var(--color-editor-bg);
+}
+
+.pane-header-start {
+  display: flex;
+  align-items: center;
+  gap: 0.18rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pane-header-trailing-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.15rem;
 }
 
 .pane-title {
@@ -1150,6 +1225,10 @@ button.primary.destructive {
   --nb-editor-faint: rgb(150, 150, 150);
   /* Same tone as ATX `#` marks (see `.cm-md-header-mark`); use for markdown delimiters. */
   --nb-editor-hash-tone: color-mix(in srgb, var(--nb-editor-faint) 34%, var(--nb-editor-paper) 66%);
+  /* `%%…%%` delimiters: lighter than other syntax marks (`--nb-editor-hash-tone`). */
+  --nb-editor-percent-mark-tone: color-mix(in srgb, var(--nb-editor-hash-tone) 44%, var(--nb-editor-paper) 56%);
+  /* `==…==` highlight background (highlighter yellow). */
+  --nb-editor-equal-highlight-bg: #fff59d;
   --nb-editor-accent: rgb(203, 77, 73);
   --nb-editor-inline-code-bg: rgb(240, 240, 240);
   --nb-editor-inline-code-border: rgb(215, 215, 215);
@@ -1405,6 +1484,14 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
   .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-percent-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-equal-highlight-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
@@ -2128,6 +2215,109 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static {
+  box-sizing: border-box;
+  display: block;
+  min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: inherit;
+  white-space: pre-wrap;
+  cursor: default;
+  outline: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static:focus-visible {
+  outline: 1px solid var(--color-interactive-text);
+  outline-offset: 0;
+  border-radius: 0.2rem;
+  padding-inline: 0.12rem;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich {
+  display: block;
+  box-sizing: border-box;
+  min-block-size: 1.35em;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: default;
+  white-space: pre-wrap;
+}
+
+/*
+ * Inactive table cells: same marker / link presentation as non-marker-focus lines in the note editor
+ * (.cm-line:not(.cm-notebox-marker-focus-line) rules ~1397–1420): hide syntax delimiters, wiki
+ * brackets, rule lines, and inline-link URL segments; keep list markers (cm-md-list-mark) visible.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-header-mark {
+  visibility: hidden;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-percent-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-equal-highlight-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-wiki-bracket,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-hr,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-rel-link-href {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-wiki-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host .cm-editor {
   background: transparent;
 }
@@ -2395,6 +2585,25 @@ button.primary.destructive {
   font-weight: 400;
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-percent-mark {
+  color: var(--nb-editor-percent-mark-tone);
+  font-weight: 400;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight-mark {
+  color: var(--nb-editor-percent-mark-tone);
+  font-weight: 400;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight {
+  background: var(--nb-editor-equal-highlight-bg);
+  color: var(--nb-editor-text);
+  border-radius: 2px;
+  padding: 0.06em 0.14em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* ATX heading hashes (HeaderMark): fixed-width left column, hashes right-aligned to meet body text. */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-header-mark {
   display: inline-block;
@@ -2511,7 +2720,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-percent-muted {
   font-size: 0.88em;
-  color: color-mix(in srgb, var(--nb-editor-faint) 55%, var(--nb-editor-text) 45%);
+  color: color-mix(in srgb, var(--nb-editor-faint) 62%, var(--color-border) 38%);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-hr {

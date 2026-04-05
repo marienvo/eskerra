@@ -7,7 +7,7 @@ type AppStatusBarProps = {
 export function AppStatusBar({onOpenSettings}: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
-      <p className="app-status-bar-tagline">Made with ♥️ in Rotterdam</p>
+      <p className="app-status-bar-tagline">Think. Compose. Nothing else.</p>
       <div className="app-status-bar-trailing">
         <button
           type="button"

@@ -1,3 +1,8 @@
+import {
+  acceptCompletion,
+  closeCompletion,
+  completionStatus,
+} from '@codemirror/autocomplete';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {
@@ -15,7 +20,7 @@ import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
-import {MARKDOWN_EXTENSION, isExternalMarkdownHref, stripMarkdownLinkHrefToPathPart} from '@notebox/core';
+import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
   noteMarkdownEditorAppearance,
   noteMarkdownParserExtensions,
@@ -29,14 +34,13 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
-
-function isActivatableRelativeMarkdownHref(href: string): boolean {
-  const part = stripMarkdownLinkHrefToPathPart(href);
-  if (part === '' || isExternalMarkdownHref(part)) {
-    return false;
-  }
-  return part.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase());
-}
+import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {
+  markdownInlineCodeSurroundInputHandler,
+  markdownSelectionAllowMultipleRanges,
+  markdownSelectionSurroundKeymap,
+} from './markdownSelectionSurround';
+import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {
@@ -101,26 +105,6 @@ export type EskerraCellBundleFactory = (
   partial: EskerraTableCellBundlePartial,
 ) => readonly Extension[];
 
-function runWikiLinkOpenAssist(view: EditorView): boolean {
-  const sel = view.state.selection.main;
-  if (!sel.empty) {
-    return false;
-  }
-  const pos = sel.head;
-  if (pos < 1) {
-    return false;
-  }
-  const prev = view.state.doc.sliceString(pos - 1, pos);
-  if (prev !== '[') {
-    return false;
-  }
-  view.dispatch({
-    changes: {from: pos, to: pos, insert: '[]]'},
-    selection: EditorSelection.cursor(pos + 1),
-  });
-  return true;
-}
-
 /**
  * Markdown editing extensions aligned with the main note editor, for one-line table cells.
  */
@@ -173,35 +157,6 @@ export function buildNoteMarkdownCellExtensions(
       return true;
     }
     return false;
-  };
-
-  const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
-    const sel = view.state.selection.main;
-    const wikiInner = wikiLinkActivatableInnerAtDocPosition(
-      view.state.doc,
-      sel.head,
-    );
-    if (wikiInner == null) {
-      return false;
-    }
-    onWikiLinkActivate({inner: wikiInner, at: sel.head});
-    return true;
-  };
-
-  const runMarkdownRelativeLinkActivateFromCaret = (
-    view: EditorView,
-  ): boolean => {
-    const sel = view.state.selection.main;
-    const relHit = markdownActivatableRelativeMdLinkAtPosition(
-      view.state,
-      sel.head,
-      isActivatableRelativeMarkdownHref,
-    );
-    if (relHit == null) {
-      return false;
-    }
-    onMarkdownRelativeLinkActivate({href: relHit.href, at: relHit.hrefFrom});
-    return true;
   };
 
   const pasteOk = () => args.pasteSessionRef.current === args.pasteSessionId;
@@ -357,8 +312,29 @@ export function buildNoteMarkdownCellExtensions(
   const tableNavKeymap = keymap.of([
     {key: 'Tab', run: () => tc.current.onTabFromCell(false)},
     {key: 'Shift-Tab', run: () => tc.current.onTabFromCell(true)},
-    {key: 'Enter', run: () => tc.current.onEnterFromCell()},
-    {key: 'Escape', run: () => tc.current.onEscapeFromCell()},
+    {
+      key: 'Enter',
+      run: view => {
+        const status = completionStatus(view.state);
+        if (status === 'pending') {
+          return true;
+        }
+        if (status === 'active') {
+          return acceptCompletion(view) || true;
+        }
+        return tc.current.onEnterFromCell();
+      },
+    },
+    {
+      key: 'Escape',
+      run: view => {
+        const status = completionStatus(view.state);
+        if (status) {
+          return closeCompletion(view) || true;
+        }
+        return tc.current.onEscapeFromCell();
+      },
+    },
     {key: '|', run: () => true},
   ]);
 
@@ -371,23 +347,18 @@ export function buildNoteMarkdownCellExtensions(
     ...noteMarkdownEditorAppearance,
     history(),
     drawSelection(),
+    markdownSelectionAllowMultipleRanges(),
+    ...markdownSmartExpandExtension(),
+    markdownSelectionSurroundKeymap(),
+    markdownInlineCodeSurroundInputHandler(),
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
     keymap.of([
-      {
-        key: 'Mod-s',
-        run: () => {
-          onSaveShortcut?.();
-          return true;
-        },
-      },
-      {key: '[', run: runWikiLinkOpenAssist},
-      {
-        key: 'Mod-Enter',
-        run: view =>
-          runWikiLinkActivateFromCaret(view)
-          || runMarkdownRelativeLinkActivateFromCaret(view),
-      },
+      ...buildNoteMarkdownVaultKeymapBindings({
+        onSaveShortcut,
+        onWikiLinkActivate,
+        onMarkdownRelativeLinkActivate,
+      }),
       indentWithTab,
       ...defaultKeymap,
       ...historyKeymap,

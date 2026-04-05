@@ -176,3 +176,21 @@ describe('noteMarkdown horizontal rule highlighting', () => {
     expect(innermostHighlightClassAt(doc, pos)).toContain('cm-md-hr');
   });
 });
+
+describe('noteMarkdown percent-muted highlighting', () => {
+  it('applies cm-md-percent-mark to %% delimiters and cm-md-percent-muted to inner span', () => {
+    const doc = '%%muted%%';
+    expect(innermostHighlightClassAt(doc, 0)).toContain('cm-md-percent-mark');
+    expect(innermostHighlightClassAt(doc, 2)).toContain('cm-md-percent-muted');
+    expect(innermostHighlightClassAt(doc, doc.length - 2)).toContain('cm-md-percent-mark');
+  });
+});
+
+describe('noteMarkdown equal-highlight highlighting', () => {
+  it('applies cm-md-equal-highlight-mark to == delimiters and cm-md-equal-highlight to inner span', () => {
+    const doc = '==x==';
+    expect(innermostHighlightClassAt(doc, 0)).toContain('cm-md-equal-highlight-mark');
+    expect(innermostHighlightClassAt(doc, 2)).toContain('cm-md-equal-highlight');
+    expect(innermostHighlightClassAt(doc, doc.length - 2)).toContain('cm-md-equal-highlight-mark');
+  });
+});

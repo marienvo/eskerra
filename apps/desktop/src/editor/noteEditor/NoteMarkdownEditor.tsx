@@ -46,17 +46,25 @@ import {
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
-import {nestedCollapseAllFolds} from './nestedFoldAll';
+import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
+import {
+  markdownInlineCodeSurroundInputHandler,
+  markdownSelectionAllowMultipleRanges,
+  markdownSelectionSurroundKeymap,
+} from './markdownSelectionSurround';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
+import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
@@ -120,6 +128,8 @@ export type NoteMarkdownEditorProps = {
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
   /** Called when the editor gains or loses at least one folded range (fold gutter, lists, etc.). */
   onFoldedRangesPresentChange?: (present: boolean) => void;
+  /** Called when the document gains or loses at least one foldable range (same rules as collapse-all). */
+  onFoldableRangesPresentChange?: (present: boolean) => void;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -164,6 +174,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     placeholder: placeholderText,
     busy,
     onFoldedRangesPresentChange,
+    onFoldableRangesPresentChange,
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -210,6 +221,13 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onFoldedRangesPresentChangeRef.current = onFoldedRangesPresentChange;
   }, [onFoldedRangesPresentChange]);
+
+  const onFoldableRangesPresentChangeRef = useRef(
+    onFoldableRangesPresentChange,
+  );
+  useEffect(() => {
+    onFoldableRangesPresentChangeRef.current = onFoldableRangesPresentChange;
+  }, [onFoldableRangesPresentChange]);
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -436,57 +454,6 @@ const NoteMarkdownEditorImpl = forwardRef<
       return false;
     };
 
-    const runWikiLinkOpenAssist = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      if (!sel.empty) {
-        return false;
-      }
-      const pos = sel.head;
-      if (pos < 1) {
-        return false;
-      }
-      const prev = view.state.doc.sliceString(pos - 1, pos);
-      if (prev !== '[') {
-        return false;
-      }
-      view.dispatch({
-        changes: {from: pos, to: pos, insert: '[]]'},
-        // Keep caret between opening and closing wiki brackets: [[|]]
-        selection: EditorSelection.cursor(pos + 1),
-      });
-      return true;
-    };
-
-    const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      const inner = wikiLinkActivatableInnerAtDocPosition(
-        view.state.doc,
-        sel.head,
-      );
-      if (inner == null) {
-        return false;
-      }
-      onWikiLinkActivateRef.current({inner, at: sel.head});
-      return true;
-    };
-
-    const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      const relHit = markdownActivatableRelativeMdLinkAtPosition(
-        view.state,
-        sel.head,
-        isActivatableRelativeMarkdownHref,
-      );
-      if (relHit == null) {
-        return false;
-      }
-      onMarkdownRelativeLinkActivateRef.current({
-        href: relHit.href,
-        at: relHit.hrefFrom,
-      });
-      return true;
-    };
-
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
@@ -510,24 +477,17 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       history(),
       drawSelection(),
+      markdownSelectionAllowMultipleRanges(),
+      ...markdownSmartExpandExtension(),
+      markdownSelectionSurroundKeymap(),
+      markdownInlineCodeSurroundInputHandler(),
       keymap.of([
-        {
-          key: 'Mod-s',
-          run: () => {
-            onSaveShortcutRef.current?.();
-            return true;
-          },
-        },
-        {
-          key: '[',
-          run: runWikiLinkOpenAssist,
-        },
-        {
-          key: 'Mod-Enter',
-          run: view =>
-            runWikiLinkActivateFromCaret(view)
-            || runMarkdownRelativeLinkActivateFromCaret(view),
-        },
+        ...buildNoteMarkdownVaultKeymapBindings({
+          onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+          onMarkdownRelativeLinkActivate: p =>
+            onMarkdownRelativeLinkActivateRef.current(p),
+        }),
         indentWithTab,
         ...foldKeymap,
         ...defaultKeymap,
@@ -570,6 +530,11 @@ const NoteMarkdownEditorImpl = forwardRef<
           ...partial,
         }),
       ),
+      eskerraTableShellLinkBridgeFacet.of({
+        onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+        onMarkdownRelativeLinkActivate: p =>
+          onMarkdownRelativeLinkActivateRef.current(p),
+      }),
       ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({
         vaultRoot: vaultRootRef,
@@ -619,6 +584,14 @@ const NoteMarkdownEditorImpl = forwardRef<
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
+          const onFoldable = onFoldableRangesPresentChangeRef.current;
+          if (onFoldable) {
+            const prevFoldable = foldableRangesPresent(update.startState);
+            const nextFoldable = foldableRangesPresent(update.state);
+            if (prevFoldable !== nextFoldable) {
+              onFoldable(nextFoldable);
+            }
+          }
         }
         const onFold = onFoldedRangesPresentChangeRef.current;
         if (onFold) {
@@ -642,9 +615,13 @@ const NoteMarkdownEditorImpl = forwardRef<
     });
     viewRef.current = view;
     onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(view.state));
+    onFoldableRangesPresentChangeRef.current?.(
+      foldableRangesPresent(view.state),
+    );
 
     return () => {
       onFoldedRangesPresentChangeRef.current?.(false);
+      onFoldableRangesPresentChangeRef.current?.(false);
       view.destroy();
       viewRef.current = null;
       codemirrorBootExtensionsRef.current = null;
@@ -717,6 +694,9 @@ const NoteMarkdownEditorImpl = forwardRef<
         dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
         onFoldedRangesPresentChangeRef.current?.(
           foldedRangesPresent(view.state),
+        );
+        onFoldableRangesPresentChangeRef.current?.(
+          foldableRangesPresent(view.state),
         );
       },
       unfoldAllFolds: () => {

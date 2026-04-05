@@ -90,6 +90,10 @@ type VaultTabProps = {
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
+  editorHistoryCanGoBack: boolean;
+  editorHistoryCanGoForward: boolean;
+  onEditorHistoryGoBack: () => void;
+  onEditorHistoryGoForward: () => void;
 };
 
 export function VaultTab({
@@ -128,6 +132,10 @@ export function VaultTab({
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
+  editorHistoryCanGoBack,
+  editorHistoryCanGoForward,
+  onEditorHistoryGoBack,
+  onEditorHistoryGoForward,
 }: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -142,6 +150,7 @@ export function VaultTab({
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
+  const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -628,39 +637,69 @@ export function VaultTab({
         right={
           <div className="panel-surface">
             <div className="pane-header">
-              <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
-                {editorPaneTitle}
-              </span>
-              {!composingNewEntry && selectedUri ? (
+              <div className="pane-header-start">
                 <button
                   type="button"
                   className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={() => openRenameDialog(selectedUri)}
-                  disabled={busy}
-                  aria-label="Rename note"
-                  data-tooltip="Rename note"
-                  data-tooltip-placement="inline-start"
+                  onClick={onEditorHistoryGoBack}
+                  disabled={busy || !editorHistoryCanGoBack}
+                  aria-label="Back"
+                  data-tooltip="Back"
+                  data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="drive_file_rename_outline" size={12} />
+                    <MaterialIcon name="chevron_left" size={12} />
                   </span>
                 </button>
-              ) : null}
-              {composingNewEntry ? (
                 <button
                   type="button"
                   className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={onCancelNewEntry}
-                  disabled={busy}
-                  aria-label="Cancel new entry"
-                  data-tooltip="Cancel"
-                  data-tooltip-placement="inline-start"
+                  onClick={onEditorHistoryGoForward}
+                  disabled={busy || !editorHistoryCanGoForward}
+                  aria-label="Forward"
+                  data-tooltip="Forward"
+                  data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="clear" size={12} />
+                    <MaterialIcon name="chevron_right" size={12} />
                   </span>
                 </button>
-              ) : null}
+                <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
+                  {editorPaneTitle}
+                </span>
+              </div>
+              <div className="pane-header-trailing-actions">
+                {!composingNewEntry && selectedUri ? (
+                  <button
+                    type="button"
+                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                    onClick={() => openRenameDialog(selectedUri)}
+                    disabled={busy}
+                    aria-label="Rename note"
+                    data-tooltip="Rename note"
+                    data-tooltip-placement="inline-start"
+                  >
+                    <span className="pane-header-add-btn__glyph" aria-hidden>
+                      <MaterialIcon name="drive_file_rename_outline" size={12} />
+                    </span>
+                  </button>
+                ) : null}
+                {composingNewEntry ? (
+                  <button
+                    type="button"
+                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                    onClick={onCancelNewEntry}
+                    disabled={busy}
+                    aria-label="Cancel new entry"
+                    data-tooltip="Cancel"
+                    data-tooltip-placement="inline-start"
+                  >
+                    <span className="pane-header-add-btn__glyph" aria-hidden>
+                      <MaterialIcon name="clear" size={12} />
+                    </span>
+                  </button>
+                ) : null}
+              </div>
             </div>
             {editorOpen ? (
               <>
@@ -668,42 +707,46 @@ export function VaultTab({
                   <div className="note-markdown-editor-scroll">
                     <div className="note-markdown-editor-page">
                       <div className="note-markdown-editor-fold-rail">
-                        <div className="note-markdown-editor-fold-bulk-anchor">
-                          <button
-                            type="button"
-                            className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
-                            onClick={() => {
-                              const ed = inboxEditorRef.current;
-                              if (!ed) {
-                                return;
+                        {editorHasFoldedRanges || editorHasFoldableRanges ? (
+                          <div className="note-markdown-editor-fold-bulk-anchor">
+                            <button
+                              type="button"
+                              className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                              onClick={() => {
+                                const ed = inboxEditorRef.current;
+                                if (!ed) {
+                                  return;
+                                }
+                                if (editorHasFoldedRanges) {
+                                  ed.unfoldAllFolds();
+                                } else {
+                                  ed.collapseAllFolds();
+                                }
+                              }}
+                              disabled={busy}
+                              aria-label={
+                                editorHasFoldedRanges
+                                  ? 'Expand all folds'
+                                  : 'Collapse all folds'
                               }
-                              if (editorHasFoldedRanges) {
-                                ed.unfoldAllFolds();
-                              } else {
-                                ed.collapseAllFolds();
+                              data-tooltip={
+                                editorHasFoldedRanges
+                                  ? 'Expand all folds'
+                                  : 'Collapse all folds'
                               }
-                            }}
-                            disabled={busy}
-                            aria-label={
-                              editorHasFoldedRanges
-                                ? 'Expand all folds'
-                                : 'Collapse all folds'
-                            }
-                            data-tooltip={
-                              editorHasFoldedRanges
-                                ? 'Expand all folds'
-                                : 'Collapse all folds'
-                            }
-                            data-tooltip-placement="inline-end"
-                          >
-                            <MaterialIcon
-                              name={
-                                editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
-                              }
-                              size={12}
-                            />
-                          </button>
-                        </div>
+                              data-tooltip-placement="inline-end"
+                            >
+                              <MaterialIcon
+                                name={
+                                  editorHasFoldedRanges
+                                    ? 'unfold_more'
+                                    : 'unfold_less'
+                                }
+                                size={12}
+                              />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="note-markdown-editor-paper">
                         <NoteMarkdownEditor
@@ -731,6 +774,9 @@ export function VaultTab({
                           }
                           busy={busy}
                           onFoldedRangesPresentChange={setEditorHasFoldedRanges}
+                          onFoldableRangesPresentChange={
+                            setEditorHasFoldableRanges
+                          }
                         />
                         {!composingNewEntry && selectedUri ? (
                           <section className="inbox-backlinks" aria-label="Backlinks">
