@@ -1,3 +1,8 @@
+import {
+  acceptCompletion,
+  closeCompletion,
+  completionStatus,
+} from '@codemirror/autocomplete';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {
@@ -349,8 +354,29 @@ export function buildNoteMarkdownCellExtensions(
   const tableNavKeymap = keymap.of([
     {key: 'Tab', run: () => tc.current.onTabFromCell(false)},
     {key: 'Shift-Tab', run: () => tc.current.onTabFromCell(true)},
-    {key: 'Enter', run: () => tc.current.onEnterFromCell()},
-    {key: 'Escape', run: () => tc.current.onEscapeFromCell()},
+    {
+      key: 'Enter',
+      run: view => {
+        const status = completionStatus(view.state);
+        if (status === 'pending') {
+          return true;
+        }
+        if (status === 'active') {
+          return acceptCompletion(view) || true;
+        }
+        return tc.current.onEnterFromCell();
+      },
+    },
+    {
+      key: 'Escape',
+      run: view => {
+        const status = completionStatus(view.state);
+        if (status) {
+          return closeCompletion(view) || true;
+        }
+        return tc.current.onEscapeFromCell();
+      },
+    },
     {key: '|', run: () => true},
   ]);
 
