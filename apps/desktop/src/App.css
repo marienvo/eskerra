@@ -812,6 +812,100 @@ a:focus:not(:focus-visible) {
   white-space: nowrap;
 }
 
+.editor-open-tabs-placeholder {
+  color: var(--color-muted);
+}
+
+.editor-open-tabs-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  padding-bottom: 1px;
+}
+
+.editor-open-tab-pill {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  max-width: 11rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-text) 12%, var(--color-border));
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+
+.editor-open-tab-pill--active {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.editor-open-tab-pill__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.12rem 0.05rem 0.12rem 0.38rem;
+  border: none;
+  border-radius: 999px 0 0 999px;
+  background: transparent;
+  cursor: default;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-synthesis: none;
+  text-align: left;
+}
+
+.editor-open-tab-pill__main:disabled {
+  opacity: 0.55;
+}
+
+.editor-open-tab-pill__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  opacity: 0.75;
+}
+
+.editor-open-tab-pill__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-open-tab-pill__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0 999px 999px 0;
+  border-left: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  background: transparent;
+  cursor: default;
+  color: var(--color-muted);
+}
+
+.editor-open-tab-pill__close:disabled {
+  opacity: 0.45;
+}
+
+.editor-open-tab-pill__close:not(:disabled):hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
 /* Episodes list: matches mobile PodcastsTabHeader vault-refresh strip (indeterminate). */
 .episodes-refresh-strip {
   flex-shrink: 0;

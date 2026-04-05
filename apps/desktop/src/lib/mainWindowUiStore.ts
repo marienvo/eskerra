@@ -8,6 +8,8 @@ export type MainTabId = 'podcasts' | 'inbox';
 export type StoredMainWindowInbox = {
   composingNewEntry: boolean;
   selectedUri: string | null;
+  /** Open editor tabs (vault markdown URIs); optional for backward compatibility. */
+  openTabUris?: string[];
 };
 
 export type StoredMainWindowUi = {
@@ -54,6 +56,20 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     } else if (typeof ib.selectedUri === 'string') {
       const t = ib.selectedUri.trim();
       inbox.selectedUri = t === '' ? null : t;
+    }
+    if (Array.isArray(ib.openTabUris)) {
+      const uris: string[] = [];
+      for (const item of ib.openTabUris) {
+        if (typeof item === 'string') {
+          const u = item.trim();
+          if (u) {
+            uris.push(u);
+          }
+        }
+      }
+      if (uris.length > 0) {
+        inbox.openTabUris = uris;
+      }
     }
   }
 

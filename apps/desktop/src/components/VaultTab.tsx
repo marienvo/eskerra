@@ -1,5 +1,6 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {MutableRefObject, RefObject} from 'react';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
@@ -35,6 +36,7 @@ import {
 import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
 
 import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
+import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {MaterialIcon} from './MaterialIcon';
 import {VaultPaneTree} from './VaultPaneTree';
 
@@ -101,6 +103,13 @@ type VaultTabProps = {
   onEditorHistoryGoForward: () => void;
   /** Workspace: hide "Linked from" for one frame after `loadMarkdown`. */
   inboxBacklinksDeferFirstPaint: boolean;
+  editorOpenTabUris: readonly string[];
+  onActivateOpenTab: (uri: string) => void;
+  onCloseEditorTab: (uri: string) => void;
+  onCloseOtherEditorTabs: (keepUri: string) => void;
+  onCloseAllEditorTabs: () => void;
+  onReopenClosedEditorTab: () => void;
+  canReopenClosedEditorTab: boolean;
 };
 
 export function VaultTab({
@@ -147,6 +156,13 @@ export function VaultTab({
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
   inboxBacklinksDeferFirstPaint,
+  editorOpenTabUris,
+  onActivateOpenTab,
+  onCloseEditorTab,
+  onCloseOtherEditorTabs,
+  onCloseAllEditorTabs,
+  onReopenClosedEditorTab,
+  canReopenClosedEditorTab,
 }: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -708,25 +724,73 @@ export function VaultTab({
                     <MaterialIcon name="chevron_right" size={12} />
                   </span>
                 </button>
-                <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
-                  {editorPaneTitle}
-                </span>
+                {composingNewEntry ? (
+                  <span
+                    className="pane-title pane-title--truncate"
+                    title={editorPaneTitle}
+                  >
+                    {editorPaneTitle}
+                  </span>
+                ) : (
+                  <EditorPaneOpenNoteTabs
+                    notes={notes}
+                    tabUris={editorOpenTabUris}
+                    selectedUri={selectedUri}
+                    busy={busy}
+                    onActivateTab={onActivateOpenTab}
+                    onCloseTab={onCloseEditorTab}
+                    onRenameNote={openRenameDialog}
+                    onCloseOtherTabs={onCloseOtherEditorTabs}
+                  />
+                )}
               </div>
               <div className="pane-header-trailing-actions">
-                {!composingNewEntry && selectedUri ? (
-                  <button
-                    type="button"
-                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                    onClick={() => openRenameDialog(selectedUri)}
-                    disabled={busy}
-                    aria-label="Rename note"
-                    data-tooltip="Rename note"
-                    data-tooltip-placement="inline-start"
-                  >
-                    <span className="pane-header-add-btn__glyph" aria-hidden>
-                      <MaterialIcon name="drive_file_rename_outline" size={12} />
-                    </span>
-                  </button>
+                {!composingNewEntry
+                && (editorOpenTabUris.length > 0 || canReopenClosedEditorTab) ? (
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                        disabled={busy}
+                        aria-label="Editor tab actions"
+                        data-tooltip="Editor tab actions"
+                        data-tooltip-placement="inline-start"
+                      >
+                        <span className="pane-header-add-btn__glyph" aria-hidden>
+                          <MaterialIcon name="more_vert" size={12} />
+                        </span>
+                      </button>
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content
+                        className="note-list-context-menu"
+                        side="bottom"
+                        align="end"
+                        sideOffset={4}
+                        collisionPadding={8}
+                      >
+                        <DropdownMenu.Item
+                          className="note-list-context-menu__item"
+                          disabled={busy || editorOpenTabUris.length === 0}
+                          onSelect={() => {
+                            onCloseAllEditorTabs();
+                          }}
+                        >
+                          Close all
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          className="note-list-context-menu__item"
+                          disabled={busy || !canReopenClosedEditorTab}
+                          onSelect={() => {
+                            onReopenClosedEditorTab();
+                          }}
+                        >
+                          Reopen closed tab
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
                 ) : null}
                 {composingNewEntry ? (
                   <button

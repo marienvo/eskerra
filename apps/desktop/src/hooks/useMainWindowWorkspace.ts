@@ -82,6 +82,20 @@ import {
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
 import {
+  isEditorClosedTabReopenable,
+  pushClosedTabsFromCloseAll,
+  pushClosedTabsFromCloseOther,
+} from '../lib/editorClosedTabStack';
+import {
+  closeOtherOpenTabs,
+  ensureOpenTab,
+  normalizeOpenTabList,
+  pickNeighborUriAfterRemovingTab,
+  remapOpenTabUris,
+  removeOpenTab,
+  removeOpenTabsWhere,
+} from '../lib/editorOpenTabs';
+import {
   mergeInboxNoteBodyIntoCache,
   resolveInboxCachedBodyForEditor,
 } from './inboxNoteBodyCache';
@@ -277,6 +291,14 @@ export type UseMainWindowWorkspaceResult = {
    * for that frame so it does not raster with the fresh editor subtree.
    */
   inboxBacklinksDeferFirstPaint: boolean;
+  /** Open note tabs (IDE-style); normalized vault markdown URIs, left-to-right order. */
+  editorOpenTabUris: readonly string[];
+  activateOpenTab: (uri: string) => void;
+  closeEditorTab: (uri: string) => void;
+  closeOtherEditorTabs: (keepUri: string) => void;
+  closeAllEditorTabs: () => void;
+  reopenLastClosedEditorTab: () => void;
+  canReopenClosedEditorTab: boolean;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -288,6 +310,7 @@ export function useMainWindowWorkspace(options: {
     vaultRoot: string;
     composingNewEntry: boolean;
     selectedUri: string | null;
+    openTabUris?: readonly string[] | null;
   } | null;
   inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
@@ -331,6 +354,8 @@ export function useMainWindowWorkspace(options: {
   const [editorDocumentHistory, setEditorDocumentHistory] = useState(() =>
     emptyEditorDocumentHistory(),
   );
+  const [editorOpenTabUris, setEditorOpenTabUris] = useState<string[]>([]);
+  const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
@@ -352,6 +377,10 @@ export function useMainWindowWorkspace(options: {
   const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
   const editorDocumentHistoryRef = useRef(emptyEditorDocumentHistory());
+  const editorOpenTabUrisRef = useRef<string[]>([]);
+  /** User-initiated tab closes only (for Reopen closed tab). */
+  const editorClosedTabsStackRef = useRef<string[]>([]);
+  const notesRef = useRef<NoteRow[]>([]);
   const editorShellScrollByUriRef = useRef(
     new Map<string, {top: number; left: number}>(),
   );
@@ -371,6 +400,39 @@ export function useMainWindowWorkspace(options: {
   useLayoutEffect(() => {
     editorDocumentHistoryRef.current = editorDocumentHistory;
   }, [editorDocumentHistory]);
+
+  useLayoutEffect(() => {
+    editorOpenTabUrisRef.current = editorOpenTabUris;
+  }, [editorOpenTabUris]);
+
+  useLayoutEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+
+  const bumpEditorClosedStack = useCallback(() => {
+    setEditorClosedStackVersion(v => v + 1);
+  }, []);
+
+  /* editorClosedStackVersion re-runs this when the ref-backed closed-tab stack mutates. */
+  const canReopenClosedEditorTab = useMemo(() => {
+    const root = vaultRoot;
+    if (!root) {
+      return false;
+    }
+    const noteSet = new Set(
+      notes.map(n => n.uri.replace(/\\/g, '/')),
+    );
+    const stack = editorClosedTabsStackRef.current;
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (
+        isEditorClosedTabReopenable(stack[i]!, root, noteSet)
+      ) {
+        return true;
+      }
+    }
+    return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editorClosedStackVersion syncs ref stack mutations to UI
+  }, [vaultRoot, notes, editorClosedStackVersion]);
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
@@ -684,11 +746,138 @@ export function useMainWindowWorkspace(options: {
       if (!options?.skipHistory) {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
+      setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
       setComposingNewEntry(false);
       setSelectedUri(targetNorm);
     },
     [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef],
   );
+
+  const activateOpenTab = useCallback(
+    (uri: string) => {
+      void openMarkdownInEditor(uri, {skipHistory: true});
+    },
+    [openMarkdownInEditor],
+  );
+
+  const closeEditorTab = useCallback(
+    (uri: string) => {
+      void (async () => {
+        const norm = normalizeEditorDocUri(uri);
+        const tabsBefore = editorOpenTabUrisRef.current;
+        const wasSelected = selectedUriRef.current === norm;
+
+        if (wasSelected) {
+          await flushInboxSaveRef.current();
+        } else {
+          await saveChainRef.current.catch(() => undefined);
+        }
+
+        const nextUri = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
+
+        editorClosedTabsStackRef.current.push(norm);
+        bumpEditorClosedStack();
+
+        setEditorOpenTabUris(prev => removeOpenTab(prev, norm));
+        setEditorDocumentHistory(prev =>
+          removeEditorHistoryUris(prev, u => u === norm),
+        );
+        editorShellScrollByUriRef.current.delete(norm);
+
+        if (!wasSelected) {
+          return;
+        }
+
+        if (nextUri) {
+          await openMarkdownInEditor(nextUri, {skipHistory: true});
+        } else {
+          selectedUriRef.current = null;
+          composingNewEntryRef.current = false;
+          lastPersistedRef.current = null;
+          setSelectedUri(null);
+          setComposingNewEntry(false);
+          setEditorBody('');
+          setInboxEditorResetNonce(n => n + 1);
+        }
+      })();
+    },
+    [openMarkdownInEditor, bumpEditorClosedStack],
+  );
+
+  const closeOtherEditorTabs = useCallback(
+    (keepUri: string) => {
+      void (async () => {
+        const keep = normalizeEditorDocUri(keepUri);
+        const prevTabs = [...editorOpenTabUrisRef.current];
+        await saveChainRef.current.catch(() => undefined);
+        if (selectedUriRef.current !== keep) {
+          await openMarkdownInEditor(keep, {skipHistory: true});
+        } else {
+          await flushInboxSaveRef.current();
+        }
+        pushClosedTabsFromCloseOther(editorClosedTabsStackRef.current, prevTabs, keep);
+        bumpEditorClosedStack();
+        setEditorOpenTabUris(prev => {
+          for (const u of prev) {
+            const n = normalizeEditorDocUri(u);
+            if (n !== keep) {
+              editorShellScrollByUriRef.current.delete(n);
+            }
+          }
+          return closeOtherOpenTabs(prev, keep);
+        });
+        setEditorDocumentHistory(prev =>
+          removeEditorHistoryUris(prev, u => u !== keep),
+        );
+      })();
+    },
+    [openMarkdownInEditor, bumpEditorClosedStack],
+  );
+
+  const closeAllEditorTabs = useCallback(() => {
+    void (async () => {
+      await flushInboxSaveRef.current();
+      const tabs = normalizeOpenTabList(editorOpenTabUrisRef.current);
+      if (tabs.length === 0) {
+        return;
+      }
+      const sel = selectedUriRef.current
+        ? normalizeEditorDocUri(selectedUriRef.current)
+        : null;
+      pushClosedTabsFromCloseAll(editorClosedTabsStackRef.current, tabs, sel);
+      bumpEditorClosedStack();
+      for (const u of tabs) {
+        editorShellScrollByUriRef.current.delete(u);
+      }
+      setEditorOpenTabUris([]);
+      setEditorDocumentHistory(emptyEditorDocumentHistory());
+      selectedUriRef.current = null;
+      composingNewEntryRef.current = false;
+      lastPersistedRef.current = null;
+      setSelectedUri(null);
+      setComposingNewEntry(false);
+      setEditorBody('');
+      setInboxEditorResetNonce(n => n + 1);
+    })();
+  }, [bumpEditorClosedStack]);
+
+  const reopenLastClosedEditorTab = useCallback(() => {
+    void (async () => {
+      const root = vaultRootRef.current;
+      const stack = editorClosedTabsStackRef.current;
+      while (stack.length > 0) {
+        const uri = stack.pop()!;
+        bumpEditorClosedStack();
+        const noteSet = new Set(
+          notesRef.current.map(n => n.uri.replace(/\\/g, '/')),
+        );
+        if (isEditorClosedTabReopenable(uri, root, noteSet)) {
+          await openMarkdownInEditor(uri);
+          return;
+        }
+      }
+    })();
+  }, [openMarkdownInEditor, bumpEditorClosedStack]);
 
   const hydrateVault = useCallback(
     async (root: string) => {
@@ -720,6 +909,9 @@ export function useMainWindowWorkspace(options: {
         setSettingsName(label !== '' ? label : 'Eskerra');
         await refreshNotes(root);
         setEditorDocumentHistory(emptyEditorDocumentHistory());
+        setEditorOpenTabUris([]);
+        editorClosedTabsStackRef.current = [];
+        setEditorClosedStackVersion(n => n + 1);
         setSelectedUri(null);
         setComposingNewEntry(false);
         setEditorBody('');
@@ -1074,18 +1266,32 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       autosaveSchedulerRef.current.cancel();
-      const wasOpen = selectedUri === uri;
-      if (wasOpen) {
-        editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(uri));
-        selectedUriRef.current = null;
-        composingNewEntryRef.current = false;
-        lastPersistedRef.current = null;
-        setSelectedUri(null);
-        setComposingNewEntry(false);
-        setEditorBody('');
-        setInboxEditorResetNonce(n => n + 1);
-      }
       await saveChainRef.current.catch(() => undefined);
+
+      const norm = normalizeEditorDocUri(uri);
+      const tabsBefore = editorOpenTabUrisRef.current;
+      const wasOpen = selectedUriRef.current === norm;
+      const nextAfterRemove = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
+
+      setEditorOpenTabUris(prev => removeOpenTab(prev, uri));
+      setEditorDocumentHistory(prev =>
+        removeEditorHistoryUris(prev, u => u === norm),
+      );
+      editorShellScrollByUriRef.current.delete(norm);
+
+      if (wasOpen) {
+        if (nextAfterRemove) {
+          await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
+        } else {
+          selectedUriRef.current = null;
+          composingNewEntryRef.current = false;
+          lastPersistedRef.current = null;
+          setSelectedUri(null);
+          setComposingNewEntry(false);
+          setEditorBody('');
+          setInboxEditorResetNonce(n => n + 1);
+        }
+      }
 
       setBusy(true);
       setErr(null);
@@ -1099,16 +1305,13 @@ export function useMainWindowWorkspace(options: {
         });
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
-        setEditorDocumentHistory(prev =>
-          removeEditorHistoryUris(prev, u => u === normalizeEditorDocUri(uri)),
-        );
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, selectedUri],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
   );
 
   const runRenameWithWikiLinkMaintenance = useCallback(
@@ -1280,6 +1483,7 @@ export function useMainWindowWorkspace(options: {
           setEditorDocumentHistory(prev =>
             remapEditorHistoryPrefix(prev, uri, nextUri),
           );
+          setEditorOpenTabUris(prev => remapOpenTabUris(prev, uri, nextUri));
         }
         if (applyResult.failed.length > 0) {
           const list = applyResult.failed.map(f => f.uri).join(', ');
@@ -1487,11 +1691,12 @@ export function useMainWindowWorkspace(options: {
       }
       autosaveSchedulerRef.current.cancel();
       const normDir = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+      const tabsBeforeDelete = editorOpenTabUrisRef.current;
       const selected = selectedUriRef.current?.replace(/\\/g, '/');
-      if (
-        selected
-        && (selected === normDir || selected.startsWith(`${normDir}/`))
-      ) {
+      const clearsSelection =
+        selected != null
+        && (selected === normDir || selected.startsWith(`${normDir}/`));
+      if (clearsSelection) {
         selectedUriRef.current = null;
         composingNewEntryRef.current = false;
         lastPersistedRef.current = null;
@@ -1521,12 +1726,21 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        const tabPred = (u: string) => {
+          const f = normDir;
+          return u === f || u.startsWith(`${f}/`);
+        };
+        const newTabs = removeOpenTabsWhere(tabsBeforeDelete, tabPred);
+        setEditorOpenTabUris(newTabs);
         setEditorDocumentHistory(prev =>
           removeEditorHistoryUris(prev, u => {
             const f = normDir;
             return u === f || u.startsWith(`${f}/`);
           }),
         );
+        if (clearsSelection && newTabs.length > 0) {
+          await openMarkdownInEditor(newTabs[0]!, {skipHistory: true});
+        }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -1535,7 +1749,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
   );
 
   const renameFolder = useCallback(
@@ -1606,6 +1820,7 @@ export function useMainWindowWorkspace(options: {
         setEditorDocumentHistory(prev =>
           remapEditorHistoryPrefix(prev, oldUri, normalizedNext),
         );
+        setEditorOpenTabUris(prev => remapOpenTabUris(prev, oldUri, normalizedNext));
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -1698,6 +1913,9 @@ export function useMainWindowWorkspace(options: {
       setEditorDocumentHistory(prev =>
         remapEditorHistoryPrefix(prev, result.previousUri, result.nextUri),
       );
+      setEditorOpenTabUris(prev =>
+        remapOpenTabUris(prev, result.previousUri, result.nextUri),
+      );
     },
     [vaultRoot],
   );
@@ -1744,6 +1962,7 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       autosaveSchedulerRef.current.cancel();
+      const tabsBeforeBulk = editorOpenTabUrisRef.current;
       const normSel = selectedUriRef.current?.replace(/\\/g, '/');
       const shouldClearEditor =
         normSel != null
@@ -1819,11 +2038,18 @@ export function useMainWindowWorkspace(options: {
             vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
           ),
         );
+        const newTabs = removeOpenTabsWhere(tabsBeforeBulk, u =>
+          vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
+        );
+        setEditorOpenTabUris(newTabs);
         const sm = editorShellScrollByUriRef.current;
         for (const key of [...sm.keys()]) {
           if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
             sm.delete(key);
           }
+        }
+        if (shouldClearEditor && newTabs.length > 0) {
+          await openMarkdownInEditor(newTabs[0]!, {skipHistory: true});
         }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
@@ -1834,7 +2060,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
   );
 
   const bulkMoveVaultTreeItems = useCallback(
@@ -1955,18 +2181,39 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
+      const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+      const filterStoredTab = (raw: string) => {
+        const uri = raw.replace(/\\/g, '/');
+        const inVault = uri === root || uri.startsWith(`${root}/`);
+        return (
+          inVault
+          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'))
+        );
+      };
+      const rawTabs = restoredInboxState.openTabUris;
+      let restoredTabs: string[] = [];
+      if (rawTabs != null && rawTabs.length > 0) {
+        const filtered = rawTabs.filter(filterStoredTab);
+        if (filtered.length > 0) {
+          restoredTabs = normalizeOpenTabList(filtered);
+          setEditorOpenTabUris(restoredTabs);
+        }
+      }
       if (restoredInboxState.composingNewEntry) {
         startNewEntry();
       } else if (restoredInboxState.selectedUri) {
         const uri = restoredInboxState.selectedUri.replace(/\\/g, '/');
-        const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
         const inVault = uri === root || uri.startsWith(`${root}/`);
-        if (
+        const selectedOk =
           inVault
-          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'))
-        ) {
+          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'));
+        if (selectedOk) {
           selectNote(restoredInboxState.selectedUri);
+        } else if (restoredTabs.length > 0) {
+          selectNote(restoredTabs[0]!);
         }
+      } else if (restoredTabs.length > 0) {
+        selectNote(restoredTabs[0]!);
       }
     }
     setInboxShellRestored(true);
@@ -2030,5 +2277,12 @@ export function useMainWindowWorkspace(options: {
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferFirstPaint,
+    editorOpenTabUris,
+    activateOpenTab,
+    closeEditorTab,
+    closeOtherEditorTabs,
+    closeAllEditorTabs,
+    reopenLastClosedEditorTab,
+    canReopenClosedEditorTab,
   };
 }

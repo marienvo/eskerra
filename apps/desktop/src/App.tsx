@@ -82,6 +82,7 @@ export default function App() {
     vaultRoot: string;
     composingNewEntry: boolean;
     selectedUri: string | null;
+    openTabUris?: readonly string[];
   } | null>(null);
   const {
     vaultRoot,
@@ -132,6 +133,13 @@ export default function App() {
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferFirstPaint,
+    editorOpenTabUris,
+    activateOpenTab,
+    closeEditorTab,
+    closeOtherEditorTabs,
+    closeAllEditorTabs,
+    reopenLastClosedEditorTab,
+    canReopenClosedEditorTab,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -309,6 +317,7 @@ export default function App() {
             vaultRoot: ui.vaultRoot,
             composingNewEntry: ui.inbox.composingNewEntry,
             selectedUri: ui.inbox.selectedUri,
+            openTabUris: ui.inbox.openTabUris,
           });
         }
         setLayoutsReady(true);
@@ -358,6 +367,7 @@ export default function App() {
       inbox: {
         composingNewEntry,
         selectedUri,
+        openTabUris: [...editorOpenTabUris],
       },
     };
     const t = window.setTimeout(() => {
@@ -372,6 +382,7 @@ export default function App() {
     playerDockVisible,
     selectedUri,
     composingNewEntry,
+    editorOpenTabUris,
     inboxShellRestored,
   ]);
 
@@ -709,6 +720,13 @@ export default function App() {
                     onEditorHistoryGoBack={editorHistoryGoBack}
                     onEditorHistoryGoForward={editorHistoryGoForward}
                     inboxBacklinksDeferFirstPaint={inboxBacklinksDeferFirstPaint}
+                    editorOpenTabUris={editorOpenTabUris}
+                    onActivateOpenTab={activateOpenTab}
+                    onCloseEditorTab={closeEditorTab}
+                    onCloseOtherEditorTabs={closeOtherEditorTabs}
+                    onCloseAllEditorTabs={closeAllEditorTabs}
+                    onReopenClosedEditorTab={reopenLastClosedEditorTab}
+                    canReopenClosedEditorTab={canReopenClosedEditorTab}
                   />
                 </div>
                 {podcastsTabMounted ? (

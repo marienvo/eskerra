@@ -6,6 +6,7 @@ import {
   keepOnlyOpenTab,
   normalizeOpenTabList,
   pickNeighborUriAfterRemovingTab,
+  pickSurvivorAfterSelectedRemovedFromTabs,
   remapOpenTabUris,
   removeOpenTab,
   removeOpenTabsWhere,
@@ -33,6 +34,24 @@ describe('ensureOpenTab', () => {
 describe('removeOpenTab', () => {
   it('removes by normalized match', () => {
     expect(removeOpenTab(['/a.md', '/b.md'], ' /a.md ')).toEqual(['/b.md']);
+  });
+});
+
+describe('pickSurvivorAfterSelectedRemovedFromTabs', () => {
+  it('returns selected when still open', () => {
+    expect(
+      pickSurvivorAfterSelectedRemovedFromTabs(['/a.md', '/b.md'], ['/a.md', '/b.md'], '/a.md'),
+    ).toBe('/a.md');
+  });
+
+  it('prefers right survivor in old order', () => {
+    expect(
+      pickSurvivorAfterSelectedRemovedFromTabs(
+        ['/a.md', '/b.md', '/c.md'],
+        ['/a.md', '/c.md'],
+        '/b.md',
+      ),
+    ).toBe('/c.md');
   });
 });
 
