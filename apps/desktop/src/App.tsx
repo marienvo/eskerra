@@ -37,6 +37,7 @@ import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
+import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
@@ -97,6 +98,9 @@ export default function App() {
     diskConflict,
     resolveDiskConflictReloadFromDisk,
     resolveDiskConflictKeepLocal,
+    diskConflictSoft,
+    elevateDiskConflictSoftToBlocking,
+    dismissDiskConflictSoft,
     composingNewEntry,
     inboxContentByUri,
     vaultMarkdownRefs,
@@ -684,12 +688,36 @@ export default function App() {
               </span>
             </div>
           ) : null}
-          {!err && !diskConflict && renameLinkProgress ? (
+          {!err &&
+          !diskConflict &&
+          diskConflictSoft &&
+          selectedUri != null &&
+          normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
+            <div className="info-banner info-banner--inline-actions" aria-live="polite">
+              <span>
+                A version on disk differs from your unsaved draft. Your edits stay primary until you
+                save. Open full resolve only if you need to reconcile with disk.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => elevateDiskConflictSoftToBlocking()}
+                >
+                  Resolve with disk…
+                </button>
+                <button type="button" onClick={() => dismissDiskConflictSoft()}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          ) : null}
+          {!err && !diskConflict && !diskConflictSoft && renameLinkProgress ? (
             <div className="info-banner" aria-live="polite">
               Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
             </div>
           ) : null}
-          {!err && !diskConflict && !renameLinkProgress && wikiRenameNotice ? (
+          {!err && !diskConflict && !diskConflictSoft && !renameLinkProgress && wikiRenameNotice ? (
             <div className="info-banner" aria-live="polite">
               {wikiRenameNotice}
             </div>

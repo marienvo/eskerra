@@ -430,6 +430,13 @@ a:focus:not(:focus-visible) {
   font-size: 0.9rem;
 }
 
+.info-banner--inline-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
 .conflict-banner {
   flex-shrink: 0;
   display: flex;
