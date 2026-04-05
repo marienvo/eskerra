@@ -22,6 +22,7 @@ import {
   sanitizeInboxNoteStem,
   stemFromMarkdownFileName,
   SubtreeMarkdownPresenceCache,
+  isBrowserOpenableMarkdownHref,
   type NoteboxSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
@@ -32,6 +33,7 @@ import {
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
 } from '../lib/inboxWikiLinkNavigation';
+import {openSystemBrowserUrl} from '../lib/openSystemBrowserUrl';
 import {
   createInboxAutosaveScheduler,
   INBOX_AUTOSAVE_DEBOUNCE_MS,
@@ -232,6 +234,8 @@ export type UseMainWindowWorkspaceResult = {
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  /** Editor intent entrypoint for `http` / `https` / `mailto` inline links. */
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
   renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
@@ -1295,6 +1299,19 @@ export function useMainWindowWorkspace(options: {
     [activateRelativeMarkdownLink],
   );
 
+  const onMarkdownExternalLinkOpen = useCallback(
+    (payload: {href: string; at: number}) => {
+      const href = payload.href.trim();
+      if (!isBrowserOpenableMarkdownHref(href)) {
+        return;
+      }
+      void openSystemBrowserUrl(href).catch(e => {
+        setErr(e instanceof Error ? e.message : String(e));
+      });
+    },
+    [setErr],
+  );
+
   const deleteFolder = useCallback(
     async (directoryUri: string) => {
       if (!vaultRoot) {
@@ -1827,6 +1844,7 @@ export function useMainWindowWorkspace(options: {
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     deleteNote,
     renameNote,
     subtreeMarkdownCache: subtreeMarkdownCacheRef.current,

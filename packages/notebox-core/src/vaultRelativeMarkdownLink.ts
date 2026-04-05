@@ -35,6 +35,28 @@ export function isExternalMarkdownHref(href: string): boolean {
   return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(h);
 }
 
+const BROWSER_OPENABLE_MARKDOWN_SCHEMES = new Set([
+  'http',
+  'https',
+  'mailto',
+]);
+
+/**
+ * True when `href` may be opened in the system browser from the desktop markdown editor.
+ * Allowlist: `http`, `https`, `mailto` (scheme must be present; protocol-relative URLs are excluded).
+ */
+export function isBrowserOpenableMarkdownHref(href: string): boolean {
+  const h = href.trim();
+  if (h === '') {
+    return false;
+  }
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(h);
+  if (!m) {
+    return false;
+  }
+  return BROWSER_OPENABLE_MARKDOWN_SCHEMES.has(m[1]!.toLowerCase());
+}
+
 function tryDecodeUriComponent(segment: string): string {
   try {
     return decodeURIComponent(segment);

@@ -3,6 +3,7 @@ import {Facet} from '@codemirror/state';
 export type EskerraTableShellLinkBridge = {
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
 };
 
 /**

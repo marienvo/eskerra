@@ -15,6 +15,7 @@
     "core:window:allow-set-size",
     "store:default",
     "dialog:default",
+    "opener:default",
     "clipboard-manager:default",
     "clipboard-manager:allow-read-image",
     "clipboard-manager:allow-read-text",

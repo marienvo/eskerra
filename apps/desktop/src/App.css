@@ -1533,7 +1533,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
-  .cm-md-rel-link-href {
+  .cm-md-rel-link-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-external-href {
   display: none;
 }
 
@@ -1576,6 +1580,13 @@ button.primary.destructive {
   color: var(--nb-editor-faint);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  color: var(--color-interactive-text);
+}
+
 /*
  * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
  * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
@@ -1584,6 +1595,16 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
   .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-external-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
@@ -2322,7 +2343,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-rel-link-href {
+  .cm-md-rel-link-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-external-href {
   display: none;
 }
 
@@ -2330,6 +2355,16 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-external-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);

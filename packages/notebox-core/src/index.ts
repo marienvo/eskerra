@@ -149,6 +149,7 @@ export {
 } from './vaultMarkdownPaths';
 export {
   extractInlineMarkdownLinksFromMarkdown,
+  isBrowserOpenableMarkdownHref,
   isExternalMarkdownHref,
   listInboxRelativeMarkdownLinkBacklinkReferrersForTarget,
   planInboxRelativeMarkdownLinkRenameInMarkdown,

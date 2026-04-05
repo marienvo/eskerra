@@ -3,7 +3,7 @@ import {ensureSyntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {describe, expect, it} from 'vitest';
 
-import {MARKDOWN_EXTENSION} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref, MARKDOWN_EXTENSION} from '@notebox/core';
 
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
@@ -82,5 +82,24 @@ describe('markdownActivatableRelativeMdLinkAtPosition', () => {
     expect(
       markdownActivatableRelativeMdLinkAtPosition(state, midLabel, hrefActivatable),
     ).toBeNull();
+  });
+
+  it('activates https label and URL when predicate allows browser schemes', () => {
+    const doc = 'See [Site](https://example.com/path) here.';
+    const state = stateForMd(doc);
+    ensureSyntaxTree(state, state.doc.length, 200);
+    const expectedHref = 'https://example.com/path';
+    const hrefFrom = doc.indexOf(expectedHref);
+    const hrefTo = hrefFrom + expectedHref.length;
+    const labelHit = markdownActivatableRelativeMdLinkAtPosition(
+      state,
+      doc.indexOf('Site'),
+      isBrowserOpenableMarkdownHref,
+    );
+    expect(labelHit).toEqual({
+      href: expectedHref,
+      hrefFrom,
+      hrefTo,
+    });
   });
 });

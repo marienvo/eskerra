@@ -74,6 +74,7 @@ type VaultTabProps = {
   onEditorError: (message: string) => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
@@ -125,6 +126,7 @@ export function VaultTab({
   onEditorError,
   onWikiLinkActivate,
   onMarkdownRelativeLinkActivate,
+  onMarkdownExternalLinkOpen,
   onSaveShortcut,
   busy,
   onDeleteNote,
@@ -805,6 +807,7 @@ export function VaultTab({
                           onMarkdownRelativeLinkActivate={
                             onMarkdownRelativeLinkActivate
                           }
+                          onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                           relativeMarkdownLinkHrefIsResolved={
                             relativeMarkdownLinkHrefIsResolved
                           }

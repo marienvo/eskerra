@@ -1,0 +1,77 @@
+import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
+import {type Extension, type Range} from '@codemirror/state';
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  type DecorationSet,
+  type ViewUpdate,
+} from '@codemirror/view';
+import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+
+import {collectBareBrowserUrlIntervals} from './markdownBareUrl';
+import {relativeMarkdownLinkLabelSpan} from './relativeMarkdownLinkLabelSpan';
+
+const TREE_ENSURE_BUDGET_MS = 200;
+
+/** Builds external (http/https/mailto) markdown link decorations. Exported for tests. */
+export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet {
+  ensureSyntaxTree(view.state, view.state.doc.length, TREE_ENSURE_BUDGET_MS);
+  const tree = syntaxTree(view.state);
+  const ranges: Range<Decoration>[] = [];
+  tree.iterate({
+    enter(ref) {
+      if (ref.name !== 'URL') {
+        return;
+      }
+      const parent = ref.node.parent;
+      if (parent == null || parent.name !== 'Link') {
+        return;
+      }
+      const href = view.state.sliceDoc(ref.from, ref.to);
+      if (!isBrowserOpenableMarkdownHref(href)) {
+        return;
+      }
+      const cls = 'cm-md-external-link';
+      const hrefClass = `${cls} cm-md-external-href`;
+      ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
+      const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
+        view.state.sliceDoc(a, b),
+      );
+      if (labelSpan != null) {
+        ranges.push(
+          Decoration.mark({class: cls}).range(labelSpan.from, labelSpan.to),
+        );
+      }
+    },
+  });
+  const bareIntervals = collectBareBrowserUrlIntervals(view.state);
+  for (const iv of bareIntervals) {
+    ranges.push(
+      Decoration.mark({class: 'cm-md-external-link'}).range(iv.from, iv.to),
+    );
+  }
+  return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
+}
+
+/** Highlights inline link label and URL for browser-openable schemes (not images). */
+export function markdownExternalLinkHighlightExtension(): Extension {
+  const plugin = ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(view: EditorView) {
+        this.decorations = buildExternalMdLinkDecorations(view);
+      }
+
+      update(update: ViewUpdate) {
+        if (update.docChanged) {
+          this.decorations = buildExternalMdLinkDecorations(update.view);
+        }
+      }
+    },
+    {decorations: instance => instance.decorations},
+  );
+
+  return plugin;
+}

@@ -145,6 +145,7 @@ export default function App() {
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     deleteNote,
     renameNote,
     deleteFolder,
@@ -627,6 +628,7 @@ export default function App() {
                     onEditorError={setErr}
                     onWikiLinkActivate={onWikiLinkActivate}
                     onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                    onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                     onSaveShortcut={onInboxSaveShortcut}
                     busy={busy}
                     onDeleteNote={uri => {

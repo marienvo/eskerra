@@ -15,7 +15,10 @@ import {
 import {drawSelection, EditorView, keymap} from '@codemirror/view';
 import type {MutableRefObject} from 'react';
 
-import type {InboxWikiLinkCompletionCandidate} from '@notebox/core';
+import {
+  isBrowserOpenableMarkdownHref,
+  type InboxWikiLinkCompletionCandidate,
+} from '@notebox/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -26,7 +29,9 @@ import {
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
+import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
@@ -79,6 +84,7 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   busyRef: MutableRefObject<boolean>;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut?: () => void;
   onReportError: (message: string) => void;
   onDocChanged: () => void;
@@ -124,6 +130,7 @@ export function buildNoteMarkdownCellExtensions(
     busyRef,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     onSaveShortcut,
     onReportError,
     onDocChanged,
@@ -154,6 +161,24 @@ export function buildNoteMarkdownCellExtensions(
       e.preventDefault();
       e.stopPropagation();
       onMarkdownRelativeLinkActivate({href: relHit.href, at: relHit.hrefFrom});
+      return true;
+    }
+    const extHit = markdownActivatableRelativeMdLinkAtPosition(
+      view.state,
+      pos,
+      isBrowserOpenableMarkdownHref,
+    );
+    if (extHit) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMarkdownExternalLinkOpen({href: extHit.href, at: extHit.hrefFrom});
+      return true;
+    }
+    const bareHit = markdownBareBrowserUrlAtPosition(view.state, pos);
+    if (bareHit) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMarkdownExternalLinkOpen({href: bareHit.href, at: bareHit.hrefFrom});
       return true;
     }
     return false;
@@ -358,6 +383,7 @@ export function buildNoteMarkdownCellExtensions(
         onSaveShortcut,
         onWikiLinkActivate,
         onMarkdownRelativeLinkActivate,
+        onMarkdownExternalLinkOpen,
       }),
       indentWithTab,
       ...defaultKeymap,
@@ -370,6 +396,7 @@ export function buildNoteMarkdownCellExtensions(
     relativeMdLinkCompartment.of(
       markdownRelativeLinkHighlightExtensions(relativeMarkdownLinkHrefIsResolved),
     ),
+    markdownExternalLinkHighlightExtension(),
     wikiLinkAutocompleteExtension(wikiLinkCompletionCandidates),
     ...vaultImagePreviewExtension({
       vaultRoot: vaultRootRef,

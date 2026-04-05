@@ -1,7 +1,9 @@
 import {EditorSelection} from '@codemirror/state';
 import {type EditorView, type KeyBinding} from '@codemirror/view';
+import {isBrowserOpenableMarkdownHref} from '@notebox/core';
 
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
+import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 
@@ -9,6 +11,7 @@ export type NoteMarkdownVaultKeymapHandlers = {
   onSaveShortcut?: () => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
 };
 
 /**
@@ -67,12 +70,38 @@ export function runMarkdownRelativeLinkActivateFromCaret(
   return true;
 }
 
+export function runMarkdownExternalLinkActivateFromCaret(
+  view: EditorView,
+  onMarkdownExternalLinkOpen: NoteMarkdownVaultKeymapHandlers['onMarkdownExternalLinkOpen'],
+): boolean {
+  const sel = view.state.selection.main;
+  const hit = markdownActivatableRelativeMdLinkAtPosition(
+    view.state,
+    sel.head,
+    isBrowserOpenableMarkdownHref,
+  );
+  if (hit != null) {
+    onMarkdownExternalLinkOpen({href: hit.href, at: hit.hrefFrom});
+    return true;
+  }
+  const bare = markdownBareBrowserUrlAtPosition(view.state, sel.head);
+  if (bare == null) {
+    return false;
+  }
+  onMarkdownExternalLinkOpen({href: bare.href, at: bare.hrefFrom});
+  return true;
+}
+
 /** Keybindings shared by the root note editor and Eskerra table cell editors (vault navigation + save). */
 export function buildNoteMarkdownVaultKeymapBindings(
   handlers: NoteMarkdownVaultKeymapHandlers,
 ): readonly KeyBinding[] {
-  const {onSaveShortcut, onWikiLinkActivate, onMarkdownRelativeLinkActivate} =
-    handlers;
+  const {
+    onSaveShortcut,
+    onWikiLinkActivate,
+    onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
+  } = handlers;
   return [
     {
       key: 'Mod-s',
@@ -89,7 +118,8 @@ export function buildNoteMarkdownVaultKeymapBindings(
         || runMarkdownRelativeLinkActivateFromCaret(
           view,
           onMarkdownRelativeLinkActivate,
-        ),
+        )
+        || runMarkdownExternalLinkActivateFromCaret(view, onMarkdownExternalLinkOpen),
     },
   ];
 }

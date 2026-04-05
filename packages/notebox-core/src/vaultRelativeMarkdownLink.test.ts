@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 
 import {
   extractInlineMarkdownLinksFromMarkdown,
+  isBrowserOpenableMarkdownHref,
   isExternalMarkdownHref,
   listInboxRelativeMarkdownLinkBacklinkReferrersForTarget,
   planInboxRelativeMarkdownLinkRenameInMarkdown,
@@ -30,6 +31,20 @@ describe('stripMarkdownLinkHrefToPathPart / isExternalMarkdownHref', () => {
     expect(isExternalMarkdownHref('//cdn/x.md')).toBe(true);
     expect(isExternalMarkdownHref('./x.md')).toBe(false);
     expect(isExternalMarkdownHref('../x.md')).toBe(false);
+  });
+});
+
+describe('isBrowserOpenableMarkdownHref', () => {
+  it('allows http(s) and mailto only', () => {
+    expect(isBrowserOpenableMarkdownHref('https://example.com/x')).toBe(true);
+    expect(isBrowserOpenableMarkdownHref('HTTP://example.com/')).toBe(true);
+    expect(isBrowserOpenableMarkdownHref('http://a')).toBe(true);
+    expect(isBrowserOpenableMarkdownHref('mailto:a@b')).toBe(true);
+    expect(isBrowserOpenableMarkdownHref('javascript:alert(1)')).toBe(false);
+    expect(isBrowserOpenableMarkdownHref('file:///etc/passwd')).toBe(false);
+    expect(isBrowserOpenableMarkdownHref('//cdn/x')).toBe(false);
+    expect(isBrowserOpenableMarkdownHref('./note.md')).toBe(false);
+    expect(isBrowserOpenableMarkdownHref('')).toBe(false);
   });
 });
 

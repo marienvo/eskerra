@@ -28,6 +28,7 @@ import {
 } from 'react';
 
 import {
+  isBrowserOpenableMarkdownHref,
   isExternalMarkdownHref,
   MARKDOWN_EXTENSION,
   stripMarkdownLinkHrefToPathPart,
@@ -49,8 +50,10 @@ import {markdownNotebox} from './markdownNoteboxLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
+import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {
   markdownInlineCodeSurroundInputHandler,
@@ -114,6 +117,8 @@ export type NoteMarkdownEditorProps = {
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  /** Shell-owned: open `http` / `https` / `mailto` inline links in the system browser. */
+  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   /** Shell-provided vault markdown targets for `[[` autocomplete (WL-3). */
@@ -171,6 +176,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onWikiLinkActivate,
     relativeMarkdownLinkHrefIsResolved,
     onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
@@ -214,6 +220,11 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onMarkdownRelativeLinkActivateRef.current = onMarkdownRelativeLinkActivate;
   }, [onMarkdownRelativeLinkActivate]);
+
+  const onMarkdownExternalLinkOpenRef = useRef(onMarkdownExternalLinkOpen);
+  useEffect(() => {
+    onMarkdownExternalLinkOpenRef.current = onMarkdownExternalLinkOpen;
+  }, [onMarkdownExternalLinkOpen]);
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
@@ -454,6 +465,30 @@ const NoteMarkdownEditorImpl = forwardRef<
         });
         return true;
       }
+      const extHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isBrowserOpenableMarkdownHref,
+      );
+      const bareHit = markdownBareBrowserUrlAtPosition(view.state, pos);
+      if (extHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownExternalLinkOpenRef.current({
+          href: extHit.href,
+          at: extHit.hrefFrom,
+        });
+        return true;
+      }
+      if (bareHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownExternalLinkOpenRef.current({
+          href: bareHit.href,
+          at: bareHit.hrefFrom,
+        });
+        return true;
+      }
       return false;
     };
 
@@ -490,6 +525,8 @@ const NoteMarkdownEditorImpl = forwardRef<
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
+          onMarkdownExternalLinkOpen: p =>
+            onMarkdownExternalLinkOpenRef.current(p),
         }),
         indentWithTab,
         ...foldKeymap,
@@ -506,6 +543,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolved,
         ),
       ),
+      markdownExternalLinkHighlightExtension(),
       eskerraTableParentLinkCompartmentsFacet.of({
         wikiLink: wikiLinkCompartment,
         relativeMarkdownLink: relativeMdLinkCompartment,
@@ -529,6 +567,8 @@ const NoteMarkdownEditorImpl = forwardRef<
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
+          onMarkdownExternalLinkOpen: p =>
+            onMarkdownExternalLinkOpenRef.current(p),
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
           ...partial,
         }),
@@ -537,6 +577,8 @@ const NoteMarkdownEditorImpl = forwardRef<
         onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
         onMarkdownRelativeLinkActivate: p =>
           onMarkdownRelativeLinkActivateRef.current(p),
+        onMarkdownExternalLinkOpen: p =>
+          onMarkdownExternalLinkOpenRef.current(p),
       }),
       ...eskerraTableV1Extension(),
       ...vaultImagePreviewExtension({

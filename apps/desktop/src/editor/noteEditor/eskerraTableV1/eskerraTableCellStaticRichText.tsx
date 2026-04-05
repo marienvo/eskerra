@@ -4,7 +4,10 @@ import {EditorState} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 import {useMemo, type ReactElement} from 'react';
 
+import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
+import {markdownBareBrowserUrlAtPosition} from '../markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from '../markdownActivatableRelativeMdLinkAtPosition';
 import {markdownNotebox} from '../markdownNoteboxLanguage';
 import {noteMarkdownParserExtensions} from '../markdownEditorStyling';
@@ -135,6 +138,30 @@ export function EskerraTableCellStaticRichText(
           bridge.onMarkdownRelativeLinkActivate({
             href: relHit.href,
             at: relHit.hrefFrom,
+          });
+          return;
+        }
+        const extHit = markdownActivatableRelativeMdLinkAtPosition(
+          hitState,
+          pos,
+          isBrowserOpenableMarkdownHref,
+        );
+        if (extHit != null) {
+          e.preventDefault();
+          e.stopPropagation();
+          bridge.onMarkdownExternalLinkOpen({
+            href: extHit.href,
+            at: extHit.hrefFrom,
+          });
+          return;
+        }
+        const bareHit = markdownBareBrowserUrlAtPosition(hitState, pos);
+        if (bareHit != null) {
+          e.preventDefault();
+          e.stopPropagation();
+          bridge.onMarkdownExternalLinkOpen({
+            href: bareHit.href,
+            at: bareHit.hrefFrom,
           });
         }
       }}
