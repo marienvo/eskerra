@@ -1,6 +1,7 @@
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
 import {
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -369,6 +370,9 @@ export function useMainWindowWorkspace(options: {
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const saveActiveRef = useRef(false);
+  const eagerEditorLoadUriRef = useRef<string | null>(null);
+  const suppressEditorOnChangeRef = useRef(false);
   const autosaveSchedulerRef = useRef(
     createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
   );
@@ -396,6 +400,14 @@ export function useMainWindowWorkspace(options: {
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
   backlinksActiveBodyRef.current = backlinksActiveBody;
+
+  const guardedSetEditorBody: typeof setEditorBody = useCallback(
+    value => {
+      if (suppressEditorOnChangeRef.current) return;
+      setEditorBody(value);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     editorDocumentHistoryRef.current = editorDocumentHistory;
@@ -630,7 +642,10 @@ export function useMainWindowWorkspace(options: {
       }
     };
 
-    const next = saveChainRef.current.then(run);
+    saveActiveRef.current = true;
+    const next = saveChainRef.current.then(run).finally(() => {
+      saveActiveRef.current = false;
+    });
     saveChainRef.current = next.catch(() => undefined);
     await next;
   }, [fs, refreshNotes, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
@@ -646,7 +661,9 @@ export function useMainWindowWorkspace(options: {
     async (uri: string, options?: {skipHistory?: boolean}) => {
       const openGen = ++openMarkdownGenerationRef.current;
       autosaveSchedulerRef.current.cancel();
-      await saveChainRef.current.catch(() => undefined);
+      if (saveActiveRef.current) {
+        await saveChainRef.current.catch(() => undefined);
+      }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
       }
@@ -670,9 +687,11 @@ export function useMainWindowWorkspace(options: {
       }
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
-      if (curUri != null && !composingNewEntryRef.current) {
-        const snapshot =
-          inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+      const snapshot =
+        curUri != null && !composingNewEntryRef.current
+          ? (inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current)
+          : undefined;
+      if (curUri != null && snapshot !== undefined) {
         const nextCache = mergeInboxNoteBodyIntoCache(
           inboxContentByUriRef.current,
           curUri,
@@ -688,12 +707,10 @@ export function useMainWindowWorkspace(options: {
       const needsPersist =
         root != null &&
         curUri != null &&
-        !composingNewEntryRef.current &&
+        snapshot !== undefined &&
         (() => {
-          const raw =
-            inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
           const prev = lastPersistedRef.current;
-          return !(prev && prev.uri === curUri && prev.markdown === raw);
+          return !(prev && prev.uri === curUri && prev.markdown === snapshot);
         })();
       if (needsPersist) {
         await enqueueInboxPersist();
@@ -727,30 +744,50 @@ export function useMainWindowWorkspace(options: {
 
       if (prefetchBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
-        setInboxContentByUri(prev => {
-          if (prev[targetNorm] === prefetchBody) {
-            return prev;
-          }
-          return {...prev, [targetNorm]: prefetchBody!};
-        });
+        inboxContentByUriRef.current = {...inboxContentByUriRef.current, [targetNorm]: prefetchBody};
       }
 
       const resolvedEditorBody =
         prefetchBody !== undefined
           ? prefetchBody
           : inboxContentByUriRef.current[targetNorm];
+
       if (resolvedEditorBody !== undefined) {
-        setEditorBody(resolvedEditorBody);
+        lastPersistedRef.current = {uri: targetNorm, markdown: resolvedEditorBody};
+        eagerEditorLoadUriRef.current = targetNorm;
+        editorBodyRef.current = resolvedEditorBody;
+        backlinksActiveBodyRef.current = resolvedEditorBody;
+        suppressEditorOnChangeRef.current = true;
+        inboxEditorRef.current?.loadMarkdown(resolvedEditorBody, {selection: 'start'});
+        suppressEditorOnChangeRef.current = false;
+        scheduleBacklinksDeferOneFrameAfterLoad();
       }
 
-      if (!options?.skipHistory) {
-        setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
-      }
-      setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
-      setComposingNewEntry(false);
-      setSelectedUri(targetNorm);
+      selectedUriRef.current = targetNorm;
+      composingNewEntryRef.current = false;
+
+      startTransition(() => {
+        if (prefetchBody !== undefined) {
+          setInboxContentByUri(prev => {
+            if (prev[targetNorm] === prefetchBody) {
+              return prev;
+            }
+            return {...prev, [targetNorm]: prefetchBody!};
+          });
+        }
+        if (resolvedEditorBody !== undefined) {
+          setEditorBody(resolvedEditorBody);
+          setBacklinksActiveBody(resolvedEditorBody);
+        }
+        if (!options?.skipHistory) {
+          setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
+        }
+        setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
+        setComposingNewEntry(false);
+        setSelectedUri(targetNorm);
+      });
     },
-    [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef],
+    [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef, scheduleBacklinksDeferOneFrameAfterLoad],
   );
 
   const activateOpenTab = useCallback(
@@ -1021,6 +1058,11 @@ export function useMainWindowWorkspace(options: {
       clearInboxBacklinksDeferAfterLoad();
       return;
     }
+    if (eagerEditorLoadUriRef.current === selectedUri) {
+      eagerEditorLoadUriRef.current = null;
+      scheduleBacklinksDeferOneFrameAfterLoad();
+      return;
+    }
     const cached = inboxContentByUriRef.current[selectedUri];
     if (cached !== undefined) {
       const {markdown: body, healedCache} = resolveInboxCachedBodyForEditor(
@@ -1079,8 +1121,11 @@ export function useMainWindowWorkspace(options: {
       setBacklinksActiveBody('');
       return;
     }
-    const snap = inboxContentByUriRef.current[selectedUri];
-    setBacklinksActiveBody(snap ?? '');
+    const snap = inboxContentByUriRef.current[selectedUri] ?? '';
+    if (backlinksActiveBodyRef.current === snap) {
+      return;
+    }
+    setBacklinksActiveBody(snap);
   }, [selectedUri, composingNewEntry, vaultRoot]);
 
   useEffect(() => {
@@ -2249,7 +2294,7 @@ export function useMainWindowWorkspace(options: {
     confirmPendingWikiLinkAmbiguityRename,
     cancelPendingWikiLinkAmbiguityRename,
     setErr,
-    setEditorBody,
+    setEditorBody: guardedSetEditorBody,
     hydrateVault,
     startNewEntry,
     cancelNewEntry,
