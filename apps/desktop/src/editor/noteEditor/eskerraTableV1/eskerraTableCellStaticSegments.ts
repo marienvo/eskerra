@@ -2,8 +2,9 @@ import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
-import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
+import {isBrowserOpenableMarkdownHref, wikiLinkInnerBrowserOpenableHref} from '@eskerra/core';
 
+import {CM_MD_EXTERNAL_LINK_GLYPH_CLASS} from '../markdownExternalLinkCodemirror';
 import {collectBareBrowserUrlIntervals} from '../markdownBareUrl';
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
 import {markdownEskerra} from '../markdownEskerraLanguage';
@@ -113,9 +114,13 @@ function collectWikiIntervals(
       const from = line.from + start;
       const to = from + fullLen;
       const inner = match[1]!;
-      const innerClass = wikiResolved(inner)
-        ? 'cm-wiki-link cm-wiki-link--resolved'
-        : 'cm-wiki-link cm-wiki-link--unresolved';
+      const browserHref = wikiLinkInnerBrowserOpenableHref(inner);
+      const innerClass =
+        browserHref != null
+          ? `cm-wiki-link cm-wiki-link--resolved cm-wiki-link--external ${CM_MD_EXTERNAL_LINK_GLYPH_CLASS}`
+          : wikiResolved(inner)
+            ? 'cm-wiki-link cm-wiki-link--resolved'
+            : 'cm-wiki-link cm-wiki-link--unresolved';
       out.push({from, to: from + 2, priority: 2, classes: 'cm-md-wiki-bracket'});
       out.push({from: from + 2, to: to - 2, priority: 2, classes: innerClass});
       out.push({from: to - 2, to, priority: 2, classes: 'cm-md-wiki-bracket'});
@@ -182,17 +187,22 @@ function collectExternalMdIntervals(state: EditorState): StyledInterval[] {
         return;
       }
       const labelClass = 'cm-md-external-link';
-      const hrefClass = `${labelClass} cm-md-external-href`;
-      out.push({from: ref.from, to: ref.to, priority: 2, classes: hrefClass});
+      const g = CM_MD_EXTERNAL_LINK_GLYPH_CLASS;
       const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
         state.sliceDoc(a, b),
       );
-      if (labelSpan != null) {
+      const hasVisibleLabel =
+        labelSpan != null && labelSpan.to > labelSpan.from;
+      const hrefClass = hasVisibleLabel
+        ? `${labelClass} cm-md-external-href`
+        : `${labelClass} cm-md-external-href ${g}`;
+      out.push({from: ref.from, to: ref.to, priority: 2, classes: hrefClass});
+      if (hasVisibleLabel && labelSpan != null) {
         out.push({
           from: labelSpan.from,
           to: labelSpan.to,
           priority: 2,
-          classes: labelClass,
+          classes: `${labelClass} ${g}`,
         });
       }
     },
@@ -201,13 +211,14 @@ function collectExternalMdIntervals(state: EditorState): StyledInterval[] {
 }
 
 function collectBareBrowserStyledIntervals(state: EditorState): StyledInterval[] {
+  const g = CM_MD_EXTERNAL_LINK_GLYPH_CLASS;
   const out: StyledInterval[] = [];
   for (const iv of collectBareBrowserUrlIntervals(state)) {
     out.push({
       from: iv.from,
       to: iv.to,
       priority: 2,
-      classes: 'cm-md-external-link',
+      classes: `cm-md-external-link ${g}`,
     });
   }
   return out;

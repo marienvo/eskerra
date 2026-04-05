@@ -135,6 +135,15 @@ describe('inboxWikiLinkTargetIsResolved', () => {
       ),
     ).toBe(true);
   });
+
+  it('is true when target is a browser-openable wiki URL', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [],
+        'https://example.com/path|Site',
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('openOrCreateInboxWikiLinkTarget', () => {

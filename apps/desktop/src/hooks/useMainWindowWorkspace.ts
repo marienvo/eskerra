@@ -23,6 +23,7 @@ import {
   stemFromMarkdownFileName,
   SubtreeMarkdownPresenceCache,
   isBrowserOpenableMarkdownHref,
+  wikiLinkInnerBrowserOpenableHref,
   type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
@@ -1344,6 +1345,13 @@ export function useMainWindowWorkspace(options: {
   const activateWikiLink = useCallback(
     async ({inner, at}: {inner: string; at: number}) => {
       if (!vaultRoot) {
+        return;
+      }
+      const browserHref = wikiLinkInnerBrowserOpenableHref(inner);
+      if (browserHref != null) {
+        void openSystemBrowserUrl(browserHref.trim()).catch(e => {
+          setErr(e instanceof Error ? e.message : String(e));
+        });
         return;
       }
       await flushInboxSaveRef.current();

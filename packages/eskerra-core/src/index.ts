@@ -27,6 +27,7 @@ export {
   buildInboxWikiLinkResolveLookup,
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveLookup,
   type InboxWikiLinkResolveResult,

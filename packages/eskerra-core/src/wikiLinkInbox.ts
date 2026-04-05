@@ -1,4 +1,5 @@
 import {sanitizeInboxNoteStem, stemFromMarkdownFileName} from './inboxMarkdown';
+import {isBrowserOpenableMarkdownHref} from './vaultRelativeMarkdownLink';
 
 export type InboxWikiLinkNoteRef = {
   name: string;
@@ -33,6 +34,16 @@ function splitWikiLinkInner(inner: string): ParsedWikiLinkInner {
     displayText: displayRaw === '' ? null : displayRaw,
     targetText,
   };
+}
+
+/**
+ * If the wiki link target (text before `|`) is an `http` / `https` / `mailto` href that
+ * may be opened from the desktop editor, returns the trimmed href; otherwise null.
+ */
+export function wikiLinkInnerBrowserOpenableHref(inner: string): string | null {
+  const parsed = splitWikiLinkInner(inner);
+  const href = parsed.targetText.trim();
+  return isBrowserOpenableMarkdownHref(href) ? href : null;
 }
 
 function stripInboxPrefixCaseInsensitive(target: string): string {
