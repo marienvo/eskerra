@@ -194,7 +194,7 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 
 ---
 
-## Comparison: This app vs others
+## Philosophy
 
 I want a Markdown app that is fast, predictable, and works out of the box. 
 No plugins required for the basics, no waiting, no hidden complexity.
