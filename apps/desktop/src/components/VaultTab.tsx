@@ -90,6 +90,10 @@ type VaultTabProps = {
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
+  editorHistoryCanGoBack: boolean;
+  editorHistoryCanGoForward: boolean;
+  onEditorHistoryGoBack: () => void;
+  onEditorHistoryGoForward: () => void;
 };
 
 export function VaultTab({
@@ -128,6 +132,10 @@ export function VaultTab({
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
+  editorHistoryCanGoBack,
+  editorHistoryCanGoForward,
+  onEditorHistoryGoBack,
+  onEditorHistoryGoForward,
 }: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -628,39 +636,69 @@ export function VaultTab({
         right={
           <div className="panel-surface">
             <div className="pane-header">
-              <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
-                {editorPaneTitle}
-              </span>
-              {!composingNewEntry && selectedUri ? (
+              <div className="pane-header-start">
                 <button
                   type="button"
                   className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={() => openRenameDialog(selectedUri)}
-                  disabled={busy}
-                  aria-label="Rename note"
-                  data-tooltip="Rename note"
-                  data-tooltip-placement="inline-start"
+                  onClick={onEditorHistoryGoBack}
+                  disabled={busy || !editorHistoryCanGoBack}
+                  aria-label="Back"
+                  data-tooltip="Back"
+                  data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="drive_file_rename_outline" size={12} />
+                    <MaterialIcon name="chevron_left" size={12} />
                   </span>
                 </button>
-              ) : null}
-              {composingNewEntry ? (
                 <button
                   type="button"
                   className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={onCancelNewEntry}
-                  disabled={busy}
-                  aria-label="Cancel new entry"
-                  data-tooltip="Cancel"
-                  data-tooltip-placement="inline-start"
+                  onClick={onEditorHistoryGoForward}
+                  disabled={busy || !editorHistoryCanGoForward}
+                  aria-label="Forward"
+                  data-tooltip="Forward"
+                  data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="clear" size={12} />
+                    <MaterialIcon name="chevron_right" size={12} />
                   </span>
                 </button>
-              ) : null}
+                <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
+                  {editorPaneTitle}
+                </span>
+              </div>
+              <div className="pane-header-trailing-actions">
+                {!composingNewEntry && selectedUri ? (
+                  <button
+                    type="button"
+                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                    onClick={() => openRenameDialog(selectedUri)}
+                    disabled={busy}
+                    aria-label="Rename note"
+                    data-tooltip="Rename note"
+                    data-tooltip-placement="inline-start"
+                  >
+                    <span className="pane-header-add-btn__glyph" aria-hidden>
+                      <MaterialIcon name="drive_file_rename_outline" size={12} />
+                    </span>
+                  </button>
+                ) : null}
+                {composingNewEntry ? (
+                  <button
+                    type="button"
+                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+                    onClick={onCancelNewEntry}
+                    disabled={busy}
+                    aria-label="Cancel new entry"
+                    data-tooltip="Cancel"
+                    data-tooltip-placement="inline-start"
+                  >
+                    <span className="pane-header-add-btn__glyph" aria-hidden>
+                      <MaterialIcon name="clear" size={12} />
+                    </span>
+                  </button>
+                ) : null}
+              </div>
             </div>
             {editorOpen ? (
               <>

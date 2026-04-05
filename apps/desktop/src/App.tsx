@@ -152,6 +152,10 @@ export default function App() {
     vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
+    editorHistoryCanGoBack,
+    editorHistoryCanGoForward,
+    editorHistoryGoBack,
+    editorHistoryGoForward,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -630,6 +634,10 @@ export default function App() {
                 onCancelWikiLinkAmbiguityRename={
                   cancelPendingWikiLinkAmbiguityRename
                 }
+                editorHistoryCanGoBack={editorHistoryCanGoBack}
+                editorHistoryCanGoForward={editorHistoryCanGoForward}
+                onEditorHistoryGoBack={editorHistoryGoBack}
+                onEditorHistoryGoForward={editorHistoryGoForward}
               />
             </div>
             {podcastsTabMounted ? (

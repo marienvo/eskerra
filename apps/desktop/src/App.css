@@ -364,6 +364,10 @@ a:focus:not(:focus-visible) {
     transform 0.14s ease 0.55s;
 }
 
+.app-tooltip-trigger[data-tooltip]:disabled::after {
+  content: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-tooltip-trigger[data-tooltip]::after {
     transition:
@@ -620,6 +624,21 @@ a:focus:not(:focus-visible) {
   padding: 0.32rem 0.48rem;
   border-bottom: 1px solid var(--color-border-soft, var(--color-border));
   background: var(--color-editor-bg);
+}
+
+.pane-header-start {
+  display: flex;
+  align-items: center;
+  gap: 0.18rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pane-header-trailing-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.15rem;
 }
 
 .pane-title {
