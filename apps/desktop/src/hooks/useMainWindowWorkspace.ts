@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type RefObject,
 } from 'react';
 
@@ -77,6 +78,64 @@ import {
   removeEditorHistoryUris,
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
+
+export type InboxEditorShellScrollDirective =
+  | {kind: 'snapTop'}
+  | {kind: 'restore'; top: number; left: number};
+
+function snapshotEditorShellScrollForOpenNote(
+  scrollEl: HTMLDivElement | null,
+  selectedUri: string | null,
+  composingNewEntry: boolean,
+  into: Map<string, {top: number; left: number}>,
+) {
+  if (!scrollEl || !selectedUri || composingNewEntry) {
+    return;
+  }
+  into.set(normalizeEditorDocUri(selectedUri), {
+    top: scrollEl.scrollTop,
+    left: scrollEl.scrollLeft,
+  });
+}
+
+function remapEditorShellScrollMapExact(
+  map: Map<string, {top: number; left: number}>,
+  fromUri: string,
+  toUri: string,
+) {
+  const from = normalizeEditorDocUri(fromUri);
+  const to = normalizeEditorDocUri(toUri);
+  if (from === to) {
+    return;
+  }
+  const v = map.get(from);
+  if (v === undefined) {
+    return;
+  }
+  map.delete(from);
+  map.set(to, v);
+}
+
+function remapEditorShellScrollMapTreePrefix(
+  map: Map<string, {top: number; left: number}>,
+  oldPrefix: string,
+  newPrefix: string,
+) {
+  const oldP = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  const newP = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (oldP === newP) {
+    return;
+  }
+  const next = new Map<string, {top: number; left: number}>();
+  for (const [k, v] of map) {
+    const mapped = remapVaultUriPrefix(k, oldP, newP);
+    next.set(mapped ?? k, v);
+  }
+  map.clear();
+  for (const [k, v] of next) {
+    map.set(k, v);
+  }
+}
 
 const STORE_PATH = 'notebox-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
@@ -199,11 +258,18 @@ export type UseMainWindowWorkspaceResult = {
   editorHistoryCanGoForward: boolean;
   editorHistoryGoBack: () => void;
   editorHistoryGoForward: () => void;
+  /**
+   * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
+   * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
+   */
+  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
 };
 
 export function useMainWindowWorkspace(options: {
   fs: VaultFilesystem;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  /** `.note-markdown-editor-scroll`: used to snapshot and restore scroll offsets per note URI. */
+  inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   restoredInboxState: {
     vaultRoot: string;
     composingNewEntry: boolean;
@@ -211,7 +277,13 @@ export function useMainWindowWorkspace(options: {
   } | null;
   inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
-  const {fs, inboxEditorRef, restoredInboxState, inboxRestoreEnabled} = options;
+  const {
+    fs,
+    inboxEditorRef,
+    inboxEditorShellScrollRef,
+    restoredInboxState,
+    inboxRestoreEnabled,
+  } = options;
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
   const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
   const [settingsName, setSettingsName] = useState('Notebox');
@@ -264,6 +336,11 @@ export function useMainWindowWorkspace(options: {
   const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
   const editorDocumentHistoryRef = useRef(emptyEditorDocumentHistory());
+  const editorShellScrollByUriRef = useRef(
+    new Map<string, {top: number; left: number}>(),
+  );
+  const inboxEditorShellScrollDirectiveRef =
+    useRef<InboxEditorShellScrollDirective | null>(null);
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
@@ -448,6 +525,24 @@ export function useMainWindowWorkspace(options: {
     async (uri: string, options?: {skipHistory?: boolean}) => {
       autosaveSchedulerRef.current.cancel();
       await saveChainRef.current.catch(() => undefined);
+      snapshotEditorShellScrollForOpenNote(
+        inboxEditorShellScrollRef.current,
+        selectedUriRef.current,
+        composingNewEntryRef.current,
+        editorShellScrollByUriRef.current,
+      );
+      const targetNorm = normalizeEditorDocUri(uri);
+      if (options?.skipHistory) {
+        const saved =
+          editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
+        inboxEditorShellScrollDirectiveRef.current = {
+          kind: 'restore',
+          top: saved.top,
+          left: saved.left,
+        };
+      } else {
+        inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
+      }
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
       const needsPersist =
@@ -467,14 +562,16 @@ export function useMainWindowWorkspace(options: {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
       setComposingNewEntry(false);
-      setSelectedUri(normalizeEditorDocUri(uri));
+      setSelectedUri(targetNorm);
     },
-    [enqueueInboxPersist, inboxEditorRef],
+    [enqueueInboxPersist, inboxEditorRef, inboxEditorShellScrollRef],
   );
 
   const hydrateVault = useCallback(
     async (root: string) => {
       await flushInboxSaveRef.current();
+      editorShellScrollByUriRef.current = new Map();
+      inboxEditorShellScrollDirectiveRef.current = null;
       setBusy(true);
       setErr(null);
       clearRenameNotice();
@@ -612,7 +709,7 @@ export function useMainWindowWorkspace(options: {
     if (cached !== undefined) {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
-      inboxEditorRef.current?.loadMarkdown(cached);
+      inboxEditorRef.current?.loadMarkdown(cached, {selection: 'start'});
     } else {
       setEditorBody('');
       lastPersistedRef.current = null;
@@ -630,7 +727,7 @@ export function useMainWindowWorkspace(options: {
     if (inboxContentByUriRef.current[selectedUri] !== undefined) {
       return;
     }
-    inboxEditorRef.current?.loadMarkdown('');
+    inboxEditorRef.current?.loadMarkdown('', {selection: 'start'});
   }, [vaultRoot, selectedUri, inboxEditorRef]);
 
 
@@ -675,7 +772,7 @@ export function useMainWindowWorkspace(options: {
           });
           if (normalized !== editorBodyRef.current) {
             setEditorBody(normalized);
-            inboxEditorRef.current?.loadMarkdown(normalized);
+            inboxEditorRef.current?.loadMarkdown(normalized, {selection: 'start'});
           }
         }
       } catch (e) {
@@ -741,6 +838,7 @@ export function useMainWindowWorkspace(options: {
     void (async () => {
       await flushInboxSaveRef.current();
       setErr(null);
+      inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
       setComposingNewEntry(true);
       setSelectedUri(null);
       setEditorBody('');
@@ -813,6 +911,7 @@ export function useMainWindowWorkspace(options: {
       autosaveSchedulerRef.current.cancel();
       const wasOpen = selectedUri === uri;
       if (wasOpen) {
+        editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(uri));
         selectedUriRef.current = null;
         composingNewEntryRef.current = false;
         lastPersistedRef.current = null;
@@ -1008,6 +1107,11 @@ export function useMainWindowWorkspace(options: {
           }
         }
         if (nextUri !== uri) {
+          remapEditorShellScrollMapExact(
+            editorShellScrollByUriRef.current,
+            uri,
+            nextUri,
+          );
           setEditorDocumentHistory(prev =>
             remapEditorHistoryPrefix(prev, uri, nextUri),
           );
@@ -1289,6 +1393,11 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        remapEditorShellScrollMapTreePrefix(
+          editorShellScrollByUriRef.current,
+          oldUri,
+          normalizedNext,
+        );
         {
           let nextSel: string | null = selectedUriRef.current;
           if (nextSel) {
@@ -1350,6 +1459,11 @@ export function useMainWindowWorkspace(options: {
           delete next[result.previousUri];
           return next;
         });
+        remapEditorShellScrollMapExact(
+          editorShellScrollByUriRef.current,
+          result.previousUri,
+          result.nextUri,
+        );
         if (selectedUriRef.current === result.previousUri) {
           selectedUriRef.current = result.nextUri;
           setSelectedUri(result.nextUri);
@@ -1372,6 +1486,11 @@ export function useMainWindowWorkspace(options: {
           }
           return next;
         });
+        remapEditorShellScrollMapTreePrefix(
+          editorShellScrollByUriRef.current,
+          oldUri,
+          newUri,
+        );
         let nextSel: string | null = selectedUriRef.current;
         if (nextSel) {
           const mappedSel = remapVaultUriPrefix(
@@ -1515,6 +1634,12 @@ export function useMainWindowWorkspace(options: {
             vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
           ),
         );
+        const sm = editorShellScrollByUriRef.current;
+        for (const key of [...sm.keys()]) {
+          if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
+            sm.delete(key);
+          }
+        }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
         setVaultTreeSelectionClearNonce(n => n + 1);
@@ -1717,5 +1842,6 @@ export function useMainWindowWorkspace(options: {
     editorHistoryCanGoForward,
     editorHistoryGoBack,
     editorHistoryGoForward,
+    inboxEditorShellScrollDirectiveRef,
   };
 }

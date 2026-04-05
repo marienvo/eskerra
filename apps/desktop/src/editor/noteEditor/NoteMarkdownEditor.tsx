@@ -134,7 +134,10 @@ export type NoteMarkdownEditorProps = {
 
 export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
-  loadMarkdown: (markdown: string) => void;
+  loadMarkdown: (
+    markdown: string,
+    options?: {selection?: 'start' | 'end'},
+  ) => void;
   /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
   unfoldAllFolds: () => boolean;
   /**
@@ -665,7 +668,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         }
         return view?.state.doc.toString() ?? initialMarkdownRef.current;
       },
-      loadMarkdown: (markdown: string) => {
+      loadMarkdown: (markdown: string, options?: {selection?: 'start' | 'end'}) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
         const wikiCompartment = wikiLinkCompartmentRef.current;
@@ -673,10 +676,12 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
+        const at =
+          options?.selection === 'start' ? 0 : markdown.length;
         view.setState(
           EditorState.create({
             doc: markdown,
-            selection: EditorSelection.cursor(markdown.length),
+            selection: EditorSelection.cursor(at),
             extensions: bootExtensions,
           }),
         );

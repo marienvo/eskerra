@@ -106,6 +106,7 @@ export default function App() {
   const appRootRef = useRef<HTMLDivElement>(null);
   const fs = useMemo(() => createTauriVaultFilesystem(), []);
   const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
+  const inboxEditorShellScrollRef = useRef<HTMLDivElement | null>(null);
   const [layoutsReady, setLayoutsReady] = useState(false);
   const [restoredInboxState, setRestoredInboxState] = useState<{
     vaultRoot: string;
@@ -158,9 +159,11 @@ export default function App() {
     editorHistoryCanGoForward,
     editorHistoryGoBack,
     editorHistoryGoForward,
+    inboxEditorShellScrollDirectiveRef,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
+    inboxEditorShellScrollRef,
     restoredInboxState,
     inboxRestoreEnabled: layoutsReady,
   });
@@ -602,6 +605,10 @@ export default function App() {
                     fs={fs}
                     fsRefreshNonce={fsRefreshNonce}
                     inboxEditorRef={inboxEditorRef}
+                    inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+                    inboxEditorShellScrollDirectiveRef={
+                      inboxEditorShellScrollDirectiveRef
+                    }
                     leftWidthPx={layouts.inbox.leftWidthPx}
                     onLeftWidthPxChanged={persistInboxLeftWidthPx}
                     notes={notes}

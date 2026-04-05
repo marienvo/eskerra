@@ -1,7 +1,7 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import type {RefObject} from 'react';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import type {MutableRefObject, RefObject} from 'react';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {
@@ -32,6 +32,8 @@ import {
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
 
+import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
+
 import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {MaterialIcon} from './MaterialIcon';
 import {VaultPaneTree} from './VaultPaneTree';
@@ -51,6 +53,8 @@ type VaultTabProps = {
   fs: VaultFilesystem;
   fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
+  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
   leftWidthPx: number;
   onLeftWidthPxChanged: (px: number) => void;
   notes: NoteRow[];
@@ -101,6 +105,8 @@ export function VaultTab({
   fs,
   fsRefreshNonce,
   inboxEditorRef,
+  inboxEditorShellScrollRef,
+  inboxEditorShellScrollDirectiveRef,
   leftWidthPx,
   onLeftWidthPxChanged,
   notes,
@@ -294,6 +300,39 @@ export function VaultTab({
   ]);
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
+
+  useLayoutEffect(() => {
+    if (!editorOpen) {
+      return;
+    }
+    const el = inboxEditorShellScrollRef.current;
+    if (!el) {
+      return;
+    }
+    const directive = inboxEditorShellScrollDirectiveRef.current;
+    if (directive == null) {
+      return;
+    }
+    inboxEditorShellScrollDirectiveRef.current = null;
+    const apply = () => {
+      if (directive.kind === 'snapTop') {
+        el.scrollTop = 0;
+        el.scrollLeft = 0;
+      } else {
+        el.scrollTop = directive.top;
+        el.scrollLeft = directive.left;
+      }
+    };
+    apply();
+    const raf = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(raf);
+  }, [
+    editorOpen,
+    selectedUri,
+    composingNewEntry,
+    inboxEditorShellScrollDirectiveRef,
+    inboxEditorShellScrollRef,
+  ]);
 
   return (
     <div className="inbox-root" data-app-surface="capture">
@@ -704,7 +743,10 @@ export function VaultTab({
             {editorOpen ? (
               <>
                 <div className="editor note-markdown-editor-wrap">
-                  <div className="note-markdown-editor-scroll">
+                  <div
+                    ref={inboxEditorShellScrollRef}
+                    className="note-markdown-editor-scroll"
+                  >
                     <div className="note-markdown-editor-page">
                       <div className="note-markdown-editor-fold-rail">
                         {editorHasFoldedRanges || editorHasFoldableRanges ? (
