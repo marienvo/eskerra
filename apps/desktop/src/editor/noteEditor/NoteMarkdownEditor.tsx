@@ -33,7 +33,7 @@ import {
   MARKDOWN_EXTENSION,
   stripMarkdownLinkHrefToPathPart,
   type InboxWikiLinkCompletionCandidate,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -46,7 +46,7 @@ import {
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
@@ -147,7 +147,7 @@ export type NoteMarkdownEditorHandle = {
   unfoldAllFolds: () => boolean;
   /**
    * Folds every foldable range (lists, sections, etc.). H1 title sections are never foldable
-   * (see `markdownNotebox`).
+   * (see `markdownEskerra`).
    */
   collapseAllFolds: () => boolean;
   replaceWikiLinkInnerAt: (options: {
@@ -403,7 +403,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         ) {
           e.preventDefault();
           reportEditorError(
-            'Pasting images into the vault requires the Notebox desktop app. Use `tauri dev` or the packaged app instead of a plain browser tab.',
+            'Pasting images into the vault requires the Eskerra desktop app. Use `tauri dev` or the packaged app instead of a plain browser tab.',
           );
           return true;
         }
@@ -502,7 +502,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
-      markdownNotebox({
+      markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),

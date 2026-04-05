@@ -4,7 +4,7 @@ import {EditorSelection, EditorState} from '@codemirror/state';
 import {EditorView, keymap, runScopeHandlers} from '@codemirror/view';
 import {afterEach, describe, expect, it} from 'vitest';
 
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
 import {
   buildInlineCodeReplacement,
@@ -72,7 +72,7 @@ function singleQuoteKeydown(view: EditorView): void {
 
 function minimalMarkdownExtensions() {
   return [
-    markdownNotebox({
+    markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),

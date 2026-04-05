@@ -33,7 +33,7 @@ pub fn init_media_session(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "linux")]
     {
         let config = PlatformConfig {
-            dbus_name: "com_notebox_desktop",
+            dbus_name: "com_eskerra_desktop",
             display_name: "Eskerra",
             hwnd: None,
         };

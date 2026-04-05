@@ -7,7 +7,7 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
-import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
 import {collectBareBrowserUrlIntervals} from './markdownBareUrl';
 import {relativeMarkdownLinkLabelSpan} from './relativeMarkdownLinkLabelSpan';

@@ -18,7 +18,7 @@ import {
   normalizeVaultBaseUri,
   type VaultFilesystem,
   type VaultMarkdownRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {
   NoteMarkdownEditor,

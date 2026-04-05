@@ -5,7 +5,7 @@ import type {
   PlayerProgress,
   PlayerState,
   Unsubscribe,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 function clampMs(n: number): number {
   if (!Number.isFinite(n) || n < 0) {

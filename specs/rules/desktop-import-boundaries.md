@@ -8,10 +8,10 @@ Goal: make **layer violations detectable** over time—without blocking day-one 
 
 | Zone | Path glob | May import |
 |------|-----------|------------|
-| `core` | `packages/notebox-core/src/**` | TypeScript stdlib; small pure dependencies only |
-| `desktop-lib` | `apps/desktop/src/lib/**` | `@notebox/core`, npm; **may** use `@tauri-apps/*` where needed |
-| `desktop-editor` | `apps/desktop/src/editor/**` | `@notebox/core`, React, CodeMirror packages |
-| `desktop-ui` | `apps/desktop/src/components/**`, `apps/desktop/src/hooks/**` | `@notebox/core`, `lib`, React |
+| `core` | `packages/eskerra-core/src/**` | TypeScript stdlib; small pure dependencies only |
+| `desktop-lib` | `apps/desktop/src/lib/**` | `@eskerra/core`, npm; **may** use `@tauri-apps/*` where needed |
+| `desktop-editor` | `apps/desktop/src/editor/**` | `@eskerra/core`, React, CodeMirror packages |
+| `desktop-ui` | `apps/desktop/src/components/**`, `apps/desktop/src/hooks/**` | `@eskerra/core`, `lib`, React |
 
 ## Forbidden edges (target state)
 

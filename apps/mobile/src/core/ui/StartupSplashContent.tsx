@@ -17,7 +17,7 @@ import {
   MIDDLE_STARTUP_BARS_FULL,
   smoothSpectrumLevelsInPlace,
   STARTUP_SPECTRUM_SPATIAL_SMOOTH,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {ACCENT_COLOR} from './accentColor';
 import packageJson from '../../../package.json';
 

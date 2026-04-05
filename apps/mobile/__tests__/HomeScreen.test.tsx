@@ -43,7 +43,7 @@ describe('SettingsScreen', () => {
       localSettings: {
         deviceInstanceId: 'test-device',
         deviceName: '',
-        displayName: 'My Notebox',
+        displayName: 'My Eskerra',
         playlistKnownControlRevision: null,
         playlistKnownUpdatedAtMs: null,
       },
@@ -61,7 +61,7 @@ describe('SettingsScreen', () => {
     });
 
     const input = tree!.root.findByProps({testID: 'settings-display-name'});
-    expect(input.props.value).toBe('My Notebox');
+    expect(input.props.value).toBe('My Eskerra');
   });
 
   test('saves trimmed displayName and device name', async () => {

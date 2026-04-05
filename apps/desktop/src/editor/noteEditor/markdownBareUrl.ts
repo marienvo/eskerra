@@ -1,7 +1,7 @@
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import type {EditorState} from '@codemirror/state';
 import type {SyntaxNode} from '@lezer/common';
-import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
 const TREE_ENSURE_MS = 200;
 

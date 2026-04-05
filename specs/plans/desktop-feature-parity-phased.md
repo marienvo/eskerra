@@ -4,7 +4,7 @@ This document lists **remaining work** for the Linux desktop app (`apps/desktop`
 
 **Companion doc:** high-level shared contract and MVP matrix live in [`specs/architecture/desktop-mobile-parity.md`](../architecture/desktop-mobile-parity.md).
 
-**Parity definition:** “Same vault on disk produces equivalent outcomes for note I/O, settings, podcast episode discovery from markdown, playback resume (`.notebox/playlist.json`), and user actions that mutate podcast markdown (played state, RSS refresh results).” Platform-specific implementation (SAF vs folder path, Track Player vs HTML audio + MPRIS) is expected to differ; **behavior** should align where the vault format is shared.
+**Parity definition:** “Same vault on disk produces equivalent outcomes for note I/O, settings, podcast episode discovery from markdown, playback resume (`.eskerra/playlist.json`), and user actions that mutate podcast markdown (played state, RSS refresh results).” Platform-specific implementation (SAF vs folder path, Track Player vs HTML audio + MPRIS) is expected to differ; **behavior** should align where the vault format is shared.
 
 ---
 
@@ -13,7 +13,7 @@ This document lists **remaining work** for the Linux desktop app (`apps/desktop`
 For each phase:
 
 1. **Implement** the deliverables and meet **exit criteria**.
-2. **Stabilize:** fix regressions; add or extend tests where cheap and meaningful (Vitest in `@notebox/core`, desktop UI tests if/when introduced, Rust checks for Tauri commands).
+2. **Stabilize:** fix regressions; add or extend tests where cheap and meaningful (Vitest in `@eskerra/core`, desktop UI tests if/when introduced, Rust checks for Tauri commands).
 3. **Layout / design pass:** adjust structure and visuals without changing the vault contract.
 4. **Short QA checklist:** run manual scenarios listed under **Between-phase focus** before starting the next phase.
 
@@ -28,7 +28,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 | Area | Implemented behavior (summary) |
 | ---- | ------------------------------ |
 | **Setup** | SAF tree selection; initial route resolution; vault context |
-| **Settings** | Display name in `.notebox/settings-shared.json`; change vault directory; navigation back to setup |
+| **Settings** | Display name in `.eskerra/settings-shared.json`; change vault directory; navigation back to setup |
 | **Vault / “Log”** | Inbox list (`Inbox/`), refresh, **multi-select + delete**, open **NoteDetail**, title-from-H1, relative date labels, tile coloring |
 | **Entry / Add note** | Compose flow with markdown body, keyboard handling, save via shared vault compose helpers; integration with notes list refresh |
 | **Episodes / Podcasts** | Scan `General/` markdown; build **sectioned episode list**; **pull-to-refresh** triggers **native Kotlin RSS sync** (batch); **play episode** via Track Player; **mini player**; **mark played** / batch mark; optional **artwork** selection for mini player; **seek**; errors and loading states |
@@ -44,9 +44,9 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 | Area | Current milestone |
 | ---- | ----------------- |
 | **Vault root** | Native folder dialog; path persisted (store + session) |
-| **Layout / notes** | Bootstrap vault (`initNoteboxVault` via `@notebox/core`), sync `General/Inbox.md`, **list Inbox notes**, **single-column editor**, create note (`window.prompt` title), save markdown |
+| **Layout / notes** | Bootstrap vault (`initEskerraVault` via `@eskerra/core`), sync `General/Inbox.md`, **list Inbox notes**, **single-column editor**, create note (`window.prompt` title), save markdown |
 | **Settings** | Display name editable in header; change folder |
-| **Audio** | Manual **MP3 URL** field; **play / pause**; **resume from** `.notebox/playlist.json`; **MPRIS** on Linux (souvlaki) |
+| **Audio** | Manual **MP3 URL** field; **play / pause**; **resume from** `.eskerra/playlist.json`; **MPRIS** on Linux (souvlaki) |
 | **Podcasts from vault** | **Not present** as a first-class Episodes UI (no scan of `General/` episode lists, no sectioned list, no refresh) |
 | **RSS sync** | **Deferred** (documented in parity matrix) |
 | **Mark played / batch** | **Not present** |
@@ -56,7 +56,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 
 ## Phase 1 — Vault and notes (inbox parity)
 
-**Objective:** Desktop feel and capabilities for **Inbox** match Android’s vault tab for daily note work, still using the shared `@notebox/core` + `VaultFilesystem` contract.
+**Objective:** Desktop feel and capabilities for **Inbox** match Android’s vault tab for daily note work, still using the shared `@eskerra/core` + `VaultFilesystem` contract.
 
 **Deliverables**
 
@@ -84,7 +84,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 
 **Deliverables**
 
-- **Port or share** the TypeScript-side vault scanning and episode model (`podcastPhase1`, types under `apps/mobile/src/types`, hooks like `usePodcasts`) into a **desktop-consumable module**—prefer **`@notebox/core` or a small `packages/` slice** if it avoids duplicating parsing rules.
+- **Port or share** the TypeScript-side vault scanning and episode model (`podcastPhase1`, types under `apps/mobile/src/types`, hooks like `usePodcasts`) into a **desktop-consumable module**—prefer **`@eskerra/core` or a small `packages/` slice** if it avoids duplicating parsing rules.
 - **UI:** sectioned episode list analogous to `PodcastsScreen` (sections, row actions that exist **without** sync first—play at minimum).
 - **Playback:** **play episode** wires `HtmlAudioPlayer` + `playlist.json` updates + **MPRIS metadata** (title/artist/position) matching episode fields where available.
 - **Mini-player equivalent:** persistent player strip (play/pause, scrub if supported by `AudioPlayer` interface, show title).
@@ -93,7 +93,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 **Exit criteria**
 
 - Opening a vault that already has Android-generated podcast markdown shows **the same episode inventory** (same ordering/sections as defined by shared parsing—document any intentional deltas).
-- Playing an episode updates **`.notebox/playlist.json`** so Android can resume and vice versa.
+- Playing an episode updates **`.eskerra/playlist.json`** so Android can resume and vice versa.
 
 **Between-phase focus**
 
@@ -183,7 +183,7 @@ Tasks that can start early or span phases:
 
 | Item | Notes |
 | ---- | ----- |
-| **Share parsing / types in `@notebox/core`** | Reduces drift between platforms; add tests for markdown edge cases. |
+| **Share parsing / types in `@eskerra/core`** | Reduces drift between platforms; add tests for markdown edge cases. |
 | **Observability** | Optional Sentry or logging parity for desktop (see mobile observability specs)—not required for vault parity but helps beta. |
 | **CI** | Keep `cargo check` / desktop build green; add desktop Vitest when business logic moves to shared packages. |
 | **Performance** | Instrument startup and heavy scans per `.cursor/rules/performance.mdc` when adding General/ indexing. |

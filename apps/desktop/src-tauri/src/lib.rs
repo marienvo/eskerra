@@ -76,7 +76,7 @@ pub fn run() {
             vault::vault_rename_file,
             vault::vault_list_dir,
             vault_watch::vault_start_watch,
-            window_state_disk::notebox_peek_window_state_file,
+            window_state_disk::eskerra_peek_window_state_file,
             media::media_set_metadata,
             media::media_set_playback,
             media::media_clear_session,

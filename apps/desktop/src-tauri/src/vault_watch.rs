@@ -58,7 +58,7 @@ pub fn vault_start_watch(
     )
     .map_err(|e| e.to_string())?;
 
-    for sub in ["Inbox", "General", ".notebox"] {
+    for sub in ["Inbox", "General", ".eskerra"] {
         let p = root.join(sub);
         if p.exists() {
             watcher

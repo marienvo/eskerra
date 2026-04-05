@@ -20,7 +20,7 @@ The same pattern applies to:
 
 For every mutation, the app follows a two-step process:
 
-1. Perform the storage mutation in `noteboxStorage`.
+1. Perform the storage mutation in `eskerraStorage`.
 2. Update UI state optimistically from the mutation result, then reconcile in the background.
 
 For create specifically:

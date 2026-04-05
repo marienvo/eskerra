@@ -1,7 +1,7 @@
 import {DeviceEventEmitter, NativeModules, Platform} from 'react-native';
 
 /** Must match [PodcastRssSyncModule.EVENT_PROGRESS] in Kotlin. */
-export const NOTEBOX_PODCAST_RSS_SYNC_PROGRESS_EVENT = 'NoteboxPodcastRssSyncProgress';
+export const ESKERRA_PODCAST_RSS_SYNC_PROGRESS_EVENT = 'EskerraPodcastRssSyncProgress';
 
 export type PodcastRssSyncProgressPayload = {
   jobId: string;
@@ -18,7 +18,7 @@ function getNativeModule(): NativePodcastRssSyncModule | null {
   if (Platform.OS !== 'android') {
     return null;
   }
-  const mod = NativeModules.NoteboxPodcastRssSync as NativePodcastRssSyncModule | undefined;
+  const mod = NativeModules.EskerraPodcastRssSync as NativePodcastRssSyncModule | undefined;
   if (mod?.startPodcastRssSync == null) {
     return null;
   }
@@ -45,7 +45,7 @@ export async function runAndroidGeneralPodcastRssSync(
   }
   const jobId = `podcast-rss-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const sub = DeviceEventEmitter.addListener(
-    NOTEBOX_PODCAST_RSS_SYNC_PROGRESS_EVENT,
+    ESKERRA_PODCAST_RSS_SYNC_PROGRESS_EVENT,
     (raw: {jobId?: string; percent?: number; phase?: string; detail?: string}) => {
       if (raw.jobId == null || String(raw.jobId) !== jobId) {
         return;

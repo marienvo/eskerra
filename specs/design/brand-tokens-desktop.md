@@ -1,4 +1,4 @@
-# Notebox desktop brand tokens
+# Eskerra desktop brand tokens
 
 Product logo files live in [`assets/brand/`](../../assets/brand/) (see that folder’s README).
 

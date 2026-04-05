@@ -13,7 +13,7 @@ import {
 } from '@gluestack-ui/themed';
 import {StyleSheet} from 'react-native';
 
-import {buildNoteboxSettingsFromForm, type R2Jurisdiction} from '@notebox/core';
+import {buildEskerraSettingsFromForm, type R2Jurisdiction} from '@eskerra/core';
 
 import {RootStackParamList} from '../../../navigation/types';
 import {useSettings} from '../hooks/useSettings';
@@ -70,7 +70,7 @@ export function SettingsScreen() {
   }, [localSettings]);
 
   const handleSave = async () => {
-    const shared = buildNoteboxSettingsFromForm({
+    const shared = buildEskerraSettingsFromForm({
       endpoint: r2Endpoint,
       bucket: r2Bucket,
       accessKeyId: r2AccessKeyId,
@@ -147,7 +147,7 @@ export function SettingsScreen() {
         </Box>
 
         <Text style={styles.sectionTitle}>Vault (synced)</Text>
-        <Text style={styles.hint}>Stored in .notebox/settings-shared.json in your vault.</Text>
+        <Text style={styles.hint}>Stored in .eskerra/settings-shared.json in your vault.</Text>
 
         <Text style={styles.subsectionTitle}>Cloudflare R2 (optional)</Text>
         <Text testID="settings-r2-hint" style={styles.hint}>
@@ -230,7 +230,7 @@ export function SettingsScreen() {
         </Input>
 
         <Text style={styles.sectionTitle}>This device</Text>
-        <Text style={styles.hint}>Stored in .notebox/settings-local.json (not synced with Git by default).</Text>
+        <Text style={styles.hint}>Stored in .eskerra/settings-local.json (not synced with Git by default).</Text>
 
         <Text style={styles.label}>Display name</Text>
         <Input style={styles.input}>

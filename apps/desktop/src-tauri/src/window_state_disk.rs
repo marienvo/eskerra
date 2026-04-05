@@ -5,7 +5,7 @@ use tauri::{AppHandle, Manager};
 const WINDOW_STATE_FILE: &str = ".window-state.json";
 
 #[tauri::command]
-pub fn notebox_peek_window_state_file(app: AppHandle) -> Result<serde_json::Value, String> {
+pub fn eskerra_peek_window_state_file(app: AppHandle) -> Result<serde_json::Value, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let path = dir.join(WINDOW_STATE_FILE);
     if !path.exists() {

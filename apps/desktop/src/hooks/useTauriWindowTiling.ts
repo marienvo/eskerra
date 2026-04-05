@@ -28,7 +28,7 @@ export function useTauriWindowTiling(): {
         setTiling(d.state);
         setConfidence(d.confidence);
         if (tilingDebug) {
-          console.debug('[notebox tiling]', d);
+          console.debug('[eskerra tiling]', d);
         }
       } catch {
         // ignore

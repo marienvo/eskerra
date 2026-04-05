@@ -3,7 +3,7 @@ import {ensureSyntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {describe, expect, it} from 'vitest';
 
-import {isBrowserOpenableMarkdownHref, MARKDOWN_EXTENSION} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref, MARKDOWN_EXTENSION} from '@eskerra/core';
 
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';

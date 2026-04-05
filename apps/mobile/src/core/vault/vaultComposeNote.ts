@@ -1,9 +1,9 @@
 /**
- * Re-exports shared inbox compose helpers from `@notebox/core` (same as RN `AddNoteScreen`).
+ * Re-exports shared inbox compose helpers from `@eskerra/core` (same as RN `AddNoteScreen`).
  */
 export {
   buildInboxMarkdownFromCompose,
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
   type ParsedComposeInput,
-} from '@notebox/core';
+} from '@eskerra/core';

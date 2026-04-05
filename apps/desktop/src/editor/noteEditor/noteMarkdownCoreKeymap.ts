@@ -1,6 +1,6 @@
 import {EditorSelection} from '@codemirror/state';
 import {type EditorView, type KeyBinding} from '@codemirror/view';
-import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';

@@ -14,7 +14,7 @@ import {
 } from '@codemirror/view';
 
 /** DOM class on each `.cm-line` that should show full markdown marker chrome. */
-export const MARKER_FOCUS_LINE_CLASS = 'cm-notebox-marker-focus-line';
+export const MARKER_FOCUS_LINE_CLASS = 'cm-eskerra-marker-focus-line';
 
 /**
  * Eskerra **table cell** editors set this so an unfocused cell never gets marker-focus lines.

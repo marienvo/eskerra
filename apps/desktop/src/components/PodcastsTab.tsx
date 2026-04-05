@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import type {VaultFilesystem} from '@notebox/core';
-import type {PlaylistEntry} from '@notebox/core';
+import type {VaultFilesystem} from '@eskerra/core';
+import type {PlaylistEntry} from '@eskerra/core';
 
 import {runPodcastPhase1Desktop} from '../lib/podcasts/podcastPhase1Desktop';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
@@ -178,7 +178,7 @@ export function PodcastsTab({
                 </div>
                 <div className="playlist-body">
                   <p className="muted small">
-                    Resume pointer and playback state sync to <code>.notebox/playlist.json</code> for
+                    Resume pointer and playback state sync to <code>.eskerra/playlist.json</code> for
                     cross-device resume.
                   </p>
                   {playlistFile ? (

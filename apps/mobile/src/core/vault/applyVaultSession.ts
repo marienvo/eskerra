@@ -1,29 +1,29 @@
-import {ensureDeviceInstanceId} from '@notebox/core';
+import {ensureDeviceInstanceId} from '@eskerra/core';
 
 import {appBreadcrumb} from '../observability';
-import {tryPrepareNoteboxSessionNative} from '../storage/androidVaultListing';
+import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
 import {
-  initNotebox,
+  initEskerra,
   migrateLegacySharedDisplayNameIfNeeded,
-  parseNoteboxSettings,
+  parseEskerraSettings,
   readLocalSettings,
   readSettings,
   writeLocalSettings,
-} from '../storage/noteboxStorage';
-import {NoteboxLocalSettings, NoteboxSettings, NoteSummary} from '../../types';
+} from '../storage/eskerraStorage';
+import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 
 export type PreparedVaultSession = {
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
-  localSettings: NoteboxLocalSettings;
+  localSettings: EskerraLocalSettings;
   sessionPrep: 'native' | 'legacy';
-  settings: NoteboxSettings;
+  settings: EskerraSettings;
 };
 
 /**
  * Prepares the vault session for a given base URI.
  * - Android: prefers the native prepare path when available.
- * - Falls back to legacy `initNotebox` + `readSettings` when native fails/missing.
+ * - Falls back to legacy `initEskerra` + `readSettings` when native fails/missing.
  */
 export async function prepareVaultSession(baseUri: string): Promise<PreparedVaultSession> {
   appBreadcrumb({
@@ -32,15 +32,15 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     data: {},
   });
 
-  let nextSettings: NoteboxSettings;
+  let nextSettings: EskerraSettings;
   let sessionPrep: 'native' | 'legacy' = 'legacy';
   let inboxPrefetch: NoteSummary[] | null = null;
   let inboxContentByUri: Record<string, string> | null = null;
 
   try {
-    const prepared = await tryPrepareNoteboxSessionNative(baseUri);
+    const prepared = await tryPrepareEskerraSessionNative(baseUri);
     if (prepared !== null) {
-      nextSettings = parseNoteboxSettings(prepared.settingsJson);
+      nextSettings = parseEskerraSettings(prepared.settingsJson);
       await migrateLegacySharedDisplayNameIfNeeded(
         baseUri,
         prepared.settingsJson,
@@ -50,11 +50,11 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
       inboxPrefetch = prepared.inboxPrefetch;
       inboxContentByUri = prepared.inboxContentByUri;
     } else {
-      await initNotebox(baseUri);
+      await initEskerra(baseUri);
       nextSettings = await readSettings(baseUri);
     }
   } catch {
-    await initNotebox(baseUri);
+    await initEskerra(baseUri);
     nextSettings = await readSettings(baseUri);
     sessionPrep = 'legacy';
     inboxPrefetch = null;

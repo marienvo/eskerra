@@ -1,6 +1,6 @@
 import {invoke} from '@tauri-apps/api/core';
 
-import type {R2SignedRequestTransport} from '@notebox/core';
+import type {R2SignedRequestTransport} from '@eskerra/core';
 
 /**
  * Runs pre-signed R2/S3 requests in Rust. The WebView cannot reach the R2 API

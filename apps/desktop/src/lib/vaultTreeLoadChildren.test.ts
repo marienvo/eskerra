@@ -1,6 +1,6 @@
 import {describe, expect, it, vi} from 'vitest';
 
-import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
+import type {VaultDirEntry, VaultFilesystem} from '@eskerra/core';
 
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from './vaultTreeLoadChildren';
 

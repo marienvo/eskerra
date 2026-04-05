@@ -1,6 +1,6 @@
 import {load} from '@tauri-apps/plugin-store';
 
-const STORE_PATH = 'notebox-desktop.json';
+const STORE_PATH = 'eskerra-desktop.json';
 const KEY_V4 = 'layoutPanelsV4';
 const KEY_V3 = 'layoutPanelsV3';
 

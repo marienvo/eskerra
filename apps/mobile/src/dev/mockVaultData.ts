@@ -1,4 +1,4 @@
-import {NoteboxLocalSettings, NoteboxSettings} from '../types';
+import {EskerraLocalSettings, EskerraSettings} from '../types';
 
 export type MockNoteSeed = {
   content: string;
@@ -12,7 +12,7 @@ export type MockPodcastFileSeed = {
 
 export const DEV_MOCK_VAULT_URI = '__dev_mock_vault__';
 
-export const MOCK_SETTINGS: NoteboxSettings = {
+export const MOCK_SETTINGS: EskerraSettings = {
   r2: {
     endpoint: 'https://00000000000000000000000000000000.r2.cloudflarestorage.com',
     bucket: 'mock-bucket',
@@ -21,10 +21,10 @@ export const MOCK_SETTINGS: NoteboxSettings = {
   },
 };
 
-export const MOCK_LOCAL_SETTINGS: NoteboxLocalSettings = {
+export const MOCK_LOCAL_SETTINGS: EskerraLocalSettings = {
   deviceName: '',
   deviceInstanceId: '00000000-0000-4000-8000-000000000001',
-  displayName: 'Dev Notebox',
+  displayName: 'Dev Eskerra',
   playlistKnownControlRevision: null,
   playlistKnownUpdatedAtMs: null,
 };

@@ -23,13 +23,13 @@ import {
   LIST_DIVIDER_LIGHT,
   LIST_HORIZONTAL_INSET,
 } from '../../../core/ui/listMetrics';
-import {getNoteTitle} from '../../../core/storage/noteboxStorage';
+import {getNoteTitle} from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {
   extractFirstMarkdownH1,
   formatRelativeCalendarLabel,
   getInboxTileBackgroundColor,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {MainTabParamList, VaultStackParamList} from '../../../navigation/types';
 import {useNotes} from '../hooks/useNotes';
 

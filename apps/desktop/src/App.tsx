@@ -359,7 +359,7 @@ export default function App() {
               pathExists: boolean;
               mainWidth?: number;
               mainHeight?: number;
-            }>('notebox_peek_window_state_file');
+            }>('eskerra_peek_window_state_file');
             if (v.pathExists) {
               diskMainW = v.mainWidth;
               diskMainH = v.mainHeight;
@@ -529,7 +529,7 @@ export default function App() {
             <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
             <div className="shell setup-shell">
               <h1>{settingsName}</h1>
-              <p className="muted">Choose your notes folder (vault root). Settings are stored in `.notebox/` inside it.</p>
+              <p className="muted">Choose your notes folder (vault root). Settings are stored in `.eskerra/` inside it.</p>
               <button type="button" className="primary" onClick={() => void pickFolder()} disabled={busy}>
                 Choose folder…
               </button>

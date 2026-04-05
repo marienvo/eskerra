@@ -9,7 +9,7 @@ import {
   normalizeImageFileExtension,
   normalizeVaultBaseUri,
   sanitizeAttachmentBaseName,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {vaultJoinSimple} from './vaultFsPaths';
 

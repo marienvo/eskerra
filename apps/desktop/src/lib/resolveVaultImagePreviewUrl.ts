@@ -1,6 +1,6 @@
 import {convertFileSrc} from '@tauri-apps/api/core';
 
-import {ASSETS_DIRECTORY_NAME, ATTACHMENTS_DIRECTORY_NAME} from '@notebox/core';
+import {ASSETS_DIRECTORY_NAME, ATTACHMENTS_DIRECTORY_NAME} from '@eskerra/core';
 
 import {vaultDirname, vaultJoinSimple, vaultResolveRelativeToDir} from './vaultFsPaths';
 

@@ -20,10 +20,10 @@ import {prepareVaultSession} from './src/core/vault/applyVaultSession';
 import {RootNavigator} from './src/navigation/RootNavigator';
 import {RootStackParamList} from './src/navigation/types';
 import {clearUri} from './src/core/storage/appStorage';
-import {readPlaylistCoalesced} from './src/core/storage/noteboxStorage';
+import {readPlaylistCoalesced} from './src/core/storage/eskerraStorage';
 import {setPodcastBootstrapPayload} from './src/features/podcasts/services/podcastBootstrapCache';
 import {runPodcastPhase1} from './src/features/podcasts/services/podcastPhase1';
-import {NoteSummary, NoteboxLocalSettings, NoteboxSettings} from './src/types';
+import {NoteSummary, EskerraLocalSettings, EskerraSettings} from './src/types';
 import {appBreadcrumb} from './src/core/observability/appBreadcrumb';
 import {elapsedMsSinceJsBundleEval} from './src/core/observability/startupTiming';
 import {NotesProvider} from './src/core/vault/NotesContext';
@@ -33,8 +33,8 @@ type InitialRoute = keyof RootStackParamList;
 
 type VaultInitialSession = {
   uri: string;
-  settings: NoteboxSettings;
-  localSettings: NoteboxLocalSettings;
+  settings: EskerraSettings;
+  localSettings: EskerraLocalSettings;
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
 };

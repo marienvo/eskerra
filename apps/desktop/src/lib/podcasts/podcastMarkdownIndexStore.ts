@@ -2,7 +2,7 @@ import {load} from '@tauri-apps/plugin-store';
 
 import type {RootMarkdownFile} from './podcastTypes';
 
-const STORE_PATH = 'notebox-desktop.json';
+const STORE_PATH = 'eskerra-desktop.json';
 const PAYLOAD_VERSION = 1;
 
 type PersistedPayload = {

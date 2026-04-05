@@ -10,12 +10,12 @@ import {
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 
 function lineClassSets(md: string): Record<number, string[]> {
   const state = EditorState.create({
     doc: md,
-    extensions: markdownNotebox({
+    extensions: markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -34,7 +34,7 @@ function lineClassSets(md: string): Record<number, string[]> {
 function innermostHighlightClassAt(docText: string, pos: number): string | undefined {
   const state = EditorState.create({
     doc: docText,
-    extensions: markdownNotebox({
+    extensions: markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -58,7 +58,7 @@ function innermostHighlightClassAt(docText: string, pos: number): string | undef
 function highlightClassesOverlapping(docText: string, from: number, to: number): string[] {
   const state = EditorState.create({
     doc: docText,
-    extensions: markdownNotebox({
+    extensions: markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),
@@ -92,7 +92,7 @@ describe('noteMarkdown list highlighting', () => {
 
 describe('noteMarkdownListItemFoldService', () => {
   const foldExtensions = [
-    markdownNotebox({
+    markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),

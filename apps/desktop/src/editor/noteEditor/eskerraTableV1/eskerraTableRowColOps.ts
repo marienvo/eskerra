@@ -1,4 +1,4 @@
-import type {EskerraTableAlignment} from '@notebox/core';
+import type {EskerraTableAlignment} from '@eskerra/core';
 
 /** Build permuted column indices: move `from` so it lands before `insertBefore` (0..n). */
 export function columnReorderPermutation(

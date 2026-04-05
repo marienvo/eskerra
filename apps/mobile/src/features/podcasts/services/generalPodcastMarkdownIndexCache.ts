@@ -5,7 +5,7 @@ import {isPodcastFile} from './podcastParser';
 
 const RSS_PODCAST_FILE_PATTERN = /^📻\s+.+\.md$/;
 
-const STORAGE_KEY_PREFIX = 'notebox:generalPodcastMarkdownIndex:';
+const STORAGE_KEY_PREFIX = 'eskerra:generalPodcastMarkdownIndex:';
 
 const PAYLOAD_VERSION = 1;
 

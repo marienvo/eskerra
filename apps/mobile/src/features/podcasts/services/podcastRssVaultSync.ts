@@ -2,8 +2,8 @@ import {Platform} from 'react-native';
 
 import {
   getVaultGeneralDirectoryUri,
-  isNoteboxDevMockVaultBaseUri,
-} from '../../../core/storage/noteboxStorage';
+  isEskerraDevMockVaultBaseUri,
+} from '../../../core/storage/eskerraStorage';
 import {
   isAndroidPodcastRssSyncAvailable,
   PodcastRssSyncProgressPayload,
@@ -28,7 +28,7 @@ export async function runNativePodcastRssSyncForVault(
   if (Platform.OS !== 'android') {
     throw new Error('Native podcast RSS sync is only available on Android.');
   }
-  if (isNoteboxDevMockVaultBaseUri(baseUri)) {
+  if (isEskerraDevMockVaultBaseUri(baseUri)) {
     throw new Error('Native podcast RSS sync is not available for the dev mock vault.');
   }
   if (!isAndroidPodcastRssSyncAvailable()) {
@@ -43,7 +43,7 @@ export async function runNativePodcastRssSyncForVault(
 export function isNativePodcastRssSyncSupported(baseUri: string): boolean {
   return (
     Platform.OS === 'android' &&
-    !isNoteboxDevMockVaultBaseUri(baseUri) &&
+    !isEskerraDevMockVaultBaseUri(baseUri) &&
     isAndroidPodcastRssSyncAvailable()
   );
 }

@@ -1,4 +1,4 @@
-import {markdownContainsTransientImageUrls} from '@notebox/core';
+import {markdownContainsTransientImageUrls} from '@eskerra/core';
 
 import {dotExtensionForClipboardBytes} from './clipboardImageFiles';
 import {saveVaultImageBytes} from './desktopVaultAttachments';

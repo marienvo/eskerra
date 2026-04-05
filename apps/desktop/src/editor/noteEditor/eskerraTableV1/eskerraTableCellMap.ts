@@ -1,4 +1,4 @@
-import {parseEskerraTableV1FromLines} from '@notebox/core';
+import {parseEskerraTableV1FromLines} from '@eskerra/core';
 import {type Text} from '@codemirror/state';
 
 import {type EskerraTableDocBlock} from './eskerraTableV1DocBlocks';

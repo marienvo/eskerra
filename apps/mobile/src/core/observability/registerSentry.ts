@@ -77,7 +77,7 @@ function init(): void {
       attachViewHierarchy: false,
       enableCaptureFailedRequests: false,
       patchGlobalPromise: true,
-      release: `notebox@${packageJson.version}`,
+      release: `eskerra@${packageJson.version}`,
       beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
         return scrubEvent(event as unknown as Event) as ErrorEvent;
       },
@@ -86,7 +86,7 @@ function init(): void {
       },
     });
   } catch (error) {
-    console.error('[notebox:Sentry] init failed', error);
+      console.error('[eskerra:Sentry] init failed', error);
     return;
   }
 
@@ -106,7 +106,7 @@ async function attachRingBufferTailOnce(): Promise<void> {
     Sentry.withScope(scope => {
       scope.setExtra('ring_tail', JSON.stringify(tail).slice(0, 8000));
       scope.setFingerprint(['ring-buffer-tail']);
-      Sentry.captureMessage('notebox.ring_buffer.tail', 'info');
+      Sentry.captureMessage('eskerra.ring_buffer.tail', 'info');
     });
     await setLastRingSentTimestamp(Date.now());
   } catch {

@@ -1,6 +1,6 @@
 /* eslint-env jest, node */
 /** Set before any test file so app code can skip long deferred timers without relying on inlined env. */
-global.__NOTEBOX_JEST__ = true;
+global.__ESKERRA_JEST__ = true;
 
 /**
  * Do not use `react-native-reanimated/mock`: it imports the real `index`, which pulls in native

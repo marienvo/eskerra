@@ -1,5 +1,5 @@
 {
-  "name": "notebox-monorepo",
+  "name": "eskerra-monorepo",
   "private": true,
   "license": "AGPL-3.0-only",
   "workspaces": [
@@ -7,14 +7,14 @@
     "packages/*"
   ],
   "scripts": {
-    "apk-release": "npm run apk-release -w @notebox/mobile",
-    "mobile": "npm run start -w @notebox/mobile",
-    "mobile:android": "npm run android -w @notebox/mobile",
-    "mobile:ios": "npm run ios -w @notebox/mobile",
-    "desktop": "npm run desktop:dev -w @notebox/desktop",
-    "desktop:build": "npm run desktop:build -w @notebox/desktop",
-    "lint": "npm run lint -w @notebox/mobile && npm run lint -w @notebox/desktop",
-    "test": "npm run test -w @notebox/core && npm run test -w @notebox/mobile && node --test scripts/bump-release-version-lib.test.mjs && node --test scripts/tauri-desktop-build.test.mjs",
+    "apk-release": "npm run apk-release -w @eskerra/mobile",
+    "mobile": "npm run start -w @eskerra/mobile",
+    "mobile:android": "npm run android -w @eskerra/mobile",
+    "mobile:ios": "npm run ios -w @eskerra/mobile",
+    "desktop": "npm run desktop:dev -w @eskerra/desktop",
+    "desktop:build": "npm run desktop:build -w @eskerra/desktop",
+    "lint": "npm run lint -w @eskerra/mobile && npm run lint -w @eskerra/desktop",
+    "test": "npm run test -w @eskerra/core && npm run test -w @eskerra/mobile && node --test scripts/bump-release-version-lib.test.mjs && node --test scripts/tauri-desktop-build.test.mjs",
     "test:scripts": "node --test scripts/bump-release-version-lib.test.mjs scripts/tauri-desktop-build.test.mjs",
     "prepare": "husky"
   },

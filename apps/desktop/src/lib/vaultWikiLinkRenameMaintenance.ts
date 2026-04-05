@@ -4,7 +4,7 @@ import {
   planInboxWikiLinkRenameInMarkdown,
   type InboxWikiLinkNoteRef,
   type VaultFilesystem,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 function markdownUtf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;

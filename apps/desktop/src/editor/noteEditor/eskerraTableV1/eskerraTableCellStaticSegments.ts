@@ -2,11 +2,11 @@ import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
-import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
 import {collectBareBrowserUrlIntervals} from '../markdownBareUrl';
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
-import {markdownNotebox} from '../markdownNoteboxLanguage';
+import {markdownEskerra} from '../markdownEskerraLanguage';
 import {
   noteMarkdownHighlightStyle,
   noteMarkdownParserExtensions,
@@ -228,7 +228,7 @@ export function buildCellStaticSegments(
   const state = EditorState.create({
     doc: text,
     extensions: [
-      markdownNotebox({
+      markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),

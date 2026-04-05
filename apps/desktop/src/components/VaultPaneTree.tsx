@@ -7,7 +7,7 @@ import {
   type TreeInstance,
 } from '@headless-tree/core';
 import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
-import {normalizeVaultBaseUri, type VaultFilesystem} from '@notebox/core';
+import {normalizeVaultBaseUri, type VaultFilesystem} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {
@@ -31,7 +31,7 @@ import {MaterialIcon} from './MaterialIcon';
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
 const VAULT_TREE_ROW_HEIGHT_PX = 32;
 
-const VAULT_TREE_DND_MIME = 'application/x-notebox-vault-tree';
+const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
 
 function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | null>): void {
   const el = hostRef.current;

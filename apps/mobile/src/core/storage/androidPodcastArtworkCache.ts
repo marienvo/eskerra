@@ -29,7 +29,7 @@ function getNativeDisplayModule(): Pick<
   if (Platform.OS !== 'android') {
     return null;
   }
-  const mod = NativeModules.NoteboxPodcastArtworkCache as
+  const mod = NativeModules.EskerraPodcastArtworkCache as
     | NativePodcastArtworkCacheModule
     | undefined;
   if (mod?.ensureLocalArtworkFile == null) {
@@ -42,7 +42,7 @@ function getNativeStorageModule(): NativePodcastArtworkCacheModule | null {
   if (Platform.OS !== 'android') {
     return null;
   }
-  const mod = NativeModules.NoteboxPodcastArtworkCache as
+  const mod = NativeModules.EskerraPodcastArtworkCache as
     | NativePodcastArtworkCacheModule
     | undefined;
   if (mod?.writeArtworkFile == null || mod?.fileUriExists == null) {

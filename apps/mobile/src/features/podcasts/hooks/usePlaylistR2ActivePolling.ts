@@ -2,14 +2,14 @@ import {
   createPlaylistEtagPoller,
   fetchR2PlaylistConditional,
   isVaultR2PlaylistConfigured,
-  type NoteboxSettings,
-} from '@notebox/core';
+  type EskerraSettings,
+} from '@eskerra/core';
 import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {AppState} from 'react-native';
 
 type UsePlaylistR2ActivePollingParams = {
   baseUri: string | null;
-  settings: NoteboxSettings | null;
+  settings: EskerraSettings | null;
   onRemotePlaylistUpdated: () => void;
   /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
   allowPolling?: boolean;

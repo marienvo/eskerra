@@ -7,7 +7,7 @@ import {
   listGeneralMarkdownFiles,
   readPlaylistCoalesced,
   readPodcastFileContent,
-} from '../src/core/storage/noteboxStorage';
+} from '../src/core/storage/eskerraStorage';
 import {useVaultContext} from '../src/core/vault/VaultContext';
 import {usePodcasts} from '../src/features/podcasts/hooks/usePodcasts';
 import {groupBySection, isPodcastFile, parsePodcastFile} from '../src/features/podcasts/services/podcastParser';
@@ -23,7 +23,7 @@ import {
 import {resetRssFeedUrlCacheForTesting} from '../src/features/podcasts/services/rssFeedUrlCache';
 import {PodcastEpisode} from '../src/types';
 
-jest.mock('../src/core/storage/noteboxStorage', () => ({
+jest.mock('../src/core/storage/eskerraStorage', () => ({
   clearPlaylist: jest.fn(),
   listGeneralMarkdownFiles: jest.fn(),
   readPlaylistCoalesced: jest.fn(),
@@ -283,7 +283,7 @@ describe('usePodcasts loading lifecycle', () => {
   test('applies persisted rssFeedUrl during phase 1 when AsyncStorage has series mapping', async () => {
     const feedUrl = 'https://example.com/persisted-feed.xml';
     asyncStorageGetItemMock.mockImplementation(async key => {
-      if (key === `notebox:rssFeedUrlBySeries:${baseUri}`) {
+      if (key === `eskerra:rssFeedUrlBySeries:${baseUri}`) {
         return JSON.stringify({
           byNormalized: {'series a': feedUrl},
           bySeries: {'Series A': feedUrl},
@@ -332,7 +332,7 @@ describe('usePodcasts loading lifecycle', () => {
   test('enriches episode rssFeedUrl from persisted section title when seriesName differs', async () => {
     const feedUrl = 'https://example.com/section-title-feed.xml';
     asyncStorageGetItemMock.mockImplementation(async key => {
-      if (key === `notebox:rssFeedUrlBySeries:${baseUri}`) {
+      if (key === `eskerra:rssFeedUrlBySeries:${baseUri}`) {
         return JSON.stringify({
           byNormalized: {},
           bySeries: {'File Section Name': feedUrl},
@@ -400,7 +400,7 @@ describe('usePodcasts loading lifecycle', () => {
       },
     ];
     asyncStorageGetItemMock.mockImplementation(async key => {
-      if (key === `notebox:generalPodcastMarkdownIndex:${baseUri}`) {
+      if (key === `eskerra:generalPodcastMarkdownIndex:${baseUri}`) {
         return JSON.stringify({
           entries,
           snapshottedAt: new Date().toISOString(),

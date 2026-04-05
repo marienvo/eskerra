@@ -1,4 +1,4 @@
-import {stemFromMarkdownFileName} from '@notebox/core';
+import {stemFromMarkdownFileName} from '@eskerra/core';
 
 export type VaultMarkdownRefLike = {name: string; uri: string};
 

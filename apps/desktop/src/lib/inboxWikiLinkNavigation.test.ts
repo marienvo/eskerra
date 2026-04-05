@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import type {VaultDirEntry, VaultFilesystem} from '@notebox/core';
+import type {VaultDirEntry, VaultFilesystem} from '@eskerra/core';
 
 import {
   inboxRelativeMarkdownLinkHrefIsResolved,

@@ -1,6 +1,6 @@
 import {load} from '@tauri-apps/plugin-store';
 
-export const MAIN_WINDOW_UI_STORE_PATH = 'notebox-desktop.json';
+export const MAIN_WINDOW_UI_STORE_PATH = 'eskerra-desktop.json';
 export const MAIN_WINDOW_UI_KEY = 'mainWindowUiV1';
 
 export type MainTabId = 'podcasts' | 'inbox';

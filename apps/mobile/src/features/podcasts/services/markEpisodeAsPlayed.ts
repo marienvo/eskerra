@@ -1,7 +1,7 @@
 import {
   readPodcastFileContent,
   writePodcastFileContent,
-} from '../../../core/storage/noteboxStorage';
+} from '../../../core/storage/eskerraStorage';
 import {PodcastEpisode} from '../../../types';
 
 const UNPLAYED_PREFIX_PATTERN = /^(\s*-\s*\[)\s(\]\s+)/;

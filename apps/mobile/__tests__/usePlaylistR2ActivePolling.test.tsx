@@ -1,11 +1,11 @@
 import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
-import {createPlaylistEtagPoller, type NoteboxSettings} from '@notebox/core';
+import {createPlaylistEtagPoller, type EskerraSettings} from '@eskerra/core';
 
 import {usePlaylistR2ActivePolling} from '../src/features/podcasts/hooks/usePlaylistR2ActivePolling';
 
-jest.mock('@notebox/core', () => {
-  const actual = jest.requireActual('@notebox/core');
+jest.mock('@eskerra/core', () => {
+  const actual = jest.requireActual('@eskerra/core');
   return {
     ...actual,
     createPlaylistEtagPoller: jest.fn(),
@@ -16,7 +16,7 @@ const createPlaylistEtagPollerMock = createPlaylistEtagPoller as jest.MockedFunc
   typeof createPlaylistEtagPoller
 >;
 
-const vaultSettings: NoteboxSettings = {
+const vaultSettings: EskerraSettings = {
   r2: {
     accessKeyId: 'kid',
     bucket: 'bucket',
@@ -28,7 +28,7 @@ const vaultSettings: NoteboxSettings = {
 type HarnessProps = {
   allowPolling?: boolean;
   baseUri: string | null;
-  settings: NoteboxSettings | null;
+  settings: EskerraSettings | null;
 };
 
 function Harness({allowPolling, baseUri, settings}: HarnessProps) {

@@ -1,0 +1,206 @@
+/** R2 bucket jurisdiction; EU/FedRAMP buckets must use the matching S3 API hostname. */
+export type R2Jurisdiction = 'default' | 'eu' | 'fedramp';
+
+export type EskerraR2Config = {
+  endpoint: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  /** When set, `endpoint` host is rewritten for S3 requests (e.g. `.eu.r2.cloudflarestorage.com`). */
+  jurisdiction?: R2Jurisdiction;
+};
+
+/** Shared vault JSON: optional R2 only. Display name lives in `settings-local.json`. */
+export type EskerraSettings = {
+  r2?: EskerraR2Config;
+};
+
+function parseR2Block(value: unknown): EskerraR2Config {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('settings-shared.json has an invalid structure.');
+  }
+
+  const o = value as Record<string, unknown>;
+  if (
+    typeof o.endpoint !== 'string' ||
+    typeof o.bucket !== 'string' ||
+    typeof o.accessKeyId !== 'string' ||
+    typeof o.secretAccessKey !== 'string'
+  ) {
+    throw new Error('settings-shared.json has an invalid structure.');
+  }
+
+  let jurisdiction: R2Jurisdiction | undefined;
+  if (o.jurisdiction !== undefined) {
+    if (o.jurisdiction !== 'default' && o.jurisdiction !== 'eu' && o.jurisdiction !== 'fedramp') {
+      throw new Error('settings-shared.json has an invalid structure.');
+    }
+    jurisdiction = o.jurisdiction;
+  }
+
+  const out: EskerraR2Config = {
+    endpoint: o.endpoint,
+    bucket: o.bucket,
+    accessKeyId: o.accessKeyId,
+    secretAccessKey: o.secretAccessKey,
+  };
+  if (jurisdiction !== undefined && jurisdiction !== 'default') {
+    out.jurisdiction = jurisdiction;
+  }
+  return out;
+}
+
+/**
+ * Returns the S3 API base URL for this config. Rewrites the default R2 hostname when
+ * `jurisdiction` is `eu` or `fedramp` (required by Cloudflare for jurisdictional buckets).
+ */
+export function effectiveR2Endpoint(config: EskerraR2Config): string {
+  const trimmed = config.endpoint.trim().replace(/\/+$/, '');
+  const jur = config.jurisdiction ?? 'default';
+  if (jur === 'default') {
+    return trimmed;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return trimmed;
+  }
+
+  const host = url.hostname;
+  if (jur === 'eu') {
+    if (host.endsWith('.eu.r2.cloudflarestorage.com')) {
+      return trimmed;
+    }
+    if (
+      host.endsWith('.r2.cloudflarestorage.com') &&
+      !host.includes('.fedramp.') &&
+      !host.includes('.eu.')
+    ) {
+      const account = host.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+      if (!account.includes('.')) {
+        url.hostname = `${account}.eu.r2.cloudflarestorage.com`;
+        return url.href.replace(/\/$/, '');
+      }
+    }
+    return trimmed;
+  }
+
+  if (jur === 'fedramp') {
+    if (host.endsWith('.fedramp.r2.cloudflarestorage.com')) {
+      return trimmed;
+    }
+    if (
+      host.endsWith('.r2.cloudflarestorage.com') &&
+      !host.includes('.fedramp.') &&
+      !host.includes('.eu.')
+    ) {
+      const account = host.replace(/\.r2\.cloudflarestorage\.com$/i, '');
+      if (!account.includes('.')) {
+        url.hostname = `${account}.fedramp.r2.cloudflarestorage.com`;
+        return url.href.replace(/\/$/, '');
+      }
+    }
+    return trimmed;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Base URL for path-style S3 calls (`/<bucket>/<objectKey>`). Cloudflare's dashboard copies
+ * `https://<account>.(eu.)r2.../<bucket>`; we must not duplicate the bucket segment when building
+ * object URLs.
+ */
+export function r2S3AccountBaseUrl(config: EskerraR2Config): string {
+  const merged = effectiveR2Endpoint(config).trim().replace(/\/+$/, '');
+  let url: URL;
+  try {
+    url = new URL(merged);
+  } catch {
+    return merged;
+  }
+  const path = url.pathname.replace(/\/$/, '') || '';
+  const bucket = config.bucket.trim();
+  if (path === '' || path === `/${bucket}`) {
+    return url.origin;
+  }
+  return merged;
+}
+
+export const defaultEskerraSettings: EskerraSettings = {
+  r2: {
+    endpoint: 'https://00000000000000000000000000000000.r2.cloudflarestorage.com',
+    bucket: 'mock-bucket',
+    accessKeyId: 'mock_access_key_id',
+    secretAccessKey: 'mock_secret_access_key',
+  },
+};
+
+export function serializeEskerraSettings(settings: EskerraSettings): string {
+  return `${JSON.stringify(settings, null, 2)}\n`;
+}
+
+export type R2FormFields = {
+  endpoint: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  jurisdiction?: R2Jurisdiction;
+};
+
+/**
+ * Builds shared vault settings from R2 form fields. R2 is optional: if any field is non-empty,
+ * all four must be non-empty after trim.
+ */
+export function buildEskerraSettingsFromForm(
+  r2: R2FormFields,
+):
+  | {ok: true; settings: EskerraSettings}
+  | {ok: false; message: string} {
+  const e = r2.endpoint.trim();
+  const b = r2.bucket.trim();
+  const k = r2.accessKeyId.trim();
+  const s = r2.secretAccessKey.trim();
+  const anyNonEmpty = Boolean(e || b || k || s);
+  const allNonEmpty = Boolean(e && b && k && s);
+
+  if (anyNonEmpty && !allNonEmpty) {
+    return {
+      ok: false,
+      message: 'Complete all Cloudflare R2 fields or clear them all.',
+    };
+  }
+
+  const settings: EskerraSettings = {};
+  if (allNonEmpty) {
+    const j = r2.jurisdiction ?? 'default';
+    const block: EskerraR2Config = {endpoint: e, bucket: b, accessKeyId: k, secretAccessKey: s};
+    if (j !== 'default') {
+      block.jurisdiction = j;
+    }
+    settings.r2 = block;
+  }
+
+  return {ok: true, settings};
+}
+
+/**
+ * Parses shared settings. Legacy `displayName` in JSON is ignored (migrate to local via storage layer).
+ */
+export function parseEskerraSettings(rawSettings: string): EskerraSettings {
+  const parsed = JSON.parse(rawSettings) as Record<string, unknown>;
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('settings-shared.json has an invalid structure.');
+  }
+
+  const out: EskerraSettings = {};
+
+  if (parsed.r2 !== undefined) {
+    out.r2 = parseR2Block(parsed.r2);
+  }
+
+  return out;
+}

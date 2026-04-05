@@ -17,9 +17,9 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@notebox/core": ["../../packages/notebox-core/src/index.ts"],
-      "@notebox/core/*": ["../../packages/notebox-core/src/*"],
-      "@notebox/brand/*": ["../../assets/brand/*"]
+      "@eskerra/core": ["../../packages/eskerra-core/src/index.ts"],
+      "@eskerra/core/*": ["../../packages/eskerra-core/src/*"],
+      "@eskerra/brand/*": ["../../assets/brand/*"]
     },
 
     /* Linting */

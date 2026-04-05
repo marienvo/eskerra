@@ -1,7 +1,7 @@
 import {
   imageSniffFormatToDotExtension,
   sniffImageFormatFromBytes,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 /** Sync hint before `preventDefault` (MIME, extension, or ambiguous types worth sniffing). */
 export function fileMightBeClipboardImageByMeta(file: File): boolean {

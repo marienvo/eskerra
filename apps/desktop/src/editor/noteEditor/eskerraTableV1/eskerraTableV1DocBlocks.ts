@@ -1,7 +1,7 @@
 import {
   type EskerraTableModelV1,
   parseEskerraTableV1FromLines,
-} from '@notebox/core';
+} from '@eskerra/core';
 import {type Text} from '@codemirror/state';
 
 export type EskerraTableDocBlock = {

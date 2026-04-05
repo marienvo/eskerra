@@ -18,7 +18,7 @@ import type {MutableRefObject} from 'react';
 import {
   isBrowserOpenableMarkdownHref,
   type InboxWikiLinkCompletionCandidate,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
@@ -28,7 +28,7 @@ import {
   noteMarkdownEditorAppearance,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
-import {markdownNotebox} from './markdownNoteboxLanguage';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
@@ -290,7 +290,7 @@ export function buildNoteMarkdownCellExtensions(
         ) {
           event.preventDefault();
           onReportError(
-            'Pasting images into the vault requires the Notebox desktop app.',
+            'Pasting images into the vault requires the Eskerra desktop app.',
           );
           return true;
         }
@@ -365,7 +365,7 @@ export function buildNoteMarkdownCellExtensions(
 
   return [
     markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
-    markdownNotebox({
+    markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
     }),

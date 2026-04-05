@@ -5,7 +5,7 @@ import {normalizeSeriesKey} from './rssParser';
 const rssFeedUrlBySeriesName = new Map<string, string>();
 const rssFeedUrlByNormalizedSeriesName = new Map<string, string>();
 
-const PERSISTENT_RSS_CACHE_KEY_PREFIX = 'notebox:rssFeedUrlBySeries:';
+const PERSISTENT_RSS_CACHE_KEY_PREFIX = 'eskerra:rssFeedUrlBySeries:';
 const persistentRssWriteChains = new Map<string, Promise<void>>();
 
 const PERSISTED_PAYLOAD_VERSION = 1;

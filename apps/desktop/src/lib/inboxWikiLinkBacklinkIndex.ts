@@ -3,7 +3,7 @@ import {
   extractWikiLinkInnersFromMarkdown,
   resolveInboxWikiLinkTargetWithLookup,
   type InboxWikiLinkNoteRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 /**
  * Lists vault markdown notes whose bodies contain a wiki link that resolves to `targetUri`

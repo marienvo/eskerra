@@ -8,10 +8,10 @@ Use for changes that touch the vault, editor, desktop shell, podcast/playlist, o
 - [ ] Are Markdown or attachment transforms **explicit** (user gesture or documented setting)?
 - [ ] Could this register **global shortcuts** without going through a future central command owner?
 
-## Vault and `.notebox`
+## Vault and `.eskerra`
 
 - [ ] Are new vault files **durable and justified** (settings, defined indexes, product artifacts)—not UI session or caches?
-- [ ] Could this data live in **app store** instead? If it is ephemeral or high-churn, it should not land in `.notebox`.
+- [ ] Could this data live in **app store** instead? If it is ephemeral or high-churn, it should not land in `.eskerra`.
 
 ## Coupling
 
@@ -28,7 +28,7 @@ Use for changes that touch the vault, editor, desktop shell, podcast/playlist, o
 
 ## Tests
 
-- [ ] Pure logic changes include tests in the owning package (`@notebox/core` or targeted `lib` tests) where feasible.
+- [ ] Pure logic changes include tests in the owning package (`@eskerra/core` or targeted `lib` tests) where feasible.
 
 ## Authority
 

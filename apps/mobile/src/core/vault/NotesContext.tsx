@@ -9,14 +9,14 @@ import {
 } from 'react';
 import {InteractionManager} from 'react-native';
 
-import {tryPrepareNoteboxSessionNative} from '../storage/androidVaultListing';
+import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
 import {
   createNote,
   deleteInboxNotes,
   listInboxNotesAndSyncIndex,
   readNote,
   writeNoteContent,
-} from '../storage/noteboxStorage';
+} from '../storage/eskerraStorage';
 import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {NoteDetail, NoteSummary} from '../../types';
 import {useVaultContext} from './VaultContext';
@@ -118,7 +118,7 @@ export function NotesProvider({children}: NotesProviderProps) {
           return;
         }
 
-        const prepared = await tryPrepareNoteboxSessionNative(baseUri);
+        const prepared = await tryPrepareEskerraSessionNative(baseUri);
         if (prepared !== null && prepared.inboxPrefetch !== null) {
           setNotes(prepared.inboxPrefetch);
           replaceInboxContentFromSession(prepared.inboxContentByUri);

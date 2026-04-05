@@ -2,17 +2,17 @@
 
 **Purpose:** Track implementation and hygiene items that remain **after** Vault-tab docs landed in [desktop-shell-patterns.md](../design/desktop-shell-patterns.md) and [desktop-editor.md](../architecture/desktop-editor.md). This replaces scattered notes from the retired vault-pane rollout checklist.
 
-**Scope:** `apps/desktop`, `packages/notebox-core`. Android out of scope.
+**Scope:** `apps/desktop`, `packages/eskerra-core`. Android out of scope.
 
 ---
 
 ## 1. Tree pruning (high value, spec gap vs intended behavior)
 
-**Issue:** `loadVaultTreeVisibleChildRows` ([`apps/desktop/src/lib/vaultTreeLoadChildren.ts`](../../apps/desktop/src/lib/vaultTreeLoadChildren.ts)) applies `filterVaultTreeDirEntries` only. It does **not** call [`shouldPruneVaultTreeSubdirectory`](../../packages/notebox-core/src/vaultVisibility.ts) or [`vaultSubtreeHasEligibleMarkdown`](../../packages/notebox-core/src/vaultMarkdownSubtree.ts).
+**Issue:** `loadVaultTreeVisibleChildRows` ([`apps/desktop/src/lib/vaultTreeLoadChildren.ts`](../../apps/desktop/src/lib/vaultTreeLoadChildren.ts)) applies `filterVaultTreeDirEntries` only. It does **not** call [`shouldPruneVaultTreeSubdirectory`](../../packages/eskerra-core/src/vaultVisibility.ts) or [`vaultSubtreeHasEligibleMarkdown`](../../packages/eskerra-core/src/vaultMarkdownSubtree.ts).
 
-**Evidence:** [`SubtreeMarkdownPresenceCache`](../../packages/notebox-core/src/vaultVisibility.ts) is invalidated in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) but is **not** passed into [`VaultPaneTree`](../../apps/desktop/src/components/VaultPaneTree.tsx) or the loader.
+**Evidence:** [`SubtreeMarkdownPresenceCache`](../../packages/eskerra-core/src/vaultVisibility.ts) is invalidated in [`useMainWindowWorkspace`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) but is **not** passed into [`VaultPaneTree`](../../apps/desktop/src/components/VaultPaneTree.tsx) or the loader.
 
-**Goal:** Hide a subdirectory when it is non-empty after filters but its subtree contains no eligible `.md`, except keep empty directories visible (see helpers in `@notebox/core`).
+**Goal:** Hide a subdirectory when it is non-empty after filters but its subtree contains no eligible `.md`, except keep empty directories visible (see helpers in `@eskerra/core`).
 
 **Approach sketch:** Thread `SubtreeMarkdownPresenceCache` (or a stable ref) from `useMainWindowWorkspace` → `InboxTab` → `VaultPaneTree` → `loadVaultTreeVisibleChildRows` (or a wrapper), using `vaultSubtreeHasEligibleMarkdown` with abort/signal as needed. Add/extend tests with a mocked `VaultFilesystem`.
 
@@ -46,7 +46,7 @@
 
 ## 5. Document hard-excluded tree directory names
 
-**Issue:** [`VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES`](../../packages/notebox-core/src/vaultVisibility.ts) includes product folders (e.g. `Assets`, `Scripts`, `Templates`, `Excalidraw`). Only some of these are spelled out in user-facing architecture docs.
+**Issue:** [`VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES`](../../packages/eskerra-core/src/vaultVisibility.ts) includes product folders (e.g. `Assets`, `Scripts`, `Templates`, `Excalidraw`). Only some of these are spelled out in user-facing architecture docs.
 
 **Goal:** Add a single sentence or table row in [desktop-shell-patterns.md](../design/desktop-shell-patterns.md) (or [desktop-editor.md](../architecture/desktop-editor.md) if tree rules fit better there) listing **authoritative** excluded names so behavior is not “code-only.”
 

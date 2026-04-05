@@ -1,4 +1,4 @@
-import type {AudioPlayer} from '@notebox/core';
+import type {AudioPlayer} from '@eskerra/core';
 
 export type {
   AudioPlayer,
@@ -6,7 +6,7 @@ export type {
   PlayerProgress,
   PlayerState,
   Unsubscribe,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import {TrackPlayerAdapter} from './trackPlayerAdapter';
 

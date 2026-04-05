@@ -23,10 +23,10 @@ import {
   stemFromMarkdownFileName,
   SubtreeMarkdownPresenceCache,
   isBrowserOpenableMarkdownHref,
-  type NoteboxSettings,
+  type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
 import {
@@ -139,7 +139,7 @@ function remapEditorShellScrollMapTreePrefix(
   }
 }
 
-const STORE_PATH = 'notebox-desktop.json';
+const STORE_PATH = 'eskerra-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
 /** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
@@ -199,7 +199,7 @@ async function loadMarkdownBodiesForWikiMaintenance(
 
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
-  vaultSettings: NoteboxSettings | null;
+  vaultSettings: EskerraSettings | null;
   settingsName: string;
   notes: NoteRow[];
   selectedUri: string | null;
@@ -289,8 +289,8 @@ export function useMainWindowWorkspace(options: {
     inboxRestoreEnabled,
   } = options;
   const [vaultRoot, setVaultRoot] = useState<string | null>(null);
-  const [vaultSettings, setVaultSettings] = useState<NoteboxSettings | null>(null);
-  const [settingsName, setSettingsName] = useState('Notebox');
+  const [vaultSettings, setVaultSettings] = useState<EskerraSettings | null>(null);
+  const [settingsName, setSettingsName] = useState('Eskerra');
   const [notes, setNotes] = useState<NoteRow[]>([]);
   const [selectedUri, setSelectedUri] = useState<string | null>(null);
   const [editorBody, setEditorBody] = useState('');
@@ -598,7 +598,7 @@ export function useMainWindowWorkspace(options: {
         }
         setDeviceInstanceId(local.deviceInstanceId);
         const label = local.displayName.trim();
-        setSettingsName(label !== '' ? label : 'Notebox');
+        setSettingsName(label !== '' ? label : 'Eskerra');
         await refreshNotes(root);
         setEditorDocumentHistory(emptyEditorDocumentHistory());
         setSelectedUri(null);

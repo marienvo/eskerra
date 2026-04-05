@@ -4,12 +4,12 @@ import {EditorState} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 import {useMemo, type ReactElement} from 'react';
 
-import {isBrowserOpenableMarkdownHref} from '@notebox/core';
+import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
 import {markdownBareBrowserUrlAtPosition} from '../markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from '../markdownActivatableRelativeMdLinkAtPosition';
-import {markdownNotebox} from '../markdownNoteboxLanguage';
+import {markdownEskerra} from '../markdownEskerraLanguage';
 import {noteMarkdownParserExtensions} from '../markdownEditorStyling';
 import {relativeMdLinkHrefIsResolvedFacet} from '../markdownRelativeLinkCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDocPosition';
@@ -90,7 +90,7 @@ export function EskerraTableCellStaticRichText(
       EditorState.create({
         doc: cellText,
         extensions: [
-          markdownNotebox({
+          markdownEskerra({
             base: commonmarkLanguage,
             extensions: noteMarkdownParserExtensions,
           }),

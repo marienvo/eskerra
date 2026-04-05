@@ -12,7 +12,7 @@ import type {
   PlayerProgress,
   PlayerState,
   Unsubscribe,
-} from '@notebox/core';
+} from '@eskerra/core';
 
 function toMilliseconds(seconds: number | undefined): number {
   if (typeof seconds !== 'number' || Number.isNaN(seconds)) {

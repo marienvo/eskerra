@@ -2,8 +2,8 @@ import {
   getGeneralDirectoryUri,
   MARKDOWN_EXTENSION,
   normalizeVaultBaseUri,
-} from '@notebox/core';
-import type {VaultFilesystem} from '@notebox/core';
+} from '@eskerra/core';
+import type {VaultFilesystem} from '@eskerra/core';
 
 import {
   filterPodcastRelevantGeneralMarkdownFiles,
