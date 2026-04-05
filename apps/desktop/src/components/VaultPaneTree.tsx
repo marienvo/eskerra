@@ -28,6 +28,7 @@ import {
 } from '../lib/vaultTreeBulkPlan';
 import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
+import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
 import {MaterialIcon} from './MaterialIcon';
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
@@ -216,7 +217,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
 
   const tree = useTree<VaultTreeItemData>({
     rootItemId: rootId,
-    getItemName: item => item.getItemData()?.name ?? '…',
+    getItemName: item => {
+      const d = item.getItemData();
+      return d ? vaultTreeRowLabel(d) : '…';
+    },
     isItemFolder: item => (item.getItemData()?.kind ?? 'folder') !== 'article',
     onPrimaryAction: item => {
       const data = item.getItemData();
@@ -600,7 +604,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   setDraggingSourceUri(data.uri);
                   mountVaultTreeDragGhost({
                     isFolder,
-                    label: data.name,
+                    label: vaultTreeRowLabel(data),
                     dataTransfer: e.dataTransfer,
                     pointerClientX: e.clientX,
                     pointerClientY: e.clientY,
@@ -702,7 +706,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     size={24}
                   />
                 </span>
-                <span className="vault-tree-row__label">{data.name}</span>
+                <span className="vault-tree-row__label">{vaultTreeRowLabel(data)}</span>
               </button>
             );
 
