@@ -63,6 +63,7 @@ import {
   startVaultWatch,
 } from '../lib/tauriVault';
 import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
+import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
 import {
   applyVaultWikiLinkRenameMaintenance,
   planVaultWikiLinkRenameMaintenance,
@@ -244,6 +245,8 @@ export function useMainWindowWorkspace(options: {
   );
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
+  /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
+  const vaultBacklinkDiskBodyCacheRef = useRef<Record<string, string>>({});
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRefsBuildGenRef = useRef(0);
   const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
@@ -323,13 +326,22 @@ export function useMainWindowWorkspace(options: {
             return;
           }
 
+          const seed = mergeVaultBacklinkBodySeed(
+            vaultBacklinkDiskBodyCacheRef.current,
+            inboxContentByUriRef.current,
+          );
           const expanded = await loadMarkdownBodiesForWikiMaintenance(
             fs,
             refs,
-            inboxContentByUriRef.current,
+            seed,
             activeUri,
             activeBody,
           );
+          const pruned: Record<string, string> = {};
+          for (const {uri} of refs) {
+            pruned[uri] = expanded[uri] ?? '';
+          }
+          vaultBacklinkDiskBodyCacheRef.current = pruned;
           if (cancelled || selectedUriRef.current !== selected) {
             return;
           }
@@ -434,14 +446,30 @@ export function useMainWindowWorkspace(options: {
 
   const openMarkdownInEditor = useCallback(
     async (uri: string, options?: {skipHistory?: boolean}) => {
-      await flushInboxSaveRef.current();
+      autosaveSchedulerRef.current.cancel();
+      await saveChainRef.current.catch(() => undefined);
+      const root = vaultRootRef.current;
+      const curUri = selectedUriRef.current;
+      const needsPersist =
+        root != null &&
+        curUri != null &&
+        !composingNewEntryRef.current &&
+        (() => {
+          const raw =
+            inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+          const prev = lastPersistedRef.current;
+          return !(prev && prev.uri === curUri && prev.markdown === raw);
+        })();
+      if (needsPersist) {
+        await enqueueInboxPersist();
+      }
       if (!options?.skipHistory) {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
       setComposingNewEntry(false);
       setSelectedUri(normalizeEditorDocUri(uri));
     },
-    [],
+    [enqueueInboxPersist, inboxEditorRef],
   );
 
   const hydrateVault = useCallback(
@@ -453,6 +481,7 @@ export function useMainWindowWorkspace(options: {
       setRenameLinkProgress(null);
       setPendingWikiLinkAmbiguityRename(null);
       subtreeMarkdownCacheRef.current.invalidateAll();
+      vaultBacklinkDiskBodyCacheRef.current = {};
       setVaultSettings(null);
       try {
         await setVaultSession(root);
@@ -523,6 +552,7 @@ export function useMainWindowWorkspace(options: {
     let cancelled = false;
     void listen('vault-files-changed', () => {
       subtreeMarkdownCacheRef.current.invalidateAll();
+      vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       void (async () => {
@@ -582,12 +612,12 @@ export function useMainWindowWorkspace(options: {
     if (cached !== undefined) {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
-      setInboxEditorResetNonce(n => n + 1);
+      inboxEditorRef.current?.loadMarkdown(cached);
     } else {
       setEditorBody('');
       lastPersistedRef.current = null;
     }
-  }, [vaultRoot, selectedUri]);
+  }, [vaultRoot, selectedUri, inboxEditorRef]);
 
   /**
    * Clear the open note in CodeMirror when the shell has no cached body yet.
@@ -625,6 +655,9 @@ export function useMainWindowWorkspace(options: {
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {
+      return;
+    }
+    if (inboxContentByUriRef.current[selectedUri] !== undefined) {
       return;
     }
     let cancelled = false;
