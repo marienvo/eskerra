@@ -298,4 +298,56 @@ describe('markdownSmartExpandSelection', () => {
     expect(events.filter(e => e === 'expand').length).toBeGreaterThanOrEqual(1);
     expect(events).toContain('shrink');
   });
+
+  it('expands brace inner then outer', () => {
+    const doc = '{inside}';
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(4 /* "i" */),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 1, to: 7});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: 8});
+  });
+
+  it('nested ({a}) prefers innermost brace before paren outer', () => {
+    const doc = '({a})';
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(2 /* "a" */),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 2, to: 3});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 1, to: 4});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: 5});
+  });
+
+  it('expands ASCII double-quoted inner then outer', () => {
+    const doc = 'say "hi"!';
+    const openQuote = doc.indexOf('"');
+    const hInHi = doc.indexOf('hi');
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(hInHi + 1 /* "i" in hi */),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: openQuote + 1, to: openQuote + 3});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: openQuote, to: openQuote + 4});
+  });
 });

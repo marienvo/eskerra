@@ -237,7 +237,7 @@ function candidateClause(state: EditorState, main: SelectionRange): SelectionRan
   let sliceEnd = text.length;
 
   if (!wikiLinkMatchAtDocPosition(state.doc, focus)) {
-    const m = tryMatchBracketsForExpand(state, main);
+    const m = tryMatchBracketsForClauseSlice(state, main);
     if (m?.matched && m.end) {
       if (ia <= m.start.from && ib >= m.end.to) {
         // Selection already spans the full matched pair; defer to sentence / larger steps.
@@ -326,16 +326,268 @@ function matchRoundParensTextFallback(
   };
 }
 
+/**
+ * Plain `{` `}` scan in the current paragraph (same spirit as {@link matchRoundParensTextFallback}).
+ */
+function matchCurlyBracesTextFallback(
+  state: EditorState,
+  docPos: number,
+): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
+  if (inOpaqueBlock(state, docPos)) {
+    return null;
+  }
+  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
+    return null;
+  }
+  const para = findAncestorNamed(state, docPos, 'Paragraph');
+  if (!para) {
+    return null;
+  }
+  const base = para.from;
+  const text = state.sliceDoc(para.from, para.to);
+  const rel = docPos - base;
+  if (rel < 0 || rel >= text.length) {
+    return null;
+  }
+  let depth = 0;
+  let openRel = -1;
+  for (let i = rel; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '}') {
+      depth++;
+    } else if (ch === '{') {
+      if (depth === 0) {
+        openRel = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (openRel < 0) {
+    return null;
+  }
+  depth = 0;
+  let closeRel = -1;
+  for (let i = openRel + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      if (depth === 0) {
+        closeRel = i;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (closeRel < 0 || rel < openRel || rel > closeRel) {
+    return null;
+  }
+  return {
+    start: {from: base + openRel, to: base + openRel + 1},
+    end: {from: base + closeRel, to: base + closeRel + 1},
+  };
+}
+
+function parenPairFromFallback(
+  fb: {start: {from: number; to: number}; end: {from: number; to: number}},
+): ParenPairMatch {
+  return {matched: true, start: fb.start, end: fb.end};
+}
+
+function posStrictlyInsidePair(m: ParenPairMatch, docPos: number): boolean {
+  return Boolean(m.end && m.matched && docPos >= m.start.to && docPos < m.end.from);
+}
+
+function pairOuterWidth(m: ParenPairMatch): number {
+  return m.end!.to - m.start.from;
+}
+
+function pairsAreSameOuter(a: ParenPairMatch, b: ParenPairMatch): boolean {
+  return a.start.from === b.start.from && a.end!.to === b.end!.to;
+}
+
+/** Narrowest outer span wins so `({a})` expands `a` → `{a}` → `({a})` instead of skipping the brace pair. */
 function tryParenPairForSmartExpand(state: EditorState, docPos: number): ParenPairMatch | null {
+  const candidates: ParenPairMatch[] = [];
+  const cm = matchBrackets(state, docPos, 1) ?? matchBrackets(state, docPos, -1);
+  if (cm?.matched && cm.end && posStrictlyInsidePair(cm, docPos)) {
+    candidates.push(cm);
+  }
+  const roundFb = matchRoundParensTextFallback(state, docPos);
+  if (roundFb) {
+    const m = parenPairFromFallback(roundFb);
+    if (
+      posStrictlyInsidePair(m, docPos)
+      && !candidates.some(c => pairsAreSameOuter(c, m))
+    ) {
+      candidates.push(m);
+    }
+  }
+  const curlyFb = matchCurlyBracesTextFallback(state, docPos);
+  if (curlyFb) {
+    const m = parenPairFromFallback(curlyFb);
+    if (
+      posStrictlyInsidePair(m, docPos)
+      && !candidates.some(c => pairsAreSameOuter(c, m))
+    ) {
+      candidates.push(m);
+    }
+  }
+  if (!candidates.length) {
+    return null;
+  }
+  let best = candidates[0];
+  let bestW = pairOuterWidth(best);
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i];
+    const w = pairOuterWidth(c);
+    if (w < bestW) {
+      best = c;
+      bestW = w;
+    }
+  }
+  return best;
+}
+
+/**
+ * Conservative ASCII `"`…`"` pair in the paragraph: inner may not contain `"`; picks the narrowest span that
+ * strictly contains `docPos`.
+ */
+function matchAsciiDoubleQuoteTextFallback(
+  state: EditorState,
+  docPos: number,
+): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
+  if (inOpaqueBlock(state, docPos)) {
+    return null;
+  }
+  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
+    return null;
+  }
+  const para = findAncestorNamed(state, docPos, 'Paragraph');
+  if (!para) {
+    return null;
+  }
+  const base = para.from;
+  const text = state.sliceDoc(para.from, para.to);
+  const rel = docPos - base;
+  if (rel < 0 || rel >= text.length) {
+    return null;
+  }
+  let bestOpen = -1;
+  let bestClose = -1;
+  let bestSpan = Number.POSITIVE_INFINITY;
+  for (let i = rel; i >= 0; i--) {
+    if (text[i] !== '"') {
+      continue;
+    }
+    let j = i + 1;
+    while (j < text.length && text[j] !== '"') {
+      j++;
+    }
+    if (j >= text.length) {
+      continue;
+    }
+    if (rel <= i || rel >= j) {
+      continue;
+    }
+    const span = j - i + 1;
+    if (span < bestSpan) {
+      bestSpan = span;
+      bestOpen = i;
+      bestClose = j;
+    }
+  }
+  if (bestOpen < 0) {
+    return null;
+  }
+  return {
+    start: {from: base + bestOpen, to: base + bestOpen + 1},
+    end: {from: base + bestClose, to: base + bestClose + 1},
+  };
+}
+
+function tryAsciiDoubleQuotePairForSmartExpand(
+  state: EditorState,
+  docPos: number,
+): ParenPairMatch | null {
+  const fb = matchAsciiDoubleQuoteTextFallback(state, docPos);
+  return fb ? parenPairFromFallback(fb) : null;
+}
+
+function tryMatchAsciiDoubleQuotesForExpand(state: EditorState, main: SelectionRange): ParenPairMatch | null {
+  const lo = Math.min(main.anchor, main.head);
+  const hi = Math.max(main.anchor, main.head);
+  return (
+    tryAsciiDoubleQuotePairForSmartExpand(state, lo) ??
+    (hi > lo ? tryAsciiDoubleQuotePairForSmartExpand(state, hi - 1) : null) ??
+    tryAsciiDoubleQuotePairForSmartExpand(state, hi)
+  );
+}
+
+/**
+ * Bracket pair for clause bounding (includes caret on `(` / `)` so comma-after-`);` probes do not
+ * see a pair). Not innermost: first hit among CM, then round, then curly fallback.
+ */
+function trySingleProbeBracketPairForClause(state: EditorState, docPos: number): ParenPairMatch | null {
   const cm = matchBrackets(state, docPos, 1) ?? matchBrackets(state, docPos, -1);
   if (cm?.matched && cm.end) {
     return cm;
   }
-  const fb = matchRoundParensTextFallback(state, docPos);
-  if (fb) {
-    return {matched: true, start: fb.start, end: fb.end};
+  const roundFb = matchRoundParensTextFallback(state, docPos);
+  if (roundFb) {
+    return parenPairFromFallback(roundFb);
   }
-  return null;
+  const curlyFb = matchCurlyBracesTextFallback(state, docPos);
+  return curlyFb ? parenPairFromFallback(curlyFb) : null;
+}
+
+function tryMatchBracketsForClauseSlice(state: EditorState, main: SelectionRange): ParenPairMatch | null {
+  const lo = Math.min(main.anchor, main.head);
+  const hi = Math.max(main.anchor, main.head);
+  return (
+    trySingleProbeBracketPairForClause(state, lo) ??
+    (hi > lo ? trySingleProbeBracketPairForClause(state, hi - 1) : null) ??
+    trySingleProbeBracketPairForClause(state, hi)
+  );
+}
+
+function candidateAsciiDoubleQuoteInner(
+  state: EditorState,
+  main: SelectionRange,
+): SelectionRange | null {
+  const focus = Math.min(main.anchor, main.head);
+  if (inOpaqueBlock(state, focus)) {
+    return null;
+  }
+  if (wikiLinkMatchAtDocPosition(state.doc, focus)) {
+    return null;
+  }
+  const m = tryMatchAsciiDoubleQuotesForExpand(state, main);
+  if (!m?.matched || !m.end) {
+    return null;
+  }
+  const inner = asRange(m.start.to, m.end.from);
+  return strictlyWider(inner, main) ? inner : null;
+}
+
+function candidateAsciiDoubleQuoteOuter(
+  state: EditorState,
+  main: SelectionRange,
+): SelectionRange | null {
+  const focus = Math.min(main.anchor, main.head);
+  if (inOpaqueBlock(state, focus)) {
+    return null;
+  }
+  if (wikiLinkMatchAtDocPosition(state.doc, focus)) {
+    return null;
+  }
+  const m = tryMatchAsciiDoubleQuotesForExpand(state, main);
+  if (!m?.matched || !m.end) {
+    return null;
+  }
+  const outer = asRange(m.start.from, m.end.to);
+  return strictlyWider(outer, main) ? outer : null;
 }
 
 /** Prefer the selection start and the last in-range char before `)` so probe is never stuck on a closer. */
@@ -574,6 +826,8 @@ function computeNextExpandRange(
     candidateWord,
     candidateBracketInner,
     candidateBracketOuter,
+    candidateAsciiDoubleQuoteInner,
+    candidateAsciiDoubleQuoteOuter,
     candidateWikiInner,
     candidateWikiFull,
     candidateClause,
