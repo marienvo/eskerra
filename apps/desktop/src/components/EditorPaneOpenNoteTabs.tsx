@@ -133,7 +133,9 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
                   'data-tooltip-placement': 'inline-end' as const,
                 }
               : {})}
-            onClick={() => onActivateTab(uri)}
+            onClick={() => {
+              onActivateTab(uri);
+            }}
           >
             <span className="editor-open-tab-pill__icon" aria-hidden>
               <MaterialIcon name="description" size={12} />

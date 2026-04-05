@@ -2,7 +2,14 @@ import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {MutableRefObject, RefObject} from 'react';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {
@@ -102,8 +109,8 @@ type VaultTabProps = {
   editorHistoryCanGoForward: boolean;
   onEditorHistoryGoBack: () => void;
   onEditorHistoryGoForward: () => void;
-  /** Workspace: hide "Linked from" for one frame after `loadMarkdown`. */
-  inboxBacklinksDeferFirstPaint: boolean;
+  /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
+  inboxBacklinksDeferNonce: number;
   editorOpenTabUris: readonly string[];
   onActivateOpenTab: (uri: string) => void;
   onCloseEditorTab: (uri: string) => void;
@@ -112,6 +119,228 @@ type VaultTabProps = {
   onReopenClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
 };
+
+type InboxBacklinksSectionProps = {
+  selectedUri: string;
+  backlinkRows: readonly {uri: string; fileName: string; title: string}[];
+  onSelectNote: (uri: string) => void;
+  deferNonce: number;
+};
+
+type EditorPaneBodyProps = {
+  inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
+  inboxAttachmentHost: ReturnType<typeof createNoteInboxAttachmentHost>;
+  vaultRoot: string;
+  composingNewEntry: boolean;
+  selectedUri: string | null;
+  editorBody: string;
+  inboxEditorResetNonce: number;
+  onEditorChange: VaultTabProps['onEditorChange'];
+  onEditorError: VaultTabProps['onEditorError'];
+  onWikiLinkActivate: VaultTabProps['onWikiLinkActivate'];
+  onMarkdownRelativeLinkActivate: VaultTabProps['onMarkdownRelativeLinkActivate'];
+  onMarkdownExternalLinkOpen: VaultTabProps['onMarkdownExternalLinkOpen'];
+  relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
+  wikiLinkTargetIsResolved: (inner: string) => boolean;
+  wikiLinkCompletionCandidates: ReturnType<typeof buildInboxWikiLinkCompletionCandidates>;
+  onSaveShortcut: VaultTabProps['onSaveShortcut'];
+  onDeleteNoteShortcut: () => void;
+  busy: boolean;
+  backlinkRows: readonly {uri: string; fileName: string; title: string}[];
+  onSelectNote: VaultTabProps['onSelectNote'];
+  inboxBacklinksDeferNonce: number;
+};
+
+function InboxBacklinksSection({
+  selectedUri,
+  backlinkRows,
+  onSelectNote,
+  deferNonce,
+}: InboxBacklinksSectionProps) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const lastAppliedDeferNonceRef = useRef(deferNonce);
+
+  useLayoutEffect(() => {
+    if (lastAppliedDeferNonceRef.current === deferNonce) {
+      return;
+    }
+    lastAppliedDeferNonceRef.current = deferNonce;
+    const section = sectionRef.current;
+    if (section) {
+      section.setAttribute('aria-hidden', 'true');
+      section.classList.add('inbox-backlinks--defer-first-paint');
+    }
+    const raf = requestAnimationFrame(() => {
+      if (section) {
+        section.setAttribute('aria-hidden', 'false');
+        section.classList.remove('inbox-backlinks--defer-first-paint');
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [deferNonce, selectedUri]);
+
+  return (
+    <section
+      ref={sectionRef}
+      aria-hidden="false"
+      aria-label="Backlinks"
+      className="inbox-backlinks"
+    >
+      <div className="inbox-backlinks__header">Linked from</div>
+      {backlinkRows.length === 0 ? (
+        <p className="muted inbox-backlinks__empty">No incoming links.</p>
+      ) : (
+        <ul className="inbox-backlinks__list">
+          {backlinkRows.map(row => (
+            <li key={row.uri}>
+              <button
+                type="button"
+                className="inbox-backlinks__row"
+                onClick={() => onSelectNote(row.uri)}
+              >
+                <span className="inbox-backlinks__title">{row.title}</span>
+                <span className="inbox-backlinks__filename">{row.fileName}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function EditorPaneBody({
+  inboxEditorRef,
+  inboxEditorShellScrollRef,
+  inboxAttachmentHost,
+  vaultRoot,
+  composingNewEntry,
+  selectedUri,
+  editorBody,
+  inboxEditorResetNonce,
+  onEditorChange,
+  onEditorError,
+  onWikiLinkActivate,
+  onMarkdownRelativeLinkActivate,
+  onMarkdownExternalLinkOpen,
+  relativeMarkdownLinkHrefIsResolved,
+  wikiLinkTargetIsResolved,
+  wikiLinkCompletionCandidates,
+  onSaveShortcut,
+  onDeleteNoteShortcut,
+  busy,
+  backlinkRows,
+  onSelectNote,
+  inboxBacklinksDeferNonce,
+}: EditorPaneBodyProps) {
+  const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
+  const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
+  const editorHasFoldedRangesRef = useRef(editorHasFoldedRanges);
+  const editorHasFoldableRangesRef = useRef(editorHasFoldableRanges);
+
+  useLayoutEffect(() => {
+    editorHasFoldedRangesRef.current = editorHasFoldedRanges;
+    editorHasFoldableRangesRef.current = editorHasFoldableRanges;
+  }, [editorHasFoldedRanges, editorHasFoldableRanges]);
+
+  const onFoldedRangesPresentChange = useCallback((next: boolean) => {
+    setEditorHasFoldedRanges(next);
+  }, []);
+
+  const onFoldableRangesPresentChange = useCallback((next: boolean) => {
+    setEditorHasFoldableRanges(next);
+  }, []);
+
+  return (
+    <div className="editor note-markdown-editor-wrap">
+        <div
+          ref={inboxEditorShellScrollRef}
+          className="note-markdown-editor-scroll"
+        >
+          <div className="note-markdown-editor-page">
+            <div className="note-markdown-editor-fold-rail">
+              {editorHasFoldedRanges || editorHasFoldableRanges ? (
+                <div className="note-markdown-editor-fold-bulk-anchor">
+                  <button
+                    type="button"
+                    className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                    onClick={() => {
+                      const ed = inboxEditorRef.current;
+                      if (!ed) {
+                        return;
+                      }
+                      if (editorHasFoldedRanges) {
+                        ed.unfoldAllFolds();
+                      } else {
+                        ed.collapseAllFolds();
+                      }
+                    }}
+                    disabled={busy}
+                    aria-label={
+                      editorHasFoldedRanges
+                        ? 'Expand all folds'
+                        : 'Collapse all folds'
+                    }
+                    data-tooltip={
+                      editorHasFoldedRanges
+                        ? 'Expand all folds'
+                        : 'Collapse all folds'
+                    }
+                    data-tooltip-placement="inline-end"
+                  >
+                    <MaterialIcon
+                      name={
+                        editorHasFoldedRanges
+                          ? 'unfold_more'
+                          : 'unfold_less'
+                      }
+                      size={12}
+                    />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <div className="note-markdown-editor-paper">
+              <NoteMarkdownEditor
+                ref={inboxEditorRef}
+                attachmentHost={inboxAttachmentHost}
+                resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                vaultRoot={vaultRoot}
+                activeNotePath={composingNewEntry ? null : selectedUri}
+                initialMarkdown={editorBody}
+                sessionKey={inboxEditorResetNonce}
+                onMarkdownChange={onEditorChange}
+                onEditorError={onEditorError}
+                onWikiLinkActivate={onWikiLinkActivate}
+                onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+                wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                onSaveShortcut={onSaveShortcut}
+                onDeleteNoteShortcut={onDeleteNoteShortcut}
+                placeholder={
+                  composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                }
+                busy={busy}
+                onFoldedRangesPresentChange={onFoldedRangesPresentChange}
+                onFoldableRangesPresentChange={onFoldableRangesPresentChange}
+              />
+              {!composingNewEntry && selectedUri ? (
+                <InboxBacklinksSection
+                  selectedUri={selectedUri}
+                  backlinkRows={backlinkRows}
+                  onSelectNote={onSelectNote}
+                  deferNonce={inboxBacklinksDeferNonce}
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+    </div>
+  );
+}
 
 export function VaultTab({
   vaultRoot,
@@ -156,7 +385,7 @@ export function VaultTab({
   editorHistoryCanGoForward,
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
-  inboxBacklinksDeferFirstPaint,
+  inboxBacklinksDeferNonce,
   editorOpenTabUris,
   onActivateOpenTab,
   onCloseEditorTab,
@@ -181,9 +410,20 @@ export function VaultTab({
   const [renameDraft, setRenameDraft] = useState('');
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
-  const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
-  const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const vaultMarkdownRefsRef = useRef(vaultMarkdownRefs);
+  const onMoveVaultTreeItemRef = useRef(onMoveVaultTreeItem);
+  const onBulkMoveVaultTreeItemsRef = useRef(onBulkMoveVaultTreeItems);
+
+  useLayoutEffect(() => {
+    vaultMarkdownRefsRef.current = vaultMarkdownRefs;
+    onMoveVaultTreeItemRef.current = onMoveVaultTreeItem;
+    onBulkMoveVaultTreeItemsRef.current = onBulkMoveVaultTreeItems;
+  }, [
+    vaultMarkdownRefs,
+    onMoveVaultTreeItem,
+    onBulkMoveVaultTreeItems,
+  ]);
 
   const onDeleteNoteShortcut = useCallback(() => {
     if (busy || composingNewEntry || selectedUri == null) {
@@ -193,14 +433,14 @@ export function VaultTab({
   }, [busy, composingNewEntry, selectedUri]);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
-  const openRenameDialog = (uri: string) => {
-    const draft = renameDraftStemForMarkdownUri(uri, vaultMarkdownRefs);
+  const openRenameDialog = useCallback((uri: string) => {
+    const draft = renameDraftStemForMarkdownUri(uri, vaultMarkdownRefsRef.current);
     if (draft === null) {
       return;
     }
     setRenameTargetUri(uri);
     setRenameDraft(draft);
-  };
+  }, []);
 
   const submitRename = () => {
     const uri = renameTargetUri;
@@ -211,14 +451,41 @@ export function VaultTab({
     setRenameTargetUri(null);
   };
 
-  const openRenameFolderDialog = (uri: string) => {
+  const openRenameFolderDialog = useCallback((uri: string) => {
     const tail = uri.split(/[/\\]/).filter(Boolean).pop();
     if (!tail) {
       return;
     }
     setRenameFolderUri(uri);
     setRenameFolderDraft(tail);
-  };
+  }, []);
+
+  const openTreeDeleteNoteDialog = useCallback((uri: string) => {
+    setConfirmDeleteUri(uri);
+  }, []);
+
+  const openTreeDeleteFolderDialog = useCallback((uri: string) => {
+    setConfirmDeleteFolderUri(uri);
+  }, []);
+
+  const openBulkDeleteDialog = useCallback((items: VaultTreeBulkItem[]) => {
+    setConfirmBulkDeleteItems(items);
+  }, []);
+
+  const moveVaultTreeItemStable = useCallback(
+    (
+      sourceUri: string,
+      sourceKind: 'folder' | 'article',
+      targetDirectoryUri: string,
+    ) => onMoveVaultTreeItemRef.current(sourceUri, sourceKind, targetDirectoryUri),
+    [],
+  );
+
+  const bulkMoveVaultTreeItemsStable = useCallback(
+    (items: VaultTreeBulkItem[], targetDirectoryUri: string) =>
+      onBulkMoveVaultTreeItemsRef.current(items, targetDirectoryUri),
+    [],
+  );
 
   const submitFolderRename = () => {
     const uri = renameFolderUri;
@@ -690,18 +957,12 @@ export function VaultTab({
                 busy={busy}
                 onOpenMarkdownNote={onSelectNote}
                 onRenameMarkdownRequest={openRenameDialog}
-                onDeleteMarkdownRequest={u => {
-                  setConfirmDeleteUri(u);
-                }}
+                onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
                 onRenameFolderRequest={openRenameFolderDialog}
-                onDeleteFolderRequest={u => {
-                  setConfirmDeleteFolderUri(u);
-                }}
-                onBulkDeleteRequest={items => {
-                  setConfirmBulkDeleteItems(items);
-                }}
-                onMoveVaultTreeItem={onMoveVaultTreeItem}
-                onBulkMoveVaultTreeItems={onBulkMoveVaultTreeItems}
+                onDeleteFolderRequest={openTreeDeleteFolderDialog}
+                onBulkDeleteRequest={openBulkDeleteDialog}
+                onMoveVaultTreeItem={moveVaultTreeItemStable}
+                onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
               />
             </div>
           </div>
@@ -826,120 +1087,30 @@ export function VaultTab({
             </div>
             {editorOpen ? (
               <>
-                <div className="editor note-markdown-editor-wrap">
-                  <div
-                    ref={inboxEditorShellScrollRef}
-                    className="note-markdown-editor-scroll"
-                  >
-                    <div className="note-markdown-editor-page">
-                      <div className="note-markdown-editor-fold-rail">
-                        {editorHasFoldedRanges || editorHasFoldableRanges ? (
-                          <div className="note-markdown-editor-fold-bulk-anchor">
-                            <button
-                              type="button"
-                              className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
-                              onClick={() => {
-                                const ed = inboxEditorRef.current;
-                                if (!ed) {
-                                  return;
-                                }
-                                if (editorHasFoldedRanges) {
-                                  ed.unfoldAllFolds();
-                                } else {
-                                  ed.collapseAllFolds();
-                                }
-                              }}
-                              disabled={busy}
-                              aria-label={
-                                editorHasFoldedRanges
-                                  ? 'Expand all folds'
-                                  : 'Collapse all folds'
-                              }
-                              data-tooltip={
-                                editorHasFoldedRanges
-                                  ? 'Expand all folds'
-                                  : 'Collapse all folds'
-                              }
-                              data-tooltip-placement="inline-end"
-                            >
-                              <MaterialIcon
-                                name={
-                                  editorHasFoldedRanges
-                                    ? 'unfold_more'
-                                    : 'unfold_less'
-                                }
-                                size={12}
-                              />
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="note-markdown-editor-paper">
-                        <NoteMarkdownEditor
-                          ref={inboxEditorRef}
-                          attachmentHost={inboxAttachmentHost}
-                          resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                          vaultRoot={vaultRoot}
-                          activeNotePath={composingNewEntry ? null : selectedUri}
-                          initialMarkdown={editorBody}
-                          sessionKey={inboxEditorResetNonce}
-                          onMarkdownChange={onEditorChange}
-                          onEditorError={onEditorError}
-                          onWikiLinkActivate={onWikiLinkActivate}
-                          onMarkdownRelativeLinkActivate={
-                            onMarkdownRelativeLinkActivate
-                          }
-                          onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                          relativeMarkdownLinkHrefIsResolved={
-                            relativeMarkdownLinkHrefIsResolved
-                          }
-                          wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                          wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                          onSaveShortcut={onSaveShortcut}
-                          onDeleteNoteShortcut={onDeleteNoteShortcut}
-                          placeholder={
-                            composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
-                          }
-                          busy={busy}
-                          onFoldedRangesPresentChange={setEditorHasFoldedRanges}
-                          onFoldableRangesPresentChange={
-                            setEditorHasFoldableRanges
-                          }
-                        />
-                        {!composingNewEntry && selectedUri ? (
-                          <section
-                            aria-hidden={inboxBacklinksDeferFirstPaint}
-                            aria-label="Backlinks"
-                            className={
-                              inboxBacklinksDeferFirstPaint
-                                ? 'inbox-backlinks inbox-backlinks--defer-first-paint'
-                                : 'inbox-backlinks'
-                            }>
-                            <div className="inbox-backlinks__header">Linked from</div>
-                            {backlinkRows.length === 0 ? (
-                              <p className="muted inbox-backlinks__empty">No incoming links.</p>
-                            ) : (
-                              <ul className="inbox-backlinks__list">
-                                {backlinkRows.map(row => (
-                                  <li key={row.uri}>
-                                    <button
-                                      type="button"
-                                      className="inbox-backlinks__row"
-                                      onClick={() => onSelectNote(row.uri)}
-                                    >
-                                      <span className="inbox-backlinks__title">{row.title}</span>
-                                      <span className="inbox-backlinks__filename">{row.fileName}</span>
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </section>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <EditorPaneBody
+                  inboxEditorRef={inboxEditorRef}
+                  inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+                  inboxAttachmentHost={inboxAttachmentHost}
+                  vaultRoot={vaultRoot}
+                  composingNewEntry={composingNewEntry}
+                  selectedUri={selectedUri}
+                  editorBody={editorBody}
+                  inboxEditorResetNonce={inboxEditorResetNonce}
+                  onEditorChange={onEditorChange}
+                  onEditorError={onEditorError}
+                  onWikiLinkActivate={onWikiLinkActivate}
+                  onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                  onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                  relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+                  wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                  wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                  onSaveShortcut={onSaveShortcut}
+                  onDeleteNoteShortcut={onDeleteNoteShortcut}
+                  busy={busy}
+                  backlinkRows={backlinkRows}
+                  onSelectNote={onSelectNote}
+                  inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+                />
                 {composingNewEntry ? (
                   <div className="pane-footer">
                     <button

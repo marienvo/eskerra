@@ -737,13 +737,12 @@ const NoteMarkdownEditorImpl = forwardRef<
         return;
       }
       const at = options?.selection === 'start' ? 0 : markdown.length;
-      v.setState(
-        EditorState.create({
-          doc: markdown,
-          selection: EditorSelection.cursor(at),
-          extensions: be,
-        }),
-      );
+      const nextState = EditorState.create({
+        doc: markdown,
+        selection: EditorSelection.cursor(at),
+        extensions: be,
+      });
+      v.setState(nextState);
       const wikiEff = wc.reconfigure(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
       );

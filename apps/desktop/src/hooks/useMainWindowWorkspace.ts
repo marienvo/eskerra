@@ -1,7 +1,6 @@
 import {listen} from '@tauri-apps/api/event';
 import {load} from '@tauri-apps/plugin-store';
 import {
-  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -197,6 +196,24 @@ const LARGE_RENAME_MIN_TOUCHED_BYTES = 768 * 1024;
 const RENAME_APPLY_YIELD_EVERY_WRITES = 24;
 const RENAME_NOTICE_TTL_MS = 5000;
 
+function equalReadonlyStringArrays(
+  a: readonly string[],
+  b: readonly string[],
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function loadMarkdownBodiesForWikiMaintenance(
   fs: VaultFilesystem,
   refs: ReadonlyArray<{uri: string}>,
@@ -301,10 +318,10 @@ export type UseMainWindowWorkspaceResult = {
    */
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
   /**
-   * True for one frame after each `loadMarkdown` (note body committed to CodeMirror): hides "Linked from"
-   * for that frame so it does not raster with the fresh editor subtree.
+   * Bumped after each `loadMarkdown`; `VaultTab` handles the one-frame backlinks defer locally so the
+   * late rAF clear does not re-render the whole workspace.
    */
-  inboxBacklinksDeferFirstPaint: boolean;
+  inboxBacklinksDeferNonce: number;
   /** Open note tabs (IDE-style); normalized vault markdown URIs, left-to-right order. */
   editorOpenTabUris: readonly string[];
   activateOpenTab: (uri: string) => void;
@@ -359,8 +376,7 @@ export function useMainWindowWorkspace(options: {
   const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
     readonly string[]
   >([]);
-  const [inboxBacklinksDeferFirstPaint, setInboxBacklinksDeferFirstPaint] =
-    useState(false);
+  const [inboxBacklinksDeferNonce, setInboxBacklinksDeferNonce] = useState(0);
   const [wikiRenameNotice, setWikiRenameNotice] = useState<string | null>(null);
   const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
     null,
@@ -379,6 +395,7 @@ export function useMainWindowWorkspace(options: {
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRefsBuildGenRef = useRef(0);
   const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
+  const selectedNoteBacklinkUrisRef = useRef<readonly string[]>([]);
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
@@ -427,6 +444,10 @@ export function useMainWindowWorkspace(options: {
     },
     [],
   );
+
+  useLayoutEffect(() => {
+    selectedNoteBacklinkUrisRef.current = selectedNoteBacklinkUris;
+  }, [selectedNoteBacklinkUris]);
 
   useLayoutEffect(() => {
     editorDocumentHistoryRef.current = editorDocumentHistory;
@@ -498,10 +519,9 @@ export function useMainWindowWorkspace(options: {
       cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
       inboxBacklinksDeferAfterLoadRafRef.current = null;
     }
-    setInboxBacklinksDeferFirstPaint(true);
+    setInboxBacklinksDeferNonce(n => n + 1);
     inboxBacklinksDeferAfterLoadRafRef.current = requestAnimationFrame(() => {
       inboxBacklinksDeferAfterLoadRafRef.current = null;
-      setInboxBacklinksDeferFirstPaint(false);
     });
   }, []);
 
@@ -510,7 +530,6 @@ export function useMainWindowWorkspace(options: {
       cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
       inboxBacklinksDeferAfterLoadRafRef.current = null;
     }
-    setInboxBacklinksDeferFirstPaint(false);
   }, []);
 
   useEffect(() => {
@@ -572,11 +591,15 @@ export function useMainWindowWorkspace(options: {
             activeBody,
           });
           if (!cancelled && selectedUriRef.current === selected) {
-            setSelectedNoteBacklinkUris(uris);
+            setSelectedNoteBacklinkUris(prev =>
+              equalReadonlyStringArrays(prev, uris) ? prev : uris,
+            );
           }
         } catch {
           if (!cancelled && selectedUriRef.current === selected) {
-            setSelectedNoteBacklinkUris([]);
+            setSelectedNoteBacklinkUris(prev =>
+              prev.length === 0 ? prev : [],
+            );
           }
         }
       })();
@@ -738,6 +761,7 @@ export function useMainWindowWorkspace(options: {
   const openMarkdownInEditor = useCallback(
     async (uri: string, options?: {skipHistory?: boolean}) => {
       const openGen = ++openMarkdownGenerationRef.current;
+      const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
       if (saveActiveRef.current) {
         await saveChainRef.current.catch(() => undefined);
@@ -751,7 +775,6 @@ export function useMainWindowWorkspace(options: {
         composingNewEntryRef.current,
         editorShellScrollByUriRef.current,
       );
-      const targetNorm = normalizeEditorDocUri(uri);
       const prevConflict = diskConflictRef.current;
       if (
         prevConflict &&
@@ -852,26 +875,25 @@ export function useMainWindowWorkspace(options: {
       selectedUriRef.current = targetNorm;
       composingNewEntryRef.current = false;
 
-      startTransition(() => {
-        if (prefetchBody !== undefined) {
-          setInboxContentByUri(prev => {
-            if (prev[targetNorm] === prefetchBody) {
-              return prev;
-            }
-            return {...prev, [targetNorm]: prefetchBody!};
-          });
-        }
-        if (resolvedEditorBody !== undefined) {
-          setEditorBody(resolvedEditorBody);
-          setBacklinksActiveBody(resolvedEditorBody);
-        }
-        if (!options?.skipHistory) {
-          setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
-        }
-        setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
-        setComposingNewEntry(false);
-        setSelectedUri(targetNorm);
-      });
+      // Apply the visible note switch at normal priority so tab/tree navigation feels immediate.
+      if (prefetchBody !== undefined) {
+        setInboxContentByUri(prev => {
+          if (prev[targetNorm] === prefetchBody) {
+            return prev;
+          }
+          return {...prev, [targetNorm]: prefetchBody!};
+        });
+      }
+      if (resolvedEditorBody !== undefined) {
+        setEditorBody(resolvedEditorBody);
+        setBacklinksActiveBody(resolvedEditorBody);
+      }
+      if (!options?.skipHistory) {
+        setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
+      }
+      setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
+      setComposingNewEntry(false);
+      setSelectedUri(targetNorm);
     },
     [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef, scheduleBacklinksDeferOneFrameAfterLoad],
   );
@@ -1321,7 +1343,6 @@ export function useMainWindowWorkspace(options: {
     }
     if (eagerEditorLoadUriRef.current === selectedUri) {
       eagerEditorLoadUriRef.current = null;
-      scheduleBacklinksDeferOneFrameAfterLoad();
       return;
     }
     const cached = inboxContentByUriRef.current[selectedUri];
@@ -1394,6 +1415,9 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     const id = window.setTimeout(() => {
+      if (backlinksActiveBodyRef.current === editorBody) {
+        return;
+      }
       setBacklinksActiveBody(editorBody);
     }, INBOX_BACKLINK_BODY_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
@@ -2624,7 +2648,7 @@ export function useMainWindowWorkspace(options: {
     editorHistoryGoBack,
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
-    inboxBacklinksDeferFirstPaint,
+    inboxBacklinksDeferNonce,
     editorOpenTabUris,
     activateOpenTab,
     closeEditorTab,

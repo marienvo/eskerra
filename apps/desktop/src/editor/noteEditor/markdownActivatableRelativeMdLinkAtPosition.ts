@@ -12,8 +12,7 @@ export type ActivatableRelativeMdLinkHit = {
 /** Label text plus the caret slot immediately before the closing `]` (span.to is that offset). */
 function posInActivatableLabelSpan(
   pos: number,
-  span: {from: number; to: number} | null,
-): boolean {
+  span: {from: number; to: number} | null,): boolean {
   if (span == null) {
     return false;
   }
