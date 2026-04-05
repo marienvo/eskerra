@@ -63,13 +63,20 @@ function inlineGuardOk(doc: EditorState['doc'], from: number, to: number): boole
   return !doc.sliceString(from, to).includes('\n');
 }
 
-/** Remove paired `**...**` spans inside s (non-overlapping pairs, left-to-right). */
-export function stripBalancedDoubleAsterisks(s: string): string {
+/**
+ * Remove non-overlapping paired spans of a two-character delimiter inside `s` (left-to-right stack).
+ */
+export function stripBalancedDoubleToken(s: string, token: string): string {
+  if (token.length !== 2) {
+    throw new Error('stripBalancedDoubleToken expects a two-character delimiter.');
+  }
+  const openCh = token[0];
+  const closeCh = token[1];
   type Pair = readonly [number, number];
   const pairs: Pair[] = [];
   const stack: number[] = [];
   for (let i = 0; i + 1 < s.length; ) {
-    if (s[i] === '*' && s[i + 1] === '*') {
+    if (s[i] === openCh && s[i + 1] === closeCh) {
       if (stack.length) {
         const open = stack.pop()!;
         pairs.push([open, i]);
@@ -97,13 +104,19 @@ export function stripBalancedDoubleAsterisks(s: string): string {
   return out;
 }
 
-/** Remove paired single `*...*` spans inside s after `**` stripping. */
-export function stripBalancedSingleAsterisks(s: string): string {
-  const afterStrong = stripBalancedDoubleAsterisks(s);
+/**
+ * After removing `doubleToken` pairs, remove paired single `singleChar` spans inside `s`.
+ */
+export function stripBalancedSingleChars(
+  s: string,
+  singleChar: string,
+  doubleToken: string,
+): string {
+  const afterStrong = stripBalancedDoubleToken(s, doubleToken);
   const pairs: Array<readonly [number, number]> = [];
   const stack: number[] = [];
   for (let i = 0; i < afterStrong.length; i++) {
-    if (afterStrong[i] === '*') {
+    if (afterStrong[i] === singleChar) {
       if (stack.length) {
         const open = stack.pop()!;
         pairs.push([open, i]);
@@ -126,75 +139,93 @@ export function stripBalancedSingleAsterisks(s: string): string {
   return out;
 }
 
-function normalizeAsteriskInsideSelectionSlice(slice: string): string {
-  return stripBalancedSingleAsterisks(slice);
+/** Remove paired `**...**` spans inside s (non-overlapping pairs, left-to-right). */
+export function stripBalancedDoubleAsterisks(s: string): string {
+  return stripBalancedDoubleToken(s, '**');
 }
 
-function outerStrong(doc: EditorState['doc'], from: number, to: number): boolean {
+/** Remove paired single `*...*` spans inside s after `**` stripping. */
+export function stripBalancedSingleAsterisks(s: string): string {
+  return stripBalancedSingleChars(s, '*', '**');
+}
+
+function outerDoubleDelim(
+  doc: EditorState['doc'],
+  from: number,
+  to: number,
+  double: string,
+): boolean {
+  const dLen = double.length;
   return (
-    from >= 2
-    && to + 2 <= doc.length
-    && doc.sliceString(from - 2, from) === '**'
-    && doc.sliceString(to, to + 2) === '**'
+    from >= dLen
+    && to + dLen <= doc.length
+    && doc.sliceString(from - dLen, from) === double
+    && doc.sliceString(to, to + dLen) === double
   );
 }
 
-function outerEmphasis(doc: EditorState['doc'], from: number, to: number): boolean {
-  if (from < 1 || to >= doc.length) {
+function outerSingleDelim(
+  doc: EditorState['doc'],
+  from: number,
+  to: number,
+  single: string,
+  double: string,
+): boolean {
+  const dLen = double.length;
+  if (from < 1 || to + 1 > doc.length) {
     return false;
   }
-  if (doc.sliceString(from - 1, from) !== '*') {
+  if (doc.sliceString(from - 1, from) !== single) {
     return false;
   }
-  if (doc.sliceString(to, to + 1) !== '*') {
+  if (doc.sliceString(to, to + 1) !== single) {
     return false;
   }
-  if (from >= 2 && doc.sliceString(from - 2, from) === '**') {
+  if (from >= dLen && doc.sliceString(from - dLen, from) === double) {
     return false;
   }
-  if (to + 1 < doc.length && doc.sliceString(to, to + 2) === '**') {
+  if (to + dLen <= doc.length && doc.sliceString(to, to + dLen) === double) {
     return false;
   }
   return true;
 }
 
-/**
- * Selection covers a full `*inner*` (including both single-asterisk delimiters), for toggle-off.
- */
-function selectionIsWholeSingleEmphasisSpan(
+function selectionIsWholeSingleSpan(
   doc: EditorState['doc'],
   from: number,
   to: number,
+  single: string,
 ): boolean {
   if (to - from < 3) {
     return false;
   }
-  if (doc.sliceString(from, from + 1) !== '*') {
+  if (doc.sliceString(from, from + 1) !== single) {
     return false;
   }
-  if (doc.sliceString(to - 1, to) !== '*') {
+  if (doc.sliceString(to - 1, to) !== single) {
     return false;
   }
   return from + 1 < to - 1;
 }
 
-/** Selection is exactly `**` + inner + `**` (minimal outer strong span). */
-function selectionIsWholeStrongSpan(
+function selectionIsWholeDoubleSpan(
   doc: EditorState['doc'],
   from: number,
   to: number,
+  double: string,
 ): boolean {
-  if (to - from < 5) {
+  const dLen = double.length;
+  if (to - from < dLen * 2 + 1) {
     return false;
   }
-  if (doc.sliceString(from, from + 2) !== '**') {
+  if (doc.sliceString(from, from + dLen) !== double) {
     return false;
   }
-  if (doc.sliceString(to - 2, to) !== '**') {
+  if (doc.sliceString(to - dLen, to) !== double) {
     return false;
   }
-  const innerFrom = from + 2;
-  const innerTo = to - 2;
+  const innerFrom = from + dLen;
+  const innerTo = to - dLen;
   return innerFrom < innerTo;
 }
 
@@ -224,7 +255,18 @@ function wikiCloseStep(
   return true;
 }
 
-type StarChange = {
+export type SymmetricSurroundConfig =
+  | {
+      readonly mode: 'singleDouble';
+      readonly single: string;
+      readonly double: string;
+    }
+  | {
+      readonly mode: 'pairedOnly';
+      readonly double: string;
+    };
+
+type SurroundChange = {
   from: number;
   to: number;
   insert: string;
@@ -232,18 +274,29 @@ type StarChange = {
   selTo: number;
 };
 
-function computeStarChange(
+function normalizeSymmetricInner(slice: string, cfg: SymmetricSurroundConfig): string {
+  if (cfg.mode === 'pairedOnly') {
+    return stripBalancedDoubleToken(slice, cfg.double);
+  }
+  return stripBalancedSingleChars(slice, cfg.single, cfg.double);
+}
+
+export function computeSymmetricSurroundChange(
   state: EditorState,
   range: SelectionRange,
-): StarChange | null {
+  cfg: SymmetricSurroundConfig,
+): SurroundChange | null {
   const {doc} = state;
   const {from, to} = range;
   if (!selectionIsMarkdownPlain(state, from, to) || !inlineGuardOk(doc, from, to)) {
     return null;
   }
 
-  if (selectionIsWholeStrongSpan(doc, from, to)) {
-    const inner = doc.sliceString(from + 2, to - 2);
+  const {double} = cfg;
+  const dLen = double.length;
+
+  if (selectionIsWholeDoubleSpan(doc, from, to, double)) {
+    const inner = doc.sliceString(from + dLen, to - dLen);
     return {
       from,
       to,
@@ -253,50 +306,82 @@ function computeStarChange(
     };
   }
 
-  if (outerStrong(doc, from, to)) {
+  if (outerDoubleDelim(doc, from, to, double)) {
     const inner = doc.sliceString(from, to);
     return {
-      from: from - 2,
-      to: to + 2,
+      from: from - dLen,
+      to: to + dLen,
       insert: inner,
-      selFrom: from - 2,
-      selTo: to - 2,
+      selFrom: from - dLen,
+      selTo: to - dLen,
     };
   }
 
-  if (selectionIsWholeSingleEmphasisSpan(doc, from, to)) {
-    const inner = doc.sliceString(from + 1, to - 1);
+  if (cfg.mode === 'singleDouble') {
+    const {single} = cfg;
+
+    if (selectionIsWholeSingleSpan(doc, from, to, single)) {
+      const inner = doc.sliceString(from + 1, to - 1);
+      return {
+        from,
+        to,
+        insert: inner,
+        selFrom: from,
+        selTo: from + inner.length,
+      };
+    }
+
+    if (outerSingleDelim(doc, from, to, single, double)) {
+      const inner = doc.sliceString(from, to);
+      const insert = `${double}${inner}${double}`;
+      return {
+        from: from - 1,
+        to: to + 1,
+        insert,
+        selFrom: from + 1,
+        selTo: from + 1 + inner.length,
+      };
+    }
+
+    const rawInner = doc.sliceString(from, to);
+    const flat = normalizeSymmetricInner(rawInner, cfg);
+    const wrapped = `${single}${flat}${single}`;
     return {
       from,
       to,
-      insert: inner,
-      selFrom: from,
-      selTo: from + inner.length,
-    };
-  }
-
-  if (outerEmphasis(doc, from, to)) {
-    const inner = doc.sliceString(from, to);
-    return {
-      from: from - 1,
-      to: to + 1,
-      insert: `**${inner}**`,
+      insert: wrapped,
       selFrom: from + 1,
-      selTo: from + 1 + inner.length,
+      selTo: from + 1 + flat.length,
     };
   }
 
   const rawInner = doc.sliceString(from, to);
-  const flat = normalizeAsteriskInsideSelectionSlice(rawInner);
-  const wrapped = `*${flat}*`;
+  const flat = normalizeSymmetricInner(rawInner, cfg);
+  const wrapped = `${double}${flat}${double}`;
   return {
     from,
     to,
     insert: wrapped,
-    selFrom: from + 1,
-    selTo: from + 1 + flat.length,
+    selFrom: from + dLen,
+    selTo: from + dLen + flat.length,
   };
 }
+
+const SURROUND_STAR: SymmetricSurroundConfig = {
+  mode: 'singleDouble',
+  single: '*',
+  double: '**',
+};
+
+const SURROUND_UNDERSCORE: SymmetricSurroundConfig = {
+  mode: 'singleDouble',
+  single: '_',
+  double: '__',
+};
+
+const SURROUND_STRIKE: SymmetricSurroundConfig = {mode: 'pairedOnly', double: '~~'};
+const SURROUND_MUTED: SymmetricSurroundConfig = {mode: 'pairedOnly', double: '%%'};
+const SURROUND_HIGHLIGHT: SymmetricSurroundConfig = {mode: 'pairedOnly', double: '=='};
 
 type WikiClass = 'unwrap' | 'close' | 'open';
 
@@ -429,16 +514,11 @@ function mapAnchoredSelection(
   return EditorSelection.range(a, b);
 }
 
-function dispatchStar(view: EditorView): boolean {
+function dispatchSurround(
+  view: EditorView,
+  planned: readonly SurroundChange[],
+): boolean {
   const state = view.state;
-  const planned: StarChange[] = [];
-  for (const r of state.selection.ranges) {
-    const c = computeStarChange(state, r);
-    if (!c) {
-      return false;
-    }
-    planned.push(c);
-  }
   const pieces = [...planned]
     .sort((a, b) => a.from - b.from)
     .map(c => ({from: c.from, to: c.to, insert: c.insert}));
@@ -452,17 +532,41 @@ function dispatchStar(view: EditorView): boolean {
   return true;
 }
 
-function runStarSurround(view: EditorView): boolean {
-  const ranges = view.state.selection.ranges;
+function trySymmetricSurround(view: EditorView, cfg: SymmetricSurroundConfig): boolean {
+  const state = view.state;
+  const ranges = state.selection.ranges;
   if (!ranges.length || ranges.some(r => r.empty)) {
     return false;
   }
+  const planned: SurroundChange[] = [];
   for (const r of ranges) {
-    if (computeStarChange(view.state, r) == null) {
+    const c = computeSymmetricSurroundChange(state, r, cfg);
+    if (!c) {
       return false;
     }
+    planned.push(c);
   }
-  return dispatchStar(view);
+  return dispatchSurround(view, planned);
+}
+
+function runStarSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_STAR);
+}
+
+function runUnderscoreSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_UNDERSCORE);
+}
+
+function runStrikeSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_STRIKE);
+}
+
+function runMutedSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_MUTED);
+}
+
+function runHighlightSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_HIGHLIGHT);
 }
 
 function dispatchWiki(view: EditorView, kind: WikiClass): boolean {
@@ -511,7 +615,8 @@ export function markdownSelectionAllowMultipleRanges(): Extension {
 }
 
 /**
- * Prec.high keymap: `[` wiki wrap/unwrap steps; `*` / `Shift-8` emphasis and strong (see computeStarChange).
+ * Prec.high keymap: wiki `[`; symmetric inline markup (`*` / `**`, `_` / `__`, `~~`, `%%`, `==`).
+ * Key names follow CodeMirror conventions; US QWERTY is the reference layout (see desktop-editor spec).
  */
 export function markdownSelectionSurroundKeymap(): Extension {
   return Prec.high(
@@ -520,6 +625,11 @@ export function markdownSelectionSurroundKeymap(): Extension {
       {key: '*', run: runStarSurround},
       {key: 'Shift-8', run: runStarSurround},
       {key: 'Shift-*', run: runStarSurround},
+      {key: '_', run: runUnderscoreSurround},
+      {key: 'Shift-Minus', run: runUnderscoreSurround},
+      {key: '~', run: runStrikeSurround},
+      {key: '%', run: runMutedSurround},
+      {key: '=', run: runHighlightSurround},
     ]),
   );
 }

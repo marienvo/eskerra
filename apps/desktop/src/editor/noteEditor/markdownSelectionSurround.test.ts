@@ -7,10 +7,12 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {markdownNotebox} from './markdownNoteboxLanguage';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
 import {
+  computeSymmetricSurroundChange,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
   selectionIsMarkdownPlain,
   stripBalancedDoubleAsterisks,
+  stripBalancedDoubleToken,
   stripBalancedSingleAsterisks,
 } from './markdownSelectionSurround';
 
@@ -24,6 +26,22 @@ function keydown(view: EditorView, key: string, shiftKey = false): void {
 
 function starKeydown(view: EditorView): void {
   keydown(view, '*', true);
+}
+
+function underscoreKeydown(view: EditorView): void {
+  keydown(view, '_', true);
+}
+
+function tildeKeydown(view: EditorView): void {
+  keydown(view, '~', true);
+}
+
+function percentKeydown(view: EditorView): void {
+  keydown(view, '%', true);
+}
+
+function equalKeydown(view: EditorView): void {
+  keydown(view, '=', false);
 }
 
 function minimalMarkdownExtensions() {
@@ -50,6 +68,8 @@ describe('markdownSelectionSurround', () => {
   it('strips nested strong inside selection before outer wrap', () => {
     expect(stripBalancedDoubleAsterisks('a **b** c')).toBe('a b c');
     expect(stripBalancedSingleAsterisks('a *b* c')).toBe('a b c');
+    expect(stripBalancedDoubleToken('a ==b== c', '==')).toBe('a b c');
+    expect(stripBalancedDoubleToken('x %%y%% z', '%%')).toBe('x y z');
   });
 
   it('wraps plain selection with emphasis then upgrades to strong', () => {
@@ -168,5 +188,139 @@ describe('markdownSelectionSurround', () => {
       extensions: minimalMarkdownExtensions(),
     });
     expect(selectionIsMarkdownPlain(state, 1, 2)).toBe(false);
+  });
+
+  it('wraps with strikethrough ~~ in one keystroke and unwraps whole span', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'strike me',
+      selection: EditorSelection.create([EditorSelection.range(0, 9)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    tildeKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('~~strike me~~');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, view!.state.doc.length)]),
+    });
+    tildeKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('strike me');
+  });
+
+  it('applies == and %% surround and strips when whole span selected', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'hi',
+      selection: EditorSelection.create([EditorSelection.range(0, 2)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    equalKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('==hi==');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, view!.state.doc.length)]),
+    });
+    equalKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hi');
+
+    view!.dispatch({
+      changes: {from: 0, to: 2, insert: 'ab'},
+      selection: EditorSelection.create([EditorSelection.range(0, 2)]),
+    });
+    percentKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('%%ab%%');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, view!.state.doc.length)]),
+    });
+    percentKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('ab');
+  });
+
+  it('underscore emphasis matches star wrap and upgrade to strong', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'hello world',
+      selection: EditorSelection.create([EditorSelection.range(6, 11)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    underscoreKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello _world_');
+    underscoreKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello __world__');
+  });
+
+  it('does not compute highlight or muted surround for an empty range (handlers no-op)', () => {
+    const state = EditorState.create({
+      doc: 'plain',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    expect(
+      computeSymmetricSurroundChange(state, EditorSelection.cursor(2), {
+        mode: 'pairedOnly',
+        double: '==',
+      }),
+    ).toBeNull();
+    expect(
+      computeSymmetricSurroundChange(state, EditorSelection.cursor(2), {
+        mode: 'pairedOnly',
+        double: '%%',
+      }),
+    ).toBeNull();
+  });
+
+  it('multi-cursor highlight == on two ranges', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'aa bb',
+      selection: EditorSelection.create([
+        EditorSelection.range(0, 2),
+        EditorSelection.range(3, 5),
+      ]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    equalKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('==aa== ==bb==');
+  });
+
+  it('does not wrap strikethrough on multiline selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'a\nb',
+      selection: EditorSelection.create([EditorSelection.range(0, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    tildeKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('a\nb');
+  });
+
+  it('does not wrap highlight inside link label', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '[x](https://e)',
+      selection: EditorSelection.create([EditorSelection.range(1, 2)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    equalKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('[x](https://e)');
   });
 });
