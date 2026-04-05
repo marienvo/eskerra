@@ -32,18 +32,24 @@ describe('markdownActivatableRelativeMdLinkAtPosition', () => {
     const noteIdx = doc.indexOf('N');
     const urlIdx = doc.indexOf('foo');
     const openBracket = doc.indexOf('[');
-    const closeParen = doc.indexOf(')');
+    /** Gap after `)`; `indexOf(')')` is the gap before `)`, same as URL end and should activate. */
+    const afterCloseParen = doc.indexOf(')') + 1;
 
     expect(
       markdownActivatableRelativeMdLinkAtPosition(state, openBracket, hrefActivatable),
     ).toBeNull();
+    const expectedHit = {
+      href: 'foo.md',
+      hrefFrom: doc.indexOf('foo.md'),
+      hrefTo: doc.indexOf('foo.md') + 'foo.md'.length,
+    };
     expect(
       markdownActivatableRelativeMdLinkAtPosition(
         state,
         doc.indexOf(']'),
         hrefActivatable,
       ),
-    ).toBeNull();
+    ).toEqual(expectedHit);
     expect(
       markdownActivatableRelativeMdLinkAtPosition(
         state,
@@ -52,7 +58,7 @@ describe('markdownActivatableRelativeMdLinkAtPosition', () => {
       ),
     ).toBeNull();
     expect(
-      markdownActivatableRelativeMdLinkAtPosition(state, closeParen, hrefActivatable),
+      markdownActivatableRelativeMdLinkAtPosition(state, afterCloseParen, hrefActivatable),
     ).toBeNull();
 
     const labelHit = markdownActivatableRelativeMdLinkAtPosition(
@@ -60,18 +66,23 @@ describe('markdownActivatableRelativeMdLinkAtPosition', () => {
       noteIdx,
       hrefActivatable,
     );
-    expect(labelHit).toEqual({
-      href: 'foo.md',
-      hrefFrom: doc.indexOf('foo.md'),
-      hrefTo: doc.indexOf('foo.md') + 'foo.md'.length,
-    });
+    expect(labelHit).toEqual(expectedHit);
 
     const urlHit = markdownActivatableRelativeMdLinkAtPosition(
       state,
       urlIdx,
       hrefActivatable,
     );
-    expect(urlHit).toEqual(labelHit);
+    expect(urlHit).toEqual(expectedHit);
+
+    const urlEndCaret = doc.indexOf('foo.md') + 'foo.md'.length;
+    expect(
+      markdownActivatableRelativeMdLinkAtPosition(
+        state,
+        urlEndCaret,
+        hrefActivatable,
+      ),
+    ).toEqual(expectedHit);
   });
 
   it('returns null for non-md href regardless of pos', () => {
