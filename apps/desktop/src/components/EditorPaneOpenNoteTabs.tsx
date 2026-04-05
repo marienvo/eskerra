@@ -44,6 +44,18 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
     [onCloseTab],
   );
 
+  const onPillAuxClick = useCallback(
+    (e: MouseEvent, uri: string) => {
+      if (e.button !== 1) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onCloseTab(uri);
+    },
+    [onCloseTab],
+  );
+
   if (tabUris.length === 0) {
     return (
       <span className="pane-title pane-title--truncate editor-open-tabs-placeholder">
@@ -69,6 +81,7 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
                     : 'editor-open-tab-pill'
                 }
                 role="none"
+                onAuxClick={e => onPillAuxClick(e, uri)}
               >
                 <button
                   type="button"

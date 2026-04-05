@@ -701,7 +701,7 @@ export function VaultTab({
         }
         right={
           <div className="panel-surface">
-            <div className="pane-header">
+            <div className="pane-header pane-header--inbox-editor">
               <div className="pane-header-start">
                 <button
                   type="button"
