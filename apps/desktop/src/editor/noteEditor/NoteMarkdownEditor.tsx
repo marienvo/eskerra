@@ -63,6 +63,7 @@ import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBund
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
@@ -452,57 +453,6 @@ const NoteMarkdownEditorImpl = forwardRef<
       return false;
     };
 
-    const runWikiLinkOpenAssist = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      if (!sel.empty) {
-        return false;
-      }
-      const pos = sel.head;
-      if (pos < 1) {
-        return false;
-      }
-      const prev = view.state.doc.sliceString(pos - 1, pos);
-      if (prev !== '[') {
-        return false;
-      }
-      view.dispatch({
-        changes: {from: pos, to: pos, insert: '[]]'},
-        // Keep caret between opening and closing wiki brackets: [[|]]
-        selection: EditorSelection.cursor(pos + 1),
-      });
-      return true;
-    };
-
-    const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      const inner = wikiLinkActivatableInnerAtDocPosition(
-        view.state.doc,
-        sel.head,
-      );
-      if (inner == null) {
-        return false;
-      }
-      onWikiLinkActivateRef.current({inner, at: sel.head});
-      return true;
-    };
-
-    const runMarkdownRelativeLinkActivateFromCaret = (view: EditorView): boolean => {
-      const sel = view.state.selection.main;
-      const relHit = markdownActivatableRelativeMdLinkAtPosition(
-        view.state,
-        sel.head,
-        isActivatableRelativeMarkdownHref,
-      );
-      if (relHit == null) {
-        return false;
-      }
-      onMarkdownRelativeLinkActivateRef.current({
-        href: relHit.href,
-        at: relHit.hrefFrom,
-      });
-      return true;
-    };
-
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
@@ -530,23 +480,12 @@ const NoteMarkdownEditorImpl = forwardRef<
       markdownSelectionSurroundKeymap(),
       markdownInlineCodeSurroundInputHandler(),
       keymap.of([
-        {
-          key: 'Mod-s',
-          run: () => {
-            onSaveShortcutRef.current?.();
-            return true;
-          },
-        },
-        {
-          key: '[',
-          run: runWikiLinkOpenAssist,
-        },
-        {
-          key: 'Mod-Enter',
-          run: view =>
-            runWikiLinkActivateFromCaret(view)
-            || runMarkdownRelativeLinkActivateFromCaret(view),
-        },
+        ...buildNoteMarkdownVaultKeymapBindings({
+          onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
+          onMarkdownRelativeLinkActivate: p =>
+            onMarkdownRelativeLinkActivateRef.current(p),
+        }),
         indentWithTab,
         ...foldKeymap,
         ...defaultKeymap,

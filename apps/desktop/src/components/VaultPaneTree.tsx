@@ -235,6 +235,9 @@ export function VaultPaneTree({
         treeRef.current?.getItemInstance(lonely)?.expand();
       });
     },
+    // `hotkeysCoreFeature` dispatches selectionFeature presets (Shift+Arrow range select, Ctrl+A).
+    // Keep it: removing it drops those tree shortcuts. `toggleSelectedItem` (Ctrl+Space) stays off
+    // so we do not steal that chord from editors/OS. See specs/architecture/desktop-keybindings-inventory.md.
     features: [asyncDataLoaderFeature, selectionFeature, hotkeysCoreFeature],
     initialState: {
       expandedItems: [rootId],

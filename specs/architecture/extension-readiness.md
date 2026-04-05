@@ -76,7 +76,7 @@ Follow-on work is tracked in [desktop-shell-wiki-backlog.md](../plans/desktop-sh
 
 - **Adapters:** `VaultFilesystem`, audio player, future search/sync transports—**one owning module** each.
 - **Indexing seam (when justified):** a shell-owned link/indexing seam may be introduced for scale-sensitive mechanics (discovery, batched reads, invalidation, optional runtime caching), but only when benchmark gates show the TypeScript-first path is insufficient.
-- **Command registration (future):** when a command palette ships, a **single registrar** in the shell enumerates actions; features do not bind keys in isolation.
+- **Command registration (future):** when a command palette ships, a **single registrar** in the shell enumerates actions; features do not bind keys in isolation. Keep default chords documented in [desktop-keybindings-inventory.md](./desktop-keybindings-inventory.md); extend that inventory whenever registrar-backed shortcuts change.
 
 ### `VaultFilesystem` vs indexing seam
 

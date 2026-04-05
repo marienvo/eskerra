@@ -50,6 +50,7 @@ Remaining phases below are about **measurement**, **polish**, **scale if needed*
 
 - Single module (or small set) that enumerates commands and their handlers.
 - Migrate a handful of high-risk or user-visible shortcuts first; expand over time.
+- **Binding source of truth (today):** [desktop-keybindings-inventory.md](../architecture/desktop-keybindings-inventory.md) lists action ids and defaults; evolve it alongside the registrar.
 
 **Defer:** Third-party command contributions, plugin-shaped extension points.
 

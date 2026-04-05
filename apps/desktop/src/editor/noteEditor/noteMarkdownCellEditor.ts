@@ -34,6 +34,7 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
+import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
 import {
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
@@ -103,26 +104,6 @@ export type EskerraCellBundleFactory = (
   partial: EskerraTableCellBundlePartial,
 ) => readonly Extension[];
 
-function runWikiLinkOpenAssist(view: EditorView): boolean {
-  const sel = view.state.selection.main;
-  if (!sel.empty) {
-    return false;
-  }
-  const pos = sel.head;
-  if (pos < 1) {
-    return false;
-  }
-  const prev = view.state.doc.sliceString(pos - 1, pos);
-  if (prev !== '[') {
-    return false;
-  }
-  view.dispatch({
-    changes: {from: pos, to: pos, insert: '[]]'},
-    selection: EditorSelection.cursor(pos + 1),
-  });
-  return true;
-}
-
 /**
  * Markdown editing extensions aligned with the main note editor, for one-line table cells.
  */
@@ -175,35 +156,6 @@ export function buildNoteMarkdownCellExtensions(
       return true;
     }
     return false;
-  };
-
-  const runWikiLinkActivateFromCaret = (view: EditorView): boolean => {
-    const sel = view.state.selection.main;
-    const wikiInner = wikiLinkActivatableInnerAtDocPosition(
-      view.state.doc,
-      sel.head,
-    );
-    if (wikiInner == null) {
-      return false;
-    }
-    onWikiLinkActivate({inner: wikiInner, at: sel.head});
-    return true;
-  };
-
-  const runMarkdownRelativeLinkActivateFromCaret = (
-    view: EditorView,
-  ): boolean => {
-    const sel = view.state.selection.main;
-    const relHit = markdownActivatableRelativeMdLinkAtPosition(
-      view.state,
-      sel.head,
-      isActivatableRelativeMarkdownHref,
-    );
-    if (relHit == null) {
-      return false;
-    }
-    onMarkdownRelativeLinkActivate({href: relHit.href, at: relHit.hrefFrom});
-    return true;
   };
 
   const pasteOk = () => args.pasteSessionRef.current === args.pasteSessionId;
@@ -400,20 +352,11 @@ export function buildNoteMarkdownCellExtensions(
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
     keymap.of([
-      {
-        key: 'Mod-s',
-        run: () => {
-          onSaveShortcut?.();
-          return true;
-        },
-      },
-      {key: '[', run: runWikiLinkOpenAssist},
-      {
-        key: 'Mod-Enter',
-        run: view =>
-          runWikiLinkActivateFromCaret(view)
-          || runMarkdownRelativeLinkActivateFromCaret(view),
-      },
+      ...buildNoteMarkdownVaultKeymapBindings({
+        onSaveShortcut,
+        onWikiLinkActivate,
+        onMarkdownRelativeLinkActivate,
+      }),
       indentWithTab,
       ...defaultKeymap,
       ...historyKeymap,

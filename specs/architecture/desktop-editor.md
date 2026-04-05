@@ -1,6 +1,6 @@
 # Desktop Vault editor (CodeMirror 6)
 
-The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tree** on the left, **editor** on the right. This document describes that editor stack, wiki behavior, and filesystem rules. For shell layout and the **tree vs wiki index** split, see [desktop-shell-patterns.md](../design/desktop-shell-patterns.md).
+The markdown editor lives in the **Vault** rail tab (`apps/desktop`): **vault tree** on the left, **editor** on the right. This document describes that editor stack, wiki behavior, and filesystem rules. For shell layout and the **tree vs wiki index** split, see [desktop-shell-patterns.md](../design/desktop-shell-patterns.md). For a consolidated **default keybinding** table (action ids for future palette work), see [desktop-keybindings-inventory.md](./desktop-keybindings-inventory.md).
 
 ## Goals
 
