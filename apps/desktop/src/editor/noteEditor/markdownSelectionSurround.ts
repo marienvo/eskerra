@@ -7,6 +7,7 @@ import {
   type Extension,
   Prec,
   type SelectionRange,
+  type Transaction,
 } from '@codemirror/state';
 import {EditorView, keymap} from '@codemirror/view';
 
@@ -41,6 +42,46 @@ function selectionCrossesNonPlainTree(
   return crosses;
 }
 
+/** Like {@link selectionCrossesNonPlainTree}, but inline code spans are allowed (unwrap / re-wrap). */
+function selectionCrossesNonPlainTreeAllowingInlineCode(
+  state: EditorState,
+  from: number,
+  to: number,
+): boolean {
+  let crosses = false;
+  syntaxTree(state).iterate({
+    from,
+    to,
+    enter(node) {
+      if (/^InlineCode$/i.test(node.name)) {
+        return false;
+      }
+      if (nameLooksNonPlain(node.name)) {
+        crosses = true;
+      }
+    },
+  });
+  return crosses;
+}
+
+/**
+ * Plain markdown for inline-code surround: same as {@link selectionIsMarkdownPlain}, except selections
+ * may lie inside or cover an `InlineCode` Lezer node (for toggle-off).
+ */
+export function selectionIsMarkdownPlainForInlineCodeSurround(
+  state: EditorState,
+  from: number,
+  to: number,
+): boolean {
+  if (from === to) {
+    return false;
+  }
+  if (!markdownLanguage.isActiveAt(state, from, 1)) {
+    return false;
+  }
+  return !selectionCrossesNonPlainTreeAllowingInlineCode(state, from, to);
+}
+
 /**
  * True when pasteURLAsLink-style wrapping is safe: markdown active and selection does not cross
  * syntax-only / non-plain constructs (e.g. code, links).
@@ -61,6 +102,136 @@ export function selectionIsMarkdownPlain(
 
 function inlineGuardOk(doc: EditorState['doc'], from: number, to: number): boolean {
   return !doc.sliceString(from, to).includes('\n');
+}
+
+function maxConsecutiveBackticksIn(s: string): number {
+  let max = 0;
+  let run = 0;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '`') {
+      run++;
+      max = Math.max(max, run);
+    } else {
+      run = 0;
+    }
+  }
+  return max;
+}
+
+function backtickRunLengthAtStart(s: string): number {
+  let i = 0;
+  while (i < s.length && s[i] === '`') {
+    i++;
+  }
+  return i;
+}
+
+function backtickRunLengthAtEnd(s: string): number {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '`') {
+    i--;
+  }
+  return s.length - i;
+}
+
+/**
+ * Build CommonMark-style inline code delimiters: run length max(1, longest inner backtick run + 1);
+ * pad with spaces when inner touches a backtick.
+ */
+export function buildInlineCodeReplacement(inner: string): string {
+  const maxRun = maxConsecutiveBackticksIn(inner);
+  const fenceLen = Math.max(1, maxRun + 1);
+  const fence = '`'.repeat(fenceLen);
+  let body = inner;
+  if (body.startsWith('`') || body.endsWith('`')) {
+    body = ` ${body} `;
+  }
+  return `${fence}${body}${fence}`;
+}
+
+function sliceIsCompleteInlineCodeFence(slice: string): string | null {
+  const openLen = backtickRunLengthAtStart(slice);
+  if (openLen < 1 || slice.length < openLen * 2 + 1) {
+    return null;
+  }
+  const closeLen = backtickRunLengthAtEnd(slice);
+  if (closeLen !== openLen) {
+    return null;
+  }
+  if (slice.slice(-openLen) !== '`'.repeat(openLen)) {
+    return null;
+  }
+  return slice.slice(openLen, slice.length - openLen);
+}
+
+function countBackticksBefore(doc: EditorState['doc'], pos: number): number {
+  let n = 0;
+  for (let p = pos - 1; p >= 0; p--) {
+    if (doc.sliceString(p, p + 1) !== '`') {
+      break;
+    }
+    n++;
+  }
+  return n;
+}
+
+function countBackticksAfter(doc: EditorState['doc'], pos: number): number {
+  const len = doc.length;
+  let n = 0;
+  for (let p = pos; p < len; p++) {
+    if (doc.sliceString(p, p + 1) !== '`') {
+      break;
+    }
+    n++;
+  }
+  return n;
+}
+
+export function computeInlineCodeSurroundChange(
+  state: EditorState,
+  range: SelectionRange,
+): SurroundChange | null {
+  const {doc} = state;
+  const {from, to} = range;
+  if (!inlineGuardOk(doc, from, to) || !selectionIsMarkdownPlainForInlineCodeSurround(state, from, to)) {
+    return null;
+  }
+
+  const selected = doc.sliceString(from, to);
+  const wholeInner = sliceIsCompleteInlineCodeFence(selected);
+  if (wholeInner != null) {
+    return {
+      from,
+      to,
+      insert: wholeInner,
+      selFrom: from,
+      selTo: from + wholeInner.length,
+    };
+  }
+
+  const openBefore = countBackticksBefore(doc, from);
+  const closeAfter = countBackticksAfter(doc, to);
+  if (openBefore > 0 && openBefore === closeAfter) {
+    const inner = selected;
+    return {
+      from: from - openBefore,
+      to: to + closeAfter,
+      insert: inner,
+      selFrom: from - openBefore,
+      selTo: to - openBefore,
+    };
+  }
+
+  const insert = buildInlineCodeReplacement(selected);
+  const fenceLen = backtickRunLengthAtStart(insert);
+  const body = insert.slice(fenceLen, insert.length - fenceLen);
+  return {
+    from,
+    to,
+    insert,
+    selFrom: from + fenceLen,
+    selTo: from + fenceLen + body.length,
+  };
 }
 
 /**
@@ -569,6 +740,45 @@ function runHighlightSurround(view: EditorView): boolean {
   return trySymmetricSurround(view, SURROUND_HIGHLIGHT);
 }
 
+function tryInlineCodeSurround(view: EditorView): boolean {
+  const state = view.state;
+  const ranges = state.selection.ranges;
+  if (!ranges.length || ranges.some(r => r.empty)) {
+    return false;
+  }
+  const planned: SurroundChange[] = [];
+  for (const r of ranges) {
+    const c = computeInlineCodeSurroundChange(state, r);
+    if (!c) {
+      return false;
+    }
+    planned.push(c);
+  }
+  return dispatchSurround(view, planned);
+}
+
+/**
+ * WebKit / some Linux WebView stacks deliver inline code as `insertText` without a reliable
+ * keydown match for `{ key: '`' }`. Intercept that path when it is exactly one grave accent.
+ */
+function inlineCodeBacktickInputHandler(
+  view: EditorView,
+  _from: number,
+  _to: number,
+  text: string,
+  _insert: () => Transaction,
+): boolean {
+  if (text !== '`') {
+    return false;
+  }
+  return tryInlineCodeSurround(view);
+}
+
+/** Pair with {@link markdownSelectionSurroundKeymap} so backtick surround works under WebKit/GTK. */
+export function markdownInlineCodeSurroundInputHandler(): Extension {
+  return EditorView.inputHandler.of(inlineCodeBacktickInputHandler);
+}
+
 function dispatchWiki(view: EditorView, kind: WikiClass): boolean {
   const state = view.state;
   const planned: WikiChange[] = [];
@@ -616,20 +826,24 @@ export function markdownSelectionAllowMultipleRanges(): Extension {
 
 /**
  * Prec.high keymap: wiki `[`; symmetric inline markup (`*` / `**`, `_` / `__`, `~~`, `%%`, `==`).
+ * Inline code uses {@link markdownInlineCodeSurroundInputHandler} plus a Prec.highest backtick keymap.
  * Key names follow CodeMirror conventions; US QWERTY is the reference layout (see desktop-editor spec).
  */
 export function markdownSelectionSurroundKeymap(): Extension {
-  return Prec.high(
-    keymap.of([
-      {key: '[', run: runBracketSurround},
-      {key: '*', run: runStarSurround},
-      {key: 'Shift-8', run: runStarSurround},
-      {key: 'Shift-*', run: runStarSurround},
-      {key: '_', run: runUnderscoreSurround},
-      {key: 'Shift-Minus', run: runUnderscoreSurround},
-      {key: '~', run: runStrikeSurround},
-      {key: '%', run: runMutedSurround},
-      {key: '=', run: runHighlightSurround},
-    ]),
-  );
+  return [
+    Prec.highest(keymap.of([{key: '`', run: tryInlineCodeSurround}])),
+    Prec.high(
+      keymap.of([
+        {key: '[', run: runBracketSurround},
+        {key: '*', run: runStarSurround},
+        {key: 'Shift-8', run: runStarSurround},
+        {key: 'Shift-*', run: runStarSurround},
+        {key: '_', run: runUnderscoreSurround},
+        {key: 'Shift-Minus', run: runUnderscoreSurround},
+        {key: '~', run: runStrikeSurround},
+        {key: '%', run: runMutedSurround},
+        {key: '=', run: runHighlightSurround},
+      ]),
+    ),
+  ];
 }

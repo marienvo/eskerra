@@ -7,10 +7,13 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {markdownNotebox} from './markdownNoteboxLanguage';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
 import {
+  buildInlineCodeReplacement,
+  computeInlineCodeSurroundChange,
   computeSymmetricSurroundChange,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
   selectionIsMarkdownPlain,
+  selectionIsMarkdownPlainForInlineCodeSurround,
   stripBalancedDoubleAsterisks,
   stripBalancedDoubleToken,
   stripBalancedSingleAsterisks,
@@ -44,6 +47,10 @@ function equalKeydown(view: EditorView): void {
   keydown(view, '=', false);
 }
 
+function backtickKeydown(view: EditorView): void {
+  keydown(view, '`', false);
+}
+
 function minimalMarkdownExtensions() {
   return [
     markdownNotebox({
@@ -70,6 +77,11 @@ describe('markdownSelectionSurround', () => {
     expect(stripBalancedSingleAsterisks('a *b* c')).toBe('a b c');
     expect(stripBalancedDoubleToken('a ==b== c', '==')).toBe('a b c');
     expect(stripBalancedDoubleToken('x %%y%% z', '%%')).toBe('x y z');
+  });
+
+  it('buildInlineCodeReplacement extends fences when inner contains backticks', () => {
+    expect(buildInlineCodeReplacement('a')).toBe('`a`');
+    expect(buildInlineCodeReplacement('a`b')).toBe('``a`b``');
   });
 
   it('wraps plain selection with emphasis then upgrades to strong', () => {
@@ -322,5 +334,69 @@ describe('markdownSelectionSurround', () => {
 
     equalKeydown(view!);
     expect(view!.state.doc.toString()).toBe('[x](https://e)');
+  });
+
+  it('wraps and unwraps inline code with backtick key', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'code here',
+      selection: EditorSelection.create([EditorSelection.range(0, 4)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    backtickKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('`code` here');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, 6)]),
+    });
+    backtickKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('code here');
+  });
+
+  it('unwraps inline code when only inner is selected', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '`inner`',
+      selection: EditorSelection.create([EditorSelection.range(1, 6)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    backtickKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('inner');
+  });
+
+  it('allows unwrap inside InlineCode in the syntax tree', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '`z`',
+      selection: EditorSelection.create([EditorSelection.range(1, 2)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+    expect(selectionIsMarkdownPlain(view.state, 1, 2)).toBe(false);
+    expect(selectionIsMarkdownPlainForInlineCodeSurround(view.state, 1, 2)).toBe(true);
+    const c = computeInlineCodeSurroundChange(view.state, EditorSelection.range(1, 2));
+    expect(c).not.toBeNull();
+    expect(c!.insert).toBe('z');
+  });
+
+  it('does not wrap inline code for multiline selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'a\nb',
+      selection: EditorSelection.create([EditorSelection.range(0, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    backtickKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('a\nb');
   });
 });

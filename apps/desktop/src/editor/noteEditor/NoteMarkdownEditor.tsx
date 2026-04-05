@@ -53,6 +53,7 @@ import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatable
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {
+  markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
@@ -517,6 +518,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       drawSelection(),
       markdownSelectionAllowMultipleRanges(),
       markdownSelectionSurroundKeymap(),
+      markdownInlineCodeSurroundInputHandler(),
       keymap.of([
         {
           key: 'Mod-s',

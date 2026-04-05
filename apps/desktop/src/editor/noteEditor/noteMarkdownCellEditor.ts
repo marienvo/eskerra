@@ -35,6 +35,7 @@ import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
 import {
+  markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
@@ -395,6 +396,7 @@ export function buildNoteMarkdownCellExtensions(
     drawSelection(),
     markdownSelectionAllowMultipleRanges(),
     markdownSelectionSurroundKeymap(),
+    markdownInlineCodeSurroundInputHandler(),
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
     keymap.of([
