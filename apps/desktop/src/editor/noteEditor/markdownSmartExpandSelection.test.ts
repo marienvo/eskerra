@@ -411,4 +411,111 @@ describe('markdownSmartExpandSelection', () => {
     expect(spans.some(t => t.includes('item one') && !t.includes('##'))).toBe(true);
     expect(spans.some(t => t.includes('## Kop'))).toBe(true);
   });
+
+  it('nested list: nested siblings then parent item then top-level siblings', () => {
+    // CommonMark nesting: sublist lines align with the first line’s content (`- ` = two columns).
+    const doc = ['- outer A', '  - inner one', '  - inner two', '- outer B'].join('\n');
+    const cursor = doc.indexOf('inner one') + 3;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    const spans: string[] = [];
+    let prev = mainSpan(view);
+    for (let i = 0; i < 60; i++) {
+      expand(view);
+      const span = mainSpan(view);
+      if (span.from === prev.from && span.to === prev.to) {
+        break;
+      }
+      spans.push(doc.slice(span.from, span.to));
+      prev = span;
+    }
+    const idxNestedSibs = spans.findIndex(
+      t =>
+        t.includes('inner one') &&
+        t.includes('inner two') &&
+        !t.includes('outer B'),
+    );
+    const idxParentBlock = spans.findIndex(
+      t =>
+        t.includes('outer A') &&
+        t.includes('inner two') &&
+        !t.includes('outer B'),
+    );
+    const idxTopSibs = spans.findIndex(
+      t => t.includes('outer A') && t.includes('outer B'),
+    );
+    expect(idxNestedSibs).toBeGreaterThanOrEqual(0);
+    expect(idxParentBlock).toBeGreaterThan(idxNestedSibs);
+    expect(idxTopSibs).toBeGreaterThan(idxParentBlock);
+  });
+
+  it('top-level list: two bullets expand to sibling group before trailing prose', () => {
+    const doc = ['- first item', '- second item', '', 'Later paragraph.'].join('\n');
+    const cursor = doc.indexOf('first') + 1;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    const spans: string[] = [];
+    let prev = mainSpan(view);
+    for (let i = 0; i < 50; i++) {
+      expand(view);
+      const span = mainSpan(view);
+      if (span.from === prev.from && span.to === prev.to) {
+        break;
+      }
+      spans.push(doc.slice(span.from, span.to));
+      prev = span;
+    }
+    const siblingIdx = spans.findIndex(
+      t => t.includes('first item') && t.includes('second item'),
+    );
+    expect(siblingIdx).toBeGreaterThanOrEqual(0);
+    const laterIdx = spans.findIndex(t => t.includes('Later paragraph'));
+    expect(laterIdx).toBeGreaterThan(siblingIdx);
+  });
+
+  it('H1 section body is available after list expansion ladder', () => {
+    const doc = ['# Main title', '', '- list a', '- list b', '', 'Body line.'].join('\n');
+    const cursor = doc.indexOf('list a') + 2;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursor),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    const spans: string[] = [];
+    let prev = mainSpan(view);
+    for (let i = 0; i < 60; i++) {
+      expand(view);
+      const span = mainSpan(view);
+      if (span.from === prev.from && span.to === prev.to) {
+        break;
+      }
+      spans.push(doc.slice(span.from, span.to));
+      prev = span;
+    }
+    const h1BodyIdx = spans.findIndex(
+      t =>
+        t.includes('list a') &&
+        t.includes('Body line') &&
+        !t.includes('# Main') &&
+        !t.includes('Main title'),
+    );
+    expect(h1BodyIdx).toBeGreaterThanOrEqual(0);
+    const withHeadingIdx = spans.findIndex(t => t.includes('# Main title'));
+    expect(withHeadingIdx).toBeGreaterThanOrEqual(h1BodyIdx);
+  });
 });

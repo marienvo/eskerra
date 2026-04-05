@@ -95,6 +95,31 @@ function strictlyWider(outer: SelectionRange, inner: SelectionRange): boolean {
   return oa <= ia && ob >= ib && (oa < ia || ob > ib);
 }
 
+/**
+ * Like {@link strictlyWider}, but allows `outer.from` to sit after `inner.from` when the skipped
+ * prefix is whitespace-only (leading indent before `ListMark` often lies outside the `ListItem` node).
+ */
+function strictlyWiderForListExpand(
+  state: EditorState,
+  outer: SelectionRange,
+  inner: SelectionRange,
+): boolean {
+  if (strictlyWider(outer, inner)) {
+    return true;
+  }
+  const ia = Math.min(inner.anchor, inner.head);
+  const ib = Math.max(inner.anchor, inner.head);
+  const oa = Math.min(outer.anchor, outer.head);
+  const ob = Math.max(outer.anchor, outer.head);
+  if (oa > ia && oa <= ib && ob > ib) {
+    const gap = state.sliceDoc(ia, oa);
+    if (gap.length > 0 && /^\s+$/.test(gap)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function asRange(from: number, to: number): SelectionRange {
   return EditorSelection.range(from, to);
 }
@@ -788,13 +813,92 @@ function candidateSentenceFull(state: EditorState, main: SelectionRange): Select
   return strictlyWider(r, main) ? r : null;
 }
 
+const LIST_CONTAINER_NAMES = new Set(['BulletList', 'OrderedList']);
+
+function isListContainerName(name: string): boolean {
+  return LIST_CONTAINER_NAMES.has(name);
+}
+
+function parentListOfListItem(item: SyntaxNode): SyntaxNode | null {
+  const p = item.parent;
+  return p && isListContainerName(p.type.name) ? p : null;
+}
+
+function parentListItemOfList(list: SyntaxNode): SyntaxNode | null {
+  const p = list.parent;
+  return p?.type.name === 'ListItem' ? p : null;
+}
+
+/** Union span of direct `ListItem` children of a list container. */
+function unionDirectListItemRange(list: SyntaxNode): SelectionRange | null {
+  let from = -1;
+  let to = -1;
+  let c = list.firstChild;
+  while (c) {
+    if (c.type.name === 'ListItem') {
+      if (from < 0) {
+        from = c.from;
+        to = c.to;
+      } else {
+        from = Math.min(from, c.from);
+        to = Math.max(to, c.to);
+      }
+    }
+    c = c.nextSibling;
+  }
+  return from >= 0 ? asRange(from, to) : null;
+}
+
+/** Outermost `BulletList` / `OrderedList` ancestor of this list item (same contiguous list tree). */
+function outermostListForListItem(startItem: SyntaxNode): SyntaxNode | null {
+  let list = parentListOfListItem(startItem);
+  if (!list) {
+    return null;
+  }
+  for (;;) {
+    const pItem = parentListItemOfList(list);
+    if (!pItem) {
+      return list;
+    }
+    const outer = parentListOfListItem(pItem);
+    if (!outer) {
+      return list;
+    }
+    list = outer;
+  }
+}
+
+function selectionBounds(main: SelectionRange): {readonly ma: number; readonly mb: number} {
+  return {
+    ma: Math.min(main.anchor, main.head),
+    mb: Math.max(main.anchor, main.head),
+  };
+}
+
+function rangesEqualDocBounds(main: SelectionRange, from: number, to: number): boolean {
+  const {ma, mb} = selectionBounds(main);
+  return ma === from && mb === to;
+}
+
 function candidateLines(state: EditorState, main: SelectionRange): SelectionRange | null {
   const a = Math.min(main.anchor, main.head);
   const b = Math.max(main.anchor, main.head);
   const startLine = state.doc.lineAt(a);
   const endLine = state.doc.lineAt(b);
   const r = asRange(startLine.from, endLine.to);
-  return strictlyWider(r, main) ? r : null;
+  if (!strictlyWider(r, main)) {
+    return null;
+  }
+  const {ma, mb} = selectionBounds(main);
+  if (r.from < ma && /^\s+$/.test(state.sliceDoc(r.from, ma))) {
+    const item = findAncestorNamed(state, main.head, 'ListItem');
+    const list = item && parentListOfListItem(item);
+    const u = list && unionDirectListItemRange(list);
+    if (u && ma === u.from && mb === u.to) {
+      return null;
+    }
+  }
+  return r;
 }
 
 function candidateParagraph(state: EditorState, main: SelectionRange): SelectionRange | null {
@@ -812,11 +916,90 @@ function candidateListItem(state: EditorState, main: SelectionRange): SelectionR
     return null;
   }
   const r = asRange(item.from, item.to);
-  return strictlyWider(r, main) ? r : null;
+  return strictlyWiderForListExpand(state, r, main) ? r : null;
+}
+
+function candidateListSiblingGroup(
+  state: EditorState,
+  main: SelectionRange,
+): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const item = findAncestorNamed(state, main.head, 'ListItem');
+  if (!item) {
+    return null;
+  }
+  const list = parentListOfListItem(item);
+  if (!list) {
+    return null;
+  }
+  const u = unionDirectListItemRange(list);
+  if (!u) {
+    return null;
+  }
+  return strictlyWiderForListExpand(state, u, main) ? u : null;
 }
 
 /**
- * Deepest H2+ heading whose section [heading.from, {@link findSectionEnd}) fully contains the
+ * After the sibling group at a level, expand to parent `ListItem`, then to that level's sibling
+ * group, repeating up the nested list chain (one ring per keypress).
+ */
+function candidateListNestAscend(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  let item: SyntaxNode | null = findAncestorNamed(state, main.head, 'ListItem');
+  while (item) {
+    const list = parentListOfListItem(item);
+    if (!list) {
+      return null;
+    }
+    const sibs = unionDirectListItemRange(list);
+    if (!sibs) {
+      return null;
+    }
+    const pItem = parentListItemOfList(list);
+
+    if (
+      pItem &&
+      rangesEqualDocBounds(main, sibs.from, sibs.to) &&
+      strictlyWiderForListExpand(state, asRange(pItem.from, pItem.to), main)
+    ) {
+      return asRange(pItem.from, pItem.to);
+    }
+    if (pItem && rangesEqualDocBounds(main, pItem.from, pItem.to)) {
+      const gList = parentListOfListItem(pItem);
+      if (gList) {
+        const gSibs = unionDirectListItemRange(gList);
+        if (gSibs && strictlyWiderForListExpand(state, gSibs, main)) {
+          return gSibs;
+        }
+      }
+    }
+    item = pItem;
+  }
+  return null;
+}
+
+function candidateOutermostList(state: EditorState, main: SelectionRange): SelectionRange | null {
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const item = findAncestorNamed(state, main.head, 'ListItem');
+  if (!item) {
+    return null;
+  }
+  const outer = outermostListForListItem(item);
+  if (!outer) {
+    return null;
+  }
+  const r = asRange(outer.from, outer.to);
+  return strictlyWiderForListExpand(state, r, main) ? r : null;
+}
+
+/**
+ * Deepest heading (H1–H6) whose section [heading.from, {@link findSectionEnd}) fully contains the
  * current selection. Uses full range so a large selection (e.g. entire subsection body) still
  * resolves to the enclosing outline node, not a nested heading that only contains the caret.
  */
@@ -832,7 +1015,7 @@ function innermostHeadingWhoseSectionContainsSelection(
   syntaxTree(state).iterate({
     enter(ref) {
       const L = markdownHeadingLevel(ref.type.name);
-      if (L == null || L <= 1) {
+      if (L == null) {
         return;
       }
       const header = ref.node;
@@ -862,7 +1045,7 @@ function findParentSectionHeading(
     enter(ref) {
       const node = ref.node;
       const L = markdownHeadingLevel(node.type.name);
-      if (L == null || L <= 1 || L >= childLevel || node.from >= child.from) {
+      if (L == null || L >= childLevel || node.from >= child.from) {
         return;
       }
       if (node.from > bestFrom) {
@@ -964,6 +1147,9 @@ function computeNextExpandRange(
     candidateSyntaxInner,
     candidateLines,
     candidateListItem,
+    candidateListSiblingGroup,
+    candidateListNestAscend,
+    candidateOutermostList,
     candidateParagraph,
     candidateSectionBody,
     candidateSectionWithHeading,
