@@ -15,19 +15,7 @@
         /* Matches first tone in APP_CHROME_PALETTE (avoids gray flash before React). */
         background: #031226;
       }
-      html.tauri-main-chrome,
-      html.tauri-main-chrome body,
-      html.tauri-main-chrome #root {
-        background: transparent;
-      }
     </style>
-    <script>
-      (function () {
-        if (typeof window.__TAURI__ !== 'undefined') {
-          document.documentElement.classList.add('tauri-main-chrome');
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

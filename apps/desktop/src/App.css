@@ -9,6 +9,35 @@
   margin: 0 auto;
 }
 
+/* Vault picker + layout load: light typography on AppChromeBackground (native client area). */
+.app-root--setup {
+  color-scheme: dark;
+}
+
+.app-root--setup .setup-shell h1 {
+  color: var(--color-shell-icon);
+  font-weight: 700;
+}
+
+.app-root--setup .setup-shell .muted {
+  color: var(--color-shell-icon-muted);
+}
+
+.app-root--setup .setup-shell button.primary {
+  color: #fdfdfd;
+  border-color: color-mix(in srgb, #fff 50%, var(--color-primary-border));
+  background: color-mix(in srgb, var(--color-primary) 82%, #061525);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.app-root--setup .setup-shell button.primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+
+.app-root--setup .setup-shell .error {
+  color: #ffc9c9;
+}
+
 .app-root {
   box-sizing: border-box;
   position: relative;
@@ -99,7 +128,21 @@
   outline-offset: -2px;
 }
 
-/* Tauri frameless: declarative drag on title bar strips uses WebKit regions; keep controls scrollable. */
+/*
+ * Vault picker / layout loading: native OS title bar (see App.tsx setDecorations).
+ * Square client area; no faux floating frame drawn in the webview.
+ */
+.app-root--tauri.app-root--setup {
+  border-radius: 0;
+}
+
+.app-root--tauri.app-root--setup:not(.app-root--tiled-left):not(
+    .app-root--tiled-right
+  ):not(.app-root--maximized)::after {
+  content: none !important;
+}
+
+/* Tauri frameless main shell: declarative drag on title bar; keep controls scrollable. */
 .app-root--tauri button,
 .app-root--tauri input,
 .app-root--tauri textarea,
@@ -223,6 +266,35 @@ a:focus:not(:focus-visible) {
   align-self: stretch;
   flex-shrink: 0;
   gap: 0.15rem;
+}
+
+/* Setup / loading: tagline only (centered; no settings affordance). */
+.app-setup-tagline {
+  flex-shrink: 0;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
+  background: transparent;
+  transform: translateY(-8px);
+}
+
+.app-setup-tagline-text {
+  margin: 0;
+  max-width: calc(100% - 1rem);
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--color-shell-tagline);
+  line-height: 1.2;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-status-bar {
@@ -1122,8 +1194,7 @@ a:focus:not(:focus-visible) {
   text-overflow: ellipsis;
 }
 
-/* Radix context menu + alert dialog: above tooltip pseudo-elements (z-index 60).
- * Delete overlay: under html.tauri-main-chrome, radius follows --shell-overlay-radius (set in App.tsx from maximize/tiling). */
+/* Radix context menu + alert dialog: above tooltip pseudo-elements (z-index 60). */
 .note-list-context-menu {
   z-index: 100;
   min-width: 9rem;
@@ -1163,7 +1234,7 @@ a:focus:not(:focus-visible) {
   background: rgba(0, 0, 0, 0.38);
 }
 
-/* Rounded translucent window corners: dim only inside the same round-rect as .app-root (not the sharp webview). */
+/* Dim only inside the same round-rect as .app-root when frameless (not setup). */
 html.tauri-main-chrome .alert-dialog-overlay {
   border-radius: var(--shell-overlay-radius, var(--window-radius));
 }
