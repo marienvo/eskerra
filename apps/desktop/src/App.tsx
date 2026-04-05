@@ -32,6 +32,7 @@ import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPl
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
+import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
@@ -164,6 +165,15 @@ export default function App() {
   });
 
   const [mainTab, setMainTab] = useState<MainTab>('podcasts');
+  useEditorHistoryMouseButtons({
+    mainTab,
+    vaultRoot,
+    busy,
+    editorHistoryCanGoBack,
+    editorHistoryCanGoForward,
+    editorHistoryGoBack,
+    editorHistoryGoForward,
+  });
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);
