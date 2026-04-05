@@ -2170,6 +2170,57 @@ button.primary.destructive {
   white-space: pre-wrap;
 }
 
+/*
+ * Inactive table cells: same marker / link presentation as non-marker-focus lines in the note editor
+ * (.cm-line:not(.cm-notebox-marker-focus-line) rules ~1397–1420): hide syntax delimiters, wiki
+ * brackets, rule lines, and inline-link URL segments; keep list markers (cm-md-list-mark) visible.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-header-mark {
+  visibility: hidden;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-wiki-bracket,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-hr,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-rel-link-href {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-wiki-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cm-host .cm-editor {
