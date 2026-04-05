@@ -8,14 +8,17 @@ import {markdownNotebox} from './markdownNoteboxLanguage';
 import {noteMarkdownParserExtensions} from './markdownEditorStyling';
 import {
   buildInlineCodeReplacement,
+  computeDelimiterPairSurroundChange,
   computeInlineCodeSurroundChange,
   computeSymmetricSurroundChange,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
   selectionIsMarkdownPlain,
   selectionIsMarkdownPlainForInlineCodeSurround,
+  stripBalancedBraces,
   stripBalancedDoubleAsterisks,
   stripBalancedDoubleToken,
+  stripBalancedParens,
   stripBalancedSingleAsterisks,
 } from './markdownSelectionSurround';
 
@@ -51,6 +54,22 @@ function backtickKeydown(view: EditorView): void {
   keydown(view, '`', false);
 }
 
+function parenKeydown(view: EditorView): void {
+  keydown(view, '(', true);
+}
+
+function braceKeydown(view: EditorView): void {
+  keydown(view, '{', true);
+}
+
+function doubleQuoteKeydown(view: EditorView): void {
+  keydown(view, '"', true);
+}
+
+function singleQuoteKeydown(view: EditorView): void {
+  keydown(view, "'", false);
+}
+
 function minimalMarkdownExtensions() {
   return [
     markdownNotebox({
@@ -77,6 +96,11 @@ describe('markdownSelectionSurround', () => {
     expect(stripBalancedSingleAsterisks('a *b* c')).toBe('a b c');
     expect(stripBalancedDoubleToken('a ==b== c', '==')).toBe('a b c');
     expect(stripBalancedDoubleToken('x %%y%% z', '%%')).toBe('x y z');
+  });
+
+  it('stripBalancedParens and stripBalancedBraces remove paired delimiters', () => {
+    expect(stripBalancedParens('a (b) c')).toBe('a b c');
+    expect(stripBalancedBraces('a {b} c')).toBe('a b c');
   });
 
   it('buildInlineCodeReplacement extends fences when inner contains backticks', () => {
@@ -399,4 +423,151 @@ describe('markdownSelectionSurround', () => {
     backtickKeydown(view!);
     expect(view!.state.doc.toString()).toBe('a\nb');
   });
+
+  it('wraps and unwraps plain () selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'x y',
+      selection: EditorSelection.create([EditorSelection.range(2, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    parenKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('x (y)');
+
+    unwrapParenAroundSelection(view!);
+    expect(view!.state.doc.toString()).toBe('x y');
+  });
+
+  it('unwraps parentheses when whole span including delimiters is selected', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '(z)',
+      selection: EditorSelection.create([EditorSelection.range(0, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    parenKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('z');
+  });
+
+  it('unwraps one brace layer when inner is nested {{a}}', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '{{a}}',
+      selection: EditorSelection.create([EditorSelection.range(2, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    braceKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('{a}');
+  });
+
+  it('wraps and unwraps double-quoted selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'say hi',
+      selection: EditorSelection.create([EditorSelection.range(4, 6)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    doubleQuoteKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('say "hi"');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(4, 8)]),
+    });
+    doubleQuoteKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('say hi');
+  });
+
+  it('wraps selection with single quotes without breaking apostrophes in inner', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: "don't stop",
+      selection: EditorSelection.create([EditorSelection.range(0, 10)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    singleQuoteKeydown(view!);
+    expect(view!.state.doc.toString()).toBe("'don't stop'");
+  });
+
+  it('does not delimiter-pair wrap multiline selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'a\nb',
+      selection: EditorSelection.create([EditorSelection.range(0, 3)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    parenKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('a\nb');
+  });
+
+  it('multi-cursor delimiter surround on two ranges', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'aa bb',
+      selection: EditorSelection.create([
+        EditorSelection.range(0, 2),
+        EditorSelection.range(3, 5),
+      ]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    braceKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('{aa} {bb}');
+  });
+
+  it('does not wrap plain delimiters inside inline link label', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '[x](https://e)',
+      selection: EditorSelection.create([EditorSelection.range(1, 2)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    parenKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('[x](https://e)');
+  });
+
+  it('computeDelimiterPairSurroundChange is null for empty range', () => {
+    const state = EditorState.create({
+      doc: 'plain',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    expect(
+      computeDelimiterPairSurroundChange(state, EditorSelection.cursor(2), '(', ')', {
+        normalizeInner: stripBalancedParens,
+      }),
+    ).toBeNull();
+  });
 });
+
+/** Re-select the inner of the first `(...)` in the doc and unwrap one layer. */
+function unwrapParenAroundSelection(view: EditorView): void {
+  const d = view.state.doc.toString();
+  const open = d.indexOf('(');
+  view.dispatch({
+    selection: EditorSelection.create([EditorSelection.range(open + 1, open + 2)]),
+  });
+  parenKeydown(view);
+}

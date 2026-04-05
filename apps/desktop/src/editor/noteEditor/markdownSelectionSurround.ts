@@ -320,6 +320,64 @@ export function stripBalancedSingleAsterisks(s: string): string {
   return stripBalancedSingleChars(s, '*', '**');
 }
 
+/** Remove non-overlapping paired `(`…`)` spans inside `s` (stack, left-to-right). */
+export function stripBalancedParens(s: string): string {
+  const pairs: Array<readonly [number, number]> = [];
+  const stack: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '(') {
+      stack.push(i);
+    } else if (ch === ')') {
+      if (stack.length) {
+        const open = stack.pop()!;
+        pairs.push([open, i]);
+      }
+    }
+  }
+  const drop = new Set<number>();
+  for (const [a, b] of pairs) {
+    drop.add(a);
+    drop.add(b);
+  }
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    if (!drop.has(i)) {
+      out += s[i];
+    }
+  }
+  return out;
+}
+
+/** Remove non-overlapping paired `{`…`}` spans inside `s` (stack, left-to-right). */
+export function stripBalancedBraces(s: string): string {
+  const pairs: Array<readonly [number, number]> = [];
+  const stack: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '{') {
+      stack.push(i);
+    } else if (ch === '}') {
+      if (stack.length) {
+        const open = stack.pop()!;
+        pairs.push([open, i]);
+      }
+    }
+  }
+  const drop = new Set<number>();
+  for (const [a, b] of pairs) {
+    drop.add(a);
+    drop.add(b);
+  }
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    if (!drop.has(i)) {
+      out += s[i];
+    }
+  }
+  return out;
+}
+
 function outerDoubleDelim(
   doc: EditorState['doc'],
   from: number,
@@ -400,6 +458,48 @@ function selectionIsWholeDoubleSpan(
   return innerFrom < innerTo;
 }
 
+function selectionIsWholeDelimiterPairSpan(
+  doc: EditorState['doc'],
+  from: number,
+  to: number,
+  open: string,
+  close: string,
+): boolean {
+  const oLen = open.length;
+  const cLen = close.length;
+  if (to - from < oLen + cLen + 1) {
+    return false;
+  }
+  if (doc.sliceString(from, from + oLen) !== open) {
+    return false;
+  }
+  if (doc.sliceString(to - cLen, to) !== close) {
+    return false;
+  }
+  return from + oLen < to - cLen;
+}
+
+function outerDelimiterPair(
+  doc: EditorState['doc'],
+  from: number,
+  to: number,
+  open: string,
+  close: string,
+): boolean {
+  const oLen = open.length;
+  const cLen = close.length;
+  if (from < oLen || to + cLen > doc.length) {
+    return false;
+  }
+  if (doc.sliceString(from - oLen, from) !== open) {
+    return false;
+  }
+  if (doc.sliceString(to, to + cLen) !== close) {
+    return false;
+  }
+  return true;
+}
+
 function canWikiUnwrap(doc: EditorState['doc'], from: number, to: number): boolean {
   return (
     from >= 2
@@ -444,6 +544,69 @@ type SurroundChange = {
   selFrom: number;
   selTo: number;
 };
+
+export type DelimiterPairSurroundOptions = {
+  readonly normalizeInner?: (inner: string) => string;
+};
+
+/**
+ * Wrap or unwrap a selection with a delimiter pair (`()` `{}` `"` `'` etc.).
+ * Toggle order matches symmetric inline markup: whole span unwrap, outer unwrap, then wrap.
+ */
+export function computeDelimiterPairSurroundChange(
+  state: EditorState,
+  range: SelectionRange,
+  open: string,
+  close: string,
+  options?: DelimiterPairSurroundOptions,
+): SurroundChange | null {
+  const oLen = open.length;
+  const cLen = close.length;
+  if (oLen < 1 || cLen < 1) {
+    return null;
+  }
+
+  const {doc} = state;
+  const {from, to} = range;
+  if (!selectionIsMarkdownPlain(state, from, to) || !inlineGuardOk(doc, from, to)) {
+    return null;
+  }
+
+  if (selectionIsWholeDelimiterPairSpan(doc, from, to, open, close)) {
+    const inner = doc.sliceString(from + oLen, to - cLen);
+    return {
+      from,
+      to,
+      insert: inner,
+      selFrom: from,
+      selTo: from + inner.length,
+    };
+  }
+
+  if (outerDelimiterPair(doc, from, to, open, close)) {
+    const inner = doc.sliceString(from, to);
+    const delFrom = from - oLen;
+    const delTo = to + cLen;
+    return {
+      from: delFrom,
+      to: delTo,
+      insert: inner,
+      selFrom: delFrom,
+      selTo: delFrom + inner.length,
+    };
+  }
+
+  const rawInner = doc.sliceString(from, to);
+  const flat = options?.normalizeInner ? options.normalizeInner(rawInner) : rawInner;
+  const wrapped = `${open}${flat}${close}`;
+  return {
+    from,
+    to,
+    insert: wrapped,
+    selFrom: from + oLen,
+    selTo: from + oLen + flat.length,
+  };
+}
 
 function normalizeSymmetricInner(slice: string, cfg: SymmetricSurroundConfig): string {
   if (cfg.mode === 'pairedOnly') {
@@ -819,13 +982,52 @@ function runBracketSurround(view: EditorView): boolean {
   return dispatchWiki(view, kind);
 }
 
+function tryDelimiterPairSurround(
+  view: EditorView,
+  open: string,
+  close: string,
+  options?: DelimiterPairSurroundOptions,
+): boolean {
+  const state = view.state;
+  const ranges = state.selection.ranges;
+  if (!ranges.length || ranges.some(r => r.empty)) {
+    return false;
+  }
+  const planned: SurroundChange[] = [];
+  for (const r of ranges) {
+    const c = computeDelimiterPairSurroundChange(state, r, open, close, options);
+    if (!c) {
+      return false;
+    }
+    planned.push(c);
+  }
+  return dispatchSurround(view, planned);
+}
+
+function runParenSurround(view: EditorView): boolean {
+  return tryDelimiterPairSurround(view, '(', ')', {normalizeInner: stripBalancedParens});
+}
+
+function runBraceSurround(view: EditorView): boolean {
+  return tryDelimiterPairSurround(view, '{', '}', {normalizeInner: stripBalancedBraces});
+}
+
+function runDoubleQuoteSurround(view: EditorView): boolean {
+  return tryDelimiterPairSurround(view, '"', '"');
+}
+
+function runSingleQuoteSurround(view: EditorView): boolean {
+  return tryDelimiterPairSurround(view, "'", "'");
+}
+
 /** Set on editors that should preserve multiple selection ranges (required for multi-cursor surround). */
 export function markdownSelectionAllowMultipleRanges(): Extension {
   return EditorState.allowMultipleSelections.of(true);
 }
 
 /**
- * Prec.high keymap: wiki `[`; symmetric inline markup (`*` / `**`, `_` / `__`, `~~`, `%%`, `==`).
+ * Prec.high keymap: wiki `[`; symmetric inline markup (`*` / `**`, `_` / `__`, `~~`, `%%`, `==`);
+ * plain delimiter pairs `()`, `{}`, straight `"` / `'`.
  * Inline code uses {@link markdownInlineCodeSurroundInputHandler} plus a Prec.highest backtick keymap.
  * Key names follow CodeMirror conventions; US QWERTY is the reference layout (see desktop-editor spec).
  */
@@ -835,6 +1037,13 @@ export function markdownSelectionSurroundKeymap(): Extension {
     Prec.high(
       keymap.of([
         {key: '[', run: runBracketSurround},
+        {key: '(', run: runParenSurround},
+        {key: 'Shift-9', run: runParenSurround},
+        {key: '{', run: runBraceSurround},
+        {key: 'Shift-[', run: runBraceSurround},
+        {key: '"', run: runDoubleQuoteSurround},
+        {key: "Shift-'", run: runDoubleQuoteSurround},
+        {key: "'", run: runSingleQuoteSurround},
         {key: '*', run: runStarSurround},
         {key: 'Shift-8', run: runStarSurround},
         {key: 'Shift-*', run: runStarSurround},
