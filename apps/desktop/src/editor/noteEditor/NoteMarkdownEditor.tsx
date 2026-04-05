@@ -599,6 +599,13 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       EditorView.domEventHandlers({
+        mousedown(event) {
+          if (event.button !== 1) {
+            return false;
+          }
+          event.preventDefault();
+          return true;
+        },
         paste(event, view) {
           return onEditorPaste(event, view);
         },

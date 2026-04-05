@@ -271,6 +271,13 @@ export function buildNoteMarkdownCellExtensions(
   };
 
   const pasteHandlers = EditorView.domEventHandlers({
+    mousedown(event) {
+      if (event.button !== 1) {
+        return false;
+      }
+      event.preventDefault();
+      return true;
+    },
     paste(event, view) {
       if (busyRef.current) {
         if (

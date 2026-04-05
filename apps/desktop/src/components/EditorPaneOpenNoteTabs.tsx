@@ -93,6 +93,17 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
     [onCloseTab, uri],
   );
 
+  const onPillMiddleMouseDown = useCallback(
+    (e: MouseEvent) => {
+      if (e.button !== 1) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [],
+  );
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild disabled={busy}>
@@ -104,6 +115,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
           }
           role="none"
           onAuxClick={onPillAuxClick}
+          onMouseDown={onPillMiddleMouseDown}
         >
           <button
             type="button"
