@@ -80,6 +80,10 @@ import {
   removeEditorHistoryUris,
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
+import {
+  mergeInboxNoteBodyIntoCache,
+  resolveInboxCachedBodyForEditor,
+} from './inboxNoteBodyCache';
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -547,6 +551,17 @@ export function useMainWindowWorkspace(options: {
           return;
         }
         lastPersistedRef.current = {uri, markdown: md};
+        const nextCache = mergeInboxNoteBodyIntoCache(
+          inboxContentByUriRef.current,
+          uri,
+          md,
+        );
+        if (nextCache) {
+          inboxContentByUriRef.current = nextCache;
+          setInboxContentByUri(prev =>
+            mergeInboxNoteBodyIntoCache(prev, uri, md) ?? prev,
+          );
+        }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       }
@@ -592,6 +607,21 @@ export function useMainWindowWorkspace(options: {
       }
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
+      if (curUri != null && !composingNewEntryRef.current) {
+        const snapshot =
+          inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+        const nextCache = mergeInboxNoteBodyIntoCache(
+          inboxContentByUriRef.current,
+          curUri,
+          snapshot,
+        );
+        if (nextCache) {
+          inboxContentByUriRef.current = nextCache;
+          setInboxContentByUri(prev =>
+            mergeInboxNoteBodyIntoCache(prev, curUri, snapshot) ?? prev,
+          );
+        }
+      }
       const needsPersist =
         root != null &&
         curUri != null &&
@@ -800,9 +830,27 @@ export function useMainWindowWorkspace(options: {
     }
     const cached = inboxContentByUriRef.current[selectedUri];
     if (cached !== undefined) {
-      setEditorBody(cached);
-      lastPersistedRef.current = {uri: selectedUri, markdown: cached};
-      inboxEditorRef.current?.loadMarkdown(cached, {selection: 'start'});
+      const {markdown: body, healedCache} = resolveInboxCachedBodyForEditor(
+        selectedUri,
+        cached,
+        lastPersistedRef.current,
+      );
+      if (healedCache) {
+        const healed = mergeInboxNoteBodyIntoCache(
+          inboxContentByUriRef.current,
+          selectedUri,
+          body,
+        );
+        if (healed) {
+          inboxContentByUriRef.current = healed;
+          setInboxContentByUri(prev =>
+            mergeInboxNoteBodyIntoCache(prev, selectedUri, body) ?? prev,
+          );
+        }
+      }
+      setEditorBody(body);
+      lastPersistedRef.current = {uri: selectedUri, markdown: body};
+      inboxEditorRef.current?.loadMarkdown(body, {selection: 'start'});
       scheduleBacklinksDeferOneFrameAfterLoad();
     } else {
       clearInboxBacklinksDeferAfterLoad();
