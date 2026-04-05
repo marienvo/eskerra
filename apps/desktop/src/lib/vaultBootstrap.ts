@@ -428,9 +428,10 @@ export async function createVaultMarkdownNoteInDirectory(
   const stem = sanitizeFileName(title);
   const fileName = pickNextInboxMarkdownFileName(stem, occupied);
   const uri = `${parent}/${fileName}`;
-  const trimmed = markdownBody.trim();
-  const body = trimmed ? `${trimmed}\n` : '';
-  await fs.writeFile(uri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
+  await fs.writeFile(uri, markdownBody, {
+    encoding: 'utf8',
+    mimeType: 'text/markdown',
+  });
   const inbox = getInboxDirectoryUri(base).replace(/\\/g, '/').replace(/\/+$/, '');
   if (parent === inbox || parent.startsWith(`${inbox}/`)) {
     await syncInboxMarkdownIndex(root, fs);
@@ -591,7 +592,8 @@ export async function saveNoteMarkdown(
   fs: VaultFilesystem,
   markdownBody: string,
 ): Promise<void> {
-  const trimmed = markdownBody.trim();
-  const body = trimmed ? `${trimmed}\n` : '';
-  await fs.writeFile(noteUri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
+  await fs.writeFile(noteUri, markdownBody, {
+    encoding: 'utf8',
+    mimeType: 'text/markdown',
+  });
 }

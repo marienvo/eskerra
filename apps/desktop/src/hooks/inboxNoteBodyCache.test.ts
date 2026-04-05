@@ -211,4 +211,30 @@ describe('classifyNoteDiskReconcile', () => {
       }),
     ).toBe('reload_from_disk');
   });
+
+  it('returns noop when disk read shape differs only by one trailing newline from last persist', () => {
+    const persisted = 'hello\n';
+    const fromDiskRead = 'hello';
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: persisted},
+        diskMarkdown: fromDiskRead,
+        localMarkdown: persisted,
+      }),
+    ).toBe('noop');
+  });
+
+  it('returns noop when several trailing newlines match one-strip disk normalization', () => {
+    const persisted = 'line\n\n\n';
+    const fromDiskRead = 'line\n\n';
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: persisted},
+        diskMarkdown: fromDiskRead,
+        localMarkdown: persisted,
+      }),
+    ).toBe('noop');
+  });
 });

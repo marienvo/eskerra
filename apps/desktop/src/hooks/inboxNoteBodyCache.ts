@@ -110,7 +110,10 @@ export function classifyNoteDiskReconcile(input: {
     }
     return 'reload_from_disk';
   }
-  const diskChanged = diskMarkdown !== lastPersisted.markdown;
+  // `diskMarkdown` comes from disk read after `replace(/\n$/, '')` (see workspace reconcile).
+  // `lastPersisted.markdown` is raw editor / post-save text; strip one trailing newline for compare.
+  const persistedNorm = lastPersisted.markdown.replace(/\n$/, '');
+  const diskChanged = diskMarkdown !== persistedNorm;
   if (!diskChanged) {
     return 'noop';
   }
