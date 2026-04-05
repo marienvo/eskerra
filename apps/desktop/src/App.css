@@ -198,18 +198,19 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .titlebar-transport-btn:disabled {
   cursor: default;
-  opacity: 0.42;
+  opacity: 1;
+  color: var(--color-shell-icon-disabled);
 }
 
 .titlebar-transport-btn:not(:disabled):hover {
-  background: var(--color-titlebar-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .titlebar-transport-btn--play {
@@ -246,7 +247,7 @@ a:focus:not(:focus-visible) {
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--color-muted);
+  color: var(--color-shell-tagline);
   line-height: 1.2;
   pointer-events: none;
   user-select: none;
@@ -276,12 +277,16 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border-radius: 6px;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .app-status-bar-settings:hover:not(:disabled) {
-  color: var(--color-text);
+  color: var(--color-shell-icon);
+}
+
+.app-status-bar-settings.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-shell-hover-bg);
 }
 
 .window-title-bar-controls {
@@ -302,13 +307,13 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
 }
 
 .window-ctrl:hover {
-  background: var(--color-titlebar-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .window-ctrl-close:hover {
@@ -466,7 +471,7 @@ a:focus:not(:focus-visible) {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-muted);
   cursor: default;
   font: inherit;
   box-shadow: none;
@@ -474,8 +479,8 @@ a:focus:not(:focus-visible) {
 
 .rail-tab:hover:not(.active),
 .rail-tab:focus-visible:not(.active) {
-  background: var(--color-row-hover);
-  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
 }
 
 .rail-tab:focus-visible {
@@ -497,9 +502,9 @@ a:focus:not(:focus-visible) {
 .rail-tab:disabled,
 .rail-tab.active:disabled {
   cursor: default;
-  opacity: 0.55;
+  opacity: 1;
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-disabled);
   box-shadow: none;
 }
 
@@ -508,7 +513,7 @@ a:focus:not(:focus-visible) {
 .rail-tab.active:disabled:hover,
 .rail-tab.active:disabled:focus-visible {
   background: transparent;
-  color: var(--color-muted);
+  color: var(--color-shell-icon-disabled);
 }
 
 .main-column {

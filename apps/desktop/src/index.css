@@ -48,6 +48,16 @@ html {
   --color-titlebar-border: #d0d0d0;
   --color-titlebar-hover: rgba(17, 20, 24, 0.06);
 
+  /*
+   * Frameless shell (rail, title bar, status bar) sits on dark AppChromeBackground.
+   * Use light foregrounds so default / hover / disabled read clearly — not body --color-muted.
+   */
+  --color-shell-icon: rgba(255, 255, 255, 0.92);
+  --color-shell-icon-muted: rgba(255, 255, 255, 0.68);
+  --color-shell-icon-disabled: rgba(255, 255, 255, 0.4);
+  --color-shell-hover-bg: rgba(255, 255, 255, 0.12);
+  --color-shell-tagline: rgba(255, 255, 255, 0.55);
+
   /* Capture */
   --color-capture-panel: rgb(250, 250, 250);
   /* Pane title bars / footers: darker gray than white panel body */
