@@ -1,6 +1,11 @@
-import {useEffect} from 'react';
+import {useEffect, useRef} from 'react';
 
 import type {MainTabId} from '../lib/mainWindowUiStore';
+
+import {
+  isWithinMouseHistoryCooldown,
+  MOUSE_EDITOR_HISTORY_NAV_COOLDOWN_MS,
+} from './mouseEditorHistoryCooldown';
 
 type Options = {
   mainTab: MainTabId;
@@ -20,6 +25,11 @@ type Options = {
  *   `preventDefault()` or WRY runs `window.history.back()` / `forward()` (often a no-op).
  * - **Other stacks:** `mousedown` / `mouseup` and `auxclick` (avoid `pointerdown` so we do not
  *   double-fire alongside `mousedown` on some engines).
+ * - **Cooldown:** After a successful history step, ignore further side-button navigations from
+ *   any of those events until `MOUSE_EDITOR_HISTORY_NAV_COOLDOWN_MS` has elapsed (reduces
+ *   accidental multi-step jumps and duplicates one physical click across phases). The timestamp
+ *   is stored in a ref so it survives this hook's `useEffect` re-running when `canGoForward` /
+ *   `canGoBack` update after a navigation.
  */
 export function useEditorHistoryMouseButtons({
   mainTab,
@@ -30,31 +40,25 @@ export function useEditorHistoryMouseButtons({
   editorHistoryGoBack,
   editorHistoryGoForward,
 }: Options): void {
-  useEffect(() => {
-    /** Skip duplicate navigation when `mousedown` + `mouseup` / `auxclick` share one gesture. */
-    let lastHistoryNavMs = 0;
+  const lastHistoryNavMsRef = useRef(0);
 
+  useEffect(() => {
+    if (!vaultRoot) {
+      lastHistoryNavMsRef.current = 0;
+    }
+  }, [vaultRoot]);
+
+  useEffect(() => {
     const sideButton = (e: MouseEvent) =>
       e.button === 3 || e.button === 4 || e.button === 8 || e.button === 9;
 
-    const tryNavigate = (
-      e: MouseEvent,
-      source: 'auxclick' | 'mousedown' | 'mouseup',
-    ) => {
+    const tryNavigate = (e: MouseEvent) => {
       const navBack = e.button === 3 || e.button === 8;
       const navFwd = e.button === 4 || e.button === 9;
       const isSide = navBack || navFwd;
 
       if (mainTab === 'inbox' && vaultRoot && isSide) {
         e.preventDefault();
-      }
-
-      if (source === 'auxclick' && Date.now() - lastHistoryNavMs < 160) {
-        return;
-      }
-
-      if (source === 'mouseup' && Date.now() - lastHistoryNavMs < 160) {
-        return;
       }
 
       if (mainTab !== 'inbox' || !vaultRoot) {
@@ -68,12 +72,25 @@ export function useEditorHistoryMouseButtons({
       if (busy) {
         return;
       }
+
+      const now = Date.now();
+      const lastNav = lastHistoryNavMsRef.current;
+      const cooldownActive = isWithinMouseHistoryCooldown(
+        lastNav,
+        now,
+        MOUSE_EDITOR_HISTORY_NAV_COOLDOWN_MS,
+      );
+
+      if (cooldownActive) {
+        return;
+      }
+
       if (navBack && editorHistoryCanGoBack) {
         editorHistoryGoBack();
-        lastHistoryNavMs = Date.now();
+        lastHistoryNavMsRef.current = Date.now();
       } else if (navFwd && editorHistoryCanGoForward) {
         editorHistoryGoForward();
-        lastHistoryNavMs = Date.now();
+        lastHistoryNavMsRef.current = Date.now();
       }
     };
 
@@ -81,21 +98,21 @@ export function useEditorHistoryMouseButtons({
       if (e.button !== 3 && e.button !== 4) {
         return;
       }
-      tryNavigate(e, 'auxclick');
+      tryNavigate(e);
     };
 
     const onMouseDown = (e: MouseEvent) => {
       if (!sideButton(e)) {
         return;
       }
-      tryNavigate(e, 'mousedown');
+      tryNavigate(e);
     };
 
     const onMouseUp = (e: MouseEvent) => {
       if (!sideButton(e)) {
         return;
       }
-      tryNavigate(e, 'mouseup');
+      tryNavigate(e);
     };
 
     window.addEventListener('auxclick', onAuxClick, {capture: true});
