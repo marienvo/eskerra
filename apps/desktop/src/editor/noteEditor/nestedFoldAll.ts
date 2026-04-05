@@ -40,6 +40,28 @@ export function collectFoldableRanges(state: EditorState): Array<{
   return out;
 }
 
+/**
+ * Whether {@link nestedCollapseAllFolds} would fold at least one range (same `foldable` / dedupe
+ * rules as {@link collectFoldableRanges}, but stops at the first hit).
+ */
+export function foldableRangesPresent(state: EditorState): boolean {
+  const seen = new Set<string>();
+  for (let n = 1; n <= state.doc.lines; n++) {
+    const line = state.doc.line(n);
+    const r = foldable(state, line.from, line.to);
+    if (r == null || r.to <= r.from) {
+      continue;
+    }
+    const key = `${r.from},${r.to}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    return true;
+  }
+  return false;
+}
+
 export function sortRangesInnermostFirst(
   ranges: ReadonlyArray<{from: number; to: number}>,
 ): Array<{from: number; to: number}> {

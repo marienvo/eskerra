@@ -46,7 +46,7 @@ import {
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownNotebox} from './markdownNoteboxLanguage';
-import {nestedCollapseAllFolds} from './nestedFoldAll';
+import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
@@ -126,6 +126,8 @@ export type NoteMarkdownEditorProps = {
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
   /** Called when the editor gains or loses at least one folded range (fold gutter, lists, etc.). */
   onFoldedRangesPresentChange?: (present: boolean) => void;
+  /** Called when the document gains or loses at least one foldable range (same rules as collapse-all). */
+  onFoldableRangesPresentChange?: (present: boolean) => void;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -170,6 +172,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     placeholder: placeholderText,
     busy,
     onFoldedRangesPresentChange,
+    onFoldableRangesPresentChange,
   } = props;
 
   const parentRef = useRef<HTMLDivElement>(null);
@@ -216,6 +219,13 @@ const NoteMarkdownEditorImpl = forwardRef<
   useEffect(() => {
     onFoldedRangesPresentChangeRef.current = onFoldedRangesPresentChange;
   }, [onFoldedRangesPresentChange]);
+
+  const onFoldableRangesPresentChangeRef = useRef(
+    onFoldableRangesPresentChange,
+  );
+  useEffect(() => {
+    onFoldableRangesPresentChangeRef.current = onFoldableRangesPresentChange;
+  }, [onFoldableRangesPresentChange]);
 
   const reportEditorError = useCallback((message: string) => {
     console.error(message);
@@ -633,6 +643,14 @@ const NoteMarkdownEditorImpl = forwardRef<
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
+          const onFoldable = onFoldableRangesPresentChangeRef.current;
+          if (onFoldable) {
+            const prevFoldable = foldableRangesPresent(update.startState);
+            const nextFoldable = foldableRangesPresent(update.state);
+            if (prevFoldable !== nextFoldable) {
+              onFoldable(nextFoldable);
+            }
+          }
         }
         const onFold = onFoldedRangesPresentChangeRef.current;
         if (onFold) {
@@ -656,9 +674,13 @@ const NoteMarkdownEditorImpl = forwardRef<
     });
     viewRef.current = view;
     onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(view.state));
+    onFoldableRangesPresentChangeRef.current?.(
+      foldableRangesPresent(view.state),
+    );
 
     return () => {
       onFoldedRangesPresentChangeRef.current?.(false);
+      onFoldableRangesPresentChangeRef.current?.(false);
       view.destroy();
       viewRef.current = null;
       codemirrorBootExtensionsRef.current = null;
@@ -731,6 +753,9 @@ const NoteMarkdownEditorImpl = forwardRef<
         dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
         onFoldedRangesPresentChangeRef.current?.(
           foldedRangesPresent(view.state),
+        );
+        onFoldableRangesPresentChangeRef.current?.(
+          foldableRangesPresent(view.state),
         );
       },
       unfoldAllFolds: () => {

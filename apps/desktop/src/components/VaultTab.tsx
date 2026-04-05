@@ -150,6 +150,7 @@ export function VaultTab({
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
+  const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -706,42 +707,46 @@ export function VaultTab({
                   <div className="note-markdown-editor-scroll">
                     <div className="note-markdown-editor-page">
                       <div className="note-markdown-editor-fold-rail">
-                        <div className="note-markdown-editor-fold-bulk-anchor">
-                          <button
-                            type="button"
-                            className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
-                            onClick={() => {
-                              const ed = inboxEditorRef.current;
-                              if (!ed) {
-                                return;
+                        {editorHasFoldedRanges || editorHasFoldableRanges ? (
+                          <div className="note-markdown-editor-fold-bulk-anchor">
+                            <button
+                              type="button"
+                              className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+                              onClick={() => {
+                                const ed = inboxEditorRef.current;
+                                if (!ed) {
+                                  return;
+                                }
+                                if (editorHasFoldedRanges) {
+                                  ed.unfoldAllFolds();
+                                } else {
+                                  ed.collapseAllFolds();
+                                }
+                              }}
+                              disabled={busy}
+                              aria-label={
+                                editorHasFoldedRanges
+                                  ? 'Expand all folds'
+                                  : 'Collapse all folds'
                               }
-                              if (editorHasFoldedRanges) {
-                                ed.unfoldAllFolds();
-                              } else {
-                                ed.collapseAllFolds();
+                              data-tooltip={
+                                editorHasFoldedRanges
+                                  ? 'Expand all folds'
+                                  : 'Collapse all folds'
                               }
-                            }}
-                            disabled={busy}
-                            aria-label={
-                              editorHasFoldedRanges
-                                ? 'Expand all folds'
-                                : 'Collapse all folds'
-                            }
-                            data-tooltip={
-                              editorHasFoldedRanges
-                                ? 'Expand all folds'
-                                : 'Collapse all folds'
-                            }
-                            data-tooltip-placement="inline-end"
-                          >
-                            <MaterialIcon
-                              name={
-                                editorHasFoldedRanges ? 'unfold_more' : 'unfold_less'
-                              }
-                              size={12}
-                            />
-                          </button>
-                        </div>
+                              data-tooltip-placement="inline-end"
+                            >
+                              <MaterialIcon
+                                name={
+                                  editorHasFoldedRanges
+                                    ? 'unfold_more'
+                                    : 'unfold_less'
+                                }
+                                size={12}
+                              />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       <div className="note-markdown-editor-paper">
                         <NoteMarkdownEditor
@@ -769,6 +774,9 @@ export function VaultTab({
                           }
                           busy={busy}
                           onFoldedRangesPresentChange={setEditorHasFoldedRanges}
+                          onFoldableRangesPresentChange={
+                            setEditorHasFoldableRanges
+                          }
                         />
                         {!composingNewEntry && selectedUri ? (
                           <section className="inbox-backlinks" aria-label="Backlinks">

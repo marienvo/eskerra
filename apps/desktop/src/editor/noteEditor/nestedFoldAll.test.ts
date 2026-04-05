@@ -7,6 +7,7 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {markdownNotebox} from './markdownNoteboxLanguage';
 import {
   collectFoldableRanges,
+  foldableRangesPresent,
   nestedCollapseAllFolds,
   sortRangesInnermostFirst,
 } from './nestedFoldAll';
@@ -31,6 +32,24 @@ function createFoldView(doc: string): EditorView {
 
 afterEach(() => {
   // Views destroyed per test; no global cleanup needed.
+});
+
+describe('foldableRangesPresent', () => {
+  it('is false for H1-only title (no foldable section)', () => {
+    const doc = '# Only title\n';
+    const state = EditorState.create({doc, extensions: foldExtensions});
+    ensureSyntaxTree(state, state.doc.length, 5000);
+    expect(foldableRangesPresent(state)).toBe(false);
+    expect(collectFoldableRanges(state).length).toBe(0);
+  });
+
+  it('is true when an H2 section body can fold', () => {
+    const doc = '## Section\n\nBody.\n';
+    const state = EditorState.create({doc, extensions: foldExtensions});
+    ensureSyntaxTree(state, state.doc.length, 5000);
+    expect(foldableRangesPresent(state)).toBe(true);
+    expect(collectFoldableRanges(state).length).toBeGreaterThan(0);
+  });
 });
 
 describe('collectFoldableRanges + sortRangesInnermostFirst', () => {
