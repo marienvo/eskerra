@@ -1316,12 +1316,19 @@ export function useMainWindowWorkspace(options: {
       const norm = normalizeEditorDocUri(uri);
       const tabsBefore = editorOpenTabUrisRef.current;
       const wasOpen = selectedUriRef.current === norm;
-      const nextAfterRemove = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
+      const nextHistory = removeEditorHistoryUris(
+        editorDocumentHistoryRef.current,
+        u => u === norm,
+      );
+      const focusFromHistory =
+        nextHistory.index >= 0 && nextHistory.entries.length > 0
+          ? nextHistory.entries[nextHistory.index]!
+          : null;
+      const focusFromTabs = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
+      const nextAfterRemove = focusFromHistory ?? focusFromTabs;
 
       setEditorOpenTabUris(prev => removeOpenTab(prev, uri));
-      setEditorDocumentHistory(prev =>
-        removeEditorHistoryUris(prev, u => u === norm),
-      );
+      setEditorDocumentHistory(nextHistory);
       editorShellScrollByUriRef.current.delete(norm);
 
       if (wasOpen) {
@@ -1776,15 +1783,24 @@ export function useMainWindowWorkspace(options: {
           return u === f || u.startsWith(`${f}/`);
         };
         const newTabs = removeOpenTabsWhere(tabsBeforeDelete, tabPred);
-        setEditorOpenTabUris(newTabs);
-        setEditorDocumentHistory(prev =>
-          removeEditorHistoryUris(prev, u => {
+        const nextHistory = removeEditorHistoryUris(
+          editorDocumentHistoryRef.current,
+          u => {
             const f = normDir;
             return u === f || u.startsWith(`${f}/`);
-          }),
+          },
         );
-        if (clearsSelection && newTabs.length > 0) {
-          await openMarkdownInEditor(newTabs[0]!, {skipHistory: true});
+        setEditorOpenTabUris(newTabs);
+        setEditorDocumentHistory(nextHistory);
+        if (clearsSelection) {
+          const fromHistory =
+            nextHistory.index >= 0 && nextHistory.entries.length > 0
+              ? nextHistory.entries[nextHistory.index]!
+              : null;
+          const nextUri = fromHistory ?? newTabs[0] ?? null;
+          if (nextUri) {
+            await openMarkdownInEditor(nextUri, {skipHistory: true});
+          }
         }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
@@ -2078,14 +2094,14 @@ export function useMainWindowWorkspace(options: {
             );
           }
         }
-        setEditorDocumentHistory(prev =>
-          removeEditorHistoryUris(prev, u =>
-            vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
-          ),
+        const nextHistory = removeEditorHistoryUris(
+          editorDocumentHistoryRef.current,
+          u => vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
         );
         const newTabs = removeOpenTabsWhere(tabsBeforeBulk, u =>
           vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
         );
+        setEditorDocumentHistory(nextHistory);
         setEditorOpenTabUris(newTabs);
         const sm = editorShellScrollByUriRef.current;
         for (const key of [...sm.keys()]) {
@@ -2093,8 +2109,15 @@ export function useMainWindowWorkspace(options: {
             sm.delete(key);
           }
         }
-        if (shouldClearEditor && newTabs.length > 0) {
-          await openMarkdownInEditor(newTabs[0]!, {skipHistory: true});
+        if (shouldClearEditor) {
+          const fromHistory =
+            nextHistory.index >= 0 && nextHistory.entries.length > 0
+              ? nextHistory.entries[nextHistory.index]!
+              : null;
+          const nextUri = fromHistory ?? newTabs[0] ?? null;
+          if (nextUri) {
+            await openMarkdownInEditor(nextUri, {skipHistory: true});
+          }
         }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);

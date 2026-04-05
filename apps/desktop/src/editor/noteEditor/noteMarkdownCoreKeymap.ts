@@ -9,6 +9,8 @@ import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPositio
 
 export type NoteMarkdownVaultKeymapHandlers = {
   onSaveShortcut?: () => void;
+  /** Shell-owned: Mod-Shift-D — request delete for the current note (confirmation outside the editor). */
+  onDeleteNoteShortcut?: () => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
@@ -98,6 +100,7 @@ export function buildNoteMarkdownVaultKeymapBindings(
 ): readonly KeyBinding[] {
   const {
     onSaveShortcut,
+    onDeleteNoteShortcut,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
     onMarkdownExternalLinkOpen,
@@ -107,6 +110,13 @@ export function buildNoteMarkdownVaultKeymapBindings(
       key: 'Mod-s',
       run: () => {
         onSaveShortcut?.();
+        return true;
+      },
+    },
+    {
+      key: 'Mod-Shift-d',
+      run: () => {
+        onDeleteNoteShortcut?.();
         return true;
       },
     },

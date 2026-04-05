@@ -87,6 +87,7 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut?: () => void;
+  onDeleteNoteShortcut?: () => void;
   onReportError: (message: string) => void;
   onDocChanged: () => void;
   tableCallbacks: NoteMarkdownCellEditorCallbacks;
@@ -133,6 +134,7 @@ export function buildNoteMarkdownCellExtensions(
     onMarkdownRelativeLinkActivate,
     onMarkdownExternalLinkOpen,
     onSaveShortcut,
+    onDeleteNoteShortcut,
     onReportError,
     onDocChanged,
     tableCallbacks: tc,
@@ -383,6 +385,7 @@ export function buildNoteMarkdownCellExtensions(
     keymap.of([
       ...buildNoteMarkdownVaultKeymapBindings({
         onSaveShortcut,
+        onDeleteNoteShortcut,
         onWikiLinkActivate,
         onMarkdownRelativeLinkActivate,
         onMarkdownExternalLinkOpen,

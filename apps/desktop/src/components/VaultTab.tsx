@@ -2,7 +2,7 @@ import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {MutableRefObject, RefObject} from 'react';
-import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {
@@ -184,6 +184,13 @@ export function VaultTab({
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onDeleteNoteShortcut = useCallback(() => {
+    if (busy || composingNewEntry || selectedUri == null) {
+      return;
+    }
+    setConfirmDeleteUri(selectedUri);
+  }, [busy, composingNewEntry, selectedUri]);
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const openRenameDialog = (uri: string) => {
@@ -889,6 +896,7 @@ export function VaultTab({
                           wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                           wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                           onSaveShortcut={onSaveShortcut}
+                          onDeleteNoteShortcut={onDeleteNoteShortcut}
                           placeholder={
                             composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
                           }

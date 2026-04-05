@@ -127,6 +127,8 @@ export type NoteMarkdownEditorProps = {
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
+  /** Desktop: Ctrl/Cmd+Shift+D — request delete current note (shell shows confirmation). */
+  onDeleteNoteShortcut?: () => void;
   placeholder: string;
   busy: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
@@ -182,6 +184,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
+    onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
     onFoldedRangesPresentChange,
@@ -230,6 +233,9 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
+
+  const onDeleteNoteShortcutRef = useRef(onDeleteNoteShortcut);
+  onDeleteNoteShortcutRef.current = onDeleteNoteShortcut;
 
   const onFoldedRangesPresentChangeRef = useRef(
     onFoldedRangesPresentChange,
@@ -525,6 +531,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       keymap.of([
         ...buildNoteMarkdownVaultKeymapBindings({
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onDeleteNoteShortcut: () => onDeleteNoteShortcutRef.current?.(),
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
@@ -573,6 +580,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           onMarkdownExternalLinkOpen: p =>
             onMarkdownExternalLinkOpenRef.current(p),
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onDeleteNoteShortcut: () => onDeleteNoteShortcutRef.current?.(),
           ...partial,
         }),
       ),
