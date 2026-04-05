@@ -23,6 +23,8 @@ Machine- and human-readable catalog of **desktop (Tauri) vault UI** keyboard beh
 | `notebox.vault.editor.indentWithTab` | `Tab`, `Shift-Tab` (standard CodeMirror) | Root + cell (cell: superseded by table nav where applicable) | `@codemirror/commands` via editor keymaps |
 | `notebox.vault.editor.markdown.surround` | `[`, `*`, `_`, `` ` ``, `~`, `%`, `=` (+ shifted variants where applicable) | Root + cell | [`markdownSelectionSurround.ts`](../../apps/desktop/src/editor/noteEditor/markdownSelectionSurround.ts) |
 | `notebox.vault.editor.markdown.standard` | default + history keymaps | Root + cell | `@codemirror/commands` |
+| `notebox.vault.editor.smartExpand` | `Ctrl+w` **or** `Cmd+w` (no `Shift`) | Vault markdown editor root + table cell | [`markdownSmartExpandSelection.ts`](../../apps/desktop/src/editor/noteEditor/markdownSmartExpandSelection.ts) (`keydown` on editor; not CodeMirror `keymap`—avoids Shift+W matching plain `Ctrl+w`) |
+| `notebox.vault.editor.smartShrink` | `Ctrl+Shift+w` **or** `Cmd+Shift+w` | Same | Same |
 | `notebox.vault.editor.tableCell.nextPrev` | `Tab`, `Shift-Tab` | Eskerra table **cell** editor only | [`noteMarkdownCellEditor.ts`](../../apps/desktop/src/editor/noteEditor/noteMarkdownCellEditor.ts) |
 | `notebox.vault.editor.tableCell.newlineOrComplete` | `Enter` | Table cell (completion-aware) | Same |
 | `notebox.vault.editor.tableCell.escapeOrCloseCompletion` | `Escape` | Table cell | Same |

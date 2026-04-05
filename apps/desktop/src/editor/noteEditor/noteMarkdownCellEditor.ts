@@ -40,6 +40,7 @@ import {
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
+import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {
@@ -347,6 +348,7 @@ export function buildNoteMarkdownCellExtensions(
     history(),
     drawSelection(),
     markdownSelectionAllowMultipleRanges(),
+    ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),
     markdownInlineCodeSurroundInputHandler(),
     eskerraCellCharFilter(),

@@ -64,6 +64,7 @@ import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShe
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
 import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
@@ -477,6 +478,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       history(),
       drawSelection(),
       markdownSelectionAllowMultipleRanges(),
+      ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
       markdownInlineCodeSurroundInputHandler(),
       keymap.of([
