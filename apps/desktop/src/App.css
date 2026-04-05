@@ -1171,6 +1171,8 @@ button.primary.destructive {
   --nb-editor-hash-tone: color-mix(in srgb, var(--nb-editor-faint) 34%, var(--nb-editor-paper) 66%);
   /* `%%…%%` delimiters: lighter than other syntax marks (`--nb-editor-hash-tone`). */
   --nb-editor-percent-mark-tone: color-mix(in srgb, var(--nb-editor-hash-tone) 44%, var(--nb-editor-paper) 56%);
+  /* `==…==` highlight background (highlighter yellow). */
+  --nb-editor-equal-highlight-bg: #fff59d;
   --nb-editor-accent: rgb(203, 77, 73);
   --nb-editor-inline-code-bg: rgb(240, 240, 240);
   --nb-editor-inline-code-border: rgb(215, 215, 215);
@@ -1430,6 +1432,10 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
   .cm-md-percent-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-notebox-marker-focus-line)
+  .cm-md-equal-highlight-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-notebox-marker-focus-line)
@@ -2218,6 +2224,10 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-equal-highlight-mark,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -2522,6 +2532,20 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-percent-mark {
   color: var(--nb-editor-percent-mark-tone);
   font-weight: 400;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight-mark {
+  color: var(--nb-editor-percent-mark-tone);
+  font-weight: 400;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight {
+  background: var(--nb-editor-equal-highlight-bg);
+  color: var(--nb-editor-text);
+  border-radius: 2px;
+  padding: 0.06em 0.14em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* ATX heading hashes (HeaderMark): fixed-width left column, hashes right-aligned to meet body text. */

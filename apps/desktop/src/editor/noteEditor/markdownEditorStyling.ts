@@ -38,7 +38,15 @@ const markdownPercentMutedContentTag = Tag.define();
 /** `%%` delimiter characters; separate from {@link tags.processingInstruction} so they can be tinted lighter. */
 const markdownPercentMarkTag = Tag.define();
 
+/** `==…==` highlight span (common markdown extension); inner content gets a marker background in the editor. */
+const markdownEqualHighlightContentTag = Tag.define();
+
+/** `==` delimiter characters. */
+const markdownEqualHighlightMarkTag = Tag.define();
+
 const PercentMutedDelim = {resolve: 'PercentMuted', mark: 'PercentMark'};
+
+const EqualHighlightDelim = {resolve: 'EqualHighlight', mark: 'EqualHighlightMark'};
 
 const noteboxPercentMutedExtension: MarkdownConfig = {
   defineNodes: [
@@ -81,6 +89,47 @@ const noteboxPercentMutedExtension: MarkdownConfig = {
   ],
 };
 
+const noteboxEqualHighlightExtension: MarkdownConfig = {
+  defineNodes: [
+    {
+      name: 'EqualHighlight',
+      style: {'EqualHighlight/...': markdownEqualHighlightContentTag},
+    },
+    {
+      name: 'EqualHighlightMark',
+      style: markdownEqualHighlightMarkTag,
+    },
+  ],
+  parseInline: [
+    {
+      name: 'EqualHighlight',
+      parse(cx, next, pos) {
+        if (
+          next !== 61 /* '=' */ ||
+          cx.char(pos + 1) !== 61 ||
+          cx.char(pos + 2) === 61
+        ) {
+          return -1;
+        }
+        const before = cx.slice(pos - 1, pos);
+        const after = cx.slice(pos + 2, pos + 3);
+        const sBefore = /\s|^$/.test(before);
+        const sAfter = /\s|^$/.test(after);
+        const pBefore = MARKDOWN_PUNCT_OR_SYMBOL.test(before);
+        const pAfter = MARKDOWN_PUNCT_OR_SYMBOL.test(after);
+        return cx.addDelimiter(
+          EqualHighlightDelim,
+          pos,
+          pos + 2,
+          !sAfter && (!pAfter || sBefore || pBefore),
+          !sBefore && (!pBefore || sAfter || pAfter),
+        );
+      },
+      after: 'PercentMuted',
+    },
+  ],
+};
+
 /** Pass to `markdown({ extensions: noteMarkdownParserExtensions })`. */
 export const markdownHeaderMarkParserExtension: MarkdownExtension = {
   props: [
@@ -100,12 +149,13 @@ export const markdownListMarkParserExtension: MarkdownExtension = {
   ],
 };
 
-/** Parser extensions for the vault markdown editor (header mark styling, GFM strikethrough, `%%` muted). */
+/** Parser extensions for the vault markdown editor (header mark styling, GFM strikethrough, `%%` muted, `==` highlight). */
 export const noteMarkdownParserExtensions: MarkdownExtension = [
   markdownHeaderMarkParserExtension,
   markdownListMarkParserExtension,
   Strikethrough,
   noteboxPercentMutedExtension,
+  noteboxEqualHighlightExtension,
 ];
 
 const markdownHighlightStyle = HighlightStyle.define(
@@ -123,6 +173,8 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: tags.strikethrough, class: 'cm-md-strikethrough'},
     {tag: markdownPercentMutedContentTag, class: 'cm-md-percent-muted'},
     {tag: markdownPercentMarkTag, class: 'cm-md-percent-mark'},
+    {tag: markdownEqualHighlightContentTag, class: 'cm-md-equal-highlight'},
+    {tag: markdownEqualHighlightMarkTag, class: 'cm-md-equal-highlight-mark'},
     {tag: tags.contentSeparator, class: 'cm-md-hr'},
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
     {tag: markdownListMarkTag, class: 'cm-md-list-mark'},

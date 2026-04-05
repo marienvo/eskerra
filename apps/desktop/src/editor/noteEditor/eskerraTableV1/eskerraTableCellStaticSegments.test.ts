@@ -75,6 +75,14 @@ describe('buildCellStaticSegments', () => {
     expect(segs.some(s => s.className.includes('cm-md-percent-muted'))).toBe(true);
   });
 
+  it('styles equal highlight', () => {
+    const segs = buildCellStaticSegments('==h==', {
+      wikiTargetIsResolved: alwaysFalse,
+      relativeMarkdownLinkHrefIsResolved: alwaysFalse,
+    });
+    expect(segs.some(s => s.className.includes('cm-md-equal-highlight'))).toBe(true);
+  });
+
   it('styles wiki inner and brackets', () => {
     const segs = buildCellStaticSegments('[[page]]', {
       wikiTargetIsResolved: alwaysFalse,

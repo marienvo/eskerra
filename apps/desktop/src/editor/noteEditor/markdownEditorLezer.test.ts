@@ -50,4 +50,10 @@ describe('noteMarkdownParserExtensions', () => {
     const state = editorStateForMarkdown('%%muted%%');
     expect(collectNodeNames(state)).toContain('PercentMuted');
   });
+
+  it('parses EqualHighlight', () => {
+    const state = editorStateForMarkdown('==highlight==');
+    expect(collectNodeNames(state)).toContain('EqualHighlight');
+    expect(collectNodeNames(state)).toContain('EqualHighlightMark');
+  });
 });
