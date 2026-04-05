@@ -189,6 +189,7 @@ const NoteMarkdownEditorImpl = forwardRef<
   const parentRef = useRef<HTMLDivElement>(null);
   /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
   const hostRef = useRef<HTMLDivElement>(null);
+  const deferEditorPaintRafRef = useRef<number | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   /** Boot extension bundle for `EditorState.create` when replacing the document without React remounting. */
   const codemirrorBootExtensionsRef = useRef<readonly Extension[] | null>(null);
@@ -700,6 +701,14 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
+  useEffect(() => {
+    return () => {
+      if (deferEditorPaintRafRef.current != null) {
+        cancelAnimationFrame(deferEditorPaintRafRef.current);
+      }
+    };
+  }, []);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -718,33 +727,47 @@ const NoteMarkdownEditorImpl = forwardRef<
         if (!view || !bootExtensions || !wikiCompartment || !relCompartment) {
           return;
         }
-        const at =
-          options?.selection === 'start' ? 0 : markdown.length;
-        view.setState(
-          EditorState.create({
-            doc: markdown,
-            selection: EditorSelection.cursor(at),
-            extensions: bootExtensions,
-          }),
-        );
-        const wikiEff = wikiCompartment.reconfigure(
-          wikiLinkResolvedHighlightExtensions(
-            wikiLinkTargetIsResolvedRef.current,
-          ),
-        );
-        const relEff = relCompartment.reconfigure(
-          markdownRelativeLinkHighlightExtensions(
-            relativeMarkdownLinkHrefIsResolvedRef.current,
-          ),
-        );
-        view.dispatch({effects: [wikiEff, relEff]});
-        dispatchEskerraTableNestedCellEditors(view, {effects: [wikiEff, relEff]});
-        onFoldedRangesPresentChangeRef.current?.(
-          foldedRangesPresent(view.state),
-        );
-        onFoldableRangesPresentChangeRef.current?.(
-          foldableRangesPresent(view.state),
-        );
+        if (deferEditorPaintRafRef.current != null) {
+          cancelAnimationFrame(deferEditorPaintRafRef.current);
+          deferEditorPaintRafRef.current = null;
+        }
+        deferEditorPaintRafRef.current = requestAnimationFrame(() => {
+          deferEditorPaintRafRef.current = null;
+          const v = viewRef.current;
+          const be = codemirrorBootExtensionsRef.current;
+          const wc = wikiLinkCompartmentRef.current;
+          const rc = relativeMdLinkCompartmentRef.current;
+          if (!v || !be || !wc || !rc) {
+            return;
+          }
+          const at =
+            options?.selection === 'start' ? 0 : markdown.length;
+          v.setState(
+            EditorState.create({
+              doc: markdown,
+              selection: EditorSelection.cursor(at),
+              extensions: be,
+            }),
+          );
+          const wikiEff = wc.reconfigure(
+            wikiLinkResolvedHighlightExtensions(
+              wikiLinkTargetIsResolvedRef.current,
+            ),
+          );
+          const relEff = rc.reconfigure(
+            markdownRelativeLinkHighlightExtensions(
+              relativeMarkdownLinkHrefIsResolvedRef.current,
+            ),
+          );
+          v.dispatch({effects: [wikiEff, relEff]});
+          dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
+          onFoldedRangesPresentChangeRef.current?.(
+            foldedRangesPresent(v.state),
+          );
+          onFoldableRangesPresentChangeRef.current?.(
+            foldableRangesPresent(v.state),
+          );
+        });
       },
       unfoldAllFolds: () => {
         const view = viewRef.current;
@@ -931,12 +954,16 @@ const NoteMarkdownEditorImpl = forwardRef<
     };
   }, [attachmentHost, busy, insertRelativePaths, reportEditorError]);
 
-  const rootClass = dropActive
+  const hostClassName = dropActive
     ? 'note-markdown-editor-host note-markdown-editor-host--drop-target'
     : 'note-markdown-editor-host';
 
   return (
-    <div ref={hostRef} className={rootClass} data-note-markdown-editor>
+    <div
+      ref={hostRef}
+      className={hostClassName}
+      data-note-markdown-editor
+    >
       <div ref={parentRef} className="note-markdown-editor-cm-root" />
     </div>
   );

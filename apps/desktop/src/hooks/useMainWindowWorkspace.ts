@@ -267,6 +267,11 @@ export type UseMainWindowWorkspaceResult = {
    * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
    */
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
+  /**
+   * True for one frame after each `loadMarkdown` (note body committed to CodeMirror): hides "Linked from"
+   * for that frame so it does not raster with the fresh editor subtree.
+   */
+  inboxBacklinksDeferFirstPaint: boolean;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -310,6 +315,8 @@ export function useMainWindowWorkspace(options: {
   const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
     readonly string[]
   >([]);
+  const [inboxBacklinksDeferFirstPaint, setInboxBacklinksDeferFirstPaint] =
+    useState(false);
   const [wikiRenameNotice, setWikiRenameNotice] = useState<string | null>(null);
   const [renameLinkProgress, setRenameLinkProgress] = useState<RenameLinkProgress | null>(
     null,
@@ -345,6 +352,9 @@ export function useMainWindowWorkspace(options: {
   );
   const inboxEditorShellScrollDirectiveRef =
     useRef<InboxEditorShellScrollDirective | null>(null);
+  /** Invalidates in-flight `openMarkdownInEditor` work when a newer open supersedes it. */
+  const openMarkdownGenerationRef = useRef(0);
+  const inboxBacklinksDeferAfterLoadRafRef = useRef<number | null>(null);
 
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
@@ -381,6 +391,34 @@ export function useMainWindowWorkspace(options: {
     return () => {
       if (renameNoticeTimeoutRef.current != null) {
         window.clearTimeout(renameNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const scheduleBacklinksDeferOneFrameAfterLoad = useCallback(() => {
+    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+    }
+    setInboxBacklinksDeferFirstPaint(true);
+    inboxBacklinksDeferAfterLoadRafRef.current = requestAnimationFrame(() => {
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+      setInboxBacklinksDeferFirstPaint(false);
+    });
+  }, []);
+
+  const clearInboxBacklinksDeferAfterLoad = useCallback(() => {
+    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
+      inboxBacklinksDeferAfterLoadRafRef.current = null;
+    }
+    setInboxBacklinksDeferFirstPaint(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
+        cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
       }
     };
   }, []);
@@ -500,6 +538,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (md !== raw) {
           inboxEditorRef.current?.loadMarkdown(md);
+          scheduleBacklinksDeferOneFrameAfterLoad();
           setEditorBody(md);
         }
         await saveNoteMarkdown(uri, fs, md);
@@ -516,7 +555,7 @@ export function useMainWindowWorkspace(options: {
     const next = saveChainRef.current.then(run);
     saveChainRef.current = next.catch(() => undefined);
     await next;
-  }, [fs, refreshNotes, inboxEditorRef]);
+  }, [fs, refreshNotes, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
 
   const flushInboxSave = useCallback(async () => {
     autosaveSchedulerRef.current.cancel();
@@ -527,8 +566,12 @@ export function useMainWindowWorkspace(options: {
 
   const openMarkdownInEditor = useCallback(
     async (uri: string, options?: {skipHistory?: boolean}) => {
+      const openGen = ++openMarkdownGenerationRef.current;
       autosaveSchedulerRef.current.cancel();
       await saveChainRef.current.catch(() => undefined);
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
       snapshotEditorShellScrollForOpenNote(
         inboxEditorShellScrollRef.current,
         selectedUriRef.current,
@@ -562,13 +605,50 @@ export function useMainWindowWorkspace(options: {
       if (needsPersist) {
         await enqueueInboxPersist();
       }
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
+
+      let prefetchBody: string | undefined;
+      if (
+        root != null &&
+        inboxContentByUriRef.current[targetNorm] === undefined
+      ) {
+        try {
+          const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
+          if (openGen !== openMarkdownGenerationRef.current) {
+            return;
+          }
+          prefetchBody = raw.replace(/\n$/, '');
+        } catch (e) {
+          if (openGen !== openMarkdownGenerationRef.current) {
+            return;
+          }
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      }
+
+      if (openGen !== openMarkdownGenerationRef.current) {
+        return;
+      }
+
+      if (prefetchBody !== undefined) {
+        lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
+        setInboxContentByUri(prev => {
+          if (prev[targetNorm] === prefetchBody) {
+            return prev;
+          }
+          return {...prev, [targetNorm]: prefetchBody!};
+        });
+      }
+
       if (!options?.skipHistory) {
         setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
       }
       setComposingNewEntry(false);
       setSelectedUri(targetNorm);
     },
-    [enqueueInboxPersist, inboxEditorRef, inboxEditorShellScrollRef],
+    [enqueueInboxPersist, fs, inboxEditorRef, inboxEditorShellScrollRef],
   );
 
   const hydrateVault = useCallback(
@@ -707,6 +787,7 @@ export function useMainWindowWorkspace(options: {
 
   useLayoutEffect(() => {
     if (!vaultRoot || !selectedUri) {
+      clearInboxBacklinksDeferAfterLoad();
       return;
     }
     const cached = inboxContentByUriRef.current[selectedUri];
@@ -714,11 +795,19 @@ export function useMainWindowWorkspace(options: {
       setEditorBody(cached);
       lastPersistedRef.current = {uri: selectedUri, markdown: cached};
       inboxEditorRef.current?.loadMarkdown(cached, {selection: 'start'});
+      scheduleBacklinksDeferOneFrameAfterLoad();
     } else {
+      clearInboxBacklinksDeferAfterLoad();
       setEditorBody('');
       lastPersistedRef.current = null;
     }
-  }, [vaultRoot, selectedUri, inboxEditorRef]);
+  }, [
+    vaultRoot,
+    selectedUri,
+    inboxEditorRef,
+    clearInboxBacklinksDeferAfterLoad,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   /**
    * Clear the open note in CodeMirror when the shell has no cached body yet.
@@ -732,7 +821,8 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     inboxEditorRef.current?.loadMarkdown('', {selection: 'start'});
-  }, [vaultRoot, selectedUri, inboxEditorRef]);
+    scheduleBacklinksDeferOneFrameAfterLoad();
+  }, [vaultRoot, selectedUri, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
 
 
   useLayoutEffect(() => {
@@ -777,6 +867,7 @@ export function useMainWindowWorkspace(options: {
           if (normalized !== editorBodyRef.current) {
             setEditorBody(normalized);
             inboxEditorRef.current?.loadMarkdown(normalized, {selection: 'start'});
+            scheduleBacklinksDeferOneFrameAfterLoad();
           }
         }
       } catch (e) {
@@ -788,7 +879,13 @@ export function useMainWindowWorkspace(options: {
     return () => {
       cancelled = true;
     };
-  }, [vaultRoot, selectedUri, fs, inboxEditorRef]);
+  }, [
+    vaultRoot,
+    selectedUri,
+    fs,
+    inboxEditorRef,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
@@ -888,6 +985,7 @@ export function useMainWindowWorkspace(options: {
     }
     if (body !== rawBody) {
       inboxEditorRef.current?.loadMarkdown(body);
+      scheduleBacklinksDeferOneFrameAfterLoad();
       setEditorBody(body);
     }
     const {titleLine, bodyAfterBlank} = parseComposeInput(body);
@@ -897,7 +995,13 @@ export function useMainWindowWorkspace(options: {
     }
     const fullMarkdown = buildInboxMarkdownFromCompose(titleLine, bodyAfterBlank);
     await addNote(titleLine, fullMarkdown);
-  }, [addNote, editorBody, inboxEditorRef, vaultRoot]);
+  }, [
+    addNote,
+    editorBody,
+    inboxEditorRef,
+    vaultRoot,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
 
   const onInboxSaveShortcut = useCallback(() => {
     if (composingNewEntryRef.current) {
@@ -1861,5 +1965,6 @@ export function useMainWindowWorkspace(options: {
     editorHistoryGoBack,
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
+    inboxBacklinksDeferFirstPaint,
   };
 }

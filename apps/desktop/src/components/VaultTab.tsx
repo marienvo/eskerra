@@ -99,6 +99,8 @@ type VaultTabProps = {
   editorHistoryCanGoForward: boolean;
   onEditorHistoryGoBack: () => void;
   onEditorHistoryGoForward: () => void;
+  /** Workspace: hide "Linked from" for one frame after `loadMarkdown`. */
+  inboxBacklinksDeferFirstPaint: boolean;
 };
 
 export function VaultTab({
@@ -144,6 +146,7 @@ export function VaultTab({
   editorHistoryCanGoForward,
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
+  inboxBacklinksDeferFirstPaint,
 }: VaultTabProps) {
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
@@ -824,7 +827,14 @@ export function VaultTab({
                           }
                         />
                         {!composingNewEntry && selectedUri ? (
-                          <section className="inbox-backlinks" aria-label="Backlinks">
+                          <section
+                            aria-hidden={inboxBacklinksDeferFirstPaint}
+                            aria-label="Backlinks"
+                            className={
+                              inboxBacklinksDeferFirstPaint
+                                ? 'inbox-backlinks inbox-backlinks--defer-first-paint'
+                                : 'inbox-backlinks'
+                            }>
                             <div className="inbox-backlinks__header">Linked from</div>
                             {backlinkRows.length === 0 ? (
                               <p className="muted inbox-backlinks__empty">No incoming links.</p>

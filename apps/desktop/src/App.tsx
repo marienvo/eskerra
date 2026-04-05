@@ -130,6 +130,7 @@ export default function App() {
     editorHistoryGoBack,
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
+    inboxBacklinksDeferFirstPaint,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -703,6 +704,7 @@ export default function App() {
                     editorHistoryCanGoForward={editorHistoryCanGoForward}
                     onEditorHistoryGoBack={editorHistoryGoBack}
                     onEditorHistoryGoForward={editorHistoryGoForward}
+                    inboxBacklinksDeferFirstPaint={inboxBacklinksDeferFirstPaint}
                   />
                 </div>
                 {podcastsTabMounted ? (
