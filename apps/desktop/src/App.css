@@ -846,7 +846,14 @@ a:focus:not(:focus-visible) {
   border-radius: 3px;
   border: 1px solid transparent;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+/* Inactive tabs: no fill until hover/focus-within (active tab keeps chrome). */
+.editor-open-tab-pill:not(.editor-open-tab-pill--active):hover:not([data-disabled]),
+.editor-open-tab-pill:not(.editor-open-tab-pill--active):focus-within:not([data-disabled]) {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 
 .editor-open-tab-pill--active {
