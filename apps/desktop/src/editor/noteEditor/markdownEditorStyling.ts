@@ -35,6 +35,9 @@ export const markdownListMarkTag = Tag.define();
 /** Visible `%%…%%` span (Notebox extension); inner content is smaller gray text. */
 const markdownPercentMutedContentTag = Tag.define();
 
+/** `%%` delimiter characters; separate from {@link tags.processingInstruction} so they can be tinted lighter. */
+const markdownPercentMarkTag = Tag.define();
+
 const PercentMutedDelim = {resolve: 'PercentMuted', mark: 'PercentMark'};
 
 const noteboxPercentMutedExtension: MarkdownConfig = {
@@ -45,7 +48,7 @@ const noteboxPercentMutedExtension: MarkdownConfig = {
     },
     {
       name: 'PercentMark',
-      style: tags.processingInstruction,
+      style: markdownPercentMarkTag,
     },
   ],
   parseInline: [
@@ -119,6 +122,7 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: tags.emphasis, class: 'cm-md-emphasis'},
     {tag: tags.strikethrough, class: 'cm-md-strikethrough'},
     {tag: markdownPercentMutedContentTag, class: 'cm-md-percent-muted'},
+    {tag: markdownPercentMarkTag, class: 'cm-md-percent-mark'},
     {tag: tags.contentSeparator, class: 'cm-md-hr'},
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
     {tag: markdownListMarkTag, class: 'cm-md-list-mark'},
