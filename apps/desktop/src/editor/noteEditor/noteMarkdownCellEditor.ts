@@ -34,6 +34,10 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
+import {
+  markdownSelectionAllowMultipleRanges,
+  markdownSelectionSurroundKeymap,
+} from './markdownSelectionSurround';
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {
@@ -389,6 +393,8 @@ export function buildNoteMarkdownCellExtensions(
     ...noteMarkdownEditorAppearance,
     history(),
     drawSelection(),
+    markdownSelectionAllowMultipleRanges(),
+    markdownSelectionSurroundKeymap(),
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
     keymap.of([

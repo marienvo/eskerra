@@ -52,6 +52,10 @@ import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
+import {
+  markdownSelectionAllowMultipleRanges,
+  markdownSelectionSurroundKeymap,
+} from './markdownSelectionSurround';
 import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
@@ -511,6 +515,8 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       history(),
       drawSelection(),
+      markdownSelectionAllowMultipleRanges(),
+      markdownSelectionSurroundKeymap(),
       keymap.of([
         {
           key: 'Mod-s',
