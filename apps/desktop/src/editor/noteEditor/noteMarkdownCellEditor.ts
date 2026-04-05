@@ -40,7 +40,10 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
-import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {
+  buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownVaultKeymapBindings,
+} from './noteMarkdownCoreKeymap';
 import {
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
@@ -399,6 +402,7 @@ export function buildNoteMarkdownCellExtensions(
       }),
       indentWithTab,
       ...defaultKeymap,
+      ...buildNoteMarkdownDeleteLineModYBindings(),
       ...historyKeymap,
     ]),
     EditorView.lineWrapping,

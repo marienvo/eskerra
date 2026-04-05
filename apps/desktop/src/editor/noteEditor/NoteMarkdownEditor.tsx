@@ -68,7 +68,10 @@ import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBund
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
-import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {
+  buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownVaultKeymapBindings,
+} from './noteMarkdownCoreKeymap';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
@@ -541,6 +544,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         indentWithTab,
         ...foldKeymap,
         ...defaultKeymap,
+        ...buildNoteMarkdownDeleteLineModYBindings(),
         ...historyKeymap,
       ]),
       EditorView.lineWrapping,

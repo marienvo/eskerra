@@ -1,3 +1,4 @@
+import {deleteLine} from '@codemirror/commands';
 import {EditorSelection} from '@codemirror/state';
 import {type EditorView, type KeyBinding} from '@codemirror/view';
 import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
@@ -132,4 +133,13 @@ export function buildNoteMarkdownVaultKeymapBindings(
         || runMarkdownExternalLinkActivateFromCaret(view, onMarkdownExternalLinkOpen),
     },
   ];
+}
+
+/**
+ * Mod-y (Ctrl+Y / Cmd+Y): delete the active line(s). Must be registered before `historyKeymap` so it
+ * overrides redo on Linux/Windows. Redo remains Ctrl+Shift+Z on Linux. Stable action id:
+ * `eskerra.vault.editor.deleteLine`.
+ */
+export function buildNoteMarkdownDeleteLineModYBindings(): readonly KeyBinding[] {
+  return [{key: 'Mod-y', run: deleteLine, preventDefault: true}];
 }
