@@ -43,6 +43,7 @@ import {
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
+import {hydrateEmojiUsageFromStore} from './lib/emojiUsageStore';
 import {
   loadMainWindowUi,
   saveMainWindowUi,
@@ -292,8 +293,11 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadStoredLayouts(), loadMainWindowUi()]).then(
-      ([loadedLayouts, ui]) => {
+    void Promise.all([
+      loadStoredLayouts(),
+      loadMainWindowUi(),
+      hydrateEmojiUsageFromStore(),
+    ]).then(([loadedLayouts, ui]) => {
         if (cancelled) {
           return;
         }

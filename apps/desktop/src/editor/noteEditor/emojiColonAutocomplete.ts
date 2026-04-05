@@ -4,8 +4,16 @@
  * Search index is generated from emojibase-data (MIT); regenerate with:
  * `npm run generate-emoji-data` in apps/desktop.
  */
-import type {Completion, CompletionContext, CompletionSource} from '@codemirror/autocomplete';
+import {
+  insertCompletionText,
+  pickedCompletion,
+  type Completion,
+  type CompletionContext,
+  type CompletionSource,
+} from '@codemirror/autocomplete';
+import type {EditorView} from '@codemirror/view';
 
+import {getEmojiUsageCount, recordEmojiUsage} from '../../lib/emojiUsageStore';
 import {
   colonQueryFromEmojiPrefixMatch,
   EMOJI_COLON_PREFIX_PATTERN,
@@ -39,13 +47,20 @@ function buildEmojiCompletions(
     rows,
     queryLower,
     EMOJI_COMPLETION_MAX_OPTIONS,
+    getEmojiUsageCount,
   );
   return picked.map(
     (row): Completion => ({
       label: `:${row.p}:`,
       displayLabel: `${row.e} :${row.p}:`,
       detail: row.e,
-      apply: row.e,
+      apply: (view: EditorView, completion: Completion, from: number, to: number) => {
+        view.dispatch({
+          ...insertCompletionText(view.state, row.e, from, to),
+          annotations: pickedCompletion.of(completion),
+        });
+        recordEmojiUsage(row.p);
+      },
     }),
   );
 }

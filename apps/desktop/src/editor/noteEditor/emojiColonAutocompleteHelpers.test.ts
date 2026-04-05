@@ -91,4 +91,18 @@ describe('filterSortAndCapEmojiRows', () => {
   test('returns empty when nothing matches', () => {
     expect(filterSortAndCapEmojiRows(rows, 'qqq', 10)).toEqual([]);
   });
+
+  test('within the same tier, higher usage count sorts first', () => {
+    const r: EmojiCompletionRow[] = [
+      {e: 'a', p: 'smile_a', b: 'smile_a test'},
+      {e: 'b', p: 'smile_b', b: 'smile_b test'},
+    ];
+    const got = filterSortAndCapEmojiRows(
+      r,
+      'smile',
+      10,
+      p => (p === 'smile_b' ? 99 : 1),
+    );
+    expect(got.map(x => x.p)).toEqual(['smile_b', 'smile_a']);
+  });
 });

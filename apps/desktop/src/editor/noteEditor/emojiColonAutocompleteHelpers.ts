@@ -79,6 +79,7 @@ export function filterSortAndCapEmojiRows(
   rows: readonly EmojiCompletionRow[],
   queryLower: string,
   maxOptions: number,
+  getCount: (shortcode: string) => number = () => 0,
 ): EmojiCompletionRow[] {
   const scored: {readonly row: EmojiCompletionRow; readonly tier: EmojiMatchTier}[] =
     [];
@@ -91,6 +92,11 @@ export function filterSortAndCapEmojiRows(
   scored.sort((a, b) => {
     if (a.tier !== b.tier) {
       return a.tier - b.tier;
+    }
+    const ca = getCount(a.row.p);
+    const cb = getCount(b.row.p);
+    if (cb !== ca) {
+      return cb - ca;
     }
     return a.row.p.localeCompare(b.row.p);
   });
