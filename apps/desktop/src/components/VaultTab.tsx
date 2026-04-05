@@ -27,6 +27,7 @@ import {
 } from '../editor/noteEditor/NoteMarkdownEditor';
 
 import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
+import {reopenClosedTabMenuShortcutLabel} from '../lib/desktopShortcutLabels';
 import {renameDraftStemForMarkdownUri} from '../lib/renameDialogDraft';
 import {
   planVaultTreeBulkTargets,
@@ -164,6 +165,10 @@ export function VaultTab({
   onReopenClosedEditorTab,
   canReopenClosedEditorTab,
 }: VaultTabProps) {
+  const reopenClosedTabKbdLabel = useMemo(
+    () => reopenClosedTabMenuShortcutLabel(),
+    [],
+  );
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
@@ -780,13 +785,16 @@ export function VaultTab({
                           Close all
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
-                          className="note-list-context-menu__item"
+                          className="note-list-context-menu__item note-list-context-menu__item--with-kbd"
                           disabled={busy || !canReopenClosedEditorTab}
                           onSelect={() => {
                             onReopenClosedEditorTab();
                           }}
                         >
-                          Reopen closed tab
+                          <span>Reopen closed tab</span>
+                          <span className="note-list-context-menu__kbd">
+                            {reopenClosedTabKbdLabel}
+                          </span>
                         </DropdownMenu.Item>
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>

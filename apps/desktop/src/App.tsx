@@ -183,6 +183,38 @@ export default function App() {
     editorHistoryGoBack,
     editorHistoryGoForward,
   });
+
+  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
+  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
+  useLayoutEffect(() => {
+    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
+    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
+  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (mainTab !== 'inbox' || !vaultRoot) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || !e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 't' && e.key !== 'T') {
+        return;
+      }
+      if (busy || !canReopenClosedEditorTabRef.current) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      reopenLastClosedEditorTabRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [mainTab, vaultRoot, busy]);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);

@@ -1317,6 +1317,20 @@ a:focus:not(:focus-visible) {
   font: inherit;
 }
 
+.note-list-context-menu__item--with-kbd {
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.note-list-context-menu__kbd {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-muted);
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+
 .note-list-context-menu__item[data-highlighted] {
   background: var(--color-row-hover);
 }
