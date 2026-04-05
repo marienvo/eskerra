@@ -24,6 +24,7 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
+import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
 import {MaterialIcon} from './MaterialIcon';
 
@@ -222,6 +223,17 @@ export function VaultPaneTree({
           fs,
           itemStoreRef,
         }),
+    },
+    onLoadedChildren: (parentId, childrenIds) => {
+      const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
+        parentUri: parentId,
+      });
+      if (!lonely) {
+        return;
+      }
+      queueMicrotask(() => {
+        treeRef.current?.getItemInstance(lonely)?.expand();
+      });
     },
     features: [asyncDataLoaderFeature, selectionFeature, hotkeysCoreFeature],
     initialState: {
