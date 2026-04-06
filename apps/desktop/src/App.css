@@ -369,12 +369,17 @@ a:focus:not(:focus-visible) {
   color: var(--color-text);
 }
 
+/* Same chrome as tagline / title bar: light foreground on AppChromeBackground — not panel --color-text. */
 .app-status-bar-center--player {
-  color: var(--color-text);
+  color: var(--color-shell-icon);
 }
 
 .app-status-bar-center--player strong {
   font-weight: 600;
+}
+
+.app-status-bar-center--player .muted {
+  color: var(--color-shell-icon-muted);
 }
 
 /* Status message row: ellipsis + optional Read more (see AppStatusBar). */
