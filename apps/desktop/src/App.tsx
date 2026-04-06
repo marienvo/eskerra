@@ -49,6 +49,7 @@ import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
+  MIN_RESIZABLE_PANE_PX,
   NOTIFICATIONS_PANEL,
   saveStoredLayouts,
   type StoredLayouts,
@@ -774,7 +775,7 @@ export default function App() {
                 endWidthPx={layouts.notifications.widthPx}
                 minEndPx={NOTIFICATIONS_PANEL.minPx}
                 maxEndPx={NOTIFICATIONS_PANEL.maxPx}
-                minMainPx={220}
+                minMainPx={MIN_RESIZABLE_PANE_PX}
                 onEndWidthPxChanged={persistNotificationsWidthPx}
                 main={
                   <div className="main-column">

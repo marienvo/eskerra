@@ -2,6 +2,7 @@ import type {ReactNode} from 'react';
 
 import {
   INBOX_LEFT_PANEL,
+  MIN_RESIZABLE_PANE_PX,
   PODCASTS_LEFT_PANEL,
   VAULT_EPISODES_STACK_TOP,
 } from '../lib/layoutStore';
@@ -65,15 +66,15 @@ export function MainWorkspaceSplit({
         leftWidthPx={vaultWidthPx}
         minLeftPx={INBOX_LEFT_PANEL.minPx}
         maxLeftPx={INBOX_LEFT_PANEL.maxPx}
-        minRightPx={220}
+        minRightPx={MIN_RESIZABLE_PANE_PX}
         onLeftWidthPxChanged={onVaultWidthPxChanged}
         left={
           <DesktopVerticalSplit
             className="split-inner"
             topHeightPx={stackTopHeightPx}
-            minTopPx={VAULT_EPISODES_STACK_TOP.minPx}
+            minTopPx={MIN_RESIZABLE_PANE_PX}
             maxTopPx={VAULT_EPISODES_STACK_TOP.maxPx}
-            minBottomPx={PODCASTS_LEFT_PANEL.minPx}
+            minBottomPx={MIN_RESIZABLE_PANE_PX}
             onTopHeightPxChanged={onStackTopHeightPxChanged}
             top={vaultPane}
             bottom={episodesPane}
@@ -91,7 +92,7 @@ export function MainWorkspaceSplit({
         leftWidthPx={vaultWidthPx}
         minLeftPx={INBOX_LEFT_PANEL.minPx}
         maxLeftPx={INBOX_LEFT_PANEL.maxPx}
-        minRightPx={220}
+        minRightPx={MIN_RESIZABLE_PANE_PX}
         onLeftWidthPxChanged={onVaultWidthPxChanged}
         left={vaultPane}
         right={editorPane}
@@ -105,7 +106,7 @@ export function MainWorkspaceSplit({
       leftWidthPx={episodesWidthPx}
       minLeftPx={PODCASTS_LEFT_PANEL.minPx}
       maxLeftPx={PODCASTS_LEFT_PANEL.maxPx}
-      minRightPx={220}
+      minRightPx={MIN_RESIZABLE_PANE_PX}
       onLeftWidthPxChanged={onEpisodesWidthPxChanged}
       left={episodesPane}
       right={editorPane}

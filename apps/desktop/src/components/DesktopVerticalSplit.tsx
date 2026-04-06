@@ -12,6 +12,7 @@ import {
   maxAvailableTopHeightPx,
   shouldPersistVerticalSplitTopHeightClamp,
 } from '../lib/desktopVerticalSplitClamp';
+import {MIN_RESIZABLE_PANE_PX} from '../lib/layoutStore';
 
 export type DesktopVerticalSplitProps = {
   /** Current top pane height in CSS pixels (controlled by parent). */
@@ -34,7 +35,7 @@ export function DesktopVerticalSplit({
   topHeightPx,
   minTopPx,
   maxTopPx,
-  minBottomPx = 120,
+  minBottomPx = MIN_RESIZABLE_PANE_PX,
   onTopHeightPxChanged,
   top,
   bottom,

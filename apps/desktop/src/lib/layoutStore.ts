@@ -28,29 +28,36 @@ export type StoredLayouts = {
   vaultEpisodesStack: VaultEpisodesStackLayout;
 };
 
+/** Minimum CSS pixel size for each resizable split pane edge (left column, editor reserve, stack rows, notifications). */
+export const MIN_RESIZABLE_PANE_PX = 20 as const;
+
 export const INBOX_LEFT_PANEL = {
   defaultPx: 280,
-  minPx: 160,
+  minPx: MIN_RESIZABLE_PANE_PX,
   maxPx: 520,
 } as const;
 
 export const PODCASTS_LEFT_PANEL = {
   defaultPx: 300,
-  minPx: 180,
+  minPx: MIN_RESIZABLE_PANE_PX,
   maxPx: 560,
 } as const;
 
 export const NOTIFICATIONS_PANEL = {
   defaultPx: 280,
-  minPx: 220,
+  minPx: MIN_RESIZABLE_PANE_PX,
   maxPx: 520,
 } as const;
 
-/** Vertical split between Vault (top) and Episodes (bottom) when both panes are visible. */
+/**
+ * Vertical split between Vault (top) and Episodes (bottom) when both panes are visible.
+ * `maxPx` is a soft cap for persisted values; the vertical split clamps the live height to the
+ * column height first, so a low max would block shrinking the bottom pane on tall windows.
+ */
 export const VAULT_EPISODES_STACK_TOP = {
   defaultPx: 280,
-  minPx: 120,
-  maxPx: 560,
+  minPx: MIN_RESIZABLE_PANE_PX,
+  maxPx: 10_000,
 } as const;
 
 export const DEFAULT_LAYOUTS: StoredLayouts = {
