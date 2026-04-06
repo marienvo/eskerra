@@ -22,7 +22,7 @@ type EpisodeRowProps = {
   mutedTextColor: string;
   onPlayEpisode: (episode: PodcastEpisode) => Promise<void>;
   onToggleSelect: () => void;
-  playbackLoading: boolean;
+  playbackTransportBusy: boolean;
   playbackState: PlayerState;
   sectionRssFeedUrl?: string;
   isLastRow?: boolean;
@@ -37,7 +37,7 @@ export function EpisodeRow({
   mutedTextColor,
   onPlayEpisode,
   onToggleSelect,
-  playbackLoading,
+  playbackTransportBusy,
   playbackState,
   sectionRssFeedUrl,
   isLastRow = false,
@@ -55,15 +55,18 @@ export function EpisodeRow({
   const overlayBackgroundColor =
     colorMode === 'dark' ? 'rgba(174,174,174,0.5)' : 'rgba(186,186,186,0.5)';
 
-  const rowDisabled = playbackLoading || isBatchMarking;
-  const playAreaDisabled = rowDisabled || playbackState === 'playing';
+  const rowDisabled = playbackTransportBusy || isBatchMarking;
+  const playAreaDisabled =
+    rowDisabled || playbackState === 'playing' || (isActive && playbackState === 'loading');
   const statusLine = isPlaying
     ? 'Playing'
-    : isActive
-      ? 'Paused'
-      : playbackState === 'playing'
-        ? ''
-        : 'Tap to play';
+    : isActive && playbackState === 'loading'
+      ? 'Buffering'
+      : isActive
+        ? 'Paused'
+        : playbackState === 'playing'
+          ? ''
+          : 'Tap to play';
 
   return (
     <View

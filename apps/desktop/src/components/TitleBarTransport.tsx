@@ -1,31 +1,33 @@
 import {MaterialIcon} from './MaterialIcon';
 
+export type TitleBarPlayControl = 'loading' | 'paused' | 'playing';
+
 export type TitleBarTransportProps = {
   positionLabel: string;
   durationLabel: string;
   seekDisabled: boolean;
-  playDisabled: boolean;
-  isPlaying: boolean;
+  playControl: TitleBarPlayControl;
   onSeekBack: () => void;
   onSeekForward: () => void;
   onTogglePlay: () => void;
 };
 
 /**
- * Centered title-bar playback: elapsed, skip back, play/pause, skip forward, duration.
+ * Centered title-bar playback: elapsed, skip back, play/pause or loading, skip forward, duration.
  */
 export function TitleBarTransport({
   positionLabel,
   durationLabel,
   seekDisabled,
-  playDisabled,
-  isPlaying,
+  playControl,
   onSeekBack,
   onSeekForward,
   onTogglePlay,
 }: TitleBarTransportProps) {
-  const playTooltip = isPlaying ? 'Pause' : 'Play';
-  const playLabel = isPlaying ? 'Pause' : 'Play';
+  const isPlaying = playControl === 'playing';
+  const isLoading = playControl === 'loading';
+  const playTooltip = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
+  const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
 
   return (
     <div
@@ -50,17 +52,27 @@ export function TitleBarTransport({
       <button
         type="button"
         className="app-playback-chrome-btn app-playback-chrome-btn--play app-tooltip-trigger"
+        aria-busy={isLoading}
         aria-label={playLabel}
         data-tooltip={playTooltip}
         data-tooltip-placement="inline-end"
-        disabled={playDisabled}
+        disabled={isLoading}
         onClick={() => void onTogglePlay()}
       >
-        <MaterialIcon
-          name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-          size={24}
-          aria-hidden
-        />
+        {isLoading ? (
+          <MaterialIcon
+            aria-hidden
+            className="app-playback-chrome-btn__spin"
+            name="progress_activity"
+            size={24}
+          />
+        ) : (
+          <MaterialIcon
+            name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
+            size={24}
+            aria-hidden
+          />
+        )}
       </button>
       <button
         type="button"

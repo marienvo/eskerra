@@ -261,6 +261,19 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
+@keyframes app-playback-chrome-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-playback-chrome-btn__spin {
+  animation: app-playback-chrome-spin 0.85s linear infinite;
+}
+
 .app-playback-chrome-btn:disabled {
   cursor: default;
   opacity: 1;

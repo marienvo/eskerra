@@ -284,14 +284,19 @@ export default function App() {
     if (desktopPlayback.activeEpisode == null) {
       return undefined;
     }
-    const loading = desktopPlayback.playerLabel === 'loading';
+    const label = desktopPlayback.playerLabel;
     const seek = desktopPlayback.seekBy;
+    const playControl =
+      label === 'loading'
+        ? 'loading'
+        : label === 'playing'
+          ? 'playing'
+          : ('paused' as const);
     return {
       positionLabel: formatPlaybackMs(desktopPlayback.positionMs),
       durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
-      seekDisabled: loading,
-      playDisabled: loading,
-      isPlaying: desktopPlayback.playerLabel === 'playing',
+      seekDisabled: label === 'loading',
+      playControl,
       onSeekBack: () => void seek(-TITLE_BAR_SKIP_MS),
       onSeekForward: () => void seek(TITLE_BAR_SKIP_MS),
       onTogglePlay: () => void desktopPlayback.togglePause(),

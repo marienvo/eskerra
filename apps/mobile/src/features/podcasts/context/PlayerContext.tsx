@@ -38,7 +38,8 @@ type PlayerContextValue = {
   miniPlayerArtworkSelected: boolean;
   playEpisode: (episode: PodcastEpisode) => Promise<void>;
   playbackError: string | null;
-  playbackLoading: boolean;
+  /** True while starting/stopping playback or while the native player reports loading/buffering. */
+  playbackTransportBusy: boolean;
   playbackState: PlayerState;
   podcastError: string | null;
   podcastsLoading: boolean;
@@ -108,7 +109,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
     activeEpisode,
     clearNowPlayingIfMatchesEpisode,
     error: playbackError,
-    isLoading: playbackLoading,
+    playbackTransportBusy,
     playEpisode,
     progress,
     resyncPlaylistFromDisk,
@@ -186,7 +187,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       miniPlayerArtworkSelected,
       playEpisode,
       playbackError,
-      playbackLoading,
+      playbackTransportBusy,
       playbackState,
       podcastError,
       podcastsLoading,
@@ -208,7 +209,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       miniPlayerArtworkSelected,
       playEpisode,
       playbackError,
-      playbackLoading,
+      playbackTransportBusy,
       playbackState,
       podcastError,
       podcastsLoading,

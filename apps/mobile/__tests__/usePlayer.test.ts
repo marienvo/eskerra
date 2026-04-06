@@ -237,6 +237,7 @@ describe('usePlayer restore state', () => {
   >;
   let ensureSetupMock: jest.MockedFunction<() => Promise<void>>;
   let stopMock: jest.MockedFunction<() => Promise<void>>;
+  let playerReportedState: string;
 
   const episode: PodcastEpisode = {
     date: '2026-03-20',
@@ -252,7 +253,10 @@ describe('usePlayer restore state', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     ensureSetupMock = jest.fn(async () => undefined);
-    stopMock = jest.fn(async () => undefined);
+    playerReportedState = 'paused';
+    stopMock = jest.fn(async () => {
+      playerReportedState = 'idle';
+    });
 
     useVaultContextMock.mockReturnValue({
       baseUri: 'content://vault-root',
@@ -291,10 +295,16 @@ describe('usePlayer restore state', () => {
       destroy: jest.fn(async () => undefined),
       ensureSetup: ensureSetupMock,
       getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 30_000})),
-      getState: jest.fn(async () => 'idle'),
-      pause: jest.fn(async () => undefined),
-      play: jest.fn(async () => undefined),
-      resume: jest.fn(async () => undefined),
+      getState: jest.fn(async () => playerReportedState),
+      pause: jest.fn(async () => {
+        playerReportedState = 'paused';
+      }),
+      play: jest.fn(async () => {
+        playerReportedState = 'playing';
+      }),
+      resume: jest.fn(async () => {
+        playerReportedState = 'playing';
+      }),
       seekTo: jest.fn(async () => undefined),
       stop: stopMock,
     });
@@ -504,6 +514,67 @@ describe('usePlayer restore state', () => {
 
     expect(getStateMock).toHaveBeenCalled();
     expect(playMock).not.toHaveBeenCalled();
+  });
+
+  test('playEpisode sets state from getState after play (e.g. loading while buffering)', async () => {
+    const playMock = jest.fn(async () => undefined);
+    const getStateMock = jest
+      .fn()
+      .mockResolvedValueOnce('paused')
+      .mockResolvedValue('loading');
+
+    getAudioPlayerMock.mockReturnValue({
+      addEndedListener: jest.fn(() => () => undefined),
+      addProgressListener: jest.fn(() => () => undefined),
+      addStateListener: jest.fn(() => () => undefined),
+      destroy: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
+      getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 30_000})),
+      getState: getStateMock,
+      pause: jest.fn(async () => undefined),
+      play: playMock,
+      resume: jest.fn(async () => undefined),
+      seekTo: jest.fn(async () => undefined),
+      stop: stopMock,
+    });
+
+    readPlaylistMock.mockResolvedValue(null);
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let playEpisodeRef: ((e: PodcastEpisode) => Promise<void>) | null = null;
+    let getHookState: (() => string) | null = null;
+
+    function PlayStateHarness() {
+      const result = usePlayer(episodesById, {
+        onMarkAsPlayed: async () => undefined,
+        podcastsCatalogReady: true,
+        podcastsLoading: false,
+      });
+
+      useEffect(() => {
+        playEpisodeRef = result.playEpisode;
+        getHookState = () => result.state;
+      });
+
+      return null;
+    }
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(PlayStateHarness));
+      await flushPromises();
+    });
+
+    if (!playEpisodeRef || !getHookState) {
+      throw new Error('harness not ready.');
+    }
+
+    await act(async () => {
+      await playEpisodeRef!(episode);
+      await flushPromises();
+    });
+
+    expect(playMock).toHaveBeenCalled();
+    expect(getHookState!()).toBe('loading');
   });
 
   test('pause past 80% marks played without dismiss flag so UI can keep player', async () => {
