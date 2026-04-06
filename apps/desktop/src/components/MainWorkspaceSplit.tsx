@@ -45,6 +45,7 @@ export function MainWorkspaceSplit({
   if (!vaultVisible && !episodesVisible) {
     return (
       <div
+        className="main-workspace-editor-only"
         style={{
           flex: 1,
           minHeight: 0,
