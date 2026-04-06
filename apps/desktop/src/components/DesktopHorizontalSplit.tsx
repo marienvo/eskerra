@@ -7,7 +7,11 @@ import {
   type ReactNode,
 } from 'react';
 
-import {clampSplitLeftWidthPx} from '../lib/desktopHorizontalSplitClamp';
+import {
+  clampSplitLeftWidthPx,
+  maxAvailableLeftWidthPx,
+  shouldPersistLeftSplitWidthClamp,
+} from '../lib/desktopHorizontalSplitClamp';
 
 export type DesktopHorizontalSplitProps = {
   /** Current left column width in CSS pixels (controlled by parent). */
@@ -38,8 +42,6 @@ export function DesktopHorizontalSplit({
 }: DesktopHorizontalSplitProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const separatorRef = useRef<HTMLDivElement | null>(null);
-  /** Debug: log first successful horizontal measure (container width) once per mount. */
-  const firstMeasureLoggedRef = useRef(false);
   const draggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(0);
@@ -60,33 +62,7 @@ export function DesktopHorizontalSplit({
     if (cw <= 0) {
       return;
     }
-    const maxW = Math.max(0, Math.floor(cw - sepW - minRightPx));
-    // #region agent log
-    if (!firstMeasureLoggedRef.current) {
-      firstMeasureLoggedRef.current = true;
-      fetch('http://127.0.0.1:7708/ingest/ded427e7-7a0e-48e6-a5de-2a04cf03f51d', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Debug-Session-Id': '8d8ca5'},
-        body: JSON.stringify({
-          sessionId: '8d8ca5',
-          location: 'DesktopHorizontalSplit.tsx:firstMeasure',
-          message: 'first container measure for hsplit',
-          data: {
-            cw,
-            sepW,
-            minRightPx,
-            maxW,
-            leftWidthPx,
-            minLeftPx,
-            maxLeftPx,
-            splitClass: className ?? null,
-          },
-          timestamp: Date.now(),
-          hypothesisId: 'H4',
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
+    const maxW = maxAvailableLeftWidthPx(cw, sepW, minRightPx);
     const next = clampSplitLeftWidthPx(
       leftWidthPx,
       minLeftPx,
@@ -96,30 +72,9 @@ export function DesktopHorizontalSplit({
       minRightPx,
     );
     if (next !== leftWidthPx) {
-      // #region agent log
-      fetch('http://127.0.0.1:7708/ingest/ded427e7-7a0e-48e6-a5de-2a04cf03f51d', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-Debug-Session-Id': '8d8ca5'},
-        body: JSON.stringify({
-          sessionId: '8d8ca5',
-          location: 'DesktopHorizontalSplit.tsx:clampChanged',
-          message: 'clamp will persist new left width',
-          data: {
-            cw,
-            sepW,
-            minRightPx,
-            maxW,
-            leftWidthPx,
-            next,
-            minLeftPx,
-            maxLeftPx,
-            splitClass: className ?? null,
-          },
-          timestamp: Date.now(),
-          hypothesisId: 'H1',
-        }),
-      }).catch(() => {});
-      // #endregion
+      if (!shouldPersistLeftSplitWidthClamp(maxW, minLeftPx)) {
+        return;
+      }
       onLeftWidthPxChanged(next);
     }
   }, [leftWidthPx, minLeftPx, maxLeftPx, minRightPx, onLeftWidthPxChanged]);

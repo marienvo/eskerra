@@ -1,6 +1,10 @@
 import {describe, expect, it} from 'vitest';
 
-import {clampSplitLeftWidthPx, clampSplitRightWidthPx} from './desktopHorizontalSplitClamp';
+import {
+  clampSplitLeftWidthPx,
+  clampSplitRightWidthPx,
+  shouldPersistLeftSplitWidthClamp,
+} from './desktopHorizontalSplitClamp';
 
 describe('clampSplitLeftWidthPx', () => {
   it('clamps to min/max and container', () => {
@@ -11,6 +15,18 @@ describe('clampSplitLeftWidthPx', () => {
 
   it('shrinks when container is narrow', () => {
     expect(clampSplitLeftWidthPx(280, 160, 520, 500, 13, 220)).toBe(267);
+  });
+});
+
+describe('shouldPersistLeftSplitWidthClamp', () => {
+  it('returns false when available space is below min left (transient or degenerate)', () => {
+    expect(shouldPersistLeftSplitWidthClamp(0, 160)).toBe(false);
+    expect(shouldPersistLeftSplitWidthClamp(159, 160)).toBe(false);
+  });
+
+  it('returns true when enough space exists to honor min left', () => {
+    expect(shouldPersistLeftSplitWidthClamp(160, 160)).toBe(true);
+    expect(shouldPersistLeftSplitWidthClamp(400, 160)).toBe(true);
   });
 });
 
