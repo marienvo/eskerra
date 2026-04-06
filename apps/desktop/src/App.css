@@ -310,7 +310,7 @@ a:focus:not(:focus-visible) {
 }
 
 /* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
-.app-status-bar-tagline {
+.app-status-bar-center {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -319,7 +319,6 @@ a:focus:not(:focus-visible) {
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--color-shell-tagline);
   line-height: 1.2;
   pointer-events: none;
   user-select: none;
@@ -327,6 +326,26 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-status-bar-center--tagline {
+  color: var(--color-shell-tagline);
+}
+
+.app-status-bar-center--error {
+  color: var(--color-error);
+}
+
+.app-status-bar-center--info {
+  color: var(--color-text);
+}
+
+.app-status-bar-center--player {
+  color: var(--color-text);
+}
+
+.app-status-bar-center--player strong {
+  font-weight: 600;
 }
 
 .app-status-bar-trailing {

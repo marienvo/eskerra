@@ -1,3 +1,5 @@
+import type {AppStatusBarCenter} from '../lib/resolveAppStatusBarCenter';
+
 import {MaterialIcon} from './MaterialIcon';
 
 /** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
@@ -13,13 +15,46 @@ export function AppSetupTagline() {
 }
 
 type AppStatusBarProps = {
+  center: AppStatusBarCenter;
   onOpenSettings: () => void;
 };
 
-export function AppStatusBar({onOpenSettings}: AppStatusBarProps) {
+function AppStatusBarCenterRegion({center}: {center: AppStatusBarCenter}) {
+  if (center.kind === 'tagline') {
+    return (
+      <p className="app-status-bar-center app-status-bar-center--tagline">{center.text}</p>
+    );
+  }
+
+  if (center.kind === 'message') {
+    const toneClass =
+      center.tone === 'error'
+        ? 'app-status-bar-center--error'
+        : 'app-status-bar-center--info';
+    return (
+      <p
+        className={`app-status-bar-center ${toneClass}`}
+        {...(center.tone === 'error'
+          ? {role: 'alert' as const}
+          : {'aria-live': 'polite' as const})}
+      >
+        {center.text}
+      </p>
+    );
+  }
+
+  return (
+    <p className="app-status-bar-center app-status-bar-center--player" aria-live="polite">
+      <strong>{center.episodeTitle}</strong>
+      <span className="muted small"> — {center.seriesName}</span>
+    </p>
+  );
+}
+
+export function AppStatusBar({center, onOpenSettings}: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
-      <p className="app-status-bar-tagline">{APP_SHELL_TAGLINE}</p>
+      <AppStatusBarCenterRegion center={center} />
       <div className="app-status-bar-trailing">
         <button
           type="button"

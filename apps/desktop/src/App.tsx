@@ -25,7 +25,7 @@ import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
-import {AppSetupTagline, AppStatusBar} from './components/AppStatusBar';
+import {APP_SHELL_TAGLINE, AppSetupTagline, AppStatusBar} from './components/AppStatusBar';
 import {RailNav} from './components/RailNav';
 import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
@@ -50,6 +50,7 @@ import {
   saveMainWindowUi,
   type MainTabId,
 } from './lib/mainWindowUiStore';
+import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 
 import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
@@ -284,6 +285,29 @@ export default function App() {
     onTogglePlay: () => void desktopPlayback.togglePause(),
     onSeekForward: () => void desktopPlayback.seekBy(TITLE_BAR_SKIP_MS),
   };
+
+  const statusBarCenter = useMemo(
+    () =>
+      resolveAppStatusBarCenter({
+        err,
+        diskConflict: diskConflict != null,
+        diskConflictSoft: diskConflictSoft != null,
+        renameLinkProgress,
+        wikiRenameNotice,
+        playerLabel: desktopPlayback.playerLabel,
+        activeEpisode: desktopPlayback.activeEpisode,
+        tagline: APP_SHELL_TAGLINE,
+      }),
+    [
+      err,
+      diskConflict,
+      diskConflictSoft,
+      renameLinkProgress,
+      wikiRenameNotice,
+      desktopPlayback.playerLabel,
+      desktopPlayback.activeEpisode,
+    ],
+  );
 
   /* Setup / loading: native OS decorations; main shell: frameless + transparent HTML chrome. */
   useLayoutEffect(() => {
@@ -660,69 +684,6 @@ export default function App() {
         <div className="app-root-chrome">
           <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
 
-          {err ? (
-            <div className="error-banner" role="alert">
-              {err}
-            </div>
-          ) : null}
-          {!err && diskConflict ? (
-            <div className="conflict-banner" role="alert">
-              <span>
-                This note was changed on disk while you have unsaved edits. Saving is paused until you
-                choose.
-              </span>
-              <span className="conflict-banner__actions">
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => resolveDiskConflictReloadFromDisk()}
-                >
-                  Reload from disk
-                </button>
-                <button
-                  type="button"
-                  onClick={() => resolveDiskConflictKeepLocal()}
-                >
-                  Keep my edits
-                </button>
-              </span>
-            </div>
-          ) : null}
-          {!err &&
-          !diskConflict &&
-          diskConflictSoft &&
-          selectedUri != null &&
-          normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
-            <div className="info-banner info-banner--inline-actions" aria-live="polite">
-              <span>
-                A version on disk differs from your unsaved draft. Your edits stay primary until you
-                save. Open full resolve only if you need to reconcile with disk.
-              </span>
-              <span className="conflict-banner__actions">
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => elevateDiskConflictSoftToBlocking()}
-                >
-                  Resolve with disk…
-                </button>
-                <button type="button" onClick={() => dismissDiskConflictSoft()}>
-                  Dismiss
-                </button>
-              </span>
-            </div>
-          ) : null}
-          {!err && !diskConflict && !diskConflictSoft && renameLinkProgress ? (
-            <div className="info-banner" aria-live="polite">
-              Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
-            </div>
-          ) : null}
-          {!err && !diskConflict && !diskConflictSoft && !renameLinkProgress && wikiRenameNotice ? (
-            <div className="info-banner" aria-live="polite">
-              {wikiRenameNotice}
-            </div>
-          ) : null}
-
           <div className="app-body">
             <RailNav
               active={mainTab}
@@ -846,7 +807,55 @@ export default function App() {
             </div>
           </div>
 
-          <AppStatusBar onOpenSettings={() => void openSettingsWindow()} />
+          {!err && diskConflict ? (
+            <div className="conflict-banner" role="alert">
+              <span>
+                This note was changed on disk while you have unsaved edits. Saving is paused until you
+                choose.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => resolveDiskConflictReloadFromDisk()}
+                >
+                  Reload from disk
+                </button>
+                <button type="button" onClick={() => resolveDiskConflictKeepLocal()}>
+                  Keep my edits
+                </button>
+              </span>
+            </div>
+          ) : null}
+          {!err &&
+          !diskConflict &&
+          diskConflictSoft &&
+          selectedUri != null &&
+          normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
+            <div className="info-banner info-banner--inline-actions" aria-live="polite">
+              <span>
+                A version on disk differs from your unsaved draft. Your edits stay primary until you
+                save. Open full resolve only if you need to reconcile with disk.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => elevateDiskConflictSoftToBlocking()}
+                >
+                  Resolve with disk…
+                </button>
+                <button type="button" onClick={() => dismissDiskConflictSoft()}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          ) : null}
+
+          <AppStatusBar
+            center={statusBarCenter}
+            onOpenSettings={() => void openSettingsWindow()}
+          />
         </div>
       </div>
     </>
