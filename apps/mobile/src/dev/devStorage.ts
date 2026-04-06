@@ -406,7 +406,7 @@ export async function createNote(
   );
 
   const lastModified = Date.now();
-  await AsyncStorage.setItem(devNoteKey(fileName), normalizeNoteContent(content));
+  await AsyncStorage.setItem(devNoteKey(fileName), content);
   index[fileName] = lastModified;
   await writeNotesIndex(index);
   await refreshInboxMarkdownIndex(baseUri);
@@ -462,7 +462,7 @@ export async function writeNoteContent(
     throw new Error('Note was not found in dev mock vault.');
   }
 
-  await AsyncStorage.setItem(devNoteKey(fileName), `${content}\n`);
+  await AsyncStorage.setItem(devNoteKey(fileName), content);
   index[fileName] = Date.now();
   await writeNotesIndex(index);
 }

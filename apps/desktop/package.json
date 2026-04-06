@@ -14,7 +14,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "node ../../scripts/tauri-desktop-build.mjs",
     "desktop:icons": "tauri icon ../../assets/brand/logo-eskerra.svg",
-    "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml"
+    "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml",
+    "generate-emoji-data": "node scripts/generate-emoji-completion-data.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
@@ -23,12 +24,13 @@
     "@codemirror/language": "^6.12.3",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
+    "@eskerra/core": "*",
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
-    "@eskerra/core": "*",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
@@ -48,6 +50,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "emojibase-data": "^17.0.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

@@ -41,17 +41,20 @@ describe('wikiLinkInnerAtDocPosition', () => {
 });
 
 describe('wikiLinkActivatableInnerAtDocPosition', () => {
-  it('returns inner only when pos is inside the styled span, not on brackets', () => {
+  it('returns inner inside styled span and at caret slot before ]], not on [[ or between ]]', () => {
     const doc = Text.of(['Before [[alpha note]] after']);
     const line = doc.line(1);
     const firstBracket = line.from + line.text.indexOf('[[');
     const firstCloseInner = line.from + line.text.indexOf(']]');
     expect(wikiLinkActivatableInnerAtDocPosition(doc, firstBracket)).toBeNull();
     expect(wikiLinkActivatableInnerAtDocPosition(doc, firstBracket + 1)).toBeNull();
-    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner)).toBeNull();
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner)).toBe(
+      'alpha note',
+    );
     expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner - 1)).toBe(
       'alpha note',
     );
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner + 1)).toBeNull();
   });
 
   it('returns inner at start of wiki inner span', () => {

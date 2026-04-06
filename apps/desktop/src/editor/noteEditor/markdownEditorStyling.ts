@@ -3,6 +3,7 @@ import {Strikethrough, type MarkdownConfig, type MarkdownExtension} from '@lezer
 import type {SyntaxNode, Tree} from '@lezer/common';
 import {
   HighlightStyle,
+  indentUnit,
   syntaxHighlighting,
   ensureSyntaxTree,
   syntaxTree,
@@ -429,3 +430,9 @@ export const noteMarkdownEditorAppearance: Extension[] = [
   markdownBlockLineStyle,
   markdownMarkerFocusLineExtension,
 ];
+
+/**
+ * One literal tab per indent level (Tab / Shift-Tab and markdown list continuation).
+ * Matches @codemirror/lang-markdown tab handling (`normalizeIndent` when facet is `\t`).
+ */
+export const noteMarkdownIndentUnit: Extension = indentUnit.of('\t');

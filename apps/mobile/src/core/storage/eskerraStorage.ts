@@ -471,10 +471,7 @@ export async function createNote(
     noteUri = `${inboxDirectoryUri}/${fileName}`;
   }
 
-  const trimmedContent = content.trim();
-  const noteBody = trimmedContent ? `${trimmedContent}\n` : '';
-
-  await vaultFs.writeFile(noteUri, noteBody, {
+  await vaultFs.writeFile(noteUri, content, {
     encoding: 'utf8',
     mimeType: 'text/markdown',
   });
@@ -499,9 +496,8 @@ export async function writeNoteContent(
   }
 
   const normalizedNoteUri = normalizeNoteUri(noteUri);
-  const noteBody = `${content}\n`;
 
-  await vaultFs.writeFile(normalizedNoteUri, noteBody, {
+  await vaultFs.writeFile(normalizedNoteUri, content, {
     encoding: 'utf8',
     mimeType: 'text/markdown',
   });

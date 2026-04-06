@@ -499,7 +499,7 @@ describe('eskerraStorage', () => {
     expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/Inbox/Team Ideas!.md`,
-      'first line\n',
+      'first line',
       {
         encoding: 'utf8',
         mimeType: 'text/markdown',
@@ -562,7 +562,7 @@ describe('eskerraStorage', () => {
 
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/Inbox/Team Ideas!-3.md`,
-      'first line\n',
+      'first line',
       {
         encoding: 'utf8',
         mimeType: 'text/markdown',
@@ -620,7 +620,7 @@ describe('eskerraStorage', () => {
     expect(existsMock).toHaveBeenCalledWith(`${baseUri}/Inbox/Team Ideas!.md`);
     expect(writeFileMock).toHaveBeenCalledWith(
       `${baseUri}/Inbox/Team Ideas!-3.md`,
-      'first line\n',
+      'first line',
       {
         encoding: 'utf8',
         mimeType: 'text/markdown',
@@ -628,10 +628,46 @@ describe('eskerraStorage', () => {
     );
   });
 
+  test('createNote preserves trailing blank lines in body', async () => {
+    existsMock
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    listFilesMock.mockResolvedValueOnce([
+      {
+        lastModified: 1,
+        name: 'only-blanks.md',
+        type: 'file',
+        uri: `${baseUri}/Inbox/only-blanks.md`,
+      },
+    ] as never);
+
+    const body = 'hello\n\n\n';
+    await expect(createNote(baseUri, 'Note', body)).resolves.toMatchObject({
+      name: 'Note.md',
+    });
+
+    expect(writeFileMock).toHaveBeenCalledWith(
+      `${baseUri}/Inbox/Note.md`,
+      body,
+      {encoding: 'utf8', mimeType: 'text/markdown'},
+    );
+  });
+
   test('writeNoteContent writes markdown content by URI', async () => {
     await writeNoteContent(`${baseUri}/test.md`, 'updated');
 
-    expect(writeFileMock).toHaveBeenCalledWith(`${baseUri}/test.md`, 'updated\n', {
+    expect(writeFileMock).toHaveBeenCalledWith(`${baseUri}/test.md`, 'updated', {
+      encoding: 'utf8',
+      mimeType: 'text/markdown',
+    });
+  });
+
+  test('writeNoteContent preserves trailing blank lines', async () => {
+    const body = 'a\n\n';
+    await writeNoteContent(`${baseUri}/test.md`, body);
+
+    expect(writeFileMock).toHaveBeenCalledWith(`${baseUri}/test.md`, body, {
       encoding: 'utf8',
       mimeType: 'text/markdown',
     });

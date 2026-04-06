@@ -39,8 +39,9 @@ export function wikiLinkMatchAtDocPosition(
 }
 
 /**
- * Wiki link inner for vault navigation (click / Mod-Enter): only when `pos` lies in the
- * styled inner span `[innerFrom, innerTo)`, not on `[[` / `]]`.
+ * Wiki link inner for vault navigation (click / Mod-Enter): when `pos` lies in the styled
+ * inner span or at the caret slot immediately before `]]` (`innerTo` is the offset of the
+ * first `]`). Excludes `[[`, the gap between `]]`, and positions after the link.
  */
 export function wikiLinkActivatableInnerAtDocPosition(
   doc: Text,
@@ -50,7 +51,7 @@ export function wikiLinkActivatableInnerAtDocPosition(
   if (match == null) {
     return null;
   }
-  if (pos < match.innerFrom || pos >= match.innerTo) {
+  if (pos < match.innerFrom || pos > match.innerTo) {
     return null;
   }
   return match.inner;

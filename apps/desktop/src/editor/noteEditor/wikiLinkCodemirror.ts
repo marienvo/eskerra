@@ -1,3 +1,4 @@
+import {wikiLinkInnerBrowserOpenableHref} from '@eskerra/core';
 import {Facet, type Extension, type Range} from '@codemirror/state';
 import {
   Decoration,
@@ -6,6 +7,8 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
+
+import {CM_MD_EXTERNAL_LINK_GLYPH_CLASS} from './markdownExternalLinkCodemirror';
 
 /** Shared with inactive cell rich preview (must match `wikiLinkMatchAtLineColumn`). */
 export const WIKI_LINK_LINE_RE = /\[\[([^[\]]+)\]\]/g;
@@ -39,9 +42,13 @@ function buildWikiLinkDecorations(view: EditorView): DecorationSet {
       const from = line.from + start;
       const to = from + fullLen;
       const inner = match[1]!;
-      const innerClass = isResolved(inner)
-        ? 'cm-wiki-link cm-wiki-link--resolved'
-        : 'cm-wiki-link cm-wiki-link--unresolved';
+      const browserHref = wikiLinkInnerBrowserOpenableHref(inner);
+      const innerClass =
+        browserHref != null
+          ? `cm-wiki-link cm-wiki-link--resolved cm-wiki-link--external ${CM_MD_EXTERNAL_LINK_GLYPH_CLASS}`
+          : isResolved(inner)
+            ? 'cm-wiki-link cm-wiki-link--resolved'
+            : 'cm-wiki-link cm-wiki-link--unresolved';
       ranges.push(
         Decoration.mark({class: 'cm-md-wiki-bracket'}).range(from, from + 2),
       );

@@ -1,14 +1,22 @@
+use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use serde::Serialize;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 
 use crate::vault::VaultRootState;
 
+#[derive(Clone, Serialize)]
+pub struct VaultFilesChangedPayload {
+    /// Absolute filesystem paths touched in this debounced batch (files and directories).
+    pub paths: Vec<String>,
+}
+
 pub struct VaultWatchState {
     pub watcher: Mutex<Option<RecommendedWatcher>>,
-    pub notify_tx: std::sync::mpsc::Sender<()>,
+    pub notify_tx: std::sync::mpsc::Sender<Vec<String>>,
 }
 
 pub fn setup_vault_watch(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
@@ -21,13 +29,24 @@ pub fn setup_vault_watch(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn spawn_vault_debouncer(app_handle: AppHandle, rx: std::sync::mpsc::Receiver<()>) {
+fn spawn_vault_debouncer(
+    app_handle: AppHandle,
+    rx: std::sync::mpsc::Receiver<Vec<String>>,
+) {
     std::thread::spawn(move || {
-        while let Ok(()) = rx.recv() {
-            while let Ok(()) = rx.recv_timeout(Duration::from_millis(400)) {
-                // Drain rapid events; quiet period ends the inner loop.
+        while let Ok(first_batch) = rx.recv() {
+            let mut acc: HashSet<String> = first_batch.into_iter().collect();
+            while let Ok(more) = rx.recv_timeout(Duration::from_millis(400)) {
+                acc.extend(more);
             }
-            let _ = app_handle.emit("vault-files-changed", ());
+            // Non-empty: each `recv` batch only contains paths from notify events with non-empty
+            // `ev.paths` (see `tx.send` below). If this ever emitted an empty `paths` vec, the
+            // TypeScript listener would treat it as coarse full-vault invalidation.
+            let paths: Vec<String> = acc.into_iter().collect();
+            let _ = app_handle.emit(
+                "vault-files-changed",
+                VaultFilesChangedPayload { paths },
+            );
         }
     });
 }
@@ -50,21 +69,25 @@ pub fn vault_start_watch(
     let tx = watch_state.notify_tx.clone();
     let mut watcher = RecommendedWatcher::new(
         move |res: Result<Event, notify::Error>| {
-            if res.is_ok() {
-                let _ = tx.send(());
+            if let Ok(ev) = res {
+                let batch: Vec<String> = ev
+                    .paths
+                    .iter()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .collect();
+                if !batch.is_empty() {
+                    let _ = tx.send(batch);
+                }
             }
         },
         Config::default(),
     )
     .map_err(|e| e.to_string())?;
 
-    for sub in ["Inbox", "General", ".eskerra"] {
-        let p = root.join(sub);
-        if p.exists() {
-            watcher
-                .watch(&p, RecursiveMode::Recursive)
-                .map_err(|e| format!("watch {}: {e}", p.display()))?;
-        }
+    if root.exists() {
+        watcher
+            .watch(&root, RecursiveMode::Recursive)
+            .map_err(|e| format!("watch {}: {e}", root.display()))?;
     }
 
     let mut guard = watch_state.watcher.lock().map_err(|e| e.to_string())?;

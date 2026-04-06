@@ -44,6 +44,7 @@ import {
 } from '../../lib/noteInboxAttachmentHost';
 import {
   noteMarkdownEditorAppearance,
+  noteMarkdownIndentUnit,
   noteMarkdownListItemFoldService,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
@@ -67,7 +68,10 @@ import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBund
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
-import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {
+  buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownVaultKeymapBindings,
+} from './noteMarkdownCoreKeymap';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
@@ -126,6 +130,8 @@ export type NoteMarkdownEditorProps = {
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
+  /** Desktop: Ctrl/Cmd+Shift+D — request delete current note (shell shows confirmation). */
+  onDeleteNoteShortcut?: () => void;
   placeholder: string;
   busy: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
@@ -181,6 +187,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
+    onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
     onFoldedRangesPresentChange,
@@ -229,6 +236,9 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const onSaveShortcutRef = useRef(onSaveShortcut);
   onSaveShortcutRef.current = onSaveShortcut;
+
+  const onDeleteNoteShortcutRef = useRef(onDeleteNoteShortcut);
+  onDeleteNoteShortcutRef.current = onDeleteNoteShortcut;
 
   const onFoldedRangesPresentChangeRef = useRef(
     onFoldedRangesPresentChange,
@@ -503,6 +513,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
 
     const extensions = [
+      noteMarkdownIndentUnit,
       markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
@@ -523,6 +534,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       keymap.of([
         ...buildNoteMarkdownVaultKeymapBindings({
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onDeleteNoteShortcut: () => onDeleteNoteShortcutRef.current?.(),
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
@@ -532,6 +544,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         indentWithTab,
         ...foldKeymap,
         ...defaultKeymap,
+        ...buildNoteMarkdownDeleteLineModYBindings(),
         ...historyKeymap,
       ]),
       EditorView.lineWrapping,
@@ -571,6 +584,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           onMarkdownExternalLinkOpen: p =>
             onMarkdownExternalLinkOpenRef.current(p),
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
+          onDeleteNoteShortcut: () => onDeleteNoteShortcutRef.current?.(),
           ...partial,
         }),
       ),
@@ -589,6 +603,13 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       EditorView.domEventHandlers({
+        mousedown(event) {
+          if (event.button !== 1) {
+            return false;
+          }
+          event.preventDefault();
+          return true;
+        },
         paste(event, view) {
           return onEditorPaste(event, view);
         },
@@ -716,13 +737,12 @@ const NoteMarkdownEditorImpl = forwardRef<
         return;
       }
       const at = options?.selection === 'start' ? 0 : markdown.length;
-      v.setState(
-        EditorState.create({
-          doc: markdown,
-          selection: EditorSelection.cursor(at),
-          extensions: be,
-        }),
-      );
+      const nextState = EditorState.create({
+        doc: markdown,
+        selection: EditorSelection.cursor(at),
+        extensions: be,
+      });
+      v.setState(nextState);
       const wikiEff = wc.reconfigure(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
       );

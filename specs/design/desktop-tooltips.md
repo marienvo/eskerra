@@ -23,6 +23,8 @@ Icon-only controls and compact actions in the desktop shell **must** use:
 
 Use the native `title` attribute **only** where the primary need is to expose **full text** that is visually truncated (for example, an ellipsized file name in a pane title). That is a document hint, not an action tooltip. If product requirements later demand the same visual treatment as shell tooltips for those strings, extend the CSS pattern in `App.css` and update this document.
 
+**Editor open-note tabs:** the tab label uses the shell tooltip (`app-tooltip-trigger`, `data-tooltip` with the full file name) **only when** the label span actually overflows its box (`scrollWidth > clientWidth`), so short names do not show a redundant hover label. The per-tab close control remains an icon-only action and always uses the shell tooltip.
+
 ## Accessibility
 
 - Every icon-only or ambiguous control **must** have a concise `aria-label` (or visible text) that matches the intent of `data-tooltip`. The tooltip is supplementary for pointer and keyboard focus visibility; it is not the sole accessible name.

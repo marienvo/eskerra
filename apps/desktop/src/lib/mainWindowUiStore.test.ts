@@ -73,4 +73,14 @@ describe('normalizeMainWindowUiPayload', () => {
     });
     expect(out?.inbox.composingNewEntry).toBe(false);
   });
+
+  it('parses openTabUris when present', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      inbox: {
+        openTabUris: ['  /v/a.md  ', '', '/v/b.md', 3 as unknown as string],
+      },
+    });
+    expect(out?.inbox.openTabUris).toEqual(['/v/a.md', '/v/b.md']);
+  });
 });

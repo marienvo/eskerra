@@ -26,6 +26,7 @@ import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
   noteMarkdownEditorAppearance,
+  noteMarkdownIndentUnit,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownEskerra} from './markdownEskerraLanguage';
@@ -39,7 +40,10 @@ import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
-import {buildNoteMarkdownVaultKeymapBindings} from './noteMarkdownCoreKeymap';
+import {
+  buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownVaultKeymapBindings,
+} from './noteMarkdownCoreKeymap';
 import {
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
@@ -86,6 +90,7 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut?: () => void;
+  onDeleteNoteShortcut?: () => void;
   onReportError: (message: string) => void;
   onDocChanged: () => void;
   tableCallbacks: NoteMarkdownCellEditorCallbacks;
@@ -132,6 +137,7 @@ export function buildNoteMarkdownCellExtensions(
     onMarkdownRelativeLinkActivate,
     onMarkdownExternalLinkOpen,
     onSaveShortcut,
+    onDeleteNoteShortcut,
     onReportError,
     onDocChanged,
     tableCallbacks: tc,
@@ -268,6 +274,13 @@ export function buildNoteMarkdownCellExtensions(
   };
 
   const pasteHandlers = EditorView.domEventHandlers({
+    mousedown(event) {
+      if (event.button !== 1) {
+        return false;
+      }
+      event.preventDefault();
+      return true;
+    },
     paste(event, view) {
       if (busyRef.current) {
         if (
@@ -364,6 +377,7 @@ export function buildNoteMarkdownCellExtensions(
   ]);
 
   return [
+    noteMarkdownIndentUnit,
     markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
     markdownEskerra({
       base: commonmarkLanguage,
@@ -381,12 +395,14 @@ export function buildNoteMarkdownCellExtensions(
     keymap.of([
       ...buildNoteMarkdownVaultKeymapBindings({
         onSaveShortcut,
+        onDeleteNoteShortcut,
         onWikiLinkActivate,
         onMarkdownRelativeLinkActivate,
         onMarkdownExternalLinkOpen,
       }),
       indentWithTab,
       ...defaultKeymap,
+      ...buildNoteMarkdownDeleteLineModYBindings(),
       ...historyKeymap,
     ]),
     EditorView.lineWrapping,

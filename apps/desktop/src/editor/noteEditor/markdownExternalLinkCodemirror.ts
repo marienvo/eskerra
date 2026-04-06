@@ -14,11 +14,15 @@ import {relativeMarkdownLinkLabelSpan} from './relativeMarkdownLinkLabelSpan';
 
 const TREE_ENSURE_BUDGET_MS = 200;
 
+/** Shared with table static segments and CSS — exactly one glyph per logical external link. */
+export const CM_MD_EXTERNAL_LINK_GLYPH_CLASS = 'cm-md-external-link-glyph';
+
 /** Builds external (http/https/mailto) markdown link decorations. Exported for tests. */
 export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet {
   ensureSyntaxTree(view.state, view.state.doc.length, TREE_ENSURE_BUDGET_MS);
   const tree = syntaxTree(view.state);
   const ranges: Range<Decoration>[] = [];
+  const g = CM_MD_EXTERNAL_LINK_GLYPH_CLASS;
   tree.iterate({
     enter(ref) {
       if (ref.name !== 'URL') {
@@ -33,14 +37,21 @@ export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet 
         return;
       }
       const cls = 'cm-md-external-link';
-      const hrefClass = `${cls} cm-md-external-href`;
-      ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
       const labelSpan = relativeMarkdownLinkLabelSpan(parent, (a, b) =>
         view.state.sliceDoc(a, b),
       );
-      if (labelSpan != null) {
+      const hasVisibleLabel =
+        labelSpan != null && labelSpan.to > labelSpan.from;
+      const hrefClass = hasVisibleLabel
+        ? `${cls} cm-md-external-href`
+        : `${cls} cm-md-external-href ${g}`;
+      ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
+      if (hasVisibleLabel && labelSpan != null) {
         ranges.push(
-          Decoration.mark({class: cls}).range(labelSpan.from, labelSpan.to),
+          Decoration.mark({class: `${cls} ${g}`}).range(
+            labelSpan.from,
+            labelSpan.to,
+          ),
         );
       }
     },
@@ -48,7 +59,7 @@ export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet 
   const bareIntervals = collectBareBrowserUrlIntervals(view.state);
   for (const iv of bareIntervals) {
     ranges.push(
-      Decoration.mark({class: 'cm-md-external-link'}).range(iv.from, iv.to),
+      Decoration.mark({class: `cm-md-external-link ${g}`}).range(iv.from, iv.to),
     );
   }
   return ranges.length ? Decoration.set(ranges, true) : Decoration.none;

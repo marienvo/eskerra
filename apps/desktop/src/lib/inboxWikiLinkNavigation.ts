@@ -7,6 +7,7 @@ import {
   resolveVaultRelativeMarkdownHref,
   stemFromMarkdownFileName,
   vaultPathDirname,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveResult,
   type VaultFilesystem,
@@ -81,11 +82,17 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   return {kind: 'created', uri: created.uri};
 }
 
-/** True when `inner` resolves to exactly one existing inbox note (same rule as navigation `open`). */
+/**
+ * True when `inner` resolves to exactly one existing inbox note (same rule as navigation `open`),
+ * or when the target is a browser-openable `http` / `https` / `mailto` URL (desktop external wiki).
+ */
 export function inboxWikiLinkTargetIsResolved(
   notes: ReadonlyArray<InboxWikiLinkNoteRef>,
   inner: string,
 ): boolean {
+  if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
+    return true;
+  }
   return resolveInboxWikiLinkTarget(notes, inner).kind === 'open';
 }
 

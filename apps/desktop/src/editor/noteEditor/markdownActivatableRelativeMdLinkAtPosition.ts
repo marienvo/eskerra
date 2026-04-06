@@ -9,14 +9,14 @@ export type ActivatableRelativeMdLinkHit = {
   hrefTo: number;
 };
 
-function posInHalfOpenSpan(
+/** Label text plus the caret slot immediately before the closing `]` (span.to is that offset). */
+function posInActivatableLabelSpan(
   pos: number,
-  span: {from: number; to: number} | null,
-): boolean {
+  span: {from: number; to: number} | null,): boolean {
   if (span == null) {
     return false;
   }
-  return pos >= span.from && pos < span.to;
+  return pos >= span.from && pos <= span.to;
 }
 
 /**
@@ -46,8 +46,8 @@ export function markdownActivatableRelativeMdLinkAtPosition(
       const labelSpan = relativeMarkdownLinkLabelSpan(n, (a, b) =>
         state.sliceDoc(a, b),
       );
-      const inUrl = pos >= url.from && pos < url.to;
-      const inLabel = posInHalfOpenSpan(pos, labelSpan);
+      const inUrl = pos >= url.from && pos <= url.to;
+      const inLabel = posInActivatableLabelSpan(pos, labelSpan);
       if (!inUrl && !inLabel) {
         return null;
       }

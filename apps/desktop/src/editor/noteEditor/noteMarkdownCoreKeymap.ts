@@ -1,3 +1,4 @@
+import {deleteLine} from '@codemirror/commands';
 import {EditorSelection} from '@codemirror/state';
 import {type EditorView, type KeyBinding} from '@codemirror/view';
 import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
@@ -9,6 +10,8 @@ import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPositio
 
 export type NoteMarkdownVaultKeymapHandlers = {
   onSaveShortcut?: () => void;
+  /** Shell-owned: Mod-Shift-D — request delete for the current note (confirmation outside the editor). */
+  onDeleteNoteShortcut?: () => void;
   onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
   onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
@@ -98,6 +101,7 @@ export function buildNoteMarkdownVaultKeymapBindings(
 ): readonly KeyBinding[] {
   const {
     onSaveShortcut,
+    onDeleteNoteShortcut,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
     onMarkdownExternalLinkOpen,
@@ -107,6 +111,13 @@ export function buildNoteMarkdownVaultKeymapBindings(
       key: 'Mod-s',
       run: () => {
         onSaveShortcut?.();
+        return true;
+      },
+    },
+    {
+      key: 'Mod-Shift-d',
+      run: () => {
+        onDeleteNoteShortcut?.();
         return true;
       },
     },
@@ -122,4 +133,13 @@ export function buildNoteMarkdownVaultKeymapBindings(
         || runMarkdownExternalLinkActivateFromCaret(view, onMarkdownExternalLinkOpen),
     },
   ];
+}
+
+/**
+ * Mod-y (Ctrl+Y / Cmd+Y): delete the active line(s). Must be registered before `historyKeymap` so it
+ * overrides redo on Linux/Windows. Redo remains Ctrl+Shift+Z on Linux. Stable action id:
+ * `eskerra.vault.editor.deleteLine`.
+ */
+export function buildNoteMarkdownDeleteLineModYBindings(): readonly KeyBinding[] {
+  return [{key: 'Mod-y', run: deleteLine, preventDefault: true}];
 }

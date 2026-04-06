@@ -124,3 +124,14 @@ Mitigation (today):
 
 - Settings UI calls out that credentials live in the vault folder and should not be shared widely.
 - Do not treat `mock-vault` or developer samples as a pattern for production secrets in a public repo (use placeholders only).
+
+## 10) Desktop note body cache (`inboxContentByUri`) staleness (High — mitigated in code)
+
+### Risk
+
+- The desktop workspace keeps an in-memory map of note URI → markdown body for the vault editor, backlinks, and wiki maintenance. If an entry is **stale** (for example still holding the text from the first disk read while the user edited and saved), switching away and back can **skip `readFile`** and reload the old body into CodeMirror. That can overwrite `lastPersistedRef` and make correct on-disk content look “lost” until the user notices.
+
+### Mitigation
+
+- Treat `inboxContentByUri` as a **derived cache**, not a second source of truth: update it when leaving a note (snapshot current editor markdown), after each successful persist (including post–image-rewrite markdown), and when reconciling cache vs `lastPersistedRef` in the `selectedUri` layout effect. See **Cache consistency invariant** in `specs/architecture/desktop-editor.md` and helpers in `apps/desktop/src/hooks/inboxNoteBodyCache.ts`.
+- When adding code paths that write note files outside the normal editor save pipeline, **invalidate or update** affected cache keys (same rule as renames/deletes today).

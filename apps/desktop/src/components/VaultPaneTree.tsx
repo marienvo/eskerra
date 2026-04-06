@@ -11,8 +11,10 @@ import {normalizeVaultBaseUri, type VaultFilesystem} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {
+  memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -26,6 +28,7 @@ import {
 } from '../lib/vaultTreeBulkPlan';
 import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
+import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
 import {MaterialIcon} from './MaterialIcon';
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
@@ -129,7 +132,27 @@ export type VaultPaneTreeProps = {
   ) => void | Promise<void>;
 };
 
-export function VaultPaneTree({
+/** Lists root then top-level `Inbox` so the first inbox note open hits warm tree loader state. */
+async function warmTopLevelInboxChildren(
+  tree: TreeInstance<VaultTreeItemData>,
+  rootId: string,
+  itemStoreRef: MutableRefObject<Record<string, VaultTreeItemData>>,
+): Promise<{ inboxUri: string | null; rootKidCount: number }> {
+  await tree.loadChildrenIds(rootId);
+  const asyncRef = tree.getDataRef<AsyncDataLoaderDataRef<VaultTreeItemData>>().current;
+  const kidIds = asyncRef.childrenIds?.[rootId] ?? [];
+  const inboxUri =
+    kidIds.find(id => {
+      const data = itemStoreRef.current[id];
+      return data?.kind === 'folder' && data.name === 'Inbox';
+    }) ?? null;
+  if (inboxUri) {
+    await tree.loadChildrenIds(inboxUri);
+  }
+  return { inboxUri, rootKidCount: kidIds.length };
+}
+
+export const VaultPaneTree = memo(function VaultPaneTree({
   vaultRoot,
   fs,
   fsRefreshNonce,
@@ -165,7 +188,14 @@ export function VaultPaneTree({
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<TreeInstance<VaultTreeItemData> | null>(null);
+  /** Serialize selection-driven loads with mount/fs-refresh Inbox warmup so we never run two cold `listFiles(Inbox)` in parallel. */
+  const topLevelInboxWarmupPromiseRef = useRef<Promise<{
+    inboxUri: string | null;
+    rootKidCount: number;
+  }> | null>(null);
   const dragGhostHostRef = useRef<HTMLDivElement | null>(null);
+  const lastDirectArticleOpenRef = useRef<{uri: string; startedAt: number} | null>(null);
+  const suppressNextArticleClickRef = useRef<string | null>(null);
   const [dropTargetUri, setDropTargetUri] = useState<string | null>(null);
   const [draggingSourceUri, setDraggingSourceUri] = useState<string | null>(null);
   /** Incremented after async FS reload so React re-runs flatten; headless-tree `rebuildTree` may not change `useState` reference. */
@@ -187,7 +217,10 @@ export function VaultPaneTree({
 
   const tree = useTree<VaultTreeItemData>({
     rootItemId: rootId,
-    getItemName: item => item.getItemData()?.name ?? '…',
+    getItemName: item => {
+      const d = item.getItemData();
+      return d ? vaultTreeRowLabel(d) : '…';
+    },
     isItemFolder: item => (item.getItemData()?.kind ?? 'folder') !== 'article',
     onPrimaryAction: item => {
       const data = item.getItemData();
@@ -195,6 +228,14 @@ export function VaultPaneTree({
         return;
       }
       if (data.kind === 'article') {
+        const recentDirectOpen = lastDirectArticleOpenRef.current;
+        if (
+          recentDirectOpen?.uri === data.uri
+          && performance.now() - recentDirectOpen.startedAt < 250
+        ) {
+          lastDirectArticleOpenRef.current = null;
+          return;
+        }
         onOpenMarkdownNote(data.uri);
       }
     },
@@ -251,6 +292,25 @@ export function VaultPaneTree({
 
   treeRef.current = tree;
 
+  useEffect(() => {
+    const t = treeRef.current;
+    if (!t) {
+      return;
+    }
+    const warmupPromise = warmTopLevelInboxChildren(t, rootId, itemStoreRef);
+    topLevelInboxWarmupPromiseRef.current = warmupPromise;
+    void warmupPromise.finally(() => {
+      if (topLevelInboxWarmupPromiseRef.current === warmupPromise) {
+        topLevelInboxWarmupPromiseRef.current = null;
+      }
+    });
+    return () => {
+      if (topLevelInboxWarmupPromiseRef.current === warmupPromise) {
+        topLevelInboxWarmupPromiseRef.current = null;
+      }
+    };
+  }, [rootId]);
+
   const vaultTreeClearSelRef = useRef(vaultTreeSelectionClearNonce);
   useEffect(() => {
     if (vaultTreeClearSelRef.current === vaultTreeSelectionClearNonce) {
@@ -290,6 +350,23 @@ export function VaultPaneTree({
         }
         setTreeViewRevision(n => n + 1);
       })
+      .then(async () => {
+        const t2 = treeRef.current;
+        if (!t2) {
+          return;
+        }
+        const p = warmTopLevelInboxChildren(t2, rootId, itemStoreRef);
+        topLevelInboxWarmupPromiseRef.current = p;
+        try {
+          await p;
+        } catch {
+          /* ignore */
+        } finally {
+          if (topLevelInboxWarmupPromiseRef.current === p) {
+            topLevelInboxWarmupPromiseRef.current = null;
+          }
+        }
+      })
       .catch(() => {
         /* ignore: item ids may be stale during vault teardown */
       });
@@ -297,13 +374,31 @@ export function VaultPaneTree({
 
   void treeViewRevision;
   const items = tree.getItems();
-  /* eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual uses functional refs; safe here */
+  const selectedItems = tree.getState().selectedItems;
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => VAULT_TREE_ROW_HEIGHT_PX,
     overscan: 12,
   });
+  const virtualItems = virtualizer.getVirtualItems();
+  const itemIds = useMemo(() => items.map(item => item.getId()), [items]);
+
+  useLayoutEffect(() => {
+    if (
+      !selectedMarkdownUri
+      || (!selectedMarkdownUri.startsWith(`${rootId}/`) && selectedMarkdownUri !== rootId)
+    ) {
+      return;
+    }
+    if (!itemIds.includes(selectedMarkdownUri)) {
+      return;
+    }
+    if (selectedItems.length === 1 && selectedItems[0] === selectedMarkdownUri) {
+      return;
+    }
+    tree.setSelectedItems([selectedMarkdownUri]);
+  }, [selectedMarkdownUri, rootId, itemIds, selectedItems, tree]);
 
   useEffect(() => {
     if (
@@ -318,20 +413,32 @@ export function VaultPaneTree({
       if (!t) {
         return;
       }
+      const pendingMountWarmup = topLevelInboxWarmupPromiseRef.current;
+      if (pendingMountWarmup) {
+        try {
+          await pendingMountWarmup;
+        } catch {
+          /* ignore: warmup failed or vault torn down */
+        }
+      }
       const rel = selectedMarkdownUri.slice(rootId.length).replace(/^\//, '');
       const segments = rel.split('/').filter(Boolean);
       if (segments.length === 0) {
         return;
       }
-      let acc = rootId;
       const folderSegs = segments.length > 1 ? segments.slice(0, -1) : [];
+      let acc = rootId;
       for (const seg of folderSegs) {
         acc = `${acc}/${seg}`;
         await t.loadChildrenIds(acc);
         if (cancelled) {
           return;
         }
-        t.getItemInstance(acc)?.expand();
+        const expandedBefore = t.getState().expandedItems;
+        const wasExpanded = expandedBefore.includes(acc);
+        if (!wasExpanded) {
+          t.getItemInstance(acc)?.expand();
+        }
       }
       if (cancelled) {
         return;
@@ -341,7 +448,7 @@ export function VaultPaneTree({
     return () => {
       cancelled = true;
     };
-  }, [selectedMarkdownUri, rootId]);
+  }, [selectedMarkdownUri, rootId, items.length]);
 
   const containerProps = tree.getContainerProps('Vault');
 
@@ -387,7 +494,7 @@ export function VaultPaneTree({
           className="vault-tree__inner"
           style={{height: `${virtualizer.getTotalSize()}px`, position: 'relative'}}
         >
-          {virtualizer.getVirtualItems().map(virtualRow => {
+          {virtualItems.map(virtualRow => {
             const item = items[virtualRow.index];
             if (!item) {
               return null;
@@ -435,7 +542,35 @@ export function VaultPaneTree({
                 style={{paddingInlineStart: pad}}
                 disabled={busy}
                 draggable={canDragFromRow}
+                onMouseDown={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (
+                    busy ||
+                    e.button !== 0 ||
+                    e.shiftKey ||
+                    e.ctrlKey ||
+                    e.metaKey ||
+                    e.altKey
+                  ) {
+                    return;
+                  }
+                  if (!isFolder) {
+                    const startedAt = performance.now();
+                    lastDirectArticleOpenRef.current = {
+                      uri: data.uri,
+                      startedAt,
+                    };
+                    suppressNextArticleClickRef.current = data.uri;
+                    onOpenMarkdownNote(data.uri);
+                    e.preventDefault();
+                    return;
+                  }
+                }}
                 onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (!isFolder && suppressNextArticleClickRef.current === data.uri) {
+                    suppressNextArticleClickRef.current = null;
+                    e.preventDefault();
+                    return;
+                  }
                   if (e.shiftKey || e.ctrlKey || e.metaKey) {
                     if (e.shiftKey) {
                       item.selectUpTo(e.ctrlKey || e.metaKey);
@@ -469,7 +604,7 @@ export function VaultPaneTree({
                   setDraggingSourceUri(data.uri);
                   mountVaultTreeDragGhost({
                     isFolder,
-                    label: data.name,
+                    label: vaultTreeRowLabel(data),
                     dataTransfer: e.dataTransfer,
                     pointerClientX: e.clientX,
                     pointerClientY: e.clientY,
@@ -571,7 +706,7 @@ export function VaultPaneTree({
                     size={24}
                   />
                 </span>
-                <span className="vault-tree-row__label">{data.name}</span>
+                <span className="vault-tree-row__label">{vaultTreeRowLabel(data)}</span>
               </button>
             );
 
@@ -659,4 +794,4 @@ export function VaultPaneTree({
       </div>
     </>
   );
-}
+});

@@ -16,14 +16,13 @@ export function useSaveInboxMarkdownNote() {
   const save = useCallback(
     async (title: string, content: string, options?: SaveOptions) => {
       const trimmedTitle = title.trim();
-      const trimmedContent = content.trim();
 
       if (!trimmedTitle) {
         setStatusText('Title is required.');
         return false;
       }
 
-      if (!trimmedContent) {
+      if (content.length === 0) {
         setStatusText('Entry content is required.');
         return false;
       }
@@ -32,10 +31,10 @@ export function useSaveInboxMarkdownNote() {
       setIsSaving(true);
       try {
         if (options?.noteUri) {
-          await write(options.noteUri, trimmedContent);
+          await write(options.noteUri, content);
           options?.onSaved?.();
         } else {
-          const created = await create(trimmedTitle, trimmedContent);
+          const created = await create(trimmedTitle, content);
           options?.onSaved?.(created);
         }
         return true;

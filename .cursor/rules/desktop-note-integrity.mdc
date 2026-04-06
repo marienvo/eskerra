@@ -1,0 +1,20 @@
+---
+description: Desktop vault note body cache and editor/disk consistency (no stale inboxContentByUri)
+globs: apps/desktop/**/*
+alwaysApply: true
+---
+
+# Desktop note body integrity
+
+Authoritative detail: `specs/architecture/desktop-editor.md` (lazy note bodies + cache consistency invariant).
+
+## Invariants
+
+- **`inboxContentByUri`** must stay aligned with the latest in-memory editor text for each open note **before** awaiting work that can change `selectedUri` (snapshot on note switch in `openMarkdownInEditor`), and after every **successful** `saveNoteMarkdown` in `enqueueInboxPersist` (including when `persistTransientMarkdownImages` rewrites markdown).
+- **`lastPersistedRef`** must describe content that was written successfully (or read from disk for the current selection). Do not set it from a stale `inboxContentByUri` entry without reconciling with disk-known state.
+- The **`useLayoutEffect` on `selectedUri`** restores CodeMirror from cache when present; if cache and `lastPersistedRef` disagree for the same URI, **disk-known (`lastPersistedRef`) wins** and the cache is healed (see `resolveInboxCachedBodyForEditor` in `apps/desktop/src/hooks/inboxNoteBodyCache.ts`).
+
+## When changing note content
+
+- Any new mutation path (bulk rewrite, external sync, etc.) must **update or invalidate** the cache entry for affected URIs; otherwise reopening the note can show old text while the file on disk is newer.
+- Prefer small **pure helpers** in `inboxNoteBodyCache.ts` for merge/heal logic and add **Vitest** coverage there when behavior changes.

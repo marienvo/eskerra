@@ -7,6 +7,11 @@ import {
   WIKI_LINK_COMPLETION_MAX_OPTIONS,
 } from '@eskerra/core';
 
+import {
+  EMOJI_COMPLETION_MAX_OPTIONS,
+  emojiColonCompletionSource,
+} from './emojiColonAutocomplete';
+
 /** Match an unfinished wiki target right after `[[` (no `|` in the target segment). */
 const wikiTargetPrefix = /\[\[([^\]|]*)$/;
 
@@ -46,7 +51,10 @@ export function wikiLinkAutocompleteExtension(
 ): Extension {
   return autocompletion({
     activateOnTyping: true,
-    maxRenderedOptions: WIKI_LINK_COMPLETION_MAX_OPTIONS,
-    override: [inboxWikiLinkCompletions(getCandidates)],
+    maxRenderedOptions: Math.max(
+      WIKI_LINK_COMPLETION_MAX_OPTIONS,
+      EMOJI_COMPLETION_MAX_OPTIONS,
+    ),
+    override: [inboxWikiLinkCompletions(getCandidates), emojiColonCompletionSource],
   });
 }

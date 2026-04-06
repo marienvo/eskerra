@@ -4,6 +4,7 @@ import {
   buildInboxWikiLinkResolveLookup,
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
+  wikiLinkInnerBrowserOpenableHref,
 } from './wikiLinkInbox';
 
 const NOTES = [
@@ -131,6 +132,35 @@ describe('resolveInboxWikiLinkTarget', () => {
       kind: 'unsupported',
       reason: 'path_not_supported',
     });
+  });
+});
+
+describe('wikiLinkInnerBrowserOpenableHref', () => {
+  it('returns https target and ignores display text', () => {
+    expect(wikiLinkInnerBrowserOpenableHref('https://example.com/path|Site')).toBe(
+      'https://example.com/path',
+    );
+  });
+
+  it('returns bare https inner', () => {
+    expect(wikiLinkInnerBrowserOpenableHref('https://example.com')).toBe(
+      'https://example.com',
+    );
+  });
+
+  it('returns mailto href', () => {
+    expect(wikiLinkInnerBrowserOpenableHref('mailto:a@example.com|Email')).toBe(
+      'mailto:a@example.com',
+    );
+  });
+
+  it('returns null for vault-style targets', () => {
+    expect(wikiLinkInnerBrowserOpenableHref('alpha-note')).toBeNull();
+    expect(wikiLinkInnerBrowserOpenableHref('Inbox/beta')).toBeNull();
+  });
+
+  it('returns null for disallowed schemes', () => {
+    expect(wikiLinkInnerBrowserOpenableHref('javascript:alert(1)')).toBeNull();
   });
 });
 

@@ -37,12 +37,14 @@ import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
+import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
+import {hydrateEmojiUsageFromStore} from './lib/emojiUsageStore';
 import {
   loadMainWindowUi,
   saveMainWindowUi,
@@ -81,6 +83,7 @@ export default function App() {
     vaultRoot: string;
     composingNewEntry: boolean;
     selectedUri: string | null;
+    openTabUris?: readonly string[];
   } | null>(null);
   const {
     vaultRoot,
@@ -92,6 +95,12 @@ export default function App() {
     inboxEditorResetNonce,
     busy,
     err,
+    diskConflict,
+    resolveDiskConflictReloadFromDisk,
+    resolveDiskConflictKeepLocal,
+    diskConflictSoft,
+    elevateDiskConflictSoftToBlocking,
+    dismissDiskConflictSoft,
     composingNewEntry,
     inboxContentByUri,
     vaultMarkdownRefs,
@@ -130,7 +139,14 @@ export default function App() {
     editorHistoryGoBack,
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
-    inboxBacklinksDeferFirstPaint,
+    inboxBacklinksDeferNonce,
+    editorOpenTabUris,
+    activateOpenTab,
+    closeEditorTab,
+    closeOtherEditorTabs,
+    closeAllEditorTabs,
+    reopenLastClosedEditorTab,
+    canReopenClosedEditorTab,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -174,6 +190,38 @@ export default function App() {
     editorHistoryGoBack,
     editorHistoryGoForward,
   });
+
+  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
+  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
+  useLayoutEffect(() => {
+    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
+    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
+  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (mainTab !== 'inbox' || !vaultRoot) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || !e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 't' && e.key !== 'T') {
+        return;
+      }
+      if (busy || !canReopenClosedEditorTabRef.current) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      reopenLastClosedEditorTabRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [mainTab, vaultRoot, busy]);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);
@@ -292,8 +340,11 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadStoredLayouts(), loadMainWindowUi()]).then(
-      ([loadedLayouts, ui]) => {
+    void Promise.all([
+      loadStoredLayouts(),
+      loadMainWindowUi(),
+      hydrateEmojiUsageFromStore(),
+    ]).then(([loadedLayouts, ui]) => {
         if (cancelled) {
           return;
         }
@@ -305,6 +356,7 @@ export default function App() {
             vaultRoot: ui.vaultRoot,
             composingNewEntry: ui.inbox.composingNewEntry,
             selectedUri: ui.inbox.selectedUri,
+            openTabUris: ui.inbox.openTabUris,
           });
         }
         setLayoutsReady(true);
@@ -354,6 +406,7 @@ export default function App() {
       inbox: {
         composingNewEntry,
         selectedUri,
+        openTabUris: [...editorOpenTabUris],
       },
     };
     const t = window.setTimeout(() => {
@@ -368,6 +421,7 @@ export default function App() {
     playerDockVisible,
     selectedUri,
     composingNewEntry,
+    editorOpenTabUris,
     inboxShellRestored,
   ]);
 
@@ -611,12 +665,59 @@ export default function App() {
               {err}
             </div>
           ) : null}
-          {!err && renameLinkProgress ? (
+          {!err && diskConflict ? (
+            <div className="conflict-banner" role="alert">
+              <span>
+                This note was changed on disk while you have unsaved edits. Saving is paused until you
+                choose.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => resolveDiskConflictReloadFromDisk()}
+                >
+                  Reload from disk
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resolveDiskConflictKeepLocal()}
+                >
+                  Keep my edits
+                </button>
+              </span>
+            </div>
+          ) : null}
+          {!err &&
+          !diskConflict &&
+          diskConflictSoft &&
+          selectedUri != null &&
+          normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
+            <div className="info-banner info-banner--inline-actions" aria-live="polite">
+              <span>
+                A version on disk differs from your unsaved draft. Your edits stay primary until you
+                save. Open full resolve only if you need to reconcile with disk.
+              </span>
+              <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => elevateDiskConflictSoftToBlocking()}
+                >
+                  Resolve with disk…
+                </button>
+                <button type="button" onClick={() => dismissDiskConflictSoft()}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          ) : null}
+          {!err && !diskConflict && !diskConflictSoft && renameLinkProgress ? (
             <div className="info-banner" aria-live="polite">
               Updating links… {renameLinkProgress.done}/{renameLinkProgress.total}
             </div>
           ) : null}
-          {!err && !renameLinkProgress && wikiRenameNotice ? (
+          {!err && !diskConflict && !diskConflictSoft && !renameLinkProgress && wikiRenameNotice ? (
             <div className="info-banner" aria-live="polite">
               {wikiRenameNotice}
             </div>
@@ -639,72 +740,79 @@ export default function App() {
               <main className="main-stage">
                 <div className="tab-panel" hidden={mainTab !== 'inbox'}>
                   <VaultTab
-                    key={vaultRoot}
-                    vaultRoot={vaultRoot}
-                    fs={fs}
-                    fsRefreshNonce={fsRefreshNonce}
-                    inboxEditorRef={inboxEditorRef}
-                    inboxEditorShellScrollRef={inboxEditorShellScrollRef}
-                    inboxEditorShellScrollDirectiveRef={
-                      inboxEditorShellScrollDirectiveRef
-                    }
-                    leftWidthPx={layouts.inbox.leftWidthPx}
-                    onLeftWidthPxChanged={persistInboxLeftWidthPx}
-                    notes={notes}
-                    vaultMarkdownRefs={vaultMarkdownRefs}
-                    inboxContentByUri={inboxContentByUri}
-                    backlinkUris={selectedNoteBacklinkUris}
-                    selectedUri={selectedUri}
-                    onSelectNote={selectNote}
-                    onAddEntry={startNewEntry}
-                    composingNewEntry={composingNewEntry}
-                    onCancelNewEntry={cancelNewEntry}
-                    onCreateNewEntry={() => void submitNewEntry()}
-                    editorBody={editorBody}
-                    onEditorChange={setEditorBody}
-                    inboxEditorResetNonce={inboxEditorResetNonce}
-                    onEditorError={setErr}
-                    onWikiLinkActivate={onWikiLinkActivate}
-                    onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                    onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                    onSaveShortcut={onInboxSaveShortcut}
-                    busy={busy}
-                    onDeleteNote={uri => {
-                      void deleteNote(uri);
-                    }}
-                    onRenameNote={(uri, nextDisplayName) => {
-                      void renameNote(uri, nextDisplayName);
-                    }}
-                    onDeleteFolder={uri => {
-                      void deleteFolder(uri);
-                    }}
-                    onRenameFolder={(uri, nextDisplayName) => {
-                      void renameFolder(uri, nextDisplayName);
-                    }}
-                    onMoveVaultTreeItem={(src, kind, destDir) => {
-                      void moveVaultTreeItem(src, kind, destDir);
-                    }}
-                    onBulkMoveVaultTreeItems={(items, destDir) => {
-                      void bulkMoveVaultTreeItems(items, destDir);
-                    }}
-                    onBulkDeleteVaultTreeItems={items => {
-                      void bulkDeleteVaultTreeItems(items);
-                    }}
-                    vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-                    wikiLinkAmbiguityRenamePrompt={
-                      pendingWikiLinkAmbiguityRename?.summary ?? null
-                    }
-                    onConfirmWikiLinkAmbiguityRename={() => {
-                      void confirmPendingWikiLinkAmbiguityRename();
-                    }}
-                    onCancelWikiLinkAmbiguityRename={
-                      cancelPendingWikiLinkAmbiguityRename
-                    }
-                    editorHistoryCanGoBack={editorHistoryCanGoBack}
-                    editorHistoryCanGoForward={editorHistoryCanGoForward}
-                    onEditorHistoryGoBack={editorHistoryGoBack}
-                    onEditorHistoryGoForward={editorHistoryGoForward}
-                    inboxBacklinksDeferFirstPaint={inboxBacklinksDeferFirstPaint}
+                      key={vaultRoot}
+                      vaultRoot={vaultRoot}
+                      fs={fs}
+                      fsRefreshNonce={fsRefreshNonce}
+                      inboxEditorRef={inboxEditorRef}
+                      inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+                      inboxEditorShellScrollDirectiveRef={
+                        inboxEditorShellScrollDirectiveRef
+                      }
+                      leftWidthPx={layouts.inbox.leftWidthPx}
+                      onLeftWidthPxChanged={persistInboxLeftWidthPx}
+                      notes={notes}
+                      vaultMarkdownRefs={vaultMarkdownRefs}
+                      inboxContentByUri={inboxContentByUri}
+                      backlinkUris={selectedNoteBacklinkUris}
+                      selectedUri={selectedUri}
+                      onSelectNote={selectNote}
+                      onAddEntry={startNewEntry}
+                      composingNewEntry={composingNewEntry}
+                      onCancelNewEntry={cancelNewEntry}
+                      onCreateNewEntry={() => void submitNewEntry()}
+                      editorBody={editorBody}
+                      onEditorChange={setEditorBody}
+                      inboxEditorResetNonce={inboxEditorResetNonce}
+                      onEditorError={setErr}
+                      onWikiLinkActivate={onWikiLinkActivate}
+                      onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                      onSaveShortcut={onInboxSaveShortcut}
+                      busy={busy}
+                      onDeleteNote={uri => {
+                        void deleteNote(uri);
+                      }}
+                      onRenameNote={(uri, nextDisplayName) => {
+                        void renameNote(uri, nextDisplayName);
+                      }}
+                      onDeleteFolder={uri => {
+                        void deleteFolder(uri);
+                      }}
+                      onRenameFolder={(uri, nextDisplayName) => {
+                        void renameFolder(uri, nextDisplayName);
+                      }}
+                      onMoveVaultTreeItem={(src, kind, destDir) => {
+                        void moveVaultTreeItem(src, kind, destDir);
+                      }}
+                      onBulkMoveVaultTreeItems={(items, destDir) => {
+                        void bulkMoveVaultTreeItems(items, destDir);
+                      }}
+                      onBulkDeleteVaultTreeItems={items => {
+                        void bulkDeleteVaultTreeItems(items);
+                      }}
+                      vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
+                      wikiLinkAmbiguityRenamePrompt={
+                        pendingWikiLinkAmbiguityRename?.summary ?? null
+                      }
+                      onConfirmWikiLinkAmbiguityRename={() => {
+                        void confirmPendingWikiLinkAmbiguityRename();
+                      }}
+                      onCancelWikiLinkAmbiguityRename={
+                        cancelPendingWikiLinkAmbiguityRename
+                      }
+                      editorHistoryCanGoBack={editorHistoryCanGoBack}
+                      editorHistoryCanGoForward={editorHistoryCanGoForward}
+                      onEditorHistoryGoBack={editorHistoryGoBack}
+                      onEditorHistoryGoForward={editorHistoryGoForward}
+                      inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+                      editorOpenTabUris={editorOpenTabUris}
+                      onActivateOpenTab={activateOpenTab}
+                      onCloseEditorTab={closeEditorTab}
+                      onCloseOtherEditorTabs={closeOtherEditorTabs}
+                      onCloseAllEditorTabs={closeAllEditorTabs}
+                      onReopenClosedEditorTab={reopenLastClosedEditorTab}
+                      canReopenClosedEditorTab={canReopenClosedEditorTab}
                   />
                 </div>
                 {podcastsTabMounted ? (
