@@ -18,17 +18,15 @@ export type DesktopHorizontalSplitEndProps = {
   minMainPx?: number;
   onEndWidthPxChanged: (px: number) => void;
   main: ReactNode;
-  /** Fixed-width region before `trailing` (e.g. Notifications panel). Hidden when `endVisible` is false. */
+  /** Fixed-width region (e.g. Notifications panel). Hidden when `endVisible` is false. */
   end: ReactNode;
   endVisible: boolean;
-  /** e.g. right rail — always after `end` (or after `main` when `end` hidden). */
-  trailing: ReactNode;
   className?: string;
 };
 
 /**
- * Main (flex) | separator | end (fixed px) | trailing (e.g. icon rail).
- * Drag the separator to resize the end column; mirrors {@link DesktopHorizontalSplit} for a **right** fixed pane.
+ * Main (flex) | separator | end (fixed px). Drag the separator to resize the end column;
+ * mirrors {@link DesktopHorizontalSplit} for a **right** fixed pane.
  */
 export function DesktopHorizontalSplitEnd({
   endWidthPx,
@@ -39,7 +37,6 @@ export function DesktopHorizontalSplitEnd({
   main,
   end,
   endVisible,
-  trailing,
   className,
 }: DesktopHorizontalSplitEndProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -226,7 +223,6 @@ export function DesktopHorizontalSplitEnd({
           </div>
         </>
       ) : null}
-      {trailing}
     </div>
   );
 }

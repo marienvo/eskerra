@@ -7,14 +7,6 @@ import {MaterialIcon} from './MaterialIcon';
 /** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
 export const APP_SHELL_TAGLINE = 'Think. Compose. Nothing else.';
 
-export type AppStatusBarPlaybackChrome = {
-  positionLabel: string;
-  durationLabel: string;
-  seekDisabled: boolean;
-  onSeekBack: () => void;
-  onSeekForward: () => void;
-};
-
 /** Bottom tagline on vault picker / loading only (no settings control). */
 export function AppSetupTagline() {
   return (
@@ -26,7 +18,6 @@ export function AppSetupTagline() {
 
 type AppStatusBarProps = {
   center: AppStatusBarCenter;
-  playback: AppStatusBarPlaybackChrome | null;
   onOpenSettings: () => void;
   /** When the status message overflows, user can open the notifications panel. */
   onReadMoreStatusMessage?: () => void;
@@ -126,60 +117,13 @@ function AppStatusBarCenterRegion({
   );
 }
 
-function AppStatusBarPlaybackStrip({p}: {p: AppStatusBarPlaybackChrome}) {
-  return (
-    <div
-      className="app-status-bar-playback"
-      role="group"
-      aria-label="Skip playback"
-    >
-      <span className="app-status-bar-playback__time" aria-hidden>
-        {p.positionLabel}
-      </span>
-      <button
-        type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
-        aria-label="Rewind 10 seconds"
-        data-tooltip="Rewind 10 seconds"
-        data-tooltip-placement="inline-end"
-        disabled={p.seekDisabled}
-        onClick={() => void p.onSeekBack()}
-      >
-        <MaterialIcon name="replay_10" size={24} aria-hidden />
-      </button>
-      <button
-        type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
-        aria-label="Forward 10 seconds"
-        data-tooltip="Forward 10 seconds"
-        data-tooltip-placement="inline-start"
-        disabled={p.seekDisabled}
-        onClick={() => void p.onSeekForward()}
-      >
-        <MaterialIcon name="forward_10" size={24} aria-hidden />
-      </button>
-      <span className="app-status-bar-playback__time app-status-bar-playback__time--duration" aria-hidden>
-        {p.durationLabel}
-      </span>
-    </div>
-  );
-}
-
 export function AppStatusBar({
   center,
-  playback,
   onOpenSettings,
   onReadMoreStatusMessage,
 }: AppStatusBarProps) {
-  const withPlayback = playback != null;
-
   return (
-    <footer className={`app-status-bar${withPlayback ? ' app-status-bar--with-playback' : ''}`}>
-      {playback ? (
-        <div className="app-status-bar-leading">
-          <AppStatusBarPlaybackStrip p={playback} />
-        </div>
-      ) : null}
+    <footer className="app-status-bar">
       <AppStatusBarCenterRegion
         center={center}
         onReadMoreStatusMessage={onReadMoreStatusMessage}

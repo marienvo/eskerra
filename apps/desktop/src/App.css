@@ -231,7 +231,23 @@ a:focus:not(:focus-visible) {
   pointer-events: auto;
 }
 
-.titlebar-transport-btn {
+.window-title-bar-transport__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-shell-tagline);
+  min-width: 2.35rem;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.window-title-bar-transport__time--duration {
+  text-align: end;
+}
+
+/* Shared: title-bar playback controls */
+.app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,18 +261,18 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.titlebar-transport-btn:disabled {
+.app-playback-chrome-btn:disabled {
   cursor: default;
   opacity: 1;
   color: var(--color-shell-icon-disabled);
 }
 
-.titlebar-transport-btn:not(:disabled):hover {
+.app-playback-chrome-btn:not(:disabled):hover {
   background: var(--color-shell-hover-bg);
   color: var(--color-shell-icon);
 }
 
-.titlebar-transport-btn--play {
+.app-playback-chrome-btn--play {
   border-radius: 8px;
 }
 
@@ -619,8 +635,14 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   align-items: center;
   gap: 0.32rem;
-  /* Breathing room before main stage; inline-start keeps tabs off the window edge */
-  padding: 0.38rem 0.2rem 0.22rem 0.34rem;
+  box-sizing: border-box;
+  /* Fixed track: 40px tab + mirrored inline gutters (matches .rail--end). */
+  width: calc(40px + 0.34rem + 0.2rem);
+  min-width: calc(40px + 0.34rem + 0.2rem);
+  max-width: calc(40px + 0.34rem + 0.2rem);
+  /* Mirror .rail--end: window-edge gutter = 0.34rem (see inline padding). */
+  padding-block: 0.38rem 0.22rem;
+  padding-inline: 0.34rem 0.2rem;
   background: transparent;
 }
 
@@ -718,7 +740,7 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-icon-disabled);
 }
 
-/* Right rail: mirror padding of .rail (notifications toggle). */
+/* Right rail: physical mirror of .rail (same tab geometry vs window edge). */
 .rail--end {
   flex: 0 0 auto;
   align-self: stretch;
@@ -726,7 +748,12 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   align-items: center;
   gap: 0.32rem;
-  padding: 0.38rem 0.34rem 0.22rem 0.2rem;
+  box-sizing: border-box;
+  width: calc(40px + 0.34rem + 0.2rem);
+  min-width: calc(40px + 0.34rem + 0.2rem);
+  max-width: calc(40px + 0.34rem + 0.2rem);
+  padding-block: 0.38rem 0.22rem;
+  padding-inline: 0.2rem 0.34rem;
   background: transparent;
 }
 
@@ -737,6 +764,8 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* Symmetric horizontal inset so left vs right rail-to-panel gutters mirror (overrides .panel-group.fill 0.75/1.0 split). */
+  padding-inline: var(--panel-grid-padding);
 }
 
 .main-shell-stage.panel-group.fill > .main-end-split {
@@ -762,31 +791,6 @@ a:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.notifications-panel__header-actions {
-  flex-shrink: 0;
-}
-
-.notifications-panel__clear-all {
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--color-shell-icon-muted);
-  cursor: default;
-  padding: 0.12rem 0.25rem;
-  border-radius: 6px;
-}
-
-.notifications-panel__clear-all:hover:not(:disabled) {
-  color: var(--color-text);
-  background: var(--color-shell-hover-bg);
-}
-
-.notifications-panel__clear-all:disabled {
-  opacity: 0.45;
 }
 
 .notifications-panel__body {
@@ -866,19 +870,6 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   background: transparent;
   position: relative;
-}
-
-.desktop-player-dock-outer {
-  flex-shrink: 0;
-  min-width: 0;
-  box-sizing: border-box;
-  padding-block: 0 var(--panel-grid-padding);
-  padding-inline: calc(var(--panel-grid-padding) * 0.75) var(--panel-grid-padding);
-}
-
-.desktop-player-dock-outer .desktop-player-dock {
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .tab-panel {
@@ -3749,10 +3740,6 @@ button:disabled {
   flex-direction: column;
   gap: var(--panel-grid-gap);
   overflow: hidden;
-}
-
-.podcasts-player {
-  flex: 0 0 auto;
 }
 
 .podcasts-playlist {

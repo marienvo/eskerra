@@ -34,7 +34,7 @@ export function useSessionNotifications(
 
   const [items, setItems] = useState<SessionNotification[]>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
-  const highlightClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightClearTimerRef = useRef<number | null>(null);
 
   const dismissedStatusSigsRef = useRef<Set<string>>(new Set());
   const dismissedRenameWhileActiveRef = useRef(false);

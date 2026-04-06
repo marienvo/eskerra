@@ -5,6 +5,8 @@ import type {SessionNotification} from '../lib/sessionNotifications';
 import {MaterialIcon} from './MaterialIcon';
 
 type NotificationsPanelProps = {
+  /** Match vault tree (capture) vs podcasts (consume) pane chrome. */
+  appSurface: 'capture' | 'consume';
   items: readonly SessionNotification[];
   highlightId: string | null;
   onDismiss: (id: string) => void;
@@ -12,6 +14,7 @@ type NotificationsPanelProps = {
 };
 
 export function NotificationsPanel({
+  appSurface,
   items,
   highlightId,
   onDismiss,
@@ -26,17 +29,25 @@ export function NotificationsPanel({
   }, [highlightId]);
 
   return (
-    <div className="panel-surface notifications-panel">
-      <div className="pane-header notifications-panel__header">
+    <div
+      className="panel-surface notifications-panel"
+      data-app-surface={appSurface}
+    >
+      <div className="pane-header">
         <span className="pane-title">Notifications</span>
-        <div className="notifications-panel__header-actions">
+        <div className="pane-header-trailing-actions">
           <button
             type="button"
-            className="notifications-panel__clear-all"
+            className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
             disabled={items.length === 0}
+            aria-label="Clear all notifications"
+            data-tooltip="Clear all"
+            data-tooltip-placement="inline-start"
             onClick={onClearAll}
           >
-            Clear all
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <MaterialIcon name="delete_sweep" size={12} />
+            </span>
           </button>
         </div>
       </div>
@@ -66,7 +77,7 @@ export function NotificationsPanel({
                   data-tooltip-placement="inline-start"
                   onClick={() => onDismiss(item.id)}
                 >
-                  <MaterialIcon name="close" size={14} aria-hidden />
+                  <MaterialIcon name="close" size={12} aria-hidden />
                 </button>
               </li>
             ))}

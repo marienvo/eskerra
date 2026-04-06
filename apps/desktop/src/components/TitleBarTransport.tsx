@@ -1,23 +1,28 @@
 import {MaterialIcon} from './MaterialIcon';
 
 export type TitleBarTransportProps = {
-  disabled: boolean;
+  positionLabel: string;
+  durationLabel: string;
+  seekDisabled: boolean;
+  playDisabled: boolean;
   isPlaying: boolean;
   onSeekBack: () => void;
-  onTogglePlay: () => void;
   onSeekForward: () => void;
+  onTogglePlay: () => void;
 };
 
 /**
- * Centered title-bar playback controls (separate from rail tabs and window chrome).
- * Icon names match Material Icons / mobile MiniPlayer (`replay_10`, `forward_10`, circle filled).
+ * Centered title-bar playback: elapsed, skip back, play/pause, skip forward, duration.
  */
 export function TitleBarTransport({
-  disabled,
+  positionLabel,
+  durationLabel,
+  seekDisabled,
+  playDisabled,
   isPlaying,
   onSeekBack,
-  onTogglePlay,
   onSeekForward,
+  onTogglePlay,
 }: TitleBarTransportProps) {
   const playTooltip = isPlaying ? 'Pause' : 'Play';
   const playLabel = isPlaying ? 'Pause' : 'Play';
@@ -28,25 +33,28 @@ export function TitleBarTransport({
       role="group"
       aria-label="Playback"
     >
+      <span className="window-title-bar-transport__time" aria-hidden>
+        {positionLabel}
+      </span>
       <button
         type="button"
-        className="titlebar-transport-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-tooltip-trigger"
         aria-label="Rewind 10 seconds"
         data-tooltip="Rewind 10 seconds"
         data-tooltip-placement="inline-end"
-        disabled={disabled}
-        onClick={onSeekBack}
+        disabled={seekDisabled}
+        onClick={() => void onSeekBack()}
       >
         <MaterialIcon name="replay_10" size={24} aria-hidden />
       </button>
       <button
         type="button"
-        className="titlebar-transport-btn titlebar-transport-btn--play app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--play app-tooltip-trigger"
         aria-label={playLabel}
         data-tooltip={playTooltip}
         data-tooltip-placement="inline-end"
-        disabled={disabled}
-        onClick={onTogglePlay}
+        disabled={playDisabled}
+        onClick={() => void onTogglePlay()}
       >
         <MaterialIcon
           name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
@@ -56,15 +64,18 @@ export function TitleBarTransport({
       </button>
       <button
         type="button"
-        className="titlebar-transport-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-tooltip-trigger"
         aria-label="Forward 10 seconds"
         data-tooltip="Forward 10 seconds"
         data-tooltip-placement="inline-start"
-        disabled={disabled}
-        onClick={onSeekForward}
+        disabled={seekDisabled}
+        onClick={() => void onSeekForward()}
       >
         <MaterialIcon name="forward_10" size={24} aria-hidden />
       </button>
+      <span className="window-title-bar-transport__time window-title-bar-transport__time--duration" aria-hidden>
+        {durationLabel}
+      </span>
     </div>
   );
 }

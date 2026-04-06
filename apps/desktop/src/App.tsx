@@ -21,11 +21,14 @@ import {
   DesktopStartupSplash,
   type DesktopStartupSplashPhase,
 } from './components/DesktopStartupSplash';
-import {DesktopPlayerDock} from './components/DesktopPlayerDock';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
-import {APP_SHELL_TAGLINE, AppSetupTagline, AppStatusBar} from './components/AppStatusBar';
+import {
+  APP_SHELL_TAGLINE,
+  AppSetupTagline,
+  AppStatusBar,
+} from './components/AppStatusBar';
 import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
 import {NotificationsPanel} from './components/NotificationsPanel';
 import {NotificationsRail} from './components/NotificationsRail';
@@ -50,6 +53,7 @@ import {
   type StoredLayouts,
 } from './lib/layoutStore';
 import {hydrateEmojiUsageFromStore} from './lib/emojiUsageStore';
+import {formatPlaybackMs} from './lib/formatPlaybackMs';
 import {
   loadMainWindowUi,
   saveMainWindowUi,
@@ -230,7 +234,6 @@ export default function App() {
   }, [mainTab, vaultRoot, busy]);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
-  const [playerDockVisible, setPlayerDockVisible] = useState(true);
   const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
@@ -256,10 +259,6 @@ export default function App() {
     setPlaylistDiskRevision(r => r + 1);
   }, []);
 
-  const onAutoShowPlayerDock = useCallback(() => {
-    setPlayerDockVisible(true);
-  }, []);
-
   const consumeCatalogReady = podcastsTabMounted && !consumeCatalogLoading;
 
   const onConsumeCatalogState = useCallback(
@@ -275,22 +274,37 @@ export default function App() {
     consumeEpisodes,
     deviceInstanceId,
     fs,
-    onAutoShowPlayerDock,
     onError: setErr,
     onPlaylistDiskUpdated: bumpPlaylistDiskRevision,
     playlistRevision: playlistDiskRevision,
     vaultRoot,
   });
 
-  const titleBarTransport: TitleBarTransportProps = {
-    disabled:
-      desktopPlayback.activeEpisode == null ||
-      desktopPlayback.playerLabel === 'loading',
-    isPlaying: desktopPlayback.playerLabel === 'playing',
-    onSeekBack: () => void desktopPlayback.seekBy(-TITLE_BAR_SKIP_MS),
-    onTogglePlay: () => void desktopPlayback.togglePause(),
-    onSeekForward: () => void desktopPlayback.seekBy(TITLE_BAR_SKIP_MS),
-  };
+  const titleBarTransport = useMemo((): TitleBarTransportProps | undefined => {
+    if (desktopPlayback.activeEpisode == null) {
+      return undefined;
+    }
+    const loading = desktopPlayback.playerLabel === 'loading';
+    const seek = desktopPlayback.seekBy;
+    return {
+      positionLabel: formatPlaybackMs(desktopPlayback.positionMs),
+      durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
+      seekDisabled: loading,
+      playDisabled: loading,
+      isPlaying: desktopPlayback.playerLabel === 'playing',
+      onSeekBack: () => void seek(-TITLE_BAR_SKIP_MS),
+      onSeekForward: () => void seek(TITLE_BAR_SKIP_MS),
+      onTogglePlay: () => void desktopPlayback.togglePause(),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
+  }, [
+    desktopPlayback.activeEpisode,
+    desktopPlayback.durationMs,
+    desktopPlayback.playerLabel,
+    desktopPlayback.positionMs,
+    desktopPlayback.seekBy,
+    desktopPlayback.togglePause,
+  ]);
 
   const statusBarCenter = useMemo(
     () =>
@@ -381,7 +395,6 @@ export default function App() {
         setLayouts(loadedLayouts);
         if (ui) {
           setMainTab(ui.mainTab);
-          setPlayerDockVisible(ui.playerDockVisible);
           setNotificationsPanelVisible(ui.notificationsPanelVisible);
           setRestoredInboxState({
             vaultRoot: ui.vaultRoot,
@@ -433,7 +446,6 @@ export default function App() {
     const payload = {
       vaultRoot,
       mainTab,
-      playerDockVisible,
       notificationsPanelVisible,
       inbox: {
         composingNewEntry,
@@ -450,7 +462,6 @@ export default function App() {
   }, [
     vaultRoot,
     mainTab,
-    playerDockVisible,
     notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
@@ -749,9 +760,6 @@ export default function App() {
                   setPodcastsTabMounted(true);
                 }
               }}
-              onTogglePlayerDock={() => setPlayerDockVisible(v => !v)}
-              playerDockVisible={playerDockVisible}
-              playerToggleDisabled={desktopPlayback.activeEpisode == null}
             />
             <div className="main-shell-stage panel-group fill">
               <DesktopHorizontalSplitEnd
@@ -860,33 +868,23 @@ export default function App() {
                   </div>
                 ) : null}
               </main>
-              {playerDockVisible && desktopPlayback.activeEpisode != null ? (
-                <DesktopPlayerDock
-                  activeEpisode={desktopPlayback.activeEpisode}
-                  durationMs={desktopPlayback.durationMs}
-                  playerLabel={desktopPlayback.playerLabel}
-                  positionMs={desktopPlayback.positionMs}
-                  onTogglePause={desktopPlayback.togglePause}
-                />
-              ) : null}
             </div>
                 }
                 end={
                   <NotificationsPanel
+                    appSurface={mainTab === 'inbox' ? 'capture' : 'consume'}
                     items={notificationItems}
                     highlightId={notificationHighlightId}
                     onDismiss={dismissNotification}
                     onClearAll={clearAllNotifications}
                   />
                 }
-                trailing={
-                  <NotificationsRail
-                    panelVisible={notificationsPanelVisible}
-                    onToggle={() => setNotificationsPanelVisible(v => !v)}
-                  />
-                }
               />
             </div>
+            <NotificationsRail
+              panelVisible={notificationsPanelVisible}
+              onToggle={() => setNotificationsPanelVisible(v => !v)}
+            />
           </div>
 
           {!err && diskConflict ? (

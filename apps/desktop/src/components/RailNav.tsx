@@ -5,20 +5,9 @@ type TabId = 'podcasts' | 'inbox';
 type RailNavProps = {
   active: TabId;
   onSelect: (tab: TabId) => void;
-  playerDockVisible: boolean;
-  playerToggleDisabled: boolean;
-  onTogglePlayerDock: () => void;
 };
 
-export function RailNav({
-  active,
-  onSelect,
-  onTogglePlayerDock,
-  playerDockVisible,
-  playerToggleDisabled,
-}: RailNavProps) {
-  const playerActive = playerDockVisible && !playerToggleDisabled;
-
+export function RailNav({active, onSelect}: RailNavProps) {
   return (
     <nav className="rail" aria-label="Main">
       <TabButton
@@ -34,16 +23,6 @@ export function RailNav({
         icon="radio"
         tooltip="Episodes"
         onClick={() => onSelect('podcasts')}
-      />
-      <div className="rail-spacer" aria-hidden />
-      <TabButton
-        active={playerActive}
-        aria-label="Show or hide player"
-        ariaPressed={playerDockVisible}
-        disabled={playerToggleDisabled}
-        icon="play_circle"
-        tooltip="Player"
-        onClick={onTogglePlayerDock}
       />
     </nav>
   );

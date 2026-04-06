@@ -25,7 +25,6 @@ describe('normalizeMainWindowUiPayload', () => {
     expect(out).toEqual({
       vaultRoot: '/vault',
       mainTab: 'podcasts',
-      playerDockVisible: true,
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
@@ -35,12 +34,24 @@ describe('normalizeMainWindowUiPayload', () => {
     const out = normalizeMainWindowUiPayload({
       vaultRoot: '  /data/v  ',
       mainTab: 'inbox',
-      playerDockVisible: false,
     });
     expect(out).toEqual({
       vaultRoot: '/data/v',
       mainTab: 'inbox',
+      notificationsPanelVisible: true,
+      inbox: {composingNewEntry: false, selectedUri: null},
+    });
+  });
+
+  it('ignores legacy playerDockVisible in stored JSON', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      mainTab: 'inbox',
       playerDockVisible: false,
+    });
+    expect(out).toEqual({
+      vaultRoot: '/v',
+      mainTab: 'inbox',
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
