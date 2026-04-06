@@ -7,7 +7,11 @@ import {
   type ReactNode,
 } from 'react';
 
-import {clampSplitTopHeightPx} from '../lib/desktopVerticalSplitClamp';
+import {
+  clampSplitTopHeightPx,
+  maxAvailableTopHeightPx,
+  shouldPersistVerticalSplitTopHeightClamp,
+} from '../lib/desktopVerticalSplitClamp';
 
 export type DesktopVerticalSplitProps = {
   /** Current top pane height in CSS pixels (controlled by parent). */
@@ -57,6 +61,7 @@ export function DesktopVerticalSplit({
     if (ch <= 0) {
       return;
     }
+    const maxH = maxAvailableTopHeightPx(ch, sepH, minBottomPx);
     const next = clampSplitTopHeightPx(
       topHeightPx,
       minTopPx,
@@ -66,6 +71,9 @@ export function DesktopVerticalSplit({
       minBottomPx,
     );
     if (next !== topHeightPx) {
+      if (!shouldPersistVerticalSplitTopHeightClamp(maxH, minTopPx, topHeightPx)) {
+        return;
+      }
       onTopHeightPxChanged(next);
     }
   }, [topHeightPx, minTopPx, maxTopPx, minBottomPx, onTopHeightPxChanged]);
