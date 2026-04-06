@@ -348,6 +348,59 @@ a:focus:not(:focus-visible) {
   font-weight: 600;
 }
 
+/* Status message row: ellipsis + optional Read more (see AppStatusBar). */
+.app-status-bar-message {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: calc(100% - 5rem);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.2;
+  min-width: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.app-status-bar-message.app-status-bar-center--error {
+  color: var(--color-error);
+}
+
+.app-status-bar-message.app-status-bar-center--info {
+  color: var(--color-text);
+}
+
+.app-status-bar-message__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-status-bar-read-more {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: default;
+  padding: 0.06rem 0.12rem;
+  border-radius: 4px;
+}
+
+.app-status-bar-read-more:hover:not(:disabled) {
+  background: var(--color-shell-hover-bg);
+}
+
 .app-status-bar-trailing {
   position: relative;
   z-index: 1;
@@ -663,6 +716,136 @@ a:focus:not(:focus-visible) {
 .rail-tab.active:disabled:focus-visible {
   background: transparent;
   color: var(--color-shell-icon-disabled);
+}
+
+/* Right rail: mirror padding of .rail (notifications toggle). */
+.rail--end {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.32rem;
+  padding: 0.38rem 0.34rem 0.22rem 0.2rem;
+  background: transparent;
+}
+
+/* Main stage + notifications: outer chrome matches vault|editor (see .panel-group.fill). */
+.main-shell-stage.panel-group.fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-shell-stage.panel-group.fill > .main-end-split {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Inner vault/podcasts split: single outer padding from .main-shell-stage only. */
+.main-shell-stage .panel-group.fill.split-inner {
+  padding: 0;
+  min-height: 0;
+}
+
+.desktop-hsplit-end-pane > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
+.notifications-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notifications-panel__header-actions {
+  flex-shrink: 0;
+}
+
+.notifications-panel__clear-all {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-shell-icon-muted);
+  cursor: default;
+  padding: 0.12rem 0.25rem;
+  border-radius: 6px;
+}
+
+.notifications-panel__clear-all:hover:not(:disabled) {
+  color: var(--color-text);
+  background: var(--color-shell-hover-bg);
+}
+
+.notifications-panel__clear-all:disabled {
+  opacity: 0.45;
+}
+
+.notifications-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.28rem 0.38rem 0.45rem;
+}
+
+.notifications-panel__empty {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.notifications-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.notifications-panel__row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+}
+
+.notifications-panel__row--error {
+  border-color: var(--color-error-banner-border);
+  background: var(--color-error-banner-bg);
+}
+
+.notifications-panel__row--info {
+  background: var(--color-brand-surface-bright, var(--color-surface));
+}
+
+.notifications-panel__row--highlight {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-text) 22%, transparent);
+}
+
+.notifications-panel__text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.notifications-panel__dismiss {
+  flex-shrink: 0;
+  margin-top: -0.08rem;
 }
 
 .main-column {

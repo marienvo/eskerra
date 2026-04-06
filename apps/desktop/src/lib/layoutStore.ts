@@ -9,9 +9,15 @@ export type LeftSplitLayout = {
   leftWidthPx: number;
 };
 
+/** Right-side Notifications pane width (main | … | notifications | rail). */
+export type NotificationsPanelLayout = {
+  widthPx: number;
+};
+
 export type StoredLayouts = {
   inbox: LeftSplitLayout;
   podcastsMain: LeftSplitLayout;
+  notifications: NotificationsPanelLayout;
 };
 
 export const INBOX_LEFT_PANEL = {
@@ -26,9 +32,16 @@ export const PODCASTS_LEFT_PANEL = {
   maxPx: 560,
 } as const;
 
+export const NOTIFICATIONS_PANEL = {
+  defaultPx: 280,
+  minPx: 220,
+  maxPx: 520,
+} as const;
+
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
   podcastsMain: {leftWidthPx: PODCASTS_LEFT_PANEL.defaultPx},
+  notifications: {widthPx: NOTIFICATIONS_PANEL.defaultPx},
 };
 
 const ASSUMED_WIDTH_FOR_V3_MIGRATION = 1024;
@@ -76,6 +89,23 @@ function sanitizePodcastsMain(layout: LeftSplitLayout | undefined): LeftSplitLay
   };
 }
 
+function sanitizeNotifications(
+  layout: NotificationsPanelLayout | undefined,
+): NotificationsPanelLayout {
+  const fb = DEFAULT_LAYOUTS.notifications.widthPx;
+  if (!layout || typeof layout.widthPx !== 'number') {
+    return {widthPx: fb};
+  }
+  return {
+    widthPx: clampLeftWidth(
+      layout.widthPx,
+      NOTIFICATIONS_PANEL.minPx,
+      NOTIFICATIONS_PANEL.maxPx,
+      fb,
+    ),
+  };
+}
+
 function isInboxV3Layout(v: unknown): v is {files: number; editor: number} {
   if (typeof v !== 'object' || v === null) {
     return false;
@@ -107,6 +137,7 @@ export function migrateV3LayoutsToV4(raw: unknown): StoredLayouts | null {
   return {
     inbox: sanitizeInbox({leftWidthPx: inboxPx}),
     podcastsMain: sanitizePodcastsMain({leftWidthPx: episodesPx}),
+    notifications: sanitizeNotifications(undefined),
   };
 }
 
@@ -120,7 +151,8 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   }
   const inbox = sanitizeInbox(o.inbox);
   const podcastsMain = sanitizePodcastsMain(o.podcastsMain);
-  return {inbox, podcastsMain};
+  const notifications = sanitizeNotifications(o.notifications);
+  return {inbox, podcastsMain, notifications};
 }
 
 export async function loadStoredLayouts(): Promise<StoredLayouts> {
@@ -167,6 +199,7 @@ export async function saveStoredLayouts(layouts: StoredLayouts): Promise<void> {
   const normalized: StoredLayouts = {
     inbox: sanitizeInbox(layouts.inbox),
     podcastsMain: sanitizePodcastsMain(layouts.podcastsMain),
+    notifications: sanitizeNotifications(layouts.notifications),
   };
   await store.set(KEY_V4, JSON.stringify(normalized));
   await store.save();

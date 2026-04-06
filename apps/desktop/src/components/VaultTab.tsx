@@ -924,6 +924,7 @@ export function VaultTab({
       </Dialog.Root>
 
       <DesktopHorizontalSplit
+        className="split-inner"
         leftWidthPx={leftWidthPx}
         minLeftPx={INBOX_LEFT_PANEL.minPx}
         maxLeftPx={INBOX_LEFT_PANEL.maxPx}

@@ -26,6 +26,7 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/vault',
       mainTab: 'podcasts',
       playerDockVisible: true,
+      notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
   });
@@ -40,6 +41,7 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/data/v',
       mainTab: 'inbox',
       playerDockVisible: false,
+      notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
   });
@@ -82,5 +84,18 @@ describe('normalizeMainWindowUiPayload', () => {
       },
     });
     expect(out?.inbox.openTabUris).toEqual(['/v/a.md', '/v/b.md']);
+  });
+
+  it('parses notificationsPanelVisible', () => {
+    const hidden = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      notificationsPanelVisible: false,
+    });
+    expect(hidden?.notificationsPanelVisible).toBe(false);
+    const invalid = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      notificationsPanelVisible: 'yes',
+    });
+    expect(invalid?.notificationsPanelVisible).toBe(true);
   });
 });

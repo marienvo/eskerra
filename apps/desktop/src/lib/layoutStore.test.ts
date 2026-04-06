@@ -3,6 +3,7 @@ import {describe, expect, it} from 'vitest';
 import {
   DEFAULT_LAYOUTS,
   INBOX_LEFT_PANEL,
+  NOTIFICATIONS_PANEL,
   PODCASTS_LEFT_PANEL,
   migrateV3LayoutsToV4,
 } from './layoutStore';
@@ -39,5 +40,6 @@ describe('DEFAULT_LAYOUTS', () => {
   it('uses documented default pixel widths', () => {
     expect(DEFAULT_LAYOUTS.inbox.leftWidthPx).toBe(INBOX_LEFT_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.podcastsMain.leftWidthPx).toBe(PODCASTS_LEFT_PANEL.defaultPx);
+    expect(DEFAULT_LAYOUTS.notifications.widthPx).toBe(NOTIFICATIONS_PANEL.defaultPx);
   });
 });

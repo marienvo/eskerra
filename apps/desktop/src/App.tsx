@@ -26,6 +26,9 @@ import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {PodcastsTab} from './components/PodcastsTab';
 import {APP_SHELL_TAGLINE, AppSetupTagline, AppStatusBar} from './components/AppStatusBar';
+import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
+import {NotificationsPanel} from './components/NotificationsPanel';
+import {NotificationsRail} from './components/NotificationsRail';
 import {RailNav} from './components/RailNav';
 import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
@@ -35,12 +38,14 @@ import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
+import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
+  NOTIFICATIONS_PANEL,
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
@@ -226,6 +231,7 @@ export default function App() {
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [playerDockVisible, setPlayerDockVisible] = useState(true);
+  const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
   const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
@@ -376,6 +382,7 @@ export default function App() {
         if (ui) {
           setMainTab(ui.mainTab);
           setPlayerDockVisible(ui.playerDockVisible);
+          setNotificationsPanelVisible(ui.notificationsPanelVisible);
           setRestoredInboxState({
             vaultRoot: ui.vaultRoot,
             composingNewEntry: ui.inbox.composingNewEntry,
@@ -427,6 +434,7 @@ export default function App() {
       vaultRoot,
       mainTab,
       playerDockVisible,
+      notificationsPanelVisible,
       inbox: {
         composingNewEntry,
         selectedUri,
@@ -443,6 +451,7 @@ export default function App() {
     vaultRoot,
     mainTab,
     playerDockVisible,
+    notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
     editorOpenTabUris,
@@ -576,6 +585,14 @@ export default function App() {
     });
   }, []);
 
+  const persistNotificationsWidthPx = useCallback((widthPx: number) => {
+    setLayouts(prev => {
+      const next = {...prev, notifications: {widthPx}};
+      void saveStoredLayouts(next);
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!isTauri()) {
       return;
@@ -629,6 +646,45 @@ export default function App() {
       unlistenFocus?.();
     };
   }, [flushInboxSave]);
+
+  const diskConflictSoftVisible = useMemo(
+    () =>
+      !err &&
+      diskConflict == null &&
+      diskConflictSoft != null &&
+      selectedUri != null &&
+      normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri),
+    [err, diskConflict, diskConflictSoft, selectedUri],
+  );
+
+  const openNotificationsPanel = useCallback(() => {
+    setNotificationsPanelVisible(true);
+  }, []);
+
+  const {
+    items: notificationItems,
+    dismissItem: dismissNotification,
+    clearAll: clearAllNotifications,
+    highlightId: notificationHighlightId,
+    linkedNotificationId,
+    openPanelAndHighlight,
+  } = useSessionNotifications(
+    {
+      statusBarCenter,
+      renameLinkProgress,
+      diskConflictBlocking: diskConflict != null,
+      diskConflictSoftVisible,
+    },
+    {onOpenPanel: openNotificationsPanel},
+  );
+
+  const onReadMoreStatusMessage = useCallback(() => {
+    if (linkedNotificationId) {
+      openPanelAndHighlight(linkedNotificationId);
+    } else {
+      setNotificationsPanelVisible(true);
+    }
+  }, [linkedNotificationId, openPanelAndHighlight]);
 
   const startupOverlay =
     isTauri() && startupSplashPhase !== 'done' ? (
@@ -697,7 +753,16 @@ export default function App() {
               playerDockVisible={playerDockVisible}
               playerToggleDisabled={desktopPlayback.activeEpisode == null}
             />
-            <div className="main-column">
+            <div className="main-shell-stage panel-group fill">
+              <DesktopHorizontalSplitEnd
+                endVisible={notificationsPanelVisible}
+                endWidthPx={layouts.notifications.widthPx}
+                minEndPx={NOTIFICATIONS_PANEL.minPx}
+                maxEndPx={NOTIFICATIONS_PANEL.maxPx}
+                minMainPx={220}
+                onEndWidthPxChanged={persistNotificationsWidthPx}
+                main={
+                  <div className="main-column">
               <main className="main-stage">
                 <div className="tab-panel" hidden={mainTab !== 'inbox'}>
                   <VaultTab
@@ -805,6 +870,23 @@ export default function App() {
                 />
               ) : null}
             </div>
+                }
+                end={
+                  <NotificationsPanel
+                    items={notificationItems}
+                    highlightId={notificationHighlightId}
+                    onDismiss={dismissNotification}
+                    onClearAll={clearAllNotifications}
+                  />
+                }
+                trailing={
+                  <NotificationsRail
+                    panelVisible={notificationsPanelVisible}
+                    onToggle={() => setNotificationsPanelVisible(v => !v)}
+                  />
+                }
+              />
+            </div>
           </div>
 
           {!err && diskConflict ? (
@@ -855,6 +937,7 @@ export default function App() {
           <AppStatusBar
             center={statusBarCenter}
             onOpenSettings={() => void openSettingsWindow()}
+            onReadMoreStatusMessage={onReadMoreStatusMessage}
           />
         </div>
       </div>

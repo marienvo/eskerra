@@ -119,6 +119,7 @@ export function PodcastsTab({
   return (
     <div className="consume-root" data-app-surface="consume">
       <DesktopHorizontalSplit
+        className="split-inner"
         leftWidthPx={leftWidthPx}
         minLeftPx={PODCASTS_LEFT_PANEL.minPx}
         maxLeftPx={PODCASTS_LEFT_PANEL.maxPx}

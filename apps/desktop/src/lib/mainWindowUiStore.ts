@@ -16,6 +16,8 @@ export type StoredMainWindowUi = {
   vaultRoot: string;
   mainTab: MainTabId;
   playerDockVisible: boolean;
+  /** Notifications pane open (list is always session-only). */
+  notificationsPanelVisible: boolean;
   inbox: StoredMainWindowInbox;
 };
 
@@ -43,6 +45,11 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
   let playerDockVisible = true;
   if (typeof o.playerDockVisible === 'boolean') {
     playerDockVisible = o.playerDockVisible;
+  }
+
+  let notificationsPanelVisible = true;
+  if (typeof o.notificationsPanelVisible === 'boolean') {
+    notificationsPanelVisible = o.notificationsPanelVisible;
   }
 
   const inbox: StoredMainWindowInbox = {...DEFAULT_INBOX};
@@ -77,6 +84,7 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     vaultRoot,
     mainTab,
     playerDockVisible,
+    notificationsPanelVisible,
     inbox,
   };
 }
