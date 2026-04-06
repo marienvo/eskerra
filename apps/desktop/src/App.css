@@ -152,7 +152,7 @@
 .app-root--tauri .resize-sep,
 .app-root--tauri .note-list,
 .app-root--tauri .episode-scroll,
-.app-root--tauri .playlist-body {
+.app-root--tauri .episodes-pane-root {
   -webkit-app-region: no-drag;
 }
 
@@ -950,6 +950,12 @@ a:focus:not(:focus-visible) {
   min-height: 0;
 }
 
+.desktop-vsplit-top > .panel-surface,
+.desktop-vsplit-bottom > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
 .panel-surface.inner {
   background: var(--color-editor-bg);
 }
@@ -989,6 +995,33 @@ a:focus:not(:focus-visible) {
   opacity: 1;
   background: linear-gradient(
     90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+/* Vault/Episodes stack: north–south resize. Must follow `.resize-sep` so this wins the cascade. */
+.resize-sep.resize-sep--row {
+  margin-block: calc(var(--panel-grid-gap) / 2);
+  margin-inline: 0;
+  cursor: row-resize;
+}
+
+.resize-sep.resize-sep--row::after {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+.resize-sep.resize-sep--row:hover::after {
+  background: linear-gradient(
+    180deg,
     transparent 0%,
     color-mix(in srgb, var(--color-text) 11%, transparent) 45%,
     color-mix(in srgb, var(--color-text) 11%, transparent) 55%,
@@ -1922,7 +1955,7 @@ button.primary.destructive {
   text-rendering: auto;
   /* Parity with .note-list button / .episode-row: avoid faux-bold synthesis on WebKitGTK. */
   font-synthesis: none;
-  /* Same WebKit tradeoff as .playlist-body / .section-heading: grayscale AA can look more even when
+  /* Same WebKit tradeoff as .episode-scroll / .section-heading: grayscale AA can look more even when
    * scrolling/compositing would otherwise muddle subpixel LCD antialiasing. */
   -webkit-font-smoothing: antialiased;
   /* Transparent under `.cm-gutters` (fold rail); paper only for the text column. */
@@ -3604,31 +3637,6 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.playlist-body {
-  padding: 0.5rem 0.6rem 0.75rem;
-  overflow: auto;
-  flex: 1;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
-}
-
-.playlist-dl {
-  margin: 0.5rem 0;
-  display: grid;
-  grid-template-columns: 6rem 1fr;
-  gap: 0.25rem 0.5rem;
-  font-size: 0.85rem;
-}
-
-.playlist-dl dt {
-  margin: 0;
-  color: var(--color-muted);
-}
-
-.playlist-dl dd {
-  margin: 0;
-}
-
 .mono.wrap {
   word-break: break-all;
 }
@@ -3721,8 +3729,8 @@ button:disabled {
   border-top-color: var(--color-capture-border);
 }
 
-/* Consume (podcasts / news): scoped mental space; see specs/design/design-system-calm-editorial.md */
-.consume-root {
+/* Consume (episodes): scoped mental space; see specs/design/design-system-calm-editorial.md */
+.episodes-pane-root {
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -3743,35 +3751,33 @@ button:disabled {
   background: var(--color-consume-chrome);
 }
 
-.podcasts-right-col {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.pane-header--episodes .pane-title {
+  flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
 }
 
-.podcasts-right-stack {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--panel-grid-gap);
-  overflow: hidden;
+.pane-header-aux-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.1rem 0.28rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  cursor: default;
 }
 
-.podcasts-playlist {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+.pane-header-aux-btn__label {
+  line-height: 1.2;
 }
 
-.podcasts-playlist .playlist-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+.pane-header-aux-btn__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 input::placeholder,

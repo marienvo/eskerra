@@ -23,7 +23,7 @@ import {
 } from './components/DesktopStartupSplash';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
-import {PodcastsTab} from './components/PodcastsTab';
+import {EpisodesPane} from './components/EpisodesPane';
 import {
   APP_SHELL_TAGLINE,
   AppSetupTagline,
@@ -36,6 +36,7 @@ import {RailNav} from './components/RailNav';
 import type {TitleBarTransportProps} from './components/TitleBarTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
+import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
@@ -55,18 +56,14 @@ import {
 import {hydrateEmojiUsageFromStore} from './lib/emojiUsageStore';
 import {formatPlaybackMs} from './lib/formatPlaybackMs';
 import {
+  DEFAULT_MAIN_WINDOW_PANE_VISIBILITY,
   loadMainWindowUi,
   saveMainWindowUi,
-  type MainTabId,
 } from './lib/mainWindowUiStore';
 import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 
-import type {PodcastEpisode} from './lib/podcasts/podcastTypes';
-
 import './App.css';
-
-type MainTab = MainTabId;
 
 type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
@@ -190,9 +187,13 @@ export default function App() {
 
   const mainShellReady = Boolean(vaultRoot && layoutsReady);
 
-  const [mainTab, setMainTab] = useState<MainTab>('podcasts');
+  const [vaultPaneVisible, setVaultPaneVisible] = useState(
+    DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
+  );
+  const [episodesPaneVisible, setEpisodesPaneVisible] = useState(
+    DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
+  );
   useEditorHistoryMouseButtons({
-    mainTab,
     vaultRoot,
     busy,
     editorHistoryCanGoBack,
@@ -210,7 +211,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (mainTab !== 'inbox' || !vaultRoot) {
+      if (!vaultRoot) {
         return;
       }
       const mod = e.ctrlKey || e.metaKey;
@@ -231,13 +232,10 @@ export default function App() {
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
     };
-  }, [mainTab, vaultRoot, busy]);
+  }, [vaultRoot, busy]);
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
-  const [podcastsTabMounted, setPodcastsTabMounted] = useState(false);
   const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
-  const [consumeEpisodes, setConsumeEpisodes] = useState<PodcastEpisode[]>([]);
-  const [consumeCatalogLoading, setConsumeCatalogLoading] = useState(true);
   const [startupSplashPhase, setStartupSplashPhase] = useState<StartupSplashPhase>(
     () => (!isTauri() ? 'done' : 'artwork'),
   );
@@ -259,19 +257,18 @@ export default function App() {
     setPlaylistDiskRevision(r => r + 1);
   }, []);
 
-  const consumeCatalogReady = podcastsTabMounted && !consumeCatalogLoading;
+  const podcastCatalog = useDesktopPodcastCatalog({
+    vaultRoot,
+    fs,
+    fsRefreshNonce,
+    onError: setErr,
+  });
 
-  const onConsumeCatalogState = useCallback(
-    (s: {catalogLoading: boolean; episodes: PodcastEpisode[]}) => {
-      setConsumeEpisodes(s.episodes);
-      setConsumeCatalogLoading(s.catalogLoading);
-    },
-    [],
-  );
+  const consumeCatalogReady = Boolean(vaultRoot) && !podcastCatalog.catalogLoading;
 
   const desktopPlayback = useDesktopPodcastPlayback({
     consumeCatalogReady,
-    consumeEpisodes,
+    consumeEpisodes: podcastCatalog.episodes,
     deviceInstanceId,
     fs,
     onError: setErr,
@@ -399,7 +396,8 @@ export default function App() {
         }
         setLayouts(loadedLayouts);
         if (ui) {
-          setMainTab(ui.mainTab);
+          setVaultPaneVisible(ui.vaultPaneVisible);
+          setEpisodesPaneVisible(ui.episodesPaneVisible);
           setNotificationsPanelVisible(ui.notificationsPanelVisible);
           setRestoredInboxState({
             vaultRoot: ui.vaultRoot,
@@ -450,7 +448,8 @@ export default function App() {
     }
     const payload = {
       vaultRoot,
-      mainTab,
+      vaultPaneVisible,
+      episodesPaneVisible,
       notificationsPanelVisible,
       inbox: {
         composingNewEntry,
@@ -466,7 +465,8 @@ export default function App() {
     };
   }, [
     vaultRoot,
-    mainTab,
+    vaultPaneVisible,
+    episodesPaneVisible,
     notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
@@ -596,6 +596,14 @@ export default function App() {
   const persistPodcastsLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
       const next = {...prev, podcastsMain: {leftWidthPx}};
+      void saveStoredLayouts(next);
+      return next;
+    });
+  }, []);
+
+  const persistVaultEpisodesStackTopHeightPx = useCallback((topHeightPx: number) => {
+    setLayouts(prev => {
+      const next = {...prev, vaultEpisodesStack: {topHeightPx}};
       void saveStoredLayouts(next);
       return next;
     });
@@ -758,13 +766,10 @@ export default function App() {
 
           <div className="app-body">
             <RailNav
-              active={mainTab}
-              onSelect={tab => {
-                setMainTab(tab);
-                if (tab === 'podcasts') {
-                  setPodcastsTabMounted(true);
-                }
-              }}
+              vaultPaneVisible={vaultPaneVisible}
+              episodesPaneVisible={episodesPaneVisible}
+              onToggleVault={() => setVaultPaneVisible(v => !v)}
+              onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
             />
             <div className="main-shell-stage panel-group fill">
               <DesktopHorizontalSplitEnd
@@ -777,7 +782,6 @@ export default function App() {
                 main={
                   <div className="main-column">
               <main className="main-stage">
-                <div className="tab-panel" hidden={mainTab !== 'inbox'}>
                   <VaultTab
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
@@ -788,8 +792,27 @@ export default function App() {
                       inboxEditorShellScrollDirectiveRef={
                         inboxEditorShellScrollDirectiveRef
                       }
-                      leftWidthPx={layouts.inbox.leftWidthPx}
-                      onLeftWidthPxChanged={persistInboxLeftWidthPx}
+                      vaultPaneVisible={vaultPaneVisible}
+                      episodesPaneVisible={episodesPaneVisible}
+                      vaultWidthPx={layouts.inbox.leftWidthPx}
+                      episodesWidthPx={layouts.podcastsMain.leftWidthPx}
+                      onVaultWidthPxChanged={persistInboxLeftWidthPx}
+                      onEpisodesWidthPxChanged={persistPodcastsLeftWidthPx}
+                      stackTopHeightPx={layouts.vaultEpisodesStack.topHeightPx}
+                      onStackTopHeightPxChanged={persistVaultEpisodesStackTopHeightPx}
+                      episodesPane={
+                        episodesPaneVisible ? (
+                          <EpisodesPane
+                            sections={podcastCatalog.sections}
+                            catalogLoading={podcastCatalog.catalogLoading}
+                            playEpisode={desktopPlayback.playEpisode}
+                            resumeFromVault={desktopPlayback.resumeFromVault}
+                            episodeSelectLocked={
+                              desktopPlayback.playerLabel === 'playing'
+                            }
+                          />
+                        ) : null
+                      }
                       notes={notes}
                       vaultMarkdownRefs={vaultMarkdownRefs}
                       inboxContentByUri={inboxContentByUri}
@@ -853,31 +876,12 @@ export default function App() {
                       onReopenClosedEditorTab={reopenLastClosedEditorTab}
                       canReopenClosedEditorTab={canReopenClosedEditorTab}
                   />
-                </div>
-                {podcastsTabMounted ? (
-                  <div className="tab-panel" hidden={mainTab !== 'podcasts'}>
-                    <PodcastsTab
-                      key={vaultRoot}
-                      vaultRoot={vaultRoot}
-                      fs={fs}
-                      leftWidthPx={layouts.podcastsMain.leftWidthPx}
-                      onLeftWidthPxChanged={persistPodcastsLeftWidthPx}
-                      onConsumeCatalogState={onConsumeCatalogState}
-                      onError={setErr}
-                      fsRefreshNonce={fsRefreshNonce}
-                      playEpisode={desktopPlayback.playEpisode}
-                      playlistRevision={playlistDiskRevision}
-                      resumeFromVault={desktopPlayback.resumeFromVault}
-                      episodeSelectLocked={desktopPlayback.playerLabel === 'playing'}
-                    />
-                  </div>
-                ) : null}
               </main>
             </div>
                 }
                 end={
                   <NotificationsPanel
-                    appSurface={mainTab === 'inbox' ? 'capture' : 'consume'}
+                    appSurface={vaultPaneVisible ? 'capture' : 'consume'}
                     items={notificationItems}
                     highlightId={notificationHighlightId}
                     onDismiss={dismissNotification}

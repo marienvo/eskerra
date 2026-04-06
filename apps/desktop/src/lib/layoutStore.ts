@@ -14,10 +14,16 @@ export type NotificationsPanelLayout = {
   widthPx: number;
 };
 
+/** Vault pane height when Vault and Episodes are both visible (stacked in the left column). */
+export type VaultEpisodesStackLayout = {
+  topHeightPx: number;
+};
+
 export type StoredLayouts = {
   inbox: LeftSplitLayout;
   podcastsMain: LeftSplitLayout;
   notifications: NotificationsPanelLayout;
+  vaultEpisodesStack: VaultEpisodesStackLayout;
 };
 
 export const INBOX_LEFT_PANEL = {
@@ -38,10 +44,18 @@ export const NOTIFICATIONS_PANEL = {
   maxPx: 520,
 } as const;
 
+/** Vertical split between Vault (top) and Episodes (bottom) when both panes are visible. */
+export const VAULT_EPISODES_STACK_TOP = {
+  defaultPx: 280,
+  minPx: 120,
+  maxPx: 560,
+} as const;
+
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
   podcastsMain: {leftWidthPx: PODCASTS_LEFT_PANEL.defaultPx},
   notifications: {widthPx: NOTIFICATIONS_PANEL.defaultPx},
+  vaultEpisodesStack: {topHeightPx: VAULT_EPISODES_STACK_TOP.defaultPx},
 };
 
 const ASSUMED_WIDTH_FOR_V3_MIGRATION = 1024;
@@ -106,6 +120,23 @@ function sanitizeNotifications(
   };
 }
 
+function sanitizeVaultEpisodesStack(
+  layout: VaultEpisodesStackLayout | undefined,
+): VaultEpisodesStackLayout {
+  const fb = DEFAULT_LAYOUTS.vaultEpisodesStack.topHeightPx;
+  if (!layout || typeof layout.topHeightPx !== 'number') {
+    return {topHeightPx: fb};
+  }
+  return {
+    topHeightPx: clampLeftWidth(
+      layout.topHeightPx,
+      VAULT_EPISODES_STACK_TOP.minPx,
+      VAULT_EPISODES_STACK_TOP.maxPx,
+      fb,
+    ),
+  };
+}
+
 function isInboxV3Layout(v: unknown): v is {files: number; editor: number} {
   if (typeof v !== 'object' || v === null) {
     return false;
@@ -138,6 +169,7 @@ export function migrateV3LayoutsToV4(raw: unknown): StoredLayouts | null {
     inbox: sanitizeInbox({leftWidthPx: inboxPx}),
     podcastsMain: sanitizePodcastsMain({leftWidthPx: episodesPx}),
     notifications: sanitizeNotifications(undefined),
+    vaultEpisodesStack: sanitizeVaultEpisodesStack(undefined),
   };
 }
 
@@ -152,7 +184,8 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   const inbox = sanitizeInbox(o.inbox);
   const podcastsMain = sanitizePodcastsMain(o.podcastsMain);
   const notifications = sanitizeNotifications(o.notifications);
-  return {inbox, podcastsMain, notifications};
+  const vaultEpisodesStack = sanitizeVaultEpisodesStack(o.vaultEpisodesStack);
+  return {inbox, podcastsMain, notifications, vaultEpisodesStack};
 }
 
 export async function loadStoredLayouts(): Promise<StoredLayouts> {
@@ -200,6 +233,7 @@ export async function saveStoredLayouts(layouts: StoredLayouts): Promise<void> {
     inbox: sanitizeInbox(layouts.inbox),
     podcastsMain: sanitizePodcastsMain(layouts.podcastsMain),
     notifications: sanitizeNotifications(layouts.notifications),
+    vaultEpisodesStack: sanitizeVaultEpisodesStack(layouts.vaultEpisodesStack),
   };
   await store.set(KEY_V4, JSON.stringify(normalized));
   await store.save();

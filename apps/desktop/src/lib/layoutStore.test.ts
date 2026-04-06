@@ -5,6 +5,7 @@ import {
   INBOX_LEFT_PANEL,
   NOTIFICATIONS_PANEL,
   PODCASTS_LEFT_PANEL,
+  VAULT_EPISODES_STACK_TOP,
   migrateV3LayoutsToV4,
 } from './layoutStore';
 
@@ -17,6 +18,9 @@ describe('migrateV3LayoutsToV4', () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.inbox.leftWidthPx).toBe(307);
     expect(migrated!.podcastsMain.leftWidthPx).toBe(389);
+    expect(migrated!.vaultEpisodesStack.topHeightPx).toBe(
+      VAULT_EPISODES_STACK_TOP.defaultPx,
+    );
   });
 
   it('clamps migrated values into allowed ranges', () => {
@@ -41,5 +45,8 @@ describe('DEFAULT_LAYOUTS', () => {
     expect(DEFAULT_LAYOUTS.inbox.leftWidthPx).toBe(INBOX_LEFT_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.podcastsMain.leftWidthPx).toBe(PODCASTS_LEFT_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.notifications.widthPx).toBe(NOTIFICATIONS_PANEL.defaultPx);
+    expect(DEFAULT_LAYOUTS.vaultEpisodesStack.topHeightPx).toBe(
+      VAULT_EPISODES_STACK_TOP.defaultPx,
+    );
   });
 });

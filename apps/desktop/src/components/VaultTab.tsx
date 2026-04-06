@@ -1,7 +1,7 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import type {MutableRefObject, RefObject} from 'react';
+import type {MutableRefObject, ReactNode, RefObject} from 'react';
 import {
   useCallback,
   useEffect,
@@ -33,7 +33,6 @@ import {
   type NoteMarkdownEditorHandle,
 } from '../editor/noteEditor/NoteMarkdownEditor';
 
-import {INBOX_LEFT_PANEL} from '../lib/layoutStore';
 import {reopenClosedTabMenuShortcutLabel} from '../lib/desktopShortcutLabels';
 import {renameDraftStemForMarkdownUri} from '../lib/renameDialogDraft';
 import {
@@ -43,10 +42,10 @@ import {
 
 import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
 
-import {DesktopHorizontalSplit} from './DesktopHorizontalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
+import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {MaterialIcon} from './MaterialIcon';
-import {VaultPaneTree} from './VaultPaneTree';
+import {VaultTreePane} from './VaultTreePane';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -65,8 +64,16 @@ type VaultTabProps = {
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
-  leftWidthPx: number;
-  onLeftWidthPxChanged: (px: number) => void;
+  vaultPaneVisible: boolean;
+  episodesPaneVisible: boolean;
+  vaultWidthPx: number;
+  episodesWidthPx: number;
+  onVaultWidthPxChanged: (px: number) => void;
+  onEpisodesWidthPxChanged: (px: number) => void;
+  stackTopHeightPx: number;
+  onStackTopHeightPxChanged: (px: number) => void;
+  /** Episodes list column; omitted when {@link episodesPaneVisible} is false (pass `null`). */
+  episodesPane: ReactNode;
   notes: NoteRow[];
   /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
   vaultMarkdownRefs: VaultMarkdownRef[];
@@ -349,8 +356,15 @@ export function VaultTab({
   inboxEditorRef,
   inboxEditorShellScrollRef,
   inboxEditorShellScrollDirectiveRef,
-  leftWidthPx,
-  onLeftWidthPxChanged,
+  vaultPaneVisible,
+  episodesPaneVisible,
+  vaultWidthPx,
+  episodesWidthPx,
+  onVaultWidthPxChanged,
+  onEpisodesWidthPxChanged,
+  stackTopHeightPx,
+  onStackTopHeightPxChanged,
+  episodesPane,
   notes,
   vaultMarkdownRefs,
   inboxContentByUri,
@@ -923,52 +937,36 @@ export function VaultTab({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <DesktopHorizontalSplit
-        className="split-inner"
-        leftWidthPx={leftWidthPx}
-        minLeftPx={INBOX_LEFT_PANEL.minPx}
-        maxLeftPx={INBOX_LEFT_PANEL.maxPx}
-        minRightPx={220}
-        onLeftWidthPxChanged={onLeftWidthPxChanged}
-        left={
-          <div className="panel-surface">
-            <div className="pane-header">
-              <span className="pane-title">Vault</span>
-              <button
-                type="button"
-                className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                onClick={onAddEntry}
-                disabled={busy}
-                aria-label="Add entry"
-                data-tooltip="Add entry"
-                data-tooltip-placement="inline-start"
-              >
-                <span className="pane-header-add-btn__glyph" aria-hidden>
-                  <MaterialIcon name="add" size={12} />
-                </span>
-              </button>
-            </div>
-            <div className="vault-tree-panel">
-              <VaultPaneTree
-                vaultRoot={vaultRoot}
-                fs={fs}
-                fsRefreshNonce={fsRefreshNonce}
-                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-                selectedMarkdownUri={composingNewEntry ? null : selectedUri}
-                busy={busy}
-                onOpenMarkdownNote={onSelectNote}
-                onRenameMarkdownRequest={openRenameDialog}
-                onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
-                onRenameFolderRequest={openRenameFolderDialog}
-                onDeleteFolderRequest={openTreeDeleteFolderDialog}
-                onBulkDeleteRequest={openBulkDeleteDialog}
-                onMoveVaultTreeItem={moveVaultTreeItemStable}
-                onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
-              />
-            </div>
-          </div>
+      <MainWorkspaceSplit
+        vaultVisible={vaultPaneVisible}
+        episodesVisible={episodesPaneVisible}
+        vaultWidthPx={vaultWidthPx}
+        episodesWidthPx={episodesWidthPx}
+        onVaultWidthPxChanged={onVaultWidthPxChanged}
+        onEpisodesWidthPxChanged={onEpisodesWidthPxChanged}
+        stackTopHeightPx={stackTopHeightPx}
+        onStackTopHeightPxChanged={onStackTopHeightPxChanged}
+        vaultPane={
+          <VaultTreePane
+            vaultRoot={vaultRoot}
+            fs={fs}
+            fsRefreshNonce={fsRefreshNonce}
+            vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
+            selectedMarkdownUri={composingNewEntry ? null : selectedUri}
+            busy={busy}
+            onAddEntry={onAddEntry}
+            onOpenMarkdownNote={onSelectNote}
+            onRenameMarkdownRequest={openRenameDialog}
+            onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
+            onRenameFolderRequest={openRenameFolderDialog}
+            onDeleteFolderRequest={openTreeDeleteFolderDialog}
+            onBulkDeleteRequest={openBulkDeleteDialog}
+            onMoveVaultTreeItem={moveVaultTreeItemStable}
+            onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
+          />
         }
-        right={
+        episodesPane={episodesPane}
+        editorPane={
           <div className="panel-surface">
             <div className="pane-header pane-header--inbox-editor">
               <div className="pane-header-start">

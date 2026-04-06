@@ -1,14 +1,11 @@
 import {useEffect, useRef} from 'react';
 
-import type {MainTabId} from '../lib/mainWindowUiStore';
-
 import {
   isWithinMouseHistoryCooldown,
   MOUSE_EDITOR_HISTORY_NAV_COOLDOWN_MS,
 } from './mouseEditorHistoryCooldown';
 
 type Options = {
-  mainTab: MainTabId;
   vaultRoot: string | null;
   busy: boolean;
   editorHistoryCanGoBack: boolean;
@@ -32,7 +29,6 @@ type Options = {
  *   `canGoBack` update after a navigation.
  */
 export function useEditorHistoryMouseButtons({
-  mainTab,
   vaultRoot,
   busy,
   editorHistoryCanGoBack,
@@ -57,11 +53,11 @@ export function useEditorHistoryMouseButtons({
       const navFwd = e.button === 4 || e.button === 9;
       const isSide = navBack || navFwd;
 
-      if (mainTab === 'inbox' && vaultRoot && isSide) {
+      if (vaultRoot && isSide) {
         e.preventDefault();
       }
 
-      if (mainTab !== 'inbox' || !vaultRoot) {
+      if (!vaultRoot) {
         return;
       }
 
@@ -124,7 +120,6 @@ export function useEditorHistoryMouseButtons({
       window.removeEventListener('mouseup', onMouseUp, {capture: true});
     };
   }, [
-    mainTab,
     vaultRoot,
     busy,
     editorHistoryCanGoBack,
