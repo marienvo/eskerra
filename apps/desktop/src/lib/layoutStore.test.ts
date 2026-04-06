@@ -4,7 +4,6 @@ import {
   DEFAULT_LAYOUTS,
   INBOX_LEFT_PANEL,
   NOTIFICATIONS_PANEL,
-  PODCASTS_LEFT_PANEL,
   VAULT_EPISODES_STACK_TOP,
   migrateV3LayoutsToV4,
 } from './layoutStore';
@@ -16,7 +15,7 @@ describe('migrateV3LayoutsToV4', () => {
       podcastsMain: {episodes: 38, rightCol: 62},
     });
     expect(migrated).not.toBeNull();
-    expect(migrated!.inbox.leftWidthPx).toBe(307);
+    expect(migrated!.inbox.leftWidthPx).toBe(389);
     expect(migrated!.podcastsMain.leftWidthPx).toBe(389);
     expect(migrated!.vaultEpisodesStack.topHeightPx).toBe(
       VAULT_EPISODES_STACK_TOP.defaultPx,
@@ -29,8 +28,8 @@ describe('migrateV3LayoutsToV4', () => {
       podcastsMain: {episodes: 90, rightCol: 10},
     });
     expect(migrated).not.toBeNull();
-    expect(migrated!.inbox.leftWidthPx).toBe(INBOX_LEFT_PANEL.minPx);
-    expect(migrated!.podcastsMain.leftWidthPx).toBe(PODCASTS_LEFT_PANEL.maxPx);
+    expect(migrated!.inbox.leftWidthPx).toBe(INBOX_LEFT_PANEL.maxPx);
+    expect(migrated!.podcastsMain.leftWidthPx).toBe(INBOX_LEFT_PANEL.maxPx);
   });
 
   it('returns null for invalid payloads', () => {
@@ -43,7 +42,7 @@ describe('migrateV3LayoutsToV4', () => {
 describe('DEFAULT_LAYOUTS', () => {
   it('uses documented default pixel widths', () => {
     expect(DEFAULT_LAYOUTS.inbox.leftWidthPx).toBe(INBOX_LEFT_PANEL.defaultPx);
-    expect(DEFAULT_LAYOUTS.podcastsMain.leftWidthPx).toBe(PODCASTS_LEFT_PANEL.defaultPx);
+    expect(DEFAULT_LAYOUTS.podcastsMain.leftWidthPx).toBe(INBOX_LEFT_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.notifications.widthPx).toBe(NOTIFICATIONS_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.vaultEpisodesStack.topHeightPx).toBe(
       VAULT_EPISODES_STACK_TOP.defaultPx,

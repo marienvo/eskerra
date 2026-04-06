@@ -362,11 +362,11 @@ a:focus:not(:focus-visible) {
 }
 
 .app-status-bar-center--error {
-  color: var(--color-error);
+  color: var(--color-shell-status-error);
 }
 
 .app-status-bar-center--info {
-  color: var(--color-text);
+  color: var(--color-shell-status-info);
 }
 
 /* Same chrome as tagline / title bar: light foreground on AppChromeBackground — not panel --color-text. */
@@ -404,11 +404,11 @@ a:focus:not(:focus-visible) {
 }
 
 .app-status-bar-message.app-status-bar-center--error {
-  color: var(--color-error);
+  color: var(--color-shell-status-error);
 }
 
 .app-status-bar-message.app-status-bar-center--info {
-  color: var(--color-text);
+  color: var(--color-shell-status-info);
 }
 
 .app-status-bar-message__text {

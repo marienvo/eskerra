@@ -4,7 +4,7 @@ const STORE_PATH = 'eskerra-desktop.json';
 const KEY_V4 = 'layoutPanelsV4';
 const KEY_V3 = 'layoutPanelsV3';
 
-/** Left column width in pixels (Vault, Episodes). The right column fills the rest. */
+/** Left column width in pixels (shared by Vault, Episodes, and the stacked pair). */
 export type LeftSplitLayout = {
   leftWidthPx: number;
 };
@@ -20,7 +20,9 @@ export type VaultEpisodesStackLayout = {
 };
 
 export type StoredLayouts = {
+  /** Legacy key: main workspace left column width (Vault / Episodes / stack). */
   inbox: LeftSplitLayout;
+  /** Legacy key: must mirror {@link StoredLayouts.inbox} `leftWidthPx` for a single left-pane width. */
   podcastsMain: LeftSplitLayout;
   notifications: NotificationsPanelLayout;
   vaultEpisodesStack: VaultEpisodesStackLayout;
@@ -53,7 +55,7 @@ export const VAULT_EPISODES_STACK_TOP = {
 
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
-  podcastsMain: {leftWidthPx: PODCASTS_LEFT_PANEL.defaultPx},
+  podcastsMain: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
   notifications: {widthPx: NOTIFICATIONS_PANEL.defaultPx},
   vaultEpisodesStack: {topHeightPx: VAULT_EPISODES_STACK_TOP.defaultPx},
 };
@@ -99,6 +101,22 @@ function sanitizePodcastsMain(layout: LeftSplitLayout | undefined): LeftSplitLay
       PODCASTS_LEFT_PANEL.minPx,
       PODCASTS_LEFT_PANEL.maxPx,
       fb,
+    ),
+  };
+}
+
+/** One width for the whole left pane: take the larger of legacy inbox vs podcasts values, then clamp. */
+function mergeMainLeftPaneWidths(
+  inbox: LeftSplitLayout,
+  podcastsMain: LeftSplitLayout,
+): LeftSplitLayout {
+  const merged = Math.max(inbox.leftWidthPx, podcastsMain.leftWidthPx);
+  return {
+    leftWidthPx: clampLeftWidth(
+      merged,
+      INBOX_LEFT_PANEL.minPx,
+      INBOX_LEFT_PANEL.maxPx,
+      DEFAULT_LAYOUTS.inbox.leftWidthPx,
     ),
   };
 }
@@ -165,9 +183,13 @@ export function migrateV3LayoutsToV4(raw: unknown): StoredLayouts | null {
   const w = ASSUMED_WIDTH_FOR_V3_MIGRATION;
   const inboxPx = Math.round((o.inbox.files / 100) * w);
   const episodesPx = Math.round((o.podcastsMain.episodes / 100) * w);
+  const unified = mergeMainLeftPaneWidths(
+    sanitizeInbox({leftWidthPx: inboxPx}),
+    sanitizePodcastsMain({leftWidthPx: episodesPx}),
+  );
   return {
-    inbox: sanitizeInbox({leftWidthPx: inboxPx}),
-    podcastsMain: sanitizePodcastsMain({leftWidthPx: episodesPx}),
+    inbox: unified,
+    podcastsMain: unified,
     notifications: sanitizeNotifications(undefined),
     vaultEpisodesStack: sanitizeVaultEpisodesStack(undefined),
   };
@@ -183,9 +205,15 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   }
   const inbox = sanitizeInbox(o.inbox);
   const podcastsMain = sanitizePodcastsMain(o.podcastsMain);
+  const unifiedLeft = mergeMainLeftPaneWidths(inbox, podcastsMain);
   const notifications = sanitizeNotifications(o.notifications);
   const vaultEpisodesStack = sanitizeVaultEpisodesStack(o.vaultEpisodesStack);
-  return {inbox, podcastsMain, notifications, vaultEpisodesStack};
+  return {
+    inbox: unifiedLeft,
+    podcastsMain: unifiedLeft,
+    notifications,
+    vaultEpisodesStack,
+  };
 }
 
 export async function loadStoredLayouts(): Promise<StoredLayouts> {
@@ -229,9 +257,10 @@ export async function loadStoredLayouts(): Promise<StoredLayouts> {
 
 export async function saveStoredLayouts(layouts: StoredLayouts): Promise<void> {
   const store = await load(STORE_PATH);
+  const inbox = sanitizeInbox(layouts.inbox);
   const normalized: StoredLayouts = {
-    inbox: sanitizeInbox(layouts.inbox),
-    podcastsMain: sanitizePodcastsMain(layouts.podcastsMain),
+    inbox,
+    podcastsMain: {leftWidthPx: inbox.leftWidthPx},
     notifications: sanitizeNotifications(layouts.notifications),
     vaultEpisodesStack: sanitizeVaultEpisodesStack(layouts.vaultEpisodesStack),
   };

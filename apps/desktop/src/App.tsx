@@ -585,17 +585,14 @@ export default function App() {
     await hydrateVault(dir);
   };
 
-  const persistInboxLeftWidthPx = useCallback((leftWidthPx: number) => {
+  /** Single left-pane width (Vault, Episodes, or stack); mirrors `inbox` and `podcastsMain` in layout store. */
+  const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
-      const next = {...prev, inbox: {leftWidthPx}};
-      void saveStoredLayouts(next);
-      return next;
-    });
-  }, []);
-
-  const persistPodcastsLeftWidthPx = useCallback((leftWidthPx: number) => {
-    setLayouts(prev => {
-      const next = {...prev, podcastsMain: {leftWidthPx}};
+      const next = {
+        ...prev,
+        inbox: {leftWidthPx},
+        podcastsMain: {leftWidthPx},
+      };
       void saveStoredLayouts(next);
       return next;
     });
@@ -795,9 +792,9 @@ export default function App() {
                       vaultPaneVisible={vaultPaneVisible}
                       episodesPaneVisible={episodesPaneVisible}
                       vaultWidthPx={layouts.inbox.leftWidthPx}
-                      episodesWidthPx={layouts.podcastsMain.leftWidthPx}
-                      onVaultWidthPxChanged={persistInboxLeftWidthPx}
-                      onEpisodesWidthPxChanged={persistPodcastsLeftWidthPx}
+                      episodesWidthPx={layouts.inbox.leftWidthPx}
+                      onVaultWidthPxChanged={persistMainLeftWidthPx}
+                      onEpisodesWidthPxChanged={persistMainLeftWidthPx}
                       stackTopHeightPx={layouts.vaultEpisodesStack.topHeightPx}
                       onStackTopHeightPxChanged={persistVaultEpisodesStackTopHeightPx}
                       episodesPane={

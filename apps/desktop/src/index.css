@@ -60,6 +60,9 @@ html {
   --color-shell-hover-bg: rgba(255, 255, 255, 0.12);
   /* Opaque: chroma 2 tinted toward white (not translucent gray-on-gradient) */
   --color-shell-tagline: color-mix(in srgb, var(--color-app-chrome-chroma-2) 15%, white);
+  /* AppStatusBar transient messages: light foreground on AppChromeBackground — not panel --color-error / --color-text */
+  --color-shell-status-info: var(--color-shell-tagline);
+  --color-shell-status-error: color-mix(in srgb, white 80%, var(--color-error) 20%);
 
   /* Capture */
   --color-capture-panel: rgb(250, 250, 250);
