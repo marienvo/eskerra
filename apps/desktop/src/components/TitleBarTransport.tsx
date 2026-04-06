@@ -63,7 +63,7 @@ export function TitleBarTransport({
           <MaterialIcon
             aria-hidden
             className="app-playback-chrome-btn__spin"
-            name="progress_activity"
+            name="autorenew"
             size={24}
           />
         ) : (

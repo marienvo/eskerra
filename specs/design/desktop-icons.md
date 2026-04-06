@@ -9,6 +9,8 @@ The desktop app (Vite + React) uses **Google Material Icons** via the `material-
   (Use the `filled` stylesheet only so the bundle does not pull in outlined/round/sharp webfonts.)
 - Render icons with the shared `MaterialIcon` component in `apps/desktop/src/components/MaterialIcon.tsx`, or a `<span className="material-icons">` with the same sizing rules below.
 
+Some names exist only in **Material Symbols** and are missing from the bundled **Material Icons filled** webfont; those ligatures render as blank. Prefer glyphs that exist in the same set as `react-native-vector-icons/MaterialIcons` (for example title-bar playback loading uses `autorenew` with CSS spin, not `progress_activity`).
+
 ## 12px grid (required)
 
 All Material Icons in the desktop app **must be rendered on a square whose width and height are a positive integer multiple of 12 CSS pixels** (12×12, 24×24, 36×36, …, up to 192). **24×24** is the default for rail tabs, vault tree rows, and title-bar transport. **12×12** stays the norm for compact chrome: pane header icon-only actions (Vault / editor header plus, rename, clear) and the status bar **Settings** control (`AppStatusBar`).
