@@ -66,6 +66,12 @@ function AppStatusBarMessageCenter({
       className={`app-status-bar-message ${toneClass}`}
       {...(tone === 'error' ? {role: 'alert' as const} : {'aria-live': 'polite' as const})}
     >
+      <MaterialIcon
+        name={tone === 'error' ? 'error_outline' : 'info'}
+        size={12}
+        className="app-status-bar-message__icon"
+        aria-hidden
+      />
       <span ref={textRef} className="app-status-bar-message__text">
         {text}
       </span>

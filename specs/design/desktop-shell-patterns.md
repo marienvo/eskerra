@@ -80,7 +80,7 @@ The **center** string is chosen by **`resolveAppStatusBarCenter`** (**`apps/desk
 2. **Podcast** line (episode title and series name) when playback is **paused** or **playing** and an active episode exists.
 3. **Transient messages**: global **`err`**, then **rename link progress**, then **wiki rename notice**. While a **disk conflict** (blocking or soft) is active, rename/wiki lines are suppressed so the bar can show the tagline or podcast line instead; **`err`** still wins when set.
 
-Styling for **error** and **info** transient lines uses **`--color-shell-status-error`** and **`--color-shell-status-info`** in [`index.css`](../../apps/desktop/src/index.css) so text stays legible on the blurred chrome (do not use panel **`--color-error`** / **`--color-text`** there).
+Transient **error** and **info** lines appear as a **centered chip** (rounded pill with background, border, and optional leading icon) in **[`AppStatusBar`](../../apps/desktop/src/components/AppStatusBar.tsx)**, using **`--color-shell-status-*`** tokens in [`index.css`](../../apps/desktop/src/index.css) aligned with **`.error-banner`** / **`.info-banner`** — not bare text on the chrome gradient.
 
 **Disk conflict** UIs (blocking and soft, with primary/secondary actions) render as **inline strips** between **`app-body`** and **`AppStatusBar`**, not under the window title bar. They reuse the existing **`conflict-banner`** / **`info-banner--inline-actions`** styles; they are not centered modals on a dimmed backdrop.
 

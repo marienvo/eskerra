@@ -60,9 +60,6 @@ html {
   --color-shell-hover-bg: rgba(255, 255, 255, 0.12);
   /* Opaque: chroma 2 tinted toward white (not translucent gray-on-gradient) */
   --color-shell-tagline: color-mix(in srgb, var(--color-app-chrome-chroma-2) 15%, white);
-  /* AppStatusBar transient messages: light foreground on AppChromeBackground — not panel --color-error / --color-text */
-  --color-shell-status-info: var(--color-shell-tagline);
-  --color-shell-status-error: color-mix(in srgb, white 80%, var(--color-error) 20%);
 
   /* Capture */
   --color-capture-panel: rgb(250, 250, 250);
@@ -79,6 +76,16 @@ html {
   --color-error: #a23f3f;
   --color-error-banner-bg: #fdeeee;
   --color-error-banner-border: #ebcaca;
+
+  /*
+   * AppStatusBar transient message chips: same semantics as .error-banner / .info-banner (opaque pill on chrome).
+   */
+  --color-shell-status-error-bg: var(--color-error-banner-bg);
+  --color-shell-status-error-border: var(--color-error-banner-border);
+  --color-shell-status-error: var(--color-error);
+  --color-shell-status-info-bg: color-mix(in srgb, var(--color-accent-subtle-bg) 70%, var(--color-bg));
+  --color-shell-status-info-border: color-mix(in srgb, var(--color-accent) 25%, var(--color-border));
+  --color-shell-status-info: var(--color-text);
 
   /* Semantic */
   --color-semantic-recording: #e35d5d;

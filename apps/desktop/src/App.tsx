@@ -395,6 +395,20 @@ export default function App() {
           return;
         }
         setLayouts(loadedLayouts);
+        // #region agent log
+        fetch('http://127.0.0.1:7708/ingest/ded427e7-7a0e-48e6-a5de-2a04cf03f51d', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-Debug-Session-Id': '8d8ca5'},
+          body: JSON.stringify({
+            sessionId: '8d8ca5',
+            location: 'App.tsx:loadStoredLayouts',
+            message: 'layouts applied from store',
+            data: {leftWidthPx: loadedLayouts.inbox.leftWidthPx},
+            timestamp: Date.now(),
+            hypothesisId: 'H2',
+          }),
+        }).catch(() => {});
+        // #endregion
         if (ui) {
           setVaultPaneVisible(ui.vaultPaneVisible);
           setEpisodesPaneVisible(ui.episodesPaneVisible);
@@ -587,6 +601,20 @@ export default function App() {
 
   /** Single left-pane width (Vault, Episodes, or stack); mirrors `inbox` and `podcastsMain` in layout store. */
   const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7708/ingest/ded427e7-7a0e-48e6-a5de-2a04cf03f51d', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Debug-Session-Id': '8d8ca5'},
+      body: JSON.stringify({
+        sessionId: '8d8ca5',
+        location: 'App.tsx:persistMainLeftWidthPx',
+        message: 'persist main left width',
+        data: {leftWidthPx},
+        timestamp: Date.now(),
+        hypothesisId: 'H3',
+      }),
+    }).catch(() => {});
+    // #endregion
     setLayouts(prev => {
       const next = {
         ...prev,
