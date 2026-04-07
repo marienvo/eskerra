@@ -161,6 +161,7 @@ export default function App() {
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
+    todayHubPaperPlaceholder,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -922,7 +923,8 @@ export default function App() {
                       onCloseAllEditorTabs={closeAllEditorTabs}
                       onReopenClosedEditorTab={reopenLastClosedEditorTab}
                       canReopenClosedEditorTab={canReopenClosedEditorTab}
-                  />
+                      todayHubPaperPlaceholder={todayHubPaperPlaceholder}
+                    />
               </main>
             </div>
                 }

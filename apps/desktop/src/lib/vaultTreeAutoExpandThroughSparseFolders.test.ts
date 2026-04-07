@@ -11,6 +11,10 @@ function article(id: string, name: string): VaultTreeItemData {
   return {kind: 'article', name, uri: id, lastModified: null};
 }
 
+function todayHub(id: string, name: string, todayNoteUri: string): VaultTreeItemData {
+  return {kind: 'todayHub', name, uri: id, lastModified: null, todayNoteUri};
+}
+
 describe('pickLonelySubfolderWhenNoMarkdown', () => {
   it('returns the only subfolder when there are no articles', () => {
     const store: Record<string, VaultTreeItemData> = {
@@ -33,6 +37,13 @@ describe('pickLonelySubfolderWhenNoMarkdown', () => {
       '/v/n.md': article('/v/n.md', 'n.md'),
     };
     expect(pickLonelySubfolderWhenNoMarkdown(['/v/sub', '/v/n.md'], store)).toBeNull();
+  });
+
+  it('returns null when there is a todayHub row', () => {
+    const store: Record<string, VaultTreeItemData> = {
+      '/v/d': todayHub('/v/d', 'd', '/v/d/Today.md'),
+    };
+    expect(pickLonelySubfolderWhenNoMarkdown(['/v/d'], store)).toBeNull();
   });
 
   it('returns null when there is only a markdown file', () => {

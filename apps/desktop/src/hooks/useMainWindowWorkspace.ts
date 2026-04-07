@@ -61,6 +61,7 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
+import {vaultUriIsTodayMarkdownFile} from '../lib/vaultTreeLoadChildren';
 import {
   getVaultSession,
   setVaultSession,
@@ -353,6 +354,8 @@ export type UseMainWindowWorkspaceResult = {
   closeAllEditorTabs: () => void;
   reopenLastClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
+  /** Extra canvas under the markdown editor when Today.md is open as a Today-hub primary note. */
+  todayHubPaperPlaceholder: boolean;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -392,6 +395,7 @@ export function useMainWindowWorkspace(options: {
   const skipRecencyDeferForUriRef = useRef<Set<string>>(new Set());
   const diskConflictDeferTimerRef = useRef<number | null>(null);
   const [composingNewEntry, setComposingNewEntry] = useState(false);
+  const [todayHubPaperPlaceholder, setTodayHubPaperPlaceholder] = useState(false);
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
@@ -655,6 +659,20 @@ export function useMainWindowWorkspace(options: {
   useEffect(() => {
     vaultMarkdownRefsRef.current = vaultMarkdownRefs;
   }, [vaultMarkdownRefs]);
+
+  useEffect(() => {
+    if (!vaultRoot || !selectedUri || composingNewEntry) {
+      setTodayHubPaperPlaceholder(false);
+      return;
+    }
+    const normRoot = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+    const normSel = selectedUri.replace(/\\/g, '/');
+    if (!normSel.startsWith(`${normRoot}/`)) {
+      setTodayHubPaperPlaceholder(false);
+      return;
+    }
+    setTodayHubPaperPlaceholder(vaultUriIsTodayMarkdownFile(normSel));
+  }, [vaultRoot, selectedUri, composingNewEntry]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -2501,9 +2519,9 @@ export function useMainWindowWorkspace(options: {
       const normSel = selectedUriRef.current?.replace(/\\/g, '/');
       const shouldClearEditor =
         normSel != null
-        && plan.some(entry => {
+          && plan.some(entry => {
           const d = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
-          if (entry.kind === 'folder') {
+          if (entry.kind === 'folder' || entry.kind === 'todayHub') {
             return normSel === d || normSel.startsWith(`${d}/`);
           }
           return normSel === d;
@@ -2623,7 +2641,7 @@ export function useMainWindowWorkspace(options: {
         for (const entry of plan) {
           const result = await moveVaultTreeItemToDirectory(vaultRoot, fs, {
             sourceUri: entry.uri,
-            sourceKind: entry.kind,
+            sourceKind: entry.kind === 'article' ? 'article' : 'folder',
             targetDirectoryUri,
           });
           commitMoveVaultTreeResult(result);
@@ -2832,5 +2850,6 @@ export function useMainWindowWorkspace(options: {
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
+    todayHubPaperPlaceholder,
   };
 }

@@ -1507,6 +1507,10 @@ a:focus:not(:focus-visible) {
   color: color-mix(in srgb, #ffe994 78%, var(--color-muted));
 }
 
+.vault-tree-row__icon--today {
+  color: color-mix(in srgb, var(--color-accent) 42%, var(--color-muted));
+}
+
 .vault-tree-row__label {
   flex: 1;
   min-width: 0;
@@ -2762,6 +2766,16 @@ button.primary.destructive {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+/* Today hub: reserved strip on paper below CodeMirror (above backlinks). */
+[data-app-surface='capture'] .note-markdown-editor-today-hub-placeholder {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  padding: 1rem 1.25rem 1.5rem;
+  border-top: 1px solid var(--nb-editor-inline-code-border);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th,

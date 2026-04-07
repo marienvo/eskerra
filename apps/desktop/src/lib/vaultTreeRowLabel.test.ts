@@ -11,6 +11,10 @@ function folder(name: string, uri: string): VaultTreeItemData {
   return {kind: 'folder', name, uri, lastModified: null};
 }
 
+function todayHub(name: string, uri: string): VaultTreeItemData {
+  return {kind: 'todayHub', name, uri, lastModified: null, todayNoteUri: `${uri}/Today.md`};
+}
+
 describe('vaultTreeRowLabel', () => {
   it('strips .md from article rows (case-insensitive)', () => {
     expect(vaultTreeRowLabel(article('Note.md', '/v/Note.md'))).toBe('Note');
@@ -20,5 +24,9 @@ describe('vaultTreeRowLabel', () => {
   it('leaves folder names unchanged', () => {
     expect(vaultTreeRowLabel(folder('Inbox', '/v/Inbox'))).toBe('Inbox');
     expect(vaultTreeRowLabel(folder('refs.md', '/v/refs.md'))).toBe('refs.md');
+  });
+
+  it('leaves todayHub directory names unchanged like folders', () => {
+    expect(vaultTreeRowLabel(todayHub('Daily', '/v/Daily'))).toBe('Daily');
   });
 });

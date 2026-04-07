@@ -9,24 +9,20 @@ import {
   type MouseEvent,
 } from 'react';
 
-import {editorTabPillDisplayName} from '../lib/editorTabPillDisplayName';
+import {
+  editorOpenTabPillIconName,
+  editorOpenTabPillLabel,
+  type EditorOpenTabPillIconName,
+} from '../lib/editorOpenTabPillLabel';
 
 import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
-function labelForOpenTab(notes: readonly NoteRow[], uri: string): string {
-  const row = notes.find(n => n.uri === uri);
-  if (row) {
-    return editorTabPillDisplayName(row.name);
-  }
-  const tail = uri.split(/[/\\]/).pop()?.trim();
-  return editorTabPillDisplayName(tail || uri);
-}
-
 type EditorOpenTabPillProps = {
   uri: string;
   label: string;
+  iconName: EditorOpenTabPillIconName;
   active: boolean;
   busy: boolean;
   multiTabs: boolean;
@@ -39,6 +35,7 @@ type EditorOpenTabPillProps = {
 const EditorOpenTabPill = memo(function EditorOpenTabPill({
   uri,
   label,
+  iconName,
   active,
   busy,
   multiTabs,
@@ -138,7 +135,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             }}
           >
             <span className="editor-open-tab-pill__icon" aria-hidden>
-              <MaterialIcon name="description" size={12} />
+              <MaterialIcon name={iconName} size={12} />
             </span>
             <span ref={labelRef} className="editor-open-tab-pill__label">
               {label}
@@ -231,12 +228,14 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
     <div className="editor-open-tabs-scroll" role="tablist" aria-label="Open notes">
       {tabUris.map(uri => {
         const active = uri === selectedUri;
-        const label = labelForOpenTab(notes, uri);
+        const label = editorOpenTabPillLabel(notes, uri);
+        const iconName = editorOpenTabPillIconName(uri);
         return (
           <EditorOpenTabPill
             key={uri}
             uri={uri}
             label={label}
+            iconName={iconName}
             active={active}
             busy={busy}
             multiTabs={multiTabs}

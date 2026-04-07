@@ -125,6 +125,7 @@ type VaultTabProps = {
   onCloseAllEditorTabs: () => void;
   onReopenClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
+  todayHubPaperPlaceholder: boolean;
 };
 
 type InboxBacklinksSectionProps = {
@@ -157,6 +158,7 @@ type EditorPaneBodyProps = {
   backlinkRows: readonly {uri: string; fileName: string; title: string}[];
   onSelectNote: VaultTabProps['onSelectNote'];
   inboxBacklinksDeferNonce: number;
+  showTodayHubPaperPlaceholder: boolean;
 };
 
 function InboxBacklinksSection({
@@ -240,6 +242,7 @@ function EditorPaneBody({
   backlinkRows,
   onSelectNote,
   inboxBacklinksDeferNonce,
+  showTodayHubPaperPlaceholder,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -334,6 +337,11 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
+              {showTodayHubPaperPlaceholder ? (
+                <div className="note-markdown-editor-today-hub-placeholder muted">
+                  Today hub canvas placeholder
+                </div>
+              ) : null}
               {!composingNewEntry && selectedUri ? (
                 <InboxBacklinksSection
                   selectedUri={selectedUri}
@@ -407,6 +415,7 @@ export function VaultTab({
   onCloseAllEditorTabs,
   onReopenClosedEditorTab,
   canReopenClosedEditorTab,
+  todayHubPaperPlaceholder,
 }: VaultTabProps) {
   const reopenClosedTabKbdLabel = useMemo(
     () => reopenClosedTabMenuShortcutLabel(),
@@ -1109,6 +1118,7 @@ export function VaultTab({
                   backlinkRows={backlinkRows}
                   onSelectNote={onSelectNote}
                   inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+                  showTodayHubPaperPlaceholder={todayHubPaperPlaceholder}
                 />
                 {composingNewEntry ? (
                   <div className="pane-footer">

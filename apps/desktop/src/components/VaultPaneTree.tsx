@@ -27,7 +27,11 @@ import {
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
 import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
-import {loadVaultTreeVisibleChildRows, type VaultTreeItemData} from '../lib/vaultTreeLoadChildren';
+import {
+  loadVaultTreeVisibleChildRows,
+  vaultTreeItemShowsTodaySidebarIcon,
+  type VaultTreeItemData,
+} from '../lib/vaultTreeLoadChildren';
 import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
 import {MaterialIcon} from './MaterialIcon';
 
@@ -35,6 +39,32 @@ import {MaterialIcon} from './MaterialIcon';
 const VAULT_TREE_ROW_HEIGHT_PX = 32;
 
 const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
+
+type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
+
+function vaultTreeRowPrimaryMarkdownUri(data: VaultTreeItemData): string | null {
+  if (data.kind === 'todayHub') {
+    return data.todayNoteUri ?? null;
+  }
+  if (data.kind === 'article') {
+    return data.uri;
+  }
+  return null;
+}
+
+function vaultTreeDragGhostIconForRow(data: VaultTreeItemData): VaultTreeDragGhostIcon {
+  if (vaultTreeItemShowsTodaySidebarIcon(data)) {
+    return 'today';
+  }
+  if (data.kind === 'folder') {
+    return 'folder';
+  }
+  return 'article';
+}
+
+function isVaultTreeRowDirectoryDropTarget(data: VaultTreeItemData): boolean {
+  return data.kind === 'folder' || data.kind === 'todayHub';
+}
 
 function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | null>): void {
   const el = hostRef.current;
@@ -48,7 +78,7 @@ function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | n
  * Off-screen host + `setDragImage` so the pointer shows a clear vault-row chip (icon + label).
  */
 function mountVaultTreeDragGhost(options: {
-  isFolder: boolean;
+  icon: VaultTreeDragGhostIcon;
   label: string;
   dataTransfer: DataTransfer;
   pointerClientX: number;
@@ -57,7 +87,7 @@ function mountVaultTreeDragGhost(options: {
   hostRef: MutableRefObject<HTMLDivElement | null>;
 }): void {
   const {
-    isFolder,
+    icon: dragIcon,
     label,
     dataTransfer,
     pointerClientX,
@@ -73,7 +103,7 @@ function mountVaultTreeDragGhost(options: {
 
   const icon = document.createElement('span');
   icon.className = 'material-icons vault-tree-drag-ghost__icon';
-  icon.textContent = isFolder ? 'folder' : 'article';
+  icon.textContent = dragIcon;
 
   const text = document.createElement('span');
   text.className = 'vault-tree-drag-ghost__label';
@@ -221,22 +251,26 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       const d = item.getItemData();
       return d ? vaultTreeRowLabel(d) : '…';
     },
-    isItemFolder: item => (item.getItemData()?.kind ?? 'folder') !== 'article',
+    isItemFolder: item => item.getItemData()?.kind === 'folder',
     onPrimaryAction: item => {
       const data = item.getItemData();
       if (!data?.uri) {
         return;
       }
-      if (data.kind === 'article') {
+      const openUri = vaultTreeRowPrimaryMarkdownUri(data);
+      if (!openUri) {
+        return;
+      }
+      if (data.kind === 'article' || data.kind === 'todayHub') {
         const recentDirectOpen = lastDirectArticleOpenRef.current;
         if (
-          recentDirectOpen?.uri === data.uri
+          recentDirectOpen?.uri === openUri
           && performance.now() - recentDirectOpen.startedAt < 250
         ) {
           lastDirectArticleOpenRef.current = null;
           return;
         }
-        onOpenMarkdownNote(data.uri);
+        onOpenMarkdownNote(openUri);
       }
     },
     createLoadingItemData: () => ({
@@ -391,13 +425,20 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     ) {
       return;
     }
-    if (!itemIds.includes(selectedMarkdownUri)) {
+    const treeSelectId = itemIds.includes(selectedMarkdownUri)
+      ? selectedMarkdownUri
+      : (
+          Object.values(itemStoreRef.current).find(
+            d => d?.kind === 'todayHub' && d.todayNoteUri === selectedMarkdownUri,
+          )?.uri ?? null
+        );
+    if (!treeSelectId || !itemIds.includes(treeSelectId)) {
       return;
     }
-    if (selectedItems.length === 1 && selectedItems[0] === selectedMarkdownUri) {
+    if (selectedItems.length === 1 && selectedItems[0] === treeSelectId) {
       return;
     }
-    tree.setSelectedItems([selectedMarkdownUri]);
+    tree.setSelectedItems([treeSelectId]);
   }, [selectedMarkdownUri, rootId, itemIds, selectedItems, tree]);
 
   // Omit `items.length` from deps: it changes on expand/collapse and would re-run this effect,
@@ -445,7 +486,11 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       if (cancelled) {
         return;
       }
-      t.setSelectedItems([selectedMarkdownUri]);
+      const treeSelectId =
+        Object.values(itemStoreRef.current).find(
+          d => d?.kind === 'todayHub' && d.todayNoteUri === selectedMarkdownUri,
+        )?.uri ?? selectedMarkdownUri;
+      t.setSelectedItems([treeSelectId]);
     })();
     return () => {
       cancelled = true;
@@ -526,6 +571,8 @@ export const VaultPaneTree = memo(function VaultPaneTree({
             const level = item.getItemMeta().level;
             const pad = 6 + level * 12;
             const isFolder = data.kind === 'folder';
+            const isDropTargetDir = isVaultTreeRowDirectoryDropTarget(data);
+            const primaryMdUri = vaultTreeRowPrimaryMarkdownUri(data);
             const selected = item.isSelected();
             const isVaultRoot = data.uri === rootId;
 
@@ -536,7 +583,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 type="button"
                 className={[
                   selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
-                  isFolder && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
+                  isDropTargetDir && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
                   draggingSourceUri === data.uri ? 'vault-tree-row--dragging' : '',
                 ]
                   .filter(Boolean)
@@ -555,20 +602,20 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   ) {
                     return;
                   }
-                  if (!isFolder) {
+                  if (primaryMdUri) {
                     const startedAt = performance.now();
                     lastDirectArticleOpenRef.current = {
-                      uri: data.uri,
+                      uri: primaryMdUri,
                       startedAt,
                     };
-                    suppressNextArticleClickRef.current = data.uri;
-                    onOpenMarkdownNote(data.uri);
+                    suppressNextArticleClickRef.current = primaryMdUri;
+                    onOpenMarkdownNote(primaryMdUri);
                     e.preventDefault();
                     return;
                   }
                 }}
                 onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                  if (!isFolder && suppressNextArticleClickRef.current === data.uri) {
+                  if (primaryMdUri && suppressNextArticleClickRef.current === primaryMdUri) {
                     suppressNextArticleClickRef.current = null;
                     e.preventDefault();
                     return;
@@ -605,7 +652,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   }
                   setDraggingSourceUri(data.uri);
                   mountVaultTreeDragGhost({
-                    isFolder,
+                    icon: vaultTreeDragGhostIconForRow(data),
                     label: vaultTreeRowLabel(data),
                     dataTransfer: e.dataTransfer,
                     pointerClientX: e.clientX,
@@ -621,7 +668,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 }}
                 onDragEnd={() => endVaultTreeDrag()}
                 onDragOver={
-                  isFolder
+                  isDropTargetDir
                     ? e => {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
@@ -630,7 +677,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     : undefined
                 }
                 onDragLeave={
-                  isFolder
+                  isDropTargetDir
                     ? e => {
                         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
                           setDropTargetUri(null);
@@ -639,7 +686,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     : undefined
                 }
                 onDrop={
-                  isFolder
+                  isDropTargetDir
                     ? e => {
                         e.preventDefault();
                         clearDropTarget();
@@ -656,12 +703,15 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                         } catch {
                           return;
                         }
-                        if (
-                          typeof parsed.uri !== 'string'
-                          || (parsed.kind !== 'folder' && parsed.kind !== 'article')
-                        ) {
+                        const kindOk =
+                          parsed.kind === 'folder'
+                          || parsed.kind === 'article'
+                          || parsed.kind === 'todayHub';
+                        if (typeof parsed.uri !== 'string' || !kindOk) {
                           return;
                         }
+                        const moveSourceKind: 'folder' | 'article' =
+                          parsed.kind === 'article' ? 'article' : 'folder';
                         const selectedIds = tree.getState().selectedItems;
                         const dragIsInMulti =
                           selectedIds.length > 1 && selectedIds.includes(parsed.uri);
@@ -681,7 +731,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                           );
                           return;
                         }
-                        onMoveVaultTreeItem(parsed.uri, parsed.kind, data.uri);
+                        onMoveVaultTreeItem(parsed.uri, moveSourceKind, data.uri);
                       }
                     : undefined
                 }
@@ -699,12 +749,22 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 <span
                   className={[
                     'vault-tree-row__icon',
-                    isFolder ? 'vault-tree-row__icon--folder' : 'vault-tree-row__icon--article',
+                    vaultTreeItemShowsTodaySidebarIcon(data)
+                      ? 'vault-tree-row__icon--today'
+                      : isFolder
+                        ? 'vault-tree-row__icon--folder'
+                        : 'vault-tree-row__icon--article',
                   ].join(' ')}
                   aria-hidden
                 >
                   <MaterialIcon
-                    name={isFolder ? 'folder' : 'article'}
+                    name={
+                      vaultTreeItemShowsTodaySidebarIcon(data)
+                        ? 'today'
+                        : isFolder
+                          ? 'folder'
+                          : 'article'
+                    }
                     size={24}
                   />
                 </span>
@@ -749,7 +809,9 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                             className="note-list-context-menu__item"
                             disabled={busy || multiSelectActive}
                             onSelect={() => {
-                              if (data.kind === 'article') {
+                              if (data.kind === 'todayHub' && data.todayNoteUri) {
+                                onOpenMarkdownNote(data.todayNoteUri);
+                              } else if (data.kind === 'article') {
                                 onOpenMarkdownNote(data.uri);
                               } else {
                                 void item.expand();

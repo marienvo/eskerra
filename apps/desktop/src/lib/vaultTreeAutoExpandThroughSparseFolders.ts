@@ -36,7 +36,7 @@ export function pickLonelySubfolderWhenNoMarkdown(
     if (!row) {
       continue;
     }
-    if (row.kind === 'article') {
+    if (row.kind === 'article' || row.kind === 'todayHub') {
       return null;
     }
     if (row.kind === 'folder') {

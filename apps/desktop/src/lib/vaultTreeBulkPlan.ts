@@ -35,7 +35,7 @@ export function planVaultTreeBulkTargets(
     }
     const underSelectedFolder = minimal.some(
       p =>
-        p.kind === 'folder'
+        (p.kind === 'folder' || p.kind === 'todayHub')
         && item.uri !== p.uri
         && item.uri.startsWith(`${p.uri}/`),
     );
@@ -71,7 +71,7 @@ export function filterVaultTreeBulkMoveSources(
     if (s.uri.startsWith(`${target}/`)) {
       return false;
     }
-    if (s.kind === 'folder' && target.startsWith(`${s.uri}/`)) {
+    if ((s.kind === 'folder' || s.kind === 'todayHub') && target.startsWith(`${s.uri}/`)) {
       return false;
     }
     return true;

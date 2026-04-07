@@ -29,6 +29,12 @@ flowchart LR
 
 Implementation pointers: tree load **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**; vault markdown refs **`packages/eskerra-core/src/vaultMarkdownRefs.ts`**.
 
+## Today hub directories (vault tree + editor paper)
+
+When a vault **directory** **directly contains** an eligible markdown file named exactly **`Today.md`** (same visibility filters as `loadVaultTreeVisibleChildRows` in **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`>), the tree shows **one row for that directory**: Material icon **`today`**, label = **directory name**, **no chevron** (leaf-like; not expandable). Activation opens **`{directory}/Today.md`**. **`Today.md` is not listed** under that folder in the tree. Other files that live only inside that directory are **not** surfaced as child rows (no expand). Sibling entries **at the same parent** as that directory still list normally. While the hub note is open, tree **selection** highlights the **directory** row (item id = directory URI). Drag-and-drop, rename, and delete on that row treat it like a **folder**. Listing a parent directory performs an extra `listFiles` per visible subdirectory to classify hubs (parallelized).
+
+Open-tab **pills** (**`EditorPaneOpenNoteTabs`**) use the parent folder name as the label and the **`today`** icon when the tab URI is **`…/Today.md`** (`editorOpenTabPillLabel` / `editorOpenTabPillIconName`). Standalone **`Today.md` article rows** (when a hub folder is not used) still use the **`today`** sidebar icon for that file. **`VaultTab`** shows the **placeholder strip** below CodeMirror when the open note’s filename is **`Today.md`** (**`todayHubPaperPlaceholder`**, `vaultUriIsTodayMarkdownFile`).
+
 ## No modal overlays in the main window
 
 Do **not** add **centered dialogs** on a **dimmed full-window backdrop** for flows inside the main UI. Prefer one of:
