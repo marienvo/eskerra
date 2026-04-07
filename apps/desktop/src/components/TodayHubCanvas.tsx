@@ -412,14 +412,7 @@ export function TodayHubCanvas({
                 {sections.map((chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
                   return (
-                    <div
-                      key={ci}
-                      className={
-                        editing
-                          ? 'today-hub-canvas__cell today-hub-canvas__cell--editing'
-                          : 'today-hub-canvas__cell'
-                      }
-                    >
+                    <div key={ci} className="today-hub-canvas__cell">
                       {editing ? (
                         <div className="today-hub-canvas__cm-host">
                           <NoteMarkdownEditor
@@ -449,6 +442,7 @@ export function TodayHubCanvas({
                         <button
                           type="button"
                           className="today-hub-canvas__cell-readonly"
+                          aria-label={chunk.trim() ? undefined : 'Edit cell'}
                           onClick={e => {
                             const root = e.currentTarget.querySelector(
                               '.today-hub-canvas__cell-static-rich',
@@ -477,11 +471,7 @@ export function TodayHubCanvas({
                               }
                               onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                             />
-                          ) : (
-                            <span className="muted today-hub-canvas__cell-hint">
-                              Click to edit
-                            </span>
-                          )}
+                          ) : null}
                         </button>
                       )}
                     </div>
