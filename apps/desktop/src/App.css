@@ -2031,26 +2031,156 @@ button.primary.destructive {
   min-height: 0;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-host .cm-panels {
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panels,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panels.cm-panels-top {
   background: var(--nb-editor-paper);
   color: var(--nb-editor-text);
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/*
+ * CodeMirror’s default search panel is a flat list of nodes; without layout, options and labels misalign
+ * and clip. Use a fixed grid (see @codemirror/search SearchPanel DOM).
+ */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content)) minmax(0, 1fr);
+  column-gap: 0.5rem;
+  row-gap: 0.45rem;
+  align-items: center;
+  padding: 0.55rem 2.25rem 0.6rem 0.65rem;
   border-bottom: 1px solid var(--nb-editor-inline-code-border);
   font-family: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: visible;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label,
-[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button {
-  font: inherit;
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search br {
+  display: none;
 }
 
-[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input {
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label {
   font: inherit;
+  margin: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='search'],
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='replace'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.4rem 1.75rem 0.4rem 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.35;
   color: inherit;
   background: var(--nb-editor-code-block-bg);
   border: 1px solid var(--nb-editor-inline-code-border);
+  border-radius: 6px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='replace'] {
+  grid-row: 4;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='next'] {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='prev'] {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='select'] {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='case']) {
+  grid-column: 1;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='re']) {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='word']) {
+  grid-column: 3;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--nb-editor-text);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='replace'] {
+  grid-column: 1;
+  grid-row: 5;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='replaceAll'] {
+  grid-column: 2;
+  grid-row: 5;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search .cm-button,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close'] {
+  padding: 0.32rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-button-secondary-bg, color-mix(in srgb, var(--nb-editor-paper) 90%, var(--nb-editor-inline-code-border) 10%));
+  color: inherit;
+  cursor: default;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close'] {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  min-width: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--nb-editor-faint);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close']:hover {
+  color: var(--nb-editor-text);
 }
 
 /*
