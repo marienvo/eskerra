@@ -4,31 +4,67 @@ const STORE_PATH = 'eskerra-desktop.json';
 const KEY_V4 = 'layoutPanelsV4';
 const KEY_V3 = 'layoutPanelsV3';
 
-/** Left column width in pixels (Vault, Episodes). The right column fills the rest. */
+/** Left column width in pixels (shared by Vault, Episodes, and the stacked pair). */
 export type LeftSplitLayout = {
   leftWidthPx: number;
 };
 
-export type StoredLayouts = {
-  inbox: LeftSplitLayout;
-  podcastsMain: LeftSplitLayout;
+/** Right-side Notifications pane width (main | … | notifications | rail). */
+export type NotificationsPanelLayout = {
+  widthPx: number;
 };
+
+/** Vault pane height when Vault and Episodes are both visible (stacked in the left column). */
+export type VaultEpisodesStackLayout = {
+  topHeightPx: number;
+};
+
+export type StoredLayouts = {
+  /** Legacy key: main workspace left column width (Vault / Episodes / stack). */
+  inbox: LeftSplitLayout;
+  /** Legacy key: must mirror {@link StoredLayouts.inbox} `leftWidthPx` for a single left-pane width. */
+  podcastsMain: LeftSplitLayout;
+  notifications: NotificationsPanelLayout;
+  vaultEpisodesStack: VaultEpisodesStackLayout;
+};
+
+/** Minimum CSS pixel size for each resizable split pane edge (left column, editor reserve, stack rows, notifications). */
+export const MIN_RESIZABLE_PANE_PX = 20 as const;
 
 export const INBOX_LEFT_PANEL = {
   defaultPx: 280,
-  minPx: 160,
+  minPx: MIN_RESIZABLE_PANE_PX,
   maxPx: 520,
 } as const;
 
 export const PODCASTS_LEFT_PANEL = {
   defaultPx: 300,
-  minPx: 180,
+  minPx: MIN_RESIZABLE_PANE_PX,
   maxPx: 560,
+} as const;
+
+export const NOTIFICATIONS_PANEL = {
+  defaultPx: 280,
+  minPx: MIN_RESIZABLE_PANE_PX,
+  maxPx: 520,
+} as const;
+
+/**
+ * Vertical split between Vault (top) and Episodes (bottom) when both panes are visible.
+ * `maxPx` is a soft cap for persisted values; the vertical split clamps the live height to the
+ * column height first, so a low max would block shrinking the bottom pane on tall windows.
+ */
+export const VAULT_EPISODES_STACK_TOP = {
+  defaultPx: 280,
+  minPx: MIN_RESIZABLE_PANE_PX,
+  maxPx: 10_000,
 } as const;
 
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
-  podcastsMain: {leftWidthPx: PODCASTS_LEFT_PANEL.defaultPx},
+  podcastsMain: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
+  notifications: {widthPx: NOTIFICATIONS_PANEL.defaultPx},
+  vaultEpisodesStack: {topHeightPx: VAULT_EPISODES_STACK_TOP.defaultPx},
 };
 
 const ASSUMED_WIDTH_FOR_V3_MIGRATION = 1024;
@@ -76,6 +112,56 @@ function sanitizePodcastsMain(layout: LeftSplitLayout | undefined): LeftSplitLay
   };
 }
 
+/** One width for the whole left pane: take the larger of legacy inbox vs podcasts values, then clamp. */
+function mergeMainLeftPaneWidths(
+  inbox: LeftSplitLayout,
+  podcastsMain: LeftSplitLayout,
+): LeftSplitLayout {
+  const merged = Math.max(inbox.leftWidthPx, podcastsMain.leftWidthPx);
+  return {
+    leftWidthPx: clampLeftWidth(
+      merged,
+      INBOX_LEFT_PANEL.minPx,
+      INBOX_LEFT_PANEL.maxPx,
+      DEFAULT_LAYOUTS.inbox.leftWidthPx,
+    ),
+  };
+}
+
+function sanitizeNotifications(
+  layout: NotificationsPanelLayout | undefined,
+): NotificationsPanelLayout {
+  const fb = DEFAULT_LAYOUTS.notifications.widthPx;
+  if (!layout || typeof layout.widthPx !== 'number') {
+    return {widthPx: fb};
+  }
+  return {
+    widthPx: clampLeftWidth(
+      layout.widthPx,
+      NOTIFICATIONS_PANEL.minPx,
+      NOTIFICATIONS_PANEL.maxPx,
+      fb,
+    ),
+  };
+}
+
+function sanitizeVaultEpisodesStack(
+  layout: VaultEpisodesStackLayout | undefined,
+): VaultEpisodesStackLayout {
+  const fb = DEFAULT_LAYOUTS.vaultEpisodesStack.topHeightPx;
+  if (!layout || typeof layout.topHeightPx !== 'number') {
+    return {topHeightPx: fb};
+  }
+  return {
+    topHeightPx: clampLeftWidth(
+      layout.topHeightPx,
+      VAULT_EPISODES_STACK_TOP.minPx,
+      VAULT_EPISODES_STACK_TOP.maxPx,
+      fb,
+    ),
+  };
+}
+
 function isInboxV3Layout(v: unknown): v is {files: number; editor: number} {
   if (typeof v !== 'object' || v === null) {
     return false;
@@ -104,9 +190,15 @@ export function migrateV3LayoutsToV4(raw: unknown): StoredLayouts | null {
   const w = ASSUMED_WIDTH_FOR_V3_MIGRATION;
   const inboxPx = Math.round((o.inbox.files / 100) * w);
   const episodesPx = Math.round((o.podcastsMain.episodes / 100) * w);
+  const unified = mergeMainLeftPaneWidths(
+    sanitizeInbox({leftWidthPx: inboxPx}),
+    sanitizePodcastsMain({leftWidthPx: episodesPx}),
+  );
   return {
-    inbox: sanitizeInbox({leftWidthPx: inboxPx}),
-    podcastsMain: sanitizePodcastsMain({leftWidthPx: episodesPx}),
+    inbox: unified,
+    podcastsMain: unified,
+    notifications: sanitizeNotifications(undefined),
+    vaultEpisodesStack: sanitizeVaultEpisodesStack(undefined),
   };
 }
 
@@ -120,7 +212,15 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   }
   const inbox = sanitizeInbox(o.inbox);
   const podcastsMain = sanitizePodcastsMain(o.podcastsMain);
-  return {inbox, podcastsMain};
+  const unifiedLeft = mergeMainLeftPaneWidths(inbox, podcastsMain);
+  const notifications = sanitizeNotifications(o.notifications);
+  const vaultEpisodesStack = sanitizeVaultEpisodesStack(o.vaultEpisodesStack);
+  return {
+    inbox: unifiedLeft,
+    podcastsMain: unifiedLeft,
+    notifications,
+    vaultEpisodesStack,
+  };
 }
 
 export async function loadStoredLayouts(): Promise<StoredLayouts> {
@@ -164,9 +264,12 @@ export async function loadStoredLayouts(): Promise<StoredLayouts> {
 
 export async function saveStoredLayouts(layouts: StoredLayouts): Promise<void> {
   const store = await load(STORE_PATH);
+  const inbox = sanitizeInbox(layouts.inbox);
   const normalized: StoredLayouts = {
-    inbox: sanitizeInbox(layouts.inbox),
-    podcastsMain: sanitizePodcastsMain(layouts.podcastsMain),
+    inbox,
+    podcastsMain: {leftWidthPx: inbox.leftWidthPx},
+    notifications: sanitizeNotifications(layouts.notifications),
+    vaultEpisodesStack: sanitizeVaultEpisodesStack(layouts.vaultEpisodesStack),
   };
   await store.set(KEY_V4, JSON.stringify(normalized));
   await store.save();

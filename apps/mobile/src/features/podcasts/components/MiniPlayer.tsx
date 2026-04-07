@@ -1,7 +1,7 @@
 import {Box, Pressable, Text} from '@gluestack-ui/themed';
 import Slider from '@react-native-community/slider';
 import {useCallback, useState} from 'react';
-import {StyleSheet, View} from 'react-native';
+import {ActivityIndicator, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {ACCENT_COLOR} from '../../../core/ui/accentColor';
@@ -33,6 +33,8 @@ export const MINI_PLAYER_LAYOUT_HEIGHT =
   1 + 20 + 64 + 8 + 40 + 6 + 52;// + 20;
 
 const MS_PER_SECOND = 1000;
+/** Mid-episode resume: show "Resuming…" instead of "Buffering…" when position is past this threshold. */
+const RESUMING_COPY_THRESHOLD_MS = 10_000;
 
 function formatClockFromMs(ms: number): string {
   const safe = Math.max(0, Math.floor(ms / MS_PER_SECOND));
@@ -63,7 +65,7 @@ export function MiniPlayer() {
   const {
     activeEpisode,
     miniPlayerArtworkSelected,
-    playbackLoading,
+    playbackTransportBusy,
     playbackState,
     progress,
     seekTo,
@@ -101,12 +103,25 @@ export function MiniPlayer() {
   }
 
   const isPlaying = playbackState === 'playing';
+  const showTransportSpinner =
+    playbackState === 'loading' ||
+    (playbackTransportBusy && playbackState === 'paused');
+  const bufferingSubtitle =
+    showTransportSpinner && playbackState === 'loading'
+      ? progress.positionMs >= RESUMING_COPY_THRESHOLD_MS
+        ? 'Resuming…'
+        : 'Buffering…'
+      : showTransportSpinner && playbackState === 'paused'
+        ? 'Starting…'
+        : null;
   const durationMs = progress.durationMs ?? 0;
   const sliderMaxMs =
     durationMs > 0 ? durationMs : Math.max(progress.positionMs, 1);
   const sliderValueMs = sliderDragging ? sliderDragMs : progress.positionMs;
 
-  const transportIconColor = playbackLoading ? MINI_PLAYER_TRANSPORT_DISABLED : MINI_PLAYER_TRANSPORT;
+  const transportIconColor = playbackTransportBusy
+    ? MINI_PLAYER_TRANSPORT_DISABLED
+    : MINI_PLAYER_TRANSPORT;
   const artworkBorderColor = miniPlayerArtworkSelected ? ACCENT_COLOR : 'transparent';
   const elapsedLabel = formatClockFromMs(sliderValueMs);
   const durationLabel =
@@ -147,7 +162,7 @@ export function MiniPlayer() {
             {activeEpisode.seriesName}
           </Text>
           <Text numberOfLines={1} style={[styles.dateLine, {color: MINI_PLAYER_MUTED}]}>
-            {formatRelativeCalendarLabelFromIsoDate(activeEpisode.date)}
+            {bufferingSubtitle ?? formatRelativeCalendarLabelFromIsoDate(activeEpisode.date)}
           </Text>
         </View>
       </View>
@@ -173,7 +188,7 @@ export function MiniPlayer() {
         <View style={styles.transportCenter}>
           <Pressable
             accessibilityLabel="Rewind 10 seconds"
-            disabled={playbackLoading}
+            disabled={playbackTransportBusy}
             hitSlop={8}
             onPress={() => {
               handleSeekBy(-SKIP_MS);
@@ -182,20 +197,39 @@ export function MiniPlayer() {
             <MaterialIcons color={transportIconColor} name="replay-10" size={SKIP_ICON_SIZE} />
           </Pressable>
           <Pressable
-            disabled={playbackLoading}
+            accessibilityHint={
+              showTransportSpinner
+                ? 'Playback is loading or starting.'
+                : undefined
+            }
+            accessibilityLabel={
+              showTransportSpinner
+                ? playbackState === 'loading'
+                  ? 'Buffering'
+                  : 'Starting playback'
+                : isPlaying
+                  ? 'Pause'
+                  : 'Play'
+            }
+            accessibilityState={{busy: showTransportSpinner}}
+            disabled={playbackTransportBusy}
             onPress={() => {
               togglePlayback().catch(() => undefined);
             }}
             style={styles.playButton}>
-            <MaterialIcons
-              color={transportIconColor}
-              name={isPlaying ? 'pause-circle-filled' : 'play-circle-filled'}
-              size={PLAY_ICON_SIZE}
-            />
+            {showTransportSpinner ? (
+              <ActivityIndicator color={MINI_PLAYER_TRANSPORT} size="large" />
+            ) : (
+              <MaterialIcons
+                color={transportIconColor}
+                name={isPlaying ? 'pause-circle-filled' : 'play-circle-filled'}
+                size={PLAY_ICON_SIZE}
+              />
+            )}
           </Pressable>
           <Pressable
             accessibilityLabel="Forward 10 seconds"
-            disabled={playbackLoading}
+            disabled={playbackTransportBusy}
             hitSlop={8}
             onPress={() => {
               handleSeekBy(SKIP_MS);

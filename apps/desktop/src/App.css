@@ -152,7 +152,7 @@
 .app-root--tauri .resize-sep,
 .app-root--tauri .note-list,
 .app-root--tauri .episode-scroll,
-.app-root--tauri .playlist-body {
+.app-root--tauri .episodes-pane-root {
   -webkit-app-region: no-drag;
 }
 
@@ -231,7 +231,23 @@ a:focus:not(:focus-visible) {
   pointer-events: auto;
 }
 
-.titlebar-transport-btn {
+.window-title-bar-transport__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-shell-tagline);
+  min-width: 2.35rem;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.window-title-bar-transport__time--duration {
+  text-align: end;
+}
+
+/* Shared: title-bar playback controls */
+.app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,18 +261,31 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.titlebar-transport-btn:disabled {
+@keyframes app-playback-chrome-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-playback-chrome-btn__spin {
+  animation: app-playback-chrome-spin 0.85s linear infinite;
+}
+
+.app-playback-chrome-btn:disabled {
   cursor: default;
   opacity: 1;
   color: var(--color-shell-icon-disabled);
 }
 
-.titlebar-transport-btn:not(:disabled):hover {
+.app-playback-chrome-btn:not(:disabled):hover {
   background: var(--color-shell-hover-bg);
   color: var(--color-shell-icon);
 }
 
-.titlebar-transport-btn--play {
+.app-playback-chrome-btn--play {
   border-radius: 8px;
 }
 
@@ -310,7 +339,7 @@ a:focus:not(:focus-visible) {
 }
 
 /* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
-.app-status-bar-tagline {
+.app-status-bar-center {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -319,7 +348,6 @@ a:focus:not(:focus-visible) {
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
-  color: var(--color-shell-tagline);
   line-height: 1.2;
   pointer-events: none;
   user-select: none;
@@ -327,6 +355,94 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.app-status-bar-center--tagline {
+  color: var(--color-shell-tagline);
+}
+
+/* Same chrome as tagline / title bar: light foreground on AppChromeBackground — not panel --color-text. */
+.app-status-bar-center--player {
+  color: var(--color-shell-icon);
+}
+
+.app-status-bar-center--player strong {
+  font-weight: 600;
+}
+
+.app-status-bar-center--player .muted {
+  color: var(--color-shell-icon-muted);
+}
+
+/* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
+.app-status-bar-message {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  max-width: calc(100% - 5rem);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  min-width: 0;
+  box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  pointer-events: auto;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+
+.app-status-bar-message.app-status-bar-center--error {
+  background: var(--color-shell-status-error-bg);
+  border-color: var(--color-shell-status-error-border);
+  color: var(--color-shell-status-error);
+}
+
+.app-status-bar-message.app-status-bar-center--info {
+  background: var(--color-shell-status-info-bg);
+  border-color: var(--color-shell-status-info-border);
+  color: var(--color-shell-status-info);
+}
+
+.app-status-bar-message__icon {
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.app-status-bar-message__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-status-bar-read-more {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: default;
+  padding: 0.06rem 0.12rem;
+  border-radius: 4px;
+}
+
+.app-status-bar-message.app-status-bar-center--error .app-status-bar-read-more:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 16%, transparent);
+}
+
+.app-status-bar-message.app-status-bar-center--info .app-status-bar-read-more:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
 
 .app-status-bar-trailing {
@@ -547,8 +663,14 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   align-items: center;
   gap: 0.32rem;
-  /* Breathing room before main stage; inline-start keeps tabs off the window edge */
-  padding: 0.38rem 0.2rem 0.22rem 0.34rem;
+  box-sizing: border-box;
+  /* Fixed track: 40px tab + mirrored inline gutters (matches .rail--end). */
+  width: calc(40px + 0.34rem + 0.2rem);
+  min-width: calc(40px + 0.34rem + 0.2rem);
+  max-width: calc(40px + 0.34rem + 0.2rem);
+  /* Mirror .rail--end: window-edge gutter = 0.34rem (see inline padding). */
+  padding-block: 0.38rem 0.22rem;
+  padding-inline: 0.34rem 0.2rem;
   background: transparent;
 }
 
@@ -646,6 +768,118 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-icon-disabled);
 }
 
+/* Right rail: physical mirror of .rail (same tab geometry vs window edge). */
+.rail--end {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.32rem;
+  box-sizing: border-box;
+  width: calc(40px + 0.34rem + 0.2rem);
+  min-width: calc(40px + 0.34rem + 0.2rem);
+  max-width: calc(40px + 0.34rem + 0.2rem);
+  padding-block: 0.38rem 0.22rem;
+  padding-inline: 0.2rem 0.34rem;
+  background: transparent;
+}
+
+/* Main stage + notifications: outer chrome matches vault|editor (see .panel-group.fill). */
+.main-shell-stage.panel-group.fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* Symmetric horizontal inset so left vs right rail-to-panel gutters mirror (overrides .panel-group.fill 0.75/1.0 split). */
+  padding-inline: var(--panel-grid-padding);
+}
+
+.main-shell-stage.panel-group.fill > .main-end-split {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Inner vault/podcasts split: single outer padding from .main-shell-stage only. */
+.main-shell-stage .panel-group.fill.split-inner {
+  padding: 0;
+  min-height: 0;
+}
+
+.desktop-hsplit-end-pane > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
+.notifications-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notifications-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.28rem 0.38rem 0.45rem;
+}
+
+.notifications-panel__empty {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.notifications-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.notifications-panel__row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+}
+
+.notifications-panel__row--error {
+  border-color: var(--color-error-banner-border);
+  background: var(--color-error-banner-bg);
+}
+
+.notifications-panel__row--info {
+  background: var(--color-brand-surface-bright, var(--color-surface));
+}
+
+.notifications-panel__row--highlight {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-text) 22%, transparent);
+}
+
+.notifications-panel__text {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.notifications-panel__dismiss {
+  flex-shrink: 0;
+  margin-top: -0.08rem;
+}
+
 .main-column {
   flex: 1;
   min-width: 0;
@@ -664,19 +898,6 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   background: transparent;
   position: relative;
-}
-
-.desktop-player-dock-outer {
-  flex-shrink: 0;
-  min-width: 0;
-  box-sizing: border-box;
-  padding-block: 0 var(--panel-grid-padding);
-  padding-inline: calc(var(--panel-grid-padding) * 0.75) var(--panel-grid-padding);
-}
-
-.desktop-player-dock-outer .desktop-player-dock {
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .tab-panel {
@@ -739,6 +960,18 @@ a:focus:not(:focus-visible) {
   min-height: 0;
 }
 
+/* No left column: editor is not inside .desktop-hsplit-right (see MainWorkspaceSplit). */
+.main-workspace-editor-only > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
+.desktop-vsplit-top > .panel-surface,
+.desktop-vsplit-bottom > .panel-surface {
+  flex: 1;
+  min-height: 0;
+}
+
 .panel-surface.inner {
   background: var(--color-editor-bg);
 }
@@ -778,6 +1011,33 @@ a:focus:not(:focus-visible) {
   opacity: 1;
   background: linear-gradient(
     90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 11%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+/* Vault/Episodes stack: north–south resize. Must follow `.resize-sep` so this wins the cascade. */
+.resize-sep.resize-sep--row {
+  margin-block: calc(var(--panel-grid-gap) / 2);
+  margin-inline: 0;
+  cursor: row-resize;
+}
+
+.resize-sep.resize-sep--row::after {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
+    color-mix(in srgb, var(--color-text) 7%, transparent) 55%,
+    transparent 100%
+  );
+}
+
+.resize-sep.resize-sep--row:hover::after {
+  background: linear-gradient(
+    180deg,
     transparent 0%,
     color-mix(in srgb, var(--color-text) 11%, transparent) 45%,
     color-mix(in srgb, var(--color-text) 11%, transparent) 55%,
@@ -1711,7 +1971,7 @@ button.primary.destructive {
   text-rendering: auto;
   /* Parity with .note-list button / .episode-row: avoid faux-bold synthesis on WebKitGTK. */
   font-synthesis: none;
-  /* Same WebKit tradeoff as .playlist-body / .section-heading: grayscale AA can look more even when
+  /* Same WebKit tradeoff as .episode-scroll / .section-heading: grayscale AA can look more even when
    * scrolling/compositing would otherwise muddle subpixel LCD antialiasing. */
   -webkit-font-smoothing: antialiased;
   /* Transparent under `.cm-gutters` (fold rail); paper only for the text column. */
@@ -3393,31 +3653,6 @@ button:disabled {
   font-size: 0.9rem;
 }
 
-.playlist-body {
-  padding: 0.5rem 0.6rem 0.75rem;
-  overflow: auto;
-  flex: 1;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: geometricPrecision;
-}
-
-.playlist-dl {
-  margin: 0.5rem 0;
-  display: grid;
-  grid-template-columns: 6rem 1fr;
-  gap: 0.25rem 0.5rem;
-  font-size: 0.85rem;
-}
-
-.playlist-dl dt {
-  margin: 0;
-  color: var(--color-muted);
-}
-
-.playlist-dl dd {
-  margin: 0;
-}
-
 .mono.wrap {
   word-break: break-all;
 }
@@ -3510,8 +3745,8 @@ button:disabled {
   border-top-color: var(--color-capture-border);
 }
 
-/* Consume (podcasts / news): scoped mental space; see specs/design/design-system-calm-editorial.md */
-.consume-root {
+/* Consume (episodes): scoped mental space; see specs/design/design-system-calm-editorial.md */
+.episodes-pane-root {
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -3532,39 +3767,33 @@ button:disabled {
   background: var(--color-consume-chrome);
 }
 
-.podcasts-right-col {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+.pane-header--episodes .pane-title {
+  flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
 }
 
-.podcasts-right-stack {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--panel-grid-gap);
-  overflow: hidden;
+.pane-header-aux-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.1rem 0.28rem;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  cursor: default;
 }
 
-.podcasts-player {
-  flex: 0 0 auto;
+.pane-header-aux-btn__label {
+  line-height: 1.2;
 }
 
-.podcasts-playlist {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.podcasts-playlist .playlist-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+.pane-header-aux-btn__glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 input::placeholder,

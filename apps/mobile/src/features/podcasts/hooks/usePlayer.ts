@@ -19,6 +19,8 @@ type UsePlayerResult = {
   clearNowPlayingIfMatchesEpisode: (episodeId: string) => Promise<void>;
   error: string | null;
   isLoading: boolean;
+  /** True while a user-triggered playback action runs or native player reports loading/buffering. */
+  playbackTransportBusy: boolean;
   playEpisode: (episode: PodcastEpisode) => Promise<void>;
   progress: PlayerProgress;
   resyncPlaylistFromDisk: () => Promise<void>;
@@ -278,7 +280,7 @@ export function usePlayer(
 
         loadedEpisodeIdRef.current = episode.id;
         setActiveEpisode(episode);
-        setState('playing');
+        setState(await player.getState());
 
         const uriForPlay = baseUriRef.current;
         const deviceIdForPlay = localSettings?.deviceInstanceId?.trim() ?? '';
@@ -399,7 +401,7 @@ export function usePlayer(
       }
 
       await player.resume();
-      setState('playing');
+      setState(await player.getState());
 
       const uriResume = baseUriRef.current;
       const deviceIdResume = localSettings?.deviceInstanceId?.trim() ?? '';
@@ -505,11 +507,14 @@ export function usePlayer(
     }
   }, [player]);
 
+  const playbackTransportBusy = isLoading || state === 'loading';
+
   return {
     activeEpisode,
     clearNowPlayingIfMatchesEpisode,
     error,
     isLoading,
+    playbackTransportBusy,
     playEpisode,
     progress,
     resyncPlaylistFromDisk,

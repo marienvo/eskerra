@@ -58,7 +58,7 @@ Implementation lives in `App.css` on `.section-heading`; adjust there and update
 
 ## Feed quirks
 
-Episode titles may contain stray `**` from sources. List display strips those via `episodeListLabel()` in [`PodcastsTab.tsx`](../../apps/desktop/src/components/PodcastsTab.tsx) so inline markers do not look like uneven weight.
+Episode titles may contain stray `**` from sources. List display strips those via `episodeListLabel()` in [`EpisodesPane.tsx`](../../apps/desktop/src/components/EpisodesPane.tsx) so inline markers do not look like uneven weight.
 
 ## Related
 

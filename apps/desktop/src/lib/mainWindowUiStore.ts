@@ -3,6 +3,7 @@ import {load} from '@tauri-apps/plugin-store';
 export const MAIN_WINDOW_UI_STORE_PATH = 'eskerra-desktop.json';
 export const MAIN_WINDOW_UI_KEY = 'mainWindowUiV1';
 
+/** @deprecated Legacy field; migrated to `vaultPaneVisible` / `episodesPaneVisible` on load. */
 export type MainTabId = 'podcasts' | 'inbox';
 
 export type StoredMainWindowInbox = {
@@ -14,14 +15,27 @@ export type StoredMainWindowInbox = {
 
 export type StoredMainWindowUi = {
   vaultRoot: string;
-  mainTab: MainTabId;
-  playerDockVisible: boolean;
+  /** When true, the vault tree column is shown to the left of the editor. */
+  vaultPaneVisible: boolean;
+  /** When true, the episodes list column is shown (left of the editor, or between vault and editor). */
+  episodesPaneVisible: boolean;
+  /** Notifications pane open (list is always session-only). */
+  notificationsPanelVisible: boolean;
   inbox: StoredMainWindowInbox;
 };
 
 const DEFAULT_INBOX: StoredMainWindowInbox = {
   composingNewEntry: false,
   selectedUri: null,
+};
+
+/** Default matches the former `mainTab` default of `podcasts`. */
+export const DEFAULT_MAIN_WINDOW_PANE_VISIBILITY: {
+  vaultPaneVisible: boolean;
+  episodesPaneVisible: boolean;
+} = {
+  vaultPaneVisible: false,
+  episodesPaneVisible: true,
 };
 
 /** Pure parse + sanitize for tests and for store values. */
@@ -35,14 +49,31 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     return null;
   }
 
-  let mainTab: MainTabId = 'podcasts';
-  if (o.mainTab === 'inbox' || o.mainTab === 'podcasts') {
-    mainTab = o.mainTab;
+  let vaultPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible;
+  let episodesPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible;
+
+  const v = o.vaultPaneVisible;
+  const e = o.episodesPaneVisible;
+  if (typeof v === 'boolean' && typeof e === 'boolean') {
+    vaultPaneVisible = v;
+    episodesPaneVisible = e;
+  } else {
+    let legacyTab: MainTabId = 'podcasts';
+    if (o.mainTab === 'inbox' || o.mainTab === 'podcasts') {
+      legacyTab = o.mainTab;
+    }
+    if (legacyTab === 'inbox') {
+      vaultPaneVisible = true;
+      episodesPaneVisible = false;
+    } else {
+      vaultPaneVisible = false;
+      episodesPaneVisible = true;
+    }
   }
 
-  let playerDockVisible = true;
-  if (typeof o.playerDockVisible === 'boolean') {
-    playerDockVisible = o.playerDockVisible;
+  let notificationsPanelVisible = true;
+  if (typeof o.notificationsPanelVisible === 'boolean') {
+    notificationsPanelVisible = o.notificationsPanelVisible;
   }
 
   const inbox: StoredMainWindowInbox = {...DEFAULT_INBOX};
@@ -75,8 +106,9 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
 
   return {
     vaultRoot,
-    mainTab,
-    playerDockVisible,
+    vaultPaneVisible,
+    episodesPaneVisible,
+    notificationsPanelVisible,
     inbox,
   };
 }

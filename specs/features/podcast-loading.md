@@ -188,6 +188,18 @@ Expected call profile after this design:
 
 Total target on warm path: roughly 4 SAF calls plus any required validation misses.
 
+## Playback buffering UX (Android)
+
+- **Native-led state:** After `play()` / `resume()`, `usePlayer` syncs React playback state from `getState()` instead of forcing `playing`, so `State.Loading` / `State.Buffering` from react-native-track-player can surface as `loading` while the network buffers (e.g. resume mid-episode after cold start).
+- **`playbackTransportBusy`:** `isLoading || state === 'loading'`. Exposed on `PlayerContext` for UI that should treat transport as busy (mini player spinner, episode row lockout) during both user actions and native buffering.
+- **Mini player:** When transport is busy and the state is `loading`, the main control shows an `ActivityIndicator` instead of play/pause; optional one-line copy: **Buffering…**, **Resuming…** (when `positionMs` is past a mid-episode threshold), or **Starting…** when paused but an action is still in flight.
+- **Episode rows:** Rows use `playbackTransportBusy` so users cannot start another episode while buffering or while a play action is completing.
+
+## Desktop playback chrome (no separate player pane)
+
+- The **title bar** (`TitleBarTransport`) is the primary in-window transport: elapsed, ±10s, play/pause or **loading** (spinning `progress_activity`), duration. There is no separate docked player panel.
+- When `DesktopPlayerLabel` is `loading`, skip buttons are disabled and the center control shows the loading spinner (not a disabled play/pause icon alone).
+
 ## Non-Goals
 
 - Persisting negative artwork lookups (`null`) across restarts.

@@ -64,7 +64,7 @@ describe('EpisodeRow', () => {
         mutedTextColor="#666666"
         onPlayEpisode={jest.fn().mockResolvedValue(undefined)}
         onToggleSelect={jest.fn()}
-        playbackLoading={false}
+        playbackTransportBusy={false}
         playbackState="paused"
         {...overrides}
       />,

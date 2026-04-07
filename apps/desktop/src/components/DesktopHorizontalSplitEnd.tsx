@@ -7,40 +7,38 @@ import {
   type ReactNode,
 } from 'react';
 
-import {
-  clampSplitLeftWidthPx,
-  maxAvailableLeftWidthPx,
-  shouldPersistLeftSplitWidthClamp,
-} from '../lib/desktopHorizontalSplitClamp';
-import {MIN_RESIZABLE_PANE_PX} from '../lib/layoutStore';
+import {clampSplitRightWidthPx} from '../lib/desktopHorizontalSplitClamp';
 
-export type DesktopHorizontalSplitProps = {
-  /** Current left column width in CSS pixels (controlled by parent). */
-  leftWidthPx: number;
-  minLeftPx: number;
-  maxLeftPx: number;
-  /** Minimum width reserved for the right column (approximates former %-min). */
-  minRightPx?: number;
-  onLeftWidthPxChanged: (px: number) => void;
-  left: ReactNode;
-  right: ReactNode;
+export type DesktopHorizontalSplitEndProps = {
+  /** Current end column width in CSS pixels (notifications pane only, not the rail). */
+  endWidthPx: number;
+  minEndPx: number;
+  maxEndPx: number;
+  /** Minimum width reserved for the flex **main** column (left of the separator). */
+  minMainPx?: number;
+  onEndWidthPxChanged: (px: number) => void;
+  main: ReactNode;
+  /** Fixed-width region (e.g. Notifications panel). Hidden when `endVisible` is false. */
+  end: ReactNode;
+  endVisible: boolean;
   className?: string;
 };
 
 /**
- * App-owned horizontal split: fixed-px left column, flex right column.
- * Avoids react-resizable-panels percentage remapping jitter on window resize.
+ * Main (flex) | separator | end (fixed px). Drag the separator to resize the end column;
+ * mirrors {@link DesktopHorizontalSplit} for a **right** fixed pane.
  */
-export function DesktopHorizontalSplit({
-  leftWidthPx,
-  minLeftPx,
-  maxLeftPx,
-  minRightPx = MIN_RESIZABLE_PANE_PX,
-  onLeftWidthPxChanged,
-  left,
-  right,
+export function DesktopHorizontalSplitEnd({
+  endWidthPx,
+  minEndPx,
+  maxEndPx,
+  minMainPx = 280,
+  onEndWidthPxChanged,
+  main,
+  end,
+  endVisible,
   className,
-}: DesktopHorizontalSplitProps) {
+}: DesktopHorizontalSplitEndProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const separatorRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
@@ -48,14 +46,13 @@ export function DesktopHorizontalSplit({
   const dragStartWidthRef = useRef(0);
   const latestDragWidthRef = useRef<number | null>(null);
 
-  /** Local width while dragging so the parent debounce does not lag the handle. */
   const [dragWidthPx, setDragWidthPx] = useState<number | null>(null);
-  const displayLeftPx = dragWidthPx ?? leftWidthPx;
+  const displayEndPx = dragWidthPx ?? endWidthPx;
 
   const measureAndClamp = useCallback(() => {
     const container = containerRef.current;
     const sep = separatorRef.current;
-    if (!container || !sep) {
+    if (!container || !sep || !endVisible) {
       return;
     }
     const cw = container.clientWidth;
@@ -63,22 +60,18 @@ export function DesktopHorizontalSplit({
     if (cw <= 0) {
       return;
     }
-    const maxW = maxAvailableLeftWidthPx(cw, sepW, minRightPx);
-    const next = clampSplitLeftWidthPx(
-      leftWidthPx,
-      minLeftPx,
-      maxLeftPx,
+    const next = clampSplitRightWidthPx(
+      endWidthPx,
+      minEndPx,
+      maxEndPx,
       cw,
       sepW,
-      minRightPx,
+      minMainPx,
     );
-    if (next !== leftWidthPx) {
-      if (!shouldPersistLeftSplitWidthClamp(maxW, minLeftPx)) {
-        return;
-      }
-      onLeftWidthPxChanged(next);
+    if (next !== endWidthPx) {
+      onEndWidthPxChanged(next);
     }
-  }, [leftWidthPx, minLeftPx, maxLeftPx, minRightPx, onLeftWidthPxChanged]);
+  }, [endVisible, endWidthPx, maxEndPx, minEndPx, minMainPx, onEndWidthPxChanged]);
 
   useLayoutEffect(() => {
     measureAndClamp();
@@ -102,19 +95,25 @@ export function DesktopHorizontalSplit({
   }, [measureAndClamp]);
 
   const onSeparatorPointerDown = useCallback(
-    (e: {button: number; clientX: number; currentTarget: HTMLDivElement; pointerId: number; preventDefault: () => void}) => {
+    (e: {
+      button: number;
+      clientX: number;
+      currentTarget: HTMLDivElement;
+      pointerId: number;
+      preventDefault: () => void;
+    }) => {
       if (e.button !== 0) {
         return;
       }
       e.preventDefault();
       draggingRef.current = true;
       dragStartXRef.current = e.clientX;
-      dragStartWidthRef.current = leftWidthPx;
-      latestDragWidthRef.current = leftWidthPx;
-      setDragWidthPx(leftWidthPx);
+      dragStartWidthRef.current = endWidthPx;
+      latestDragWidthRef.current = endWidthPx;
+      setDragWidthPx(endWidthPx);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [leftWidthPx],
+    [endWidthPx],
   );
 
   const onSeparatorPointerMove = useCallback(
@@ -127,21 +126,21 @@ export function DesktopHorizontalSplit({
       if (!container || !sep) {
         return;
       }
-      const delta = e.clientX - dragStartXRef.current;
+      const delta = dragStartXRef.current - e.clientX;
       const cw = container.clientWidth;
       const sepW = sep.offsetWidth;
-      const next = clampSplitLeftWidthPx(
+      const next = clampSplitRightWidthPx(
         dragStartWidthRef.current + delta,
-        minLeftPx,
-        maxLeftPx,
+        minEndPx,
+        maxEndPx,
         cw,
         sepW,
-        minRightPx,
+        minMainPx,
       );
       latestDragWidthRef.current = next;
       setDragWidthPx(next);
     },
-    [minLeftPx, maxLeftPx, minRightPx],
+    [maxEndPx, minEndPx, minMainPx],
   );
 
   const endDrag = useCallback(
@@ -159,13 +158,13 @@ export function DesktopHorizontalSplit({
       latestDragWidthRef.current = null;
       setDragWidthPx(null);
       if (Number.isFinite(w)) {
-        onLeftWidthPxChanged(Math.round(w));
+        onEndWidthPxChanged(Math.round(w));
       }
     },
-    [onLeftWidthPxChanged],
+    [onEndWidthPxChanged],
   );
 
-  const rootClass = ['panel-group', 'fill', className].filter(Boolean).join(' ');
+  const rootClass = ['main-end-split', className].filter(Boolean).join(' ');
 
   return (
     <div
@@ -178,36 +177,11 @@ export function DesktopHorizontalSplit({
         flex: 1,
         minHeight: 0,
         minWidth: 0,
+        gap: 0,
       }}
     >
       <div
-        className="desktop-hsplit-left"
-        style={{
-          flex: `0 0 ${displayLeftPx}px`,
-          width: displayLeftPx,
-          minHeight: 0,
-          minWidth: 0,
-          maxWidth: displayLeftPx,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        {left}
-      </div>
-      <div
-        ref={separatorRef}
-        className="resize-sep"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize panels"
-        onPointerDown={onSeparatorPointerDown}
-        onPointerMove={onSeparatorPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      />
-      <div
-        className="desktop-hsplit-right"
+        className="main-end-split__main"
         style={{
           flex: '1 1 0',
           minWidth: 0,
@@ -217,8 +191,38 @@ export function DesktopHorizontalSplit({
           overflow: 'hidden',
         }}
       >
-        {right}
+        {main}
       </div>
+      {endVisible ? (
+        <>
+          <div
+            ref={separatorRef}
+            className="resize-sep"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize panels"
+            onPointerDown={onSeparatorPointerDown}
+            onPointerMove={onSeparatorPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          />
+          <div
+            className="main-end-split__end desktop-hsplit-end-pane"
+            style={{
+              flex: `0 0 ${displayEndPx}px`,
+              width: displayEndPx,
+              minHeight: 0,
+              minWidth: 0,
+              maxWidth: displayEndPx,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {end}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

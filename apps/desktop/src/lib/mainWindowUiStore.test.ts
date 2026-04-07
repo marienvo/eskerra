@@ -1,6 +1,9 @@
 import {describe, expect, it} from 'vitest';
 
-import {normalizeMainWindowUiPayload} from './mainWindowUiStore';
+import {
+  DEFAULT_MAIN_WINDOW_PANE_VISIBILITY,
+  normalizeMainWindowUiPayload,
+} from './mainWindowUiStore';
 
 describe('normalizeMainWindowUiPayload', () => {
   it('returns null for non-objects', () => {
@@ -17,29 +20,70 @@ describe('normalizeMainWindowUiPayload', () => {
     expect(normalizeMainWindowUiPayload({vaultRoot: 1})).toBeNull();
   });
 
-  it('defaults invalid mainTab to podcasts', () => {
+  it('migrates legacy mainTab podcasts to episodes-only panes', () => {
     const out = normalizeMainWindowUiPayload({
       vaultRoot: '/vault',
       mainTab: 'settings',
     });
     expect(out).toEqual({
       vaultRoot: '/vault',
-      mainTab: 'podcasts',
-      playerDockVisible: true,
+      vaultPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
+      episodesPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
+      notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
   });
 
-  it('accepts inbox tab and trims vaultRoot', () => {
+  it('migrates legacy mainTab inbox to vault-only panes', () => {
     const out = normalizeMainWindowUiPayload({
       vaultRoot: '  /data/v  ',
+      mainTab: 'inbox',
+    });
+    expect(out).toEqual({
+      vaultRoot: '/data/v',
+      vaultPaneVisible: true,
+      episodesPaneVisible: false,
+      notificationsPanelVisible: true,
+      inbox: {composingNewEntry: false, selectedUri: null},
+    });
+  });
+
+  it('migrates legacy mainTab podcasts to episodes pane visible', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      mainTab: 'podcasts',
+    });
+    expect(out).toEqual({
+      vaultRoot: '/v',
+      vaultPaneVisible: false,
+      episodesPaneVisible: true,
+      notificationsPanelVisible: true,
+      inbox: {composingNewEntry: false, selectedUri: null},
+    });
+  });
+
+  it('prefers explicit vaultPaneVisible and episodesPaneVisible over mainTab', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      mainTab: 'inbox',
+      vaultPaneVisible: false,
+      episodesPaneVisible: true,
+    });
+    expect(out?.vaultPaneVisible).toBe(false);
+    expect(out?.episodesPaneVisible).toBe(true);
+  });
+
+  it('ignores legacy playerDockVisible in stored JSON', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
       mainTab: 'inbox',
       playerDockVisible: false,
     });
     expect(out).toEqual({
-      vaultRoot: '/data/v',
-      mainTab: 'inbox',
-      playerDockVisible: false,
+      vaultRoot: '/v',
+      vaultPaneVisible: true,
+      episodesPaneVisible: false,
+      notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
   });
@@ -82,5 +126,18 @@ describe('normalizeMainWindowUiPayload', () => {
       },
     });
     expect(out?.inbox.openTabUris).toEqual(['/v/a.md', '/v/b.md']);
+  });
+
+  it('parses notificationsPanelVisible', () => {
+    const hidden = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      notificationsPanelVisible: false,
+    });
+    expect(hidden?.notificationsPanelVisible).toBe(false);
+    const invalid = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      notificationsPanelVisible: 'yes',
+    });
+    expect(invalid?.notificationsPanelVisible).toBe(true);
   });
 });

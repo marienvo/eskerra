@@ -10,7 +10,7 @@ Authoritative detail: `specs/design/desktop-shell-patterns.md`.
 
 ## Resizable columns
 
-- Main **Inbox** and **Podcasts** horizontal splits: implement with **`DesktopHorizontalSplit`** — **left column** is a **fixed pixel width**; **right column** is **`flex: 1`**. Do **not** reintroduce **`react-resizable-panels`** for this main split without a spec update (it used percentage remapping and caused visible **1px jitter** on window resize). Persist **`leftWidthPx`** via **`layoutStore`** (`layoutPanelsV4`).
+- Main **Vault** / **Episodes** / **editor** workspace (**`MainWorkspaceSplit`**): uses **`DesktopHorizontalSplit`** for width; when **both** Vault and Episodes are open, **`DesktopVerticalSplit`** stacks them in the left column (**`vaultEpisodesStack.topHeightPx`** in **`layoutPanelsV4`**). **One** main **left column width** (persisted as **`inbox.leftWidthPx`**, mirrored to **`podcastsMain.leftWidthPx`**); **editor** is **`flex: 1`**. Do **not** reintroduce **`react-resizable-panels`** for this main split without a spec update (it used percentage remapping and caused visible **1px jitter** on window resize). Persist widths and stack height via **`layoutStore`** (`layoutPanelsV4`).
 
 ## Cursors
 

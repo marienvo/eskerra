@@ -1,7 +1,6 @@
 import {
   buildPlaylistEntryForWrite,
   MIN_PLAYLIST_PERSIST_POSITION_MS,
-  type PlayerState,
   type PlaylistEntry,
   type VaultFilesystem,
 } from '@eskerra/core';
@@ -44,7 +43,6 @@ export type UseDesktopPodcastPlaybackOptions = {
   deviceInstanceId: string;
   fs: VaultFilesystem;
   onError: (msg: string | null) => void;
-  onAutoShowPlayerDock?: () => void;
   onPlaylistDiskUpdated?: () => void;
   playlistRevision: number;
   /** Flat episode list from the podcasts catalog (Episodes tab). */
@@ -72,7 +70,6 @@ export function useDesktopPodcastPlayback({
   deviceInstanceId,
   fs,
   onError,
-  onAutoShowPlayerDock,
   onPlaylistDiskUpdated,
   playlistRevision,
   consumeEpisodes,
@@ -86,7 +83,6 @@ export function useDesktopPodcastPlayback({
 
   const playbackRef = useRef<{episodeId: string; mp3Url: string} | null>(null);
   const diskPlaylistRef = useRef<PlaylistEntry | null>(null);
-  const prevPlayerStateRef = useRef<PlayerState | null>(null);
   const lastPrimedPlaylistKeyRef = useRef<string | null>(null);
   /** Catalog list identity changes every parent render; priming only needs latest rows for lookup. */
   const consumeEpisodesRef = useRef(consumeEpisodes);
@@ -140,20 +136,9 @@ export function useDesktopPodcastPlayback({
 
   useEffect(() => {
     const player = getDesktopAudioPlayer();
-    let cancelled = false;
-    void player.getState().then(s => {
-      if (!cancelled) {
-        prevPlayerStateRef.current = s;
-      }
-    });
     const unsub = player.addStateListener(s => {
-      const prev = prevPlayerStateRef.current;
-      prevPlayerStateRef.current = s;
       if (s === 'error') {
         lastPrimedPlaylistKeyRef.current = null;
-      }
-      if (prev !== 'playing' && s === 'playing') {
-        onAutoShowPlayerDock?.();
       }
       if (s === 'playing') {
         setPlayerLabel('playing');
@@ -170,10 +155,9 @@ export function useDesktopPodcastPlayback({
       }
     });
     return () => {
-      cancelled = true;
       unsub();
     };
-  }, [onAutoShowPlayerDock]);
+  }, []);
 
   useEffect(() => {
     if (!vaultRoot || !deviceInstanceId) {
@@ -385,7 +369,6 @@ export function useDesktopPodcastPlayback({
       }
 
       lastPrimedPlaylistKeyRef.current = null;
-      onAutoShowPlayerDock?.();
       onError(null);
       setPositionMs(0);
       setDurationMs(null);
@@ -455,7 +438,7 @@ export function useDesktopPodcastPlayback({
         userPlaybackDepthRef.current -= 1;
       }
     },
-    [vaultRoot, deviceInstanceId, fs, onAutoShowPlayerDock, onError, onPlaylistDiskUpdated],
+    [vaultRoot, deviceInstanceId, fs, onError, onPlaylistDiskUpdated],
   );
 
   const resumeFromVault = useCallback(async () => {
@@ -469,7 +452,6 @@ export function useDesktopPodcastPlayback({
     userPlaybackDepthRef.current += 1;
     try {
     lastPrimedPlaylistKeyRef.current = null;
-    onAutoShowPlayerDock?.();
     onError(null);
     try {
       const pl = await readPlaylistEntry(vaultRoot, fs);
@@ -542,7 +524,6 @@ export function useDesktopPodcastPlayback({
     fs,
     consumeCatalogReady,
     consumeEpisodes,
-    onAutoShowPlayerDock,
     onError,
     deviceInstanceId,
     onPlaylistDiskUpdated,

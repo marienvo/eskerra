@@ -75,7 +75,7 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
     markEpisodeAsPlayed,
     miniPlayerArtworkSelected,
     playbackError,
-    playbackLoading,
+    playbackTransportBusy,
     playbackState,
     playEpisode,
     podcastError,
@@ -399,7 +399,7 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
               onToggleSelect={() => {
                 toggleEpisodeSelection(item.id);
               }}
-              playbackLoading={playbackLoading}
+              playbackTransportBusy={playbackTransportBusy}
               playbackState={playbackState}
               sectionRssFeedUrl={section.rssFeedUrl}
             />
