@@ -2869,6 +2869,22 @@ button.primary.destructive {
   --nb-editor-heading-gutter: 9.25ch;
 }
 
+[data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
+  position: relative;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly:before {
+  content: "";
+  pointer-events: none;
+  display: block;
+  position: absolute;
+  background: color-mix(in srgb, var(--color-muted) 5%, var(--nb-editor-paper));
+  top: 0;
+  left: 70px; /* left indentation to align with markdown content */
+  bottom: 0;
+  right: 0;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__cell-readonly {
   display: flex;
   flex-direction: column;

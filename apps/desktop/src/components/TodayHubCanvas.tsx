@@ -411,8 +411,16 @@ export function TodayHubCanvas({
               <div className="today-hub-canvas__row-cells">
                 {sections.map((chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
+                  const emptyReadonly = !editing && !chunk.trim();
                   return (
-                    <div key={ci} className="today-hub-canvas__cell">
+                    <div
+                      key={ci}
+                      className={
+                        emptyReadonly
+                          ? 'today-hub-canvas__cell today-hub-canvas__cell--empty-readonly'
+                          : 'today-hub-canvas__cell'
+                      }
+                    >
                       {editing ? (
                         <div className="today-hub-canvas__cm-host">
                           <NoteMarkdownEditor
