@@ -119,6 +119,18 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
     expect(parts[1]).toBe('b\n\n::today-section::\n\nc\n\n::today-section::\n\nd');
   });
 
+  it('splits when section ends at EOF after marker (no trailing blank line)', () => {
+    const raw = '1\n\n::today-section::';
+    const parts = splitTodayRowIntoColumns(raw, 2);
+    expect(parts).toEqual(['1', '']);
+  });
+
+  it('splits with single newline before marker (flex paragraph break)', () => {
+    const raw = '1\n::today-section::\n\n';
+    const parts = splitTodayRowIntoColumns(raw, 2);
+    expect(parts).toEqual(['1', '']);
+  });
+
   it('todayHubRowSectionsAllBlank', () => {
     expect(todayHubRowSectionsAllBlank(['', '  \n'])).toBe(true);
     expect(todayHubRowSectionsAllBlank(['x'])).toBe(false);

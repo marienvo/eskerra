@@ -1,11 +1,18 @@
 import {TODAY_HUB_SECTION_DELIMITER} from './todayHubSectionDelimiter';
 
-const SPLIT_RX = /\n\n::today-section::\n\n/g;
+/**
+ * Paragraph break before the marker (`\n\n` preferred, `\n` allowed), optional spaces on the marker
+ * line, then a break after the marker: full blank line, single newline before non-newline content, or
+ * end of file. Stricter `\n\n`‑only splits failed on EOF‑after‑marker and some pasted layouts.
+ */
+const SPLIT_RX =
+  /(?:\n\n|\n)\s*::today-section::\s*(?:\n\n|\n(?=[^\n])|$)/g;
 
 /**
  * Splits row file body into `columnCount` segments. Single column: whole text.
  * If `columnCount > 1` but no delimiter: segment 0 holds entire text, rest empty.
  * Extra delimited chunks are merged into the last column.
+ * Delimiter matching is slightly relaxed vs the canonical `TODAY_HUB_SECTION_DELIMITER` (see `SPLIT_RX`).
  */
 export function splitTodayRowIntoColumns(fullText: string, columnCount: number): string[] {
   if (columnCount < 1) {

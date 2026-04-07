@@ -76,7 +76,7 @@ function localOffsetInLineFromCaretRange(
   if (!crfp) {
     return null;
   }
-  let pointRange: Range;
+  let pointRange: Range | null;
   try {
     pointRange = crfp(clientX, clientY);
   } catch {
