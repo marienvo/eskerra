@@ -2184,6 +2184,23 @@ button.primary.destructive {
 }
 
 /*
+ * Inline code uses an opaque background; default `cm-searchMatch` tint is easy to miss. Reinforce with
+ * a stronger mix + outline (same nesting patterns CodeMirror may emit).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code.cm-searchMatch,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code .cm-searchMatch {
+  background: color-mix(in srgb, #ffff00 44%, var(--nb-editor-inline-code-bg) 56%);
+  outline: 1px solid color-mix(in srgb, #b8a400 50%, var(--nb-editor-inline-code-border) 50%);
+  outline-offset: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code.cm-searchMatch.cm-searchMatch-selected,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code .cm-searchMatch.cm-searchMatch-selected {
+  background: color-mix(in srgb, #ff6a00 40%, var(--nb-editor-inline-code-bg) 60%);
+  outline-color: color-mix(in srgb, var(--nb-editor-accent) 42%, var(--nb-editor-inline-code-border) 58%);
+}
+
+/*
  * Gutter column sits in the fold rail (panel gray shows through); same fixed width as `.note-markdown-editor-fold-rail`.
  */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-gutters {

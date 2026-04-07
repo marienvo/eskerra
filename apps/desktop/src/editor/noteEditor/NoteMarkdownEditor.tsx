@@ -6,7 +6,7 @@ import {
   unfoldAll,
 } from '@codemirror/language';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
-import {search, searchKeymap} from '@codemirror/search';
+import {search, searchKeymap, searchPanelOpen} from '@codemirror/search';
 import {
   Compartment,
   EditorSelection,
@@ -84,6 +84,39 @@ import {
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
+
+/** Extra px below the sticky search bar so scroll-into-view clears the panel (outer scroll + `overflow: visible` scroller). */
+const NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX = 8;
+
+function captureSearchPanelTopInsetPx(view: EditorView): number {
+  const panels = view.dom.querySelector('.cm-panels-top');
+  if (!panels) {
+    return NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX;
+  }
+  return (
+    Math.round(panels.getBoundingClientRect().height)
+    + NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX
+  );
+}
+
+/**
+ * Search + scroll padding for the capture editor: sticky `.cm-panels-top` sits in the outer
+ * `overflow-y` scroller, so default `scrollIntoView` margins miss the real obstruction.
+ */
+const noteMarkdownSearchExtensionBundle: readonly Extension[] = [
+  search({
+    scrollToMatch: range =>
+      EditorView.scrollIntoView(range, {
+        y: 'start',
+        yMargin: NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX,
+      }),
+  }),
+  EditorView.scrollMargins.of(view =>
+    searchPanelOpen(view.state)
+      ? {top: captureSearchPanelTopInsetPx(view)}
+      : null,
+  ),
+];
 
 function foldedRangesPresent(state: EditorState): boolean {
   return foldedRanges(state).size > 0;
@@ -532,7 +565,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
       markdownInlineCodeSurroundInputHandler(),
-      search(),
+      ...noteMarkdownSearchExtensionBundle,
       keymap.of([
         ...buildNoteMarkdownVaultKeymapBindings({
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
