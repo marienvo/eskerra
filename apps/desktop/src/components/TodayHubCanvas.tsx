@@ -64,6 +64,22 @@ function normUri(u: string): string {
   return u.replace(/\\/g, '/');
 }
 
+/** Merge row file body using the latest in-memory column sections when present (avoids stale closures on debounced save). */
+function mergedMarkdownForTodayHubRow(
+  rowUri: string,
+  columnCount: number,
+  localSectionsByRow: Record<string, string[]>,
+  inboxByUri: Record<string, string>,
+): string {
+  const key = normUri(rowUri);
+  const sections = localSectionsByRow[key];
+  if (sections) {
+    return mergeTodayRowColumns(sections);
+  }
+  const raw = inboxByUri[key] ?? '';
+  return mergeTodayRowColumns(splitTodayRowIntoColumns(raw, columnCount));
+}
+
 export function TodayHubCanvas({
   vaultRoot,
   todayNoteUri,
@@ -134,10 +150,15 @@ export function TodayHubCanvas({
   const debounceTimerRef = useRef<number | null>(null);
   const pendingPersistRef = useRef<{uri: string; columnCount: number} | null>(null);
   const inboxContentByUriRef = useRef(inboxContentByUri);
+  const localRowSectionsRef = useRef<Record<string, string[]>>({});
 
   useLayoutEffect(() => {
     inboxContentByUriRef.current = inboxContentByUri;
   }, [inboxContentByUri]);
+
+  useLayoutEffect(() => {
+    localRowSectionsRef.current = localRowSections;
+  }, [localRowSections]);
 
   useEffect(() => {
     void prehydrateTodayHubRows(rowUris);
@@ -155,11 +176,6 @@ export function TodayHubCanvas({
     [localRowSections, inboxContentByUri, columnCount],
   );
 
-  const mergeForRow = useCallback(
-    (uri: string) => mergeTodayRowColumns(getSections(uri)),
-    [getSections],
-  );
-
   const flushScheduledPersist = useCallback(async () => {
     if (debounceTimerRef.current != null) {
       window.clearTimeout(debounceTimerRef.current);
@@ -168,10 +184,15 @@ export function TodayHubCanvas({
     const pending = pendingPersistRef.current;
     pendingPersistRef.current = null;
     if (pending) {
-      const merged = mergeForRow(pending.uri);
+      const merged = mergedMarkdownForTodayHubRow(
+        pending.uri,
+        pending.columnCount,
+        localRowSectionsRef.current,
+        inboxContentByUriRef.current,
+      );
       await persistTodayHubRow(pending.uri, merged, pending.columnCount);
     }
-  }, [mergeForRow, persistTodayHubRow]);
+  }, [persistTodayHubRow]);
 
   const schedulePersist = useCallback(
     (uri: string) => {
@@ -187,12 +208,17 @@ export function TodayHubCanvas({
           if (!p) {
             return;
           }
-          const merged = mergeForRow(p.uri);
+          const merged = mergedMarkdownForTodayHubRow(
+            p.uri,
+            p.columnCount,
+            localRowSectionsRef.current,
+            inboxContentByUriRef.current,
+          );
           await persistTodayHubRow(p.uri, merged, p.columnCount);
         })();
       }, INBOX_AUTOSAVE_DEBOUNCE_MS);
     },
-    [columnCount, mergeForRow, persistTodayHubRow],
+    [columnCount, persistTodayHubRow],
   );
 
   const openCell = useCallback(
@@ -201,7 +227,11 @@ export function TodayHubCanvas({
       void flushScheduledPersist().then(() => {
         const raw = inboxContentByUriRef.current[key] ?? '';
         const initial = splitTodayRowIntoColumns(raw, columnCount);
-        setLocalRowSections(prev => ({...prev, [key]: initial}));
+        setLocalRowSections(prev => {
+          const next = {...prev, [key]: initial};
+          localRowSectionsRef.current = next;
+          return next;
+        });
         setCellSessionNonce(n => n + 1);
         setActive({uri: key, col});
       });
@@ -238,7 +268,12 @@ export function TodayHubCanvas({
       if (!active) {
         return null;
       }
-      return mergeForRow(active.uri);
+      return mergedMarkdownForTodayHubRow(
+        active.uri,
+        columnCount,
+        localRowSectionsRef.current,
+        inboxContentByUriRef.current,
+      );
     };
     return () => {
       if (bridge.flushPendingEdits === flushFn) {
@@ -247,7 +282,7 @@ export function TodayHubCanvas({
         bridge.getLiveRowMergedMarkdown = () => null;
       }
     };
-  }, [bridgeRef, active, flushScheduledPersist, mergeForRow]);
+  }, [bridgeRef, active, columnCount, flushScheduledPersist]);
 
   useEffect(() => {
     return () => {
@@ -265,7 +300,9 @@ export function TodayHubCanvas({
       setLocalRowSections(prev => {
         const cur = [...(prev[active.uri] ?? getSections(active.uri))];
         cur[active.col] = text;
-        return {...prev, [active.uri]: cur};
+        const next = {...prev, [active.uri]: cur};
+        localRowSectionsRef.current = next;
+        return next;
       });
       schedulePersist(active.uri);
     },
