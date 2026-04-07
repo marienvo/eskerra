@@ -2780,9 +2780,9 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__header {
-  display: grid;
-  gap: 0.5rem 0.65rem;
-  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 0 1.25rem 0.4rem;
   margin-bottom: 0.35rem;
   border-bottom: 1px solid var(--color-border-subtle);
@@ -2791,14 +2791,24 @@ button.primary.destructive {
   font-weight: 620;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  grid-template-columns: minmax(5.5rem, 0.9fr) repeat(
-      var(--today-hub-col-count, 1),
-      minmax(7rem, 1fr)
-    );
+}
+
+[data-app-surface='capture'] .today-hub-canvas__header-top {
+  display: block;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__header-cols {
+  display: grid;
+  gap: 0.5rem 0.65rem;
+  align-items: end;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(7rem, 1fr)
+  );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__title {
-  min-width: 5.5rem;
+  display: inline-block;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__col-head {
@@ -2812,30 +2822,37 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row {
-  display: grid;
-  gap: 0.5rem 0.65rem;
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   padding: 0.35rem 1.25rem 0.5rem;
   border-radius: 6px;
-  grid-template-columns: minmax(5.5rem, 0.9fr) repeat(
-      var(--today-hub-col-count, 1),
-      minmax(7rem, 1fr)
-    );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row:nth-child(even) {
   background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
 }
 
-[data-app-surface='capture'] .today-hub-canvas__row-label {
-  min-width: 5.5rem;
-  padding-top: 0.35rem;
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar {
+  padding-top: 0.1rem;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-cells {
+  display: grid;
+  gap: 0.5rem 0.65rem;
+  align-items: stretch;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(7rem, 1fr)
+  );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-date {
   color: var(--color-text-primary);
   font-weight: 600;
   font-size: 0.82rem;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell {

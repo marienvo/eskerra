@@ -342,12 +342,16 @@ export function TodayHubCanvas({
       }
     >
       <div className="today-hub-canvas__header">
-        <span className="today-hub-canvas__title">Weeks</span>
-        {columnHeaders.map((label, ci) => (
-          <span key={ci} className="today-hub-canvas__col-head">
-            {label || ' '}
-          </span>
-        ))}
+        <div className="today-hub-canvas__header-top">
+          <span className="today-hub-canvas__title">Weeks</span>
+        </div>
+        <div className="today-hub-canvas__header-cols">
+          {columnHeaders.map((label, ci) => (
+            <span key={ci} className="today-hub-canvas__col-head">
+              {label || ' '}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="today-hub-canvas__rows">
         {mondays.map((mon, ri) => {
@@ -356,63 +360,65 @@ export function TodayHubCanvas({
           const isActiveRow = active?.uri === uri;
           return (
             <div key={uri} className="today-hub-canvas__row">
-              <div className="today-hub-canvas__row-label">
+              <div className="today-hub-canvas__row-date-bar">
                 <span className="today-hub-canvas__row-date">{rowLabel(mon)}</span>
               </div>
-              {sections.map((chunk, ci) => {
-                const editing = isActiveRow && active?.col === ci;
-                return (
-                  <div
-                    key={ci}
-                    className={
-                      editing
-                        ? 'today-hub-canvas__cell today-hub-canvas__cell--editing'
-                        : 'today-hub-canvas__cell'
-                    }
-                  >
-                    {editing ? (
-                      <div className="today-hub-canvas__cm-host">
-                        <NoteMarkdownEditor
-                          ref={cellEditorRef}
-                          vaultRoot={vaultRoot}
-                          attachmentHost={inboxAttachmentHost}
-                          resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                          activeNotePath={uri}
-                          initialMarkdown={chunk}
-                          sessionKey={cellSessionNonce}
-                          onMarkdownChange={updateActiveColumnText}
-                          onEditorError={onEditorError}
-                          onWikiLinkActivate={onWikiLinkActivate}
-                          relativeMarkdownLinkHrefIsResolved={
-                            relativeMarkdownLinkHrefIsResolved
-                          }
-                          onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                          onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                          wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
-                          wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                          onSaveShortcut={onSaveShortcut}
-                          placeholder="Write markdown…"
-                          busy={false}
-                        />
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        className="today-hub-canvas__cell-readonly"
-                        onClick={() => openCell(uri, ci)}
-                      >
-                        {chunk.trim() ? (
-                          <pre className="today-hub-canvas__pre">{chunk}</pre>
-                        ) : (
-                          <span className="muted today-hub-canvas__cell-hint">
-                            Click to edit
-                          </span>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+              <div className="today-hub-canvas__row-cells">
+                {sections.map((chunk, ci) => {
+                  const editing = isActiveRow && active?.col === ci;
+                  return (
+                    <div
+                      key={ci}
+                      className={
+                        editing
+                          ? 'today-hub-canvas__cell today-hub-canvas__cell--editing'
+                          : 'today-hub-canvas__cell'
+                      }
+                    >
+                      {editing ? (
+                        <div className="today-hub-canvas__cm-host">
+                          <NoteMarkdownEditor
+                            ref={cellEditorRef}
+                            vaultRoot={vaultRoot}
+                            attachmentHost={inboxAttachmentHost}
+                            resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                            activeNotePath={uri}
+                            initialMarkdown={chunk}
+                            sessionKey={cellSessionNonce}
+                            onMarkdownChange={updateActiveColumnText}
+                            onEditorError={onEditorError}
+                            onWikiLinkActivate={onWikiLinkActivate}
+                            relativeMarkdownLinkHrefIsResolved={
+                              relativeMarkdownLinkHrefIsResolved
+                            }
+                            onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                            onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                            wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
+                            wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                            onSaveShortcut={onSaveShortcut}
+                            placeholder="Write markdown…"
+                            busy={false}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="today-hub-canvas__cell-readonly"
+                          onClick={() => openCell(uri, ci)}
+                        >
+                          {chunk.trim() ? (
+                            <pre className="today-hub-canvas__pre">{chunk}</pre>
+                          ) : (
+                            <span className="muted today-hub-canvas__cell-hint">
+                              Click to edit
+                            </span>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
