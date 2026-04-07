@@ -400,6 +400,8 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     tree.setSelectedItems([selectedMarkdownUri]);
   }, [selectedMarkdownUri, rootId, itemIds, selectedItems, tree]);
 
+  // Omit `items.length` from deps: it changes on expand/collapse and would re-run this effect,
+  // re-expanding ancestors the user just collapsed while the open note URI is unchanged.
   useEffect(() => {
     if (
       !selectedMarkdownUri
@@ -448,7 +450,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     return () => {
       cancelled = true;
     };
-  }, [selectedMarkdownUri, rootId, items.length]);
+  }, [selectedMarkdownUri, rootId]);
 
   const containerProps = tree.getContainerProps('Vault');
 
