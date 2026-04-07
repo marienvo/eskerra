@@ -224,6 +224,50 @@ describe('loadVaultTreeVisibleChildRows', () => {
     });
   });
 
+  it('lists todayHub directories before other folders, then markdown', async () => {
+    const fs: VaultFilesystem = {
+      exists: vi.fn(),
+      mkdir: vi.fn(),
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      unlink: vi.fn(),
+      removeTree: vi.fn(),
+      renameFile: vi.fn(),
+      listFiles: vi.fn(async (d: string): Promise<VaultDirEntry[]> => {
+        if (d === '/v') {
+          return [
+            dir('Research', '/v/Research'),
+            dir('Personal', '/v/Personal'),
+            dir('Work', '/v/Work'),
+            file('n.md', '/v/n.md'),
+          ];
+        }
+        if (d === '/v/Personal' || d === '/v/Work') {
+          return [file('Today.md', `${d}/Today.md`)];
+        }
+        if (d === '/v/Research') {
+          return [];
+        }
+        return [];
+      }),
+    };
+    const itemStoreRef = {current: {} as Record<string, VaultTreeItemData>};
+    const rows = await loadVaultTreeVisibleChildRows({
+      parentUri: '/v',
+      fs,
+      itemStoreRef,
+    });
+    expect(rows.map(r => r.id)).toEqual([
+      '/v/Personal',
+      '/v/Work',
+      '/v/Research',
+      '/v/n.md',
+    ]);
+    expect(rows[0]?.data.kind).toBe('todayHub');
+    expect(rows[1]?.data.kind).toBe('todayHub');
+    expect(rows[2]?.data.kind).toBe('folder');
+  });
+
   it('classifies todayHub when Today.md is not first in sort order', async () => {
     const fs: VaultFilesystem = {
       exists: vi.fn(),

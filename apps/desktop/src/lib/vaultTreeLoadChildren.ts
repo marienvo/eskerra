@@ -120,8 +120,24 @@ export async function loadVaultTreeVisibleChildRows(options: {
     }),
   );
 
+  const byName = (a: VaultDirEntry, b: VaultDirEntry) => a.name.localeCompare(b.name);
+  const hubFolders: (VaultDirEntry & {type: 'directory'})[] = [];
+  const normalFolders: (VaultDirEntry & {type: 'directory'})[] = [];
+  for (const e of dirEntries) {
+    const todayUri = hubByDirUri.get(e.uri) ?? null;
+    if (todayUri !== null) {
+      hubFolders.push(e);
+    } else {
+      normalFolders.push(e);
+    }
+  }
+  hubFolders.sort(byName);
+  normalFolders.sort(byName);
+  const articleEntries = ordered.filter(e => e.type !== 'directory');
+  const visitationOrder: VaultDirEntry[] = [...hubFolders, ...normalFolders, ...articleEntries];
+
   const out: VaultTreeChildRow[] = [];
-  for (const e of ordered) {
+  for (const e of visitationOrder) {
     if (e.type === 'directory') {
       const todayUri = hubByDirUri.get(e.uri) ?? null;
       const payload: VaultTreeItemData =
