@@ -5,6 +5,7 @@ import {
 } from '@codemirror/autocomplete';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {openSearchPanel, search, searchKeymap} from '@codemirror/search';
 import {
   Compartment,
   EditorSelection,
@@ -99,6 +100,11 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   /** Bumped when the cell editor is recreated so async paste ignores stale callbacks. */
   pasteSessionRef: MutableRefObject<number>;
   pasteSessionId: number;
+  /**
+   * When set (table shell), Mod-f flushes the shell draft and opens find on the parent note editor
+   * instead of a per-cell search panel.
+   */
+  onOpenNoteWideFind?: () => void;
 };
 
 export type EskerraTableCellBundlePartial = Pick<
@@ -110,6 +116,7 @@ export type EskerraTableCellBundlePartial = Pick<
   | 'onReportError'
   | 'pasteSessionRef'
   | 'pasteSessionId'
+  | 'onOpenNoteWideFind'
 >;
 
 export type EskerraCellBundleFactory = (
@@ -140,6 +147,7 @@ export function buildNoteMarkdownCellExtensions(
     onDeleteNoteShortcut,
     onReportError,
     onDocChanged,
+    onOpenNoteWideFind,
     tableCallbacks: tc,
   } = args;
 
@@ -376,6 +384,21 @@ export function buildNoteMarkdownCellExtensions(
     {key: '|', run: () => true},
   ]);
 
+  const noteWideFindKeymap = Prec.highest(
+    keymap.of([
+      {
+        key: 'Mod-f',
+        run: view => {
+          if (onOpenNoteWideFind) {
+            onOpenNoteWideFind();
+            return true;
+          }
+          return openSearchPanel(view);
+        },
+      },
+    ]),
+  );
+
   return [
     noteMarkdownIndentUnit,
     markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
@@ -390,8 +413,10 @@ export function buildNoteMarkdownCellExtensions(
     ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),
     markdownInlineCodeSurroundInputHandler(),
+    ...(onOpenNoteWideFind ? [] : [search()]),
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
+    noteWideFindKeymap,
     keymap.of([
       ...buildNoteMarkdownVaultKeymapBindings({
         onSaveShortcut,
@@ -402,6 +427,7 @@ export function buildNoteMarkdownCellExtensions(
       }),
       indentWithTab,
       ...defaultKeymap,
+      ...(onOpenNoteWideFind ? [] : searchKeymap),
       ...buildNoteMarkdownDeleteLineModYBindings(),
       ...historyKeymap,
     ]),

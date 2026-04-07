@@ -6,6 +6,7 @@ import {
   unfoldAll,
 } from '@codemirror/language';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {search, searchKeymap} from '@codemirror/search';
 import {
   Compartment,
   EditorSelection,
@@ -531,6 +532,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
       markdownInlineCodeSurroundInputHandler(),
+      search(),
       keymap.of([
         ...buildNoteMarkdownVaultKeymapBindings({
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
@@ -543,6 +545,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         }),
         indentWithTab,
         ...foldKeymap,
+        ...searchKeymap,
         ...defaultKeymap,
         ...buildNoteMarkdownDeleteLineModYBindings(),
         ...historyKeymap,
