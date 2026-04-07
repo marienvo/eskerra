@@ -61,6 +61,17 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
+import {
+  enumerateTodayHubMondays,
+  parseTodayHubFrontmatter,
+  splitTodayRowIntoColumns,
+  todayHubRowSectionsAllBlank,
+  todayHubRowUri,
+  createIdleTodayHubWorkspaceBridge,
+  type TodayHubSettings,
+  type TodayHubWorkspaceBridge,
+} from '../lib/todayHub';
+import {vaultUriParentDirectory} from '../lib/vaultUriPaths';
 import {vaultUriIsTodayMarkdownFile} from '../lib/vaultTreeLoadChildren';
 import {
   getVaultSession,
@@ -354,8 +365,19 @@ export type UseMainWindowWorkspaceResult = {
   closeAllEditorTabs: () => void;
   reopenLastClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
-  /** Extra canvas under the markdown editor when Today.md is open as a Today-hub primary note. */
-  todayHubPaperPlaceholder: boolean;
+  /** Weekly hub grid under the main editor when `Today.md` is open. */
+  showTodayHubCanvas: boolean;
+  /** Parsed hub settings from the current `Today.md` editor body (frontmatter). */
+  todayHubSettings: TodayHubSettings | null;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
+  persistTodayHubRow: (
+    rowUri: string,
+    mergedMarkdown: string,
+    columnCount: number,
+  ) => Promise<void>;
 };
 
 export function useMainWindowWorkspace(options: {
@@ -395,7 +417,7 @@ export function useMainWindowWorkspace(options: {
   const skipRecencyDeferForUriRef = useRef<Set<string>>(new Set());
   const diskConflictDeferTimerRef = useRef<number | null>(null);
   const [composingNewEntry, setComposingNewEntry] = useState(false);
-  const [todayHubPaperPlaceholder, setTodayHubPaperPlaceholder] = useState(false);
+  const [showTodayHubCanvas, setShowTodayHubCanvas] = useState(false);
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
@@ -440,6 +462,12 @@ export function useMainWindowWorkspace(options: {
   const autosaveSchedulerRef = useRef(
     createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
   );
+  const todayHubBridgeRef = useRef<TodayHubWorkspaceBridge>(
+    createIdleTodayHubWorkspaceBridge(),
+  );
+  const todayHubWikiNavParentRef = useRef<string | null>(null);
+  const todayHubCellEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
+  const todayHubRowLastPersistedRef = useRef<Map<string, string>>(new Map());
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const backlinksActiveBodyRef = useRef('');
@@ -662,17 +690,24 @@ export function useMainWindowWorkspace(options: {
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
-      setTodayHubPaperPlaceholder(false);
+      setShowTodayHubCanvas(false);
       return;
     }
     const normRoot = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
     const normSel = selectedUri.replace(/\\/g, '/');
     if (!normSel.startsWith(`${normRoot}/`)) {
-      setTodayHubPaperPlaceholder(false);
+      setShowTodayHubCanvas(false);
       return;
     }
-    setTodayHubPaperPlaceholder(vaultUriIsTodayMarkdownFile(normSel));
+    setShowTodayHubCanvas(vaultUriIsTodayMarkdownFile(normSel));
   }, [vaultRoot, selectedUri, composingNewEntry]);
+
+  const todayHubSettings = useMemo((): TodayHubSettings | null => {
+    if (!showTodayHubCanvas || !selectedUri) {
+      return null;
+    }
+    return parseTodayHubFrontmatter(editorBody);
+  }, [showTodayHubCanvas, selectedUri, editorBody]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -747,6 +782,114 @@ export function useMainWindowWorkspace(options: {
     await next;
   }, [fs, refreshNotes, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
 
+  const prehydrateTodayHubRows = useCallback(
+    async (uris: readonly string[]) => {
+      const root = vaultRootRef.current;
+      if (!root) {
+        return;
+      }
+      await saveChainRef.current.catch(() => undefined);
+      const updates: Record<string, string> = {};
+      for (const uri of uris) {
+        const n = normalizeEditorDocUri(uri);
+        if (inboxContentByUriRef.current[n] !== undefined) {
+          continue;
+        }
+        try {
+          if (!(await fs.exists(n))) {
+            continue;
+          }
+          const raw = await fs.readFile(n, {encoding: 'utf8'});
+          const body = normalizeVaultMarkdownDiskRead(raw);
+          updates[n] = body;
+          todayHubRowLastPersistedRef.current.set(n, body);
+        } catch {
+          // ignore transient FS errors during prehydrate
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        inboxContentByUriRef.current = {...inboxContentByUriRef.current, ...updates};
+        setInboxContentByUri(prev => ({...prev, ...updates}));
+      }
+    },
+    [fs],
+  );
+
+  const persistTodayHubRow = useCallback(
+    async (rowUri: string, merged: string, columnCount: number) => {
+      const root = vaultRootRef.current;
+      if (!root) {
+        return;
+      }
+      const norm = normalizeEditorDocUri(rowUri);
+      const run = async (): Promise<void> => {
+        setErr(null);
+        try {
+          const sections = splitTodayRowIntoColumns(merged, columnCount);
+          if (todayHubRowSectionsAllBlank(sections)) {
+            try {
+              if (await fs.exists(norm)) {
+                await deleteVaultMarkdownNote(root, norm, fs);
+                subtreeMarkdownCacheRef.current.invalidateForMutation(
+                  root,
+                  norm,
+                  'file',
+                );
+              }
+            } catch (e) {
+              setErr(e instanceof Error ? e.message : String(e));
+              return;
+            }
+            todayHubRowLastPersistedRef.current.delete(norm);
+            const rm = removeInboxNoteBodyFromCache(
+              inboxContentByUriRef.current,
+              norm,
+            );
+            if (rm) {
+              inboxContentByUriRef.current = rm;
+              setInboxContentByUri(rm);
+            }
+            await refreshNotes(root);
+            setFsRefreshNonce(n => n + 1);
+            return;
+          }
+          const md = await persistTransientMarkdownImages(merged, root);
+          if (markdownContainsTransientImageUrls(md)) {
+            setErr(
+              'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+            );
+            return;
+          }
+          await saveNoteMarkdown(norm, fs, md);
+          subtreeMarkdownCacheRef.current.invalidateForMutation(root, norm, 'file');
+          todayHubRowLastPersistedRef.current.set(norm, md);
+          const nextCache = mergeInboxNoteBodyIntoCache(
+            inboxContentByUriRef.current,
+            norm,
+            md,
+          );
+          if (nextCache) {
+            inboxContentByUriRef.current = nextCache;
+            setInboxContentByUri(prev =>
+              mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
+            );
+          }
+          await refreshNotes(root);
+          setFsRefreshNonce(n => n + 1);
+        } catch (e) {
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      };
+      saveActiveRef.current = true;
+      const next = saveChainRef.current.then(run).finally(() => {
+        saveActiveRef.current = false;
+      });
+      saveChainRef.current = next.catch(() => undefined);
+      await next;
+    },
+    [fs, refreshNotes],
+  );
+
   const resolveDiskConflictReloadFromDisk = useCallback(() => {
     const c = diskConflictRef.current;
     const uri = selectedUriRef.current;
@@ -816,6 +959,7 @@ export function useMainWindowWorkspace(options: {
 
   const flushInboxSave = useCallback(async () => {
     autosaveSchedulerRef.current.cancel();
+    await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
     const uri = selectedUriRef.current;
     const dc = diskConflictRef.current;
     if (
@@ -838,6 +982,7 @@ export function useMainWindowWorkspace(options: {
       const openGen = ++openMarkdownGenerationRef.current;
       const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
+      await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
       if (saveActiveRef.current) {
         await saveChainRef.current.catch(() => undefined);
       }
@@ -1452,6 +1597,68 @@ export function useMainWindowWorkspace(options: {
         diskConflictRef.current = null;
         setDiskConflictSoft(soft);
         diskConflictSoftRef.current = soft;
+      }
+
+      const todaySel = selectedUriRef.current;
+      const normToday = todaySel?.replace(/\\/g, '/');
+      if (
+        normToday
+        && vaultUriIsTodayMarkdownFile(normToday)
+        && !composingNewEntryRef.current
+      ) {
+        const hubDir = vaultUriParentDirectory(normToday);
+        for (const m of enumerateTodayHubMondays(new Date())) {
+          const rowUri = normalizeEditorDocUri(todayHubRowUri(hubDir, m));
+          if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, rowUri, root)) {
+            continue;
+          }
+          let exists = false;
+          try {
+            exists = await fs.exists(rowUri);
+          } catch {
+            continue;
+          }
+          if (!exists) {
+            todayHubRowLastPersistedRef.current.delete(rowUri);
+            const rm = removeInboxNoteBodyFromCache(
+              inboxContentByUriRef.current,
+              rowUri,
+            );
+            if (rm) {
+              inboxContentByUriRef.current = rm;
+              setInboxContentByUri(rm);
+            }
+            continue;
+          }
+          let diskBody: string;
+          try {
+            const raw = await fs.readFile(rowUri, {encoding: 'utf8'});
+            diskBody = normalizeVaultMarkdownDiskRead(raw);
+          } catch {
+            continue;
+          }
+          const liveUri = todayHubBridgeRef.current.getLiveRowUri();
+          if (liveUri === rowUri) {
+            continue;
+          }
+          const cached = inboxContentByUriRef.current[rowUri];
+          if (cached === diskBody) {
+            todayHubRowLastPersistedRef.current.set(rowUri, diskBody);
+            continue;
+          }
+          todayHubRowLastPersistedRef.current.set(rowUri, diskBody);
+          const nextHubCache = mergeInboxNoteBodyIntoCache(
+            inboxContentByUriRef.current,
+            rowUri,
+            diskBody,
+          );
+          if (nextHubCache) {
+            inboxContentByUriRef.current = nextHubCache;
+            setInboxContentByUri(prev =>
+              mergeInboxNoteBodyIntoCache(prev, rowUri, diskBody) ?? prev,
+            );
+          }
+        }
       }
     };
 
@@ -2104,14 +2311,14 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       try {
+        const wikiParent =
+          todayHubWikiNavParentRef.current ?? selectedUriRef.current;
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
           notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
           vaultRoot,
           fs,
-          activeMarkdownUri: composingNewEntryRef.current
-            ? null
-            : selectedUriRef.current,
+          activeMarkdownUri: composingNewEntryRef.current ? null : wikiParent,
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
@@ -2123,11 +2330,20 @@ export function useMainWindowWorkspace(options: {
             await refreshNotes(vaultRoot);
             setFsRefreshNonce(n => n + 1);
           } else if (result.canonicalInner) {
-            inboxEditorRef.current?.replaceWikiLinkInnerAt({
-              at,
-              expectedInner: inner,
-              replacementInner: result.canonicalInner,
-            });
+            const hubEd = todayHubCellEditorRef.current;
+            if (hubEd && todayHubWikiNavParentRef.current) {
+              hubEd.replaceWikiLinkInnerAt({
+                at,
+                expectedInner: inner,
+                replacementInner: result.canonicalInner,
+              });
+            } else {
+              inboxEditorRef.current?.replaceWikiLinkInnerAt({
+                at,
+                expectedInner: inner,
+                replacementInner: result.canonicalInner,
+              });
+            }
           }
           await openMarkdownInEditor(result.uri);
           return;
@@ -2167,9 +2383,10 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       const base = normalizeVaultBaseUri(vaultRoot);
+      const relParent = todayHubWikiNavParentRef.current;
       const sourceMarkdownUriOrDir = composingNewEntryRef.current
         ? getInboxDirectoryUri(base)
-        : (selectedUriRef.current ?? getInboxDirectoryUri(base));
+        : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
       try {
         const result = await openOrCreateVaultRelativeMarkdownLink({
           href,
@@ -2191,11 +2408,20 @@ export function useMainWindowWorkspace(options: {
             await refreshNotes(vaultRoot);
             setFsRefreshNonce(n => n + 1);
           } else if (result.canonicalHref) {
-            inboxEditorRef.current?.replaceMarkdownLinkHrefAt({
-              at,
-              expectedHref: href,
-              replacementHref: result.canonicalHref,
-            });
+            const hubEd = todayHubCellEditorRef.current;
+            if (hubEd && todayHubWikiNavParentRef.current) {
+              hubEd.replaceMarkdownLinkHrefAt({
+                at,
+                expectedHref: href,
+                replacementHref: result.canonicalHref,
+              });
+            } else {
+              inboxEditorRef.current?.replaceMarkdownLinkHrefAt({
+                at,
+                expectedHref: href,
+                replacementHref: result.canonicalHref,
+              });
+            }
           }
           await openMarkdownInEditor(result.uri);
           return;
@@ -2850,6 +3076,12 @@ export function useMainWindowWorkspace(options: {
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
-    todayHubPaperPlaceholder,
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
   };
 }

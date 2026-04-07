@@ -161,7 +161,13 @@ export default function App() {
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
-    todayHubPaperPlaceholder,
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -923,7 +929,13 @@ export default function App() {
                       onCloseAllEditorTabs={closeAllEditorTabs}
                       onReopenClosedEditorTab={reopenLastClosedEditorTab}
                       canReopenClosedEditorTab={canReopenClosedEditorTab}
-                      todayHubPaperPlaceholder={todayHubPaperPlaceholder}
+                      showTodayHubCanvas={showTodayHubCanvas}
+                      todayHubSettings={todayHubSettings}
+                      todayHubBridgeRef={todayHubBridgeRef}
+                      todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+                      todayHubCellEditorRef={todayHubCellEditorRef}
+                      prehydrateTodayHubRows={prehydrateTodayHubRows}
+                      persistTodayHubRow={persistTodayHubRow}
                     />
               </main>
             </div>

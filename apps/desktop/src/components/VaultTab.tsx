@@ -41,10 +41,16 @@ import {
 } from '../lib/vaultTreeBulkPlan';
 
 import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
+import {
+  todayHubColumnCount,
+  type TodayHubSettings,
+  type TodayHubWorkspaceBridge,
+} from '../lib/todayHub';
 
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {MaterialIcon} from './MaterialIcon';
+import {TodayHubCanvas} from './TodayHubCanvas';
 import {VaultTreePane} from './VaultTreePane';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
@@ -125,7 +131,17 @@ type VaultTabProps = {
   onCloseAllEditorTabs: () => void;
   onReopenClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
-  todayHubPaperPlaceholder: boolean;
+  showTodayHubCanvas: boolean;
+  todayHubSettings: TodayHubSettings | null;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
+  persistTodayHubRow: (
+    rowUri: string,
+    mergedMarkdown: string,
+    columnCount: number,
+  ) => Promise<void>;
 };
 
 type InboxBacklinksSectionProps = {
@@ -140,6 +156,8 @@ type EditorPaneBodyProps = {
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxAttachmentHost: ReturnType<typeof createNoteInboxAttachmentHost>;
   vaultRoot: string;
+  vaultMarkdownRefs: VaultMarkdownRef[];
+  inboxContentByUri: Record<string, string>;
   composingNewEntry: boolean;
   selectedUri: string | null;
   editorBody: string;
@@ -158,7 +176,17 @@ type EditorPaneBodyProps = {
   backlinkRows: readonly {uri: string; fileName: string; title: string}[];
   onSelectNote: VaultTabProps['onSelectNote'];
   inboxBacklinksDeferNonce: number;
-  showTodayHubPaperPlaceholder: boolean;
+  showTodayHubCanvas: boolean;
+  todayHubSettings: TodayHubSettings | null;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
+  persistTodayHubRow: (
+    rowUri: string,
+    mergedMarkdown: string,
+    columnCount: number,
+  ) => Promise<void>;
 };
 
 function InboxBacklinksSection({
@@ -224,6 +252,8 @@ function EditorPaneBody({
   inboxEditorShellScrollRef,
   inboxAttachmentHost,
   vaultRoot,
+  vaultMarkdownRefs,
+  inboxContentByUri,
   composingNewEntry,
   selectedUri,
   editorBody,
@@ -242,7 +272,13 @@ function EditorPaneBody({
   backlinkRows,
   onSelectNote,
   inboxBacklinksDeferNonce,
-  showTodayHubPaperPlaceholder,
+  showTodayHubCanvas,
+  todayHubSettings,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -337,10 +373,28 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
-              {showTodayHubPaperPlaceholder ? (
-                <div className="note-markdown-editor-today-hub-placeholder muted">
-                  Today hub canvas placeholder
-                </div>
+              {showTodayHubCanvas &&
+              selectedUri &&
+              todayHubSettings &&
+              !composingNewEntry ? (
+                <TodayHubCanvas
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.columns.join('\0')}`}
+                  vaultRoot={vaultRoot}
+                  todayNoteUri={selectedUri}
+                  hubSettings={todayHubSettings}
+                  inboxContentByUri={inboxContentByUri}
+                  vaultMarkdownRefs={vaultMarkdownRefs}
+                  bridgeRef={todayHubBridgeRef}
+                  wikiNavParentRef={todayHubWikiNavParentRef}
+                  cellEditorRef={todayHubCellEditorRef}
+                  onWikiLinkActivate={onWikiLinkActivate}
+                  onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                  onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                  onEditorError={onEditorError}
+                  onSaveShortcut={onSaveShortcut}
+                  prehydrateTodayHubRows={prehydrateTodayHubRows}
+                  persistTodayHubRow={persistTodayHubRow}
+                />
               ) : null}
               {!composingNewEntry && selectedUri ? (
                 <InboxBacklinksSection
@@ -415,7 +469,13 @@ export function VaultTab({
   onCloseAllEditorTabs,
   onReopenClosedEditorTab,
   canReopenClosedEditorTab,
-  todayHubPaperPlaceholder,
+  showTodayHubCanvas,
+  todayHubSettings,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
 }: VaultTabProps) {
   const reopenClosedTabKbdLabel = useMemo(
     () => reopenClosedTabMenuShortcutLabel(),
@@ -1100,6 +1160,8 @@ export function VaultTab({
                   inboxEditorShellScrollRef={inboxEditorShellScrollRef}
                   inboxAttachmentHost={inboxAttachmentHost}
                   vaultRoot={vaultRoot}
+                  vaultMarkdownRefs={vaultMarkdownRefs}
+                  inboxContentByUri={inboxContentByUri}
                   composingNewEntry={composingNewEntry}
                   selectedUri={selectedUri}
                   editorBody={editorBody}
@@ -1118,7 +1180,13 @@ export function VaultTab({
                   backlinkRows={backlinkRows}
                   onSelectNote={onSelectNote}
                   inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                  showTodayHubPaperPlaceholder={todayHubPaperPlaceholder}
+                  showTodayHubCanvas={showTodayHubCanvas}
+                  todayHubSettings={todayHubSettings}
+                  todayHubBridgeRef={todayHubBridgeRef}
+                  todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+                  todayHubCellEditorRef={todayHubCellEditorRef}
+                  prehydrateTodayHubRows={prehydrateTodayHubRows}
+                  persistTodayHubRow={persistTodayHubRow}
                 />
                 {composingNewEntry ? (
                   <div className="pane-footer">
