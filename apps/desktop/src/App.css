@@ -2783,7 +2783,8 @@ button.primary.destructive {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding: 0 1.25rem 0.4rem;
+  padding: 0 0.4rem;
+  padding-inline: 90px 1.25rem; /* left indentation to align with markdown content */
   margin-bottom: 0.35rem;
   border-bottom: 1px solid var(--color-border-subtle);
   color: var(--color-text-muted);
@@ -2813,6 +2814,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__col-head {
   min-width: 7rem;
+  padding-left: 34px; /* left indentation to align with markdown content */
 }
 
 [data-app-surface='capture'] .today-hub-canvas__rows {
@@ -2825,7 +2827,8 @@ button.primary.destructive {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  padding: 0.35rem 1.25rem 0.5rem;
+  padding-block: 0.35rem 0.5rem;
+  padding-inline: 0 1.25rem;
   border-radius: 6px;
 }
 
@@ -2835,12 +2838,14 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar {
   padding-top: 0.1rem;
+  padding-inline-start: 90px; /* left indentation to align with markdown content */
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-cells {
   display: grid;
   gap: 0.5rem 0.65rem;
   align-items: stretch;
+  padding-inline-start: 1.25rem;
   grid-template-columns: repeat(
     var(--today-hub-col-count, 1),
     minmax(7rem, 1fr)
