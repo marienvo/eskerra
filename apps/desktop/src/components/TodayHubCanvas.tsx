@@ -35,6 +35,7 @@ import {
   type TodayHubSettings,
 } from '../lib/todayHub';
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
+import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
 
 type TodayHubCanvasProps = {
   vaultRoot: string;
@@ -407,7 +408,18 @@ export function TodayHubCanvas({
                           onClick={() => openCell(uri, ci)}
                         >
                           {chunk.trim() ? (
-                            <pre className="today-hub-canvas__pre">{chunk}</pre>
+                            <TodayHubCellStaticRichText
+                              cellText={chunk}
+                              rowUri={uri}
+                              vaultRoot={vaultRoot}
+                              wikiNavParentRef={wikiNavParentRef}
+                              noteRefs={noteRefs}
+                              onWikiLinkActivate={onWikiLinkActivate}
+                              onMarkdownRelativeLinkActivate={
+                                onMarkdownRelativeLinkActivate
+                              }
+                              onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                            />
                           ) : (
                             <span className="muted today-hub-canvas__cell-hint">
                               Click to edit
