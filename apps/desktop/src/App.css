@@ -2907,6 +2907,11 @@ button.primary.destructive {
   cursor: default;
 }
 
+[data-app-surface='capture'] .today-hub-canvas__cell-readonly:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 /*
  * Inactive hub columns: wrap static spans in `.note-markdown-editor-host` so capture markdown token
  * rules apply; override paper fold-rail width stretch meant for the real editor.

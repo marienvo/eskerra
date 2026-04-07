@@ -447,10 +447,18 @@ export function TodayHubCanvas({
                           />
                         </div>
                       ) : (
-                        <button
-                          type="button"
+                        <div
+                          role="button"
+                          tabIndex={0}
                           className="today-hub-canvas__cell-readonly"
                           aria-label={chunk.trim() ? undefined : 'Edit cell'}
+                          onKeyDown={e => {
+                            if (e.key !== 'Enter' && e.key !== ' ') {
+                              return;
+                            }
+                            e.preventDefault();
+                            openCell(uri, ci, null);
+                          }}
                           onClick={e => {
                             const root = e.currentTarget.querySelector(
                               '.today-hub-canvas__cell-static-rich',
@@ -480,7 +488,7 @@ export function TodayHubCanvas({
                               onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                             />
                           ) : null}
-                        </button>
+                        </div>
                       )}
                     </div>
                   );
