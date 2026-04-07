@@ -21,6 +21,7 @@ import {
   DesktopStartupSplash,
   type DesktopStartupSplashPhase,
 } from './components/DesktopStartupSplash';
+import {QuickOpenNotePalette} from './components/QuickOpenNotePalette';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {EpisodesPane} from './components/EpisodesPane';
@@ -61,6 +62,11 @@ import {
   loadMainWindowUi,
   saveMainWindowUi,
 } from './lib/mainWindowUiStore';
+import {
+  initialDoubleShiftState,
+  reduceDoubleShiftKeyDown,
+  reduceDoubleShiftKeyUp,
+} from './lib/doubleShiftKeySequence';
 import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 
@@ -234,6 +240,49 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown, true);
     };
   }, [vaultRoot, busy]);
+
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  const quickOpenOpenRef = useRef(false);
+  quickOpenOpenRef.current = quickOpenOpen;
+
+  useEffect(() => {
+    let state = initialDoubleShiftState;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+        return;
+      }
+      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+        return;
+      }
+      if (e.repeat) {
+        return;
+      }
+      const next = reduceDoubleShiftKeyUp(
+        state,
+        performance.now(),
+        e.key,
+        e.ctrlKey,
+        e.metaKey,
+        e.altKey,
+      );
+      state = next.state;
+      if (next.shouldOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setQuickOpenOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+  }, [vaultRoot, busy]);
+
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
@@ -943,6 +992,13 @@ export default function App() {
             center={statusBarCenter}
             onOpenSettings={() => void openSettingsWindow()}
             onReadMoreStatusMessage={onReadMoreStatusMessage}
+          />
+          <QuickOpenNotePalette
+            open={quickOpenOpen}
+            onOpenChange={setQuickOpenOpen}
+            vaultRoot={vaultRoot}
+            refs={vaultMarkdownRefs}
+            onPickNote={selectNote}
           />
         </div>
       </div>
