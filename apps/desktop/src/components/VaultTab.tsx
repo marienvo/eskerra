@@ -396,7 +396,7 @@ function EditorPaneBody({
                   persistTodayHubRow={persistTodayHubRow}
                 />
               ) : null}
-              {!composingNewEntry && selectedUri ? (
+              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
                 <InboxBacklinksSection
                   selectedUri={selectedUri}
                   backlinkRows={backlinkRows}

@@ -37,7 +37,7 @@ Open-tab **pills** (**`EditorPaneOpenNoteTabs`**) use the parent folder name as 
 
 ### Today hub canvas (weekly columns)
 
-When the open note is **`Today.md`** (`vaultUriIsTodayMarkdownFile` in **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**), **`VaultTab`** shows a **weekly canvas** below the main CodeMirror (above backlinks): **`TodayHubCanvas`** in **`apps/desktop/src/components/TodayHubCanvas.tsx`**.
+When the open note is **`Today.md`** (`vaultUriIsTodayMarkdownFile` in **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**), **`VaultTab`** shows a **weekly canvas** below the main CodeMirror: **`TodayHubCanvas`** in **`apps/desktop/src/components/TodayHubCanvas.tsx`**. The **Linked from** (inbox backlinks) section is **not** shown for that note; it still appears for all other open markdown notes.
 
 - **Hub configuration** is read from optional YAML **frontmatter** on **`Today.md`**: `perpetualType: weekly` (only weekly is implemented), `start: monday` (used for Monday-based week math), and `columns:` as a list of extra column titles (for example `- Next actions`). The main editor column is always the **default** column; each `columns` entry adds one more column to the grid. If `columns` is empty, the canvas is a single column.
 - **Row files** live in the **same directory** as **`Today.md`**, named by **local-calendar Monday** as **`YYYY-MM-DD.md`** (ISO date stem). The canvas shows **53 consecutive Mondays** starting at the Monday of the **previous calendar week**, then stepping +7 days (see **`enumerateTodayHubMondays`** in **`apps/desktop/src/lib/todayHub/`**).
