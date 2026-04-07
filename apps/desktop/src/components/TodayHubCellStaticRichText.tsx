@@ -15,65 +15,9 @@ import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
 } from '../lib/inboxWikiLinkNavigation';
+import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
 
 const HIT_TREE_MS = 200;
-
-/** Local UTF-16 offset within `root` (sum of text-node lengths under root). */
-function utf16OffsetFromPointer(
-  root: HTMLElement,
-  clientX: number,
-  clientY: number,
-): number | null {
-  const doc = root.ownerDocument;
-  let offsetNode: Node | null = null;
-  let offset = 0;
-
-  if (doc.caretPositionFromPoint) {
-    const pos = doc.caretPositionFromPoint(clientX, clientY);
-    if (pos && root.contains(pos.offsetNode)) {
-      offsetNode = pos.offsetNode;
-      offset = pos.offset;
-    }
-  }
-  if (offsetNode == null && doc.caretRangeFromPoint) {
-    const range = doc.caretRangeFromPoint(clientX, clientY);
-    if (range && root.contains(range.startContainer)) {
-      if (range.startContainer.nodeType === Node.TEXT_NODE) {
-        offsetNode = range.startContainer;
-        offset = range.startOffset;
-      }
-    }
-  }
-  if (offsetNode == null || offsetNode.nodeType !== Node.TEXT_NODE) {
-    return null;
-  }
-  let total = 0;
-  const tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let n: Node | null;
-  while ((n = tw.nextNode())) {
-    if (n === offsetNode) {
-      return total + offset;
-    }
-    total += (n as Text).length;
-  }
-  return null;
-}
-
-function docOffsetFromPointerInStaticRich(
-  root: HTMLElement,
-  clientX: number,
-  clientY: number,
-): number | null {
-  const lineEls = root.querySelectorAll<HTMLElement>('[data-doc-line-from]');
-  for (const el of lineEls) {
-    const local = utf16OffsetFromPointer(el, clientX, clientY);
-    if (local != null) {
-      const from = Number(el.dataset.docLineFrom);
-      return from + local;
-    }
-  }
-  return null;
-}
 
 export type TodayHubCellStaticRichTextProps = {
   cellText: string;
@@ -123,7 +67,11 @@ export function TodayHubCellStaticRichText({
             return;
           }
           const root = e.currentTarget;
-          const pos = docOffsetFromPointerInStaticRich(root, e.clientX, e.clientY);
+          const pos = todayHubStaticCellDocOffsetFromPointer(
+            root,
+            e.clientX,
+            e.clientY,
+          );
           if (pos == null) {
             return;
           }

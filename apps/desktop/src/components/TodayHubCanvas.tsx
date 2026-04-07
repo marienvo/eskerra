@@ -35,6 +35,7 @@ import {
   type TodayHubSettings,
 } from '../lib/todayHub';
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
+import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
 import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
 
 type TodayHubCanvasProps = {
@@ -152,6 +153,11 @@ export function TodayHubCanvas({
   const pendingPersistRef = useRef<{uri: string; columnCount: number} | null>(null);
   const inboxContentByUriRef = useRef(inboxContentByUri);
   const localRowSectionsRef = useRef<Record<string, string[]>>({});
+  /** Latest hub cell focus request: monotonic gen + optional caret (consumed by focus effect). */
+  const hubCellFocusGenerationRef = useRef(0);
+  const pendingHubCellFocusRef = useRef<{gen: number; caret: number | null} | null>(
+    null,
+  );
 
   useLayoutEffect(() => {
     inboxContentByUriRef.current = inboxContentByUri;
@@ -223,7 +229,7 @@ export function TodayHubCanvas({
   );
 
   const openCell = useCallback(
-    (uri: string, col: number) => {
+    (uri: string, col: number, clickCaret: number | null = null) => {
       const key = normUri(uri);
       void flushScheduledPersist().then(() => {
         const raw = inboxContentByUriRef.current[key] ?? '';
@@ -233,12 +239,50 @@ export function TodayHubCanvas({
           localRowSectionsRef.current = next;
           return next;
         });
+        hubCellFocusGenerationRef.current += 1;
+        pendingHubCellFocusRef.current = {
+          gen: hubCellFocusGenerationRef.current,
+          caret: clickCaret,
+        };
         setCellSessionNonce(n => n + 1);
         setActive({uri: key, col});
       });
     },
     [columnCount, flushScheduledPersist],
   );
+
+  /** Move focus from the main inbox editor into the hub cell editor after mount (same pattern as Eskerra table). */
+  useLayoutEffect(() => {
+    if (!active) {
+      return;
+    }
+    const pack = pendingHubCellFocusRef.current;
+    if (!pack) {
+      return;
+    }
+    const {gen, caret} = pack;
+    const run = (): void => {
+      if (hubCellFocusGenerationRef.current !== gen) {
+        return;
+      }
+      if (pendingHubCellFocusRef.current?.gen !== gen) {
+        return;
+      }
+      pendingHubCellFocusRef.current = null;
+      const ed = cellEditorRef.current;
+      if (!ed) {
+        return;
+      }
+      if (caret != null) {
+        ed.focus({anchor: caret});
+      } else {
+        ed.focus();
+      }
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+  }, [active, cellEditorRef]);
 
   useEffect(() => {
     if (!active) {
@@ -405,7 +449,20 @@ export function TodayHubCanvas({
                         <button
                           type="button"
                           className="today-hub-canvas__cell-readonly"
-                          onClick={() => openCell(uri, ci)}
+                          onClick={e => {
+                            const root = e.currentTarget.querySelector(
+                              '.today-hub-canvas__cell-static-rich',
+                            );
+                            const caret =
+                              root instanceof HTMLElement
+                                ? todayHubStaticCellDocOffsetFromPointer(
+                                    root,
+                                    e.clientX,
+                                    e.clientY,
+                                  )
+                                : null;
+                            openCell(uri, ci, caret);
+                          }}
                         >
                           {chunk.trim() ? (
                             <TodayHubCellStaticRichText

@@ -201,6 +201,8 @@ export type NoteMarkdownEditorHandle = {
     expectedHref: string;
     replacementHref: string;
   }) => boolean;
+  /** Move focus into this editor; optionally place the caret at a UTF-16 offset (clamped to the document). */
+  focus: (options?: {anchor?: number}) => void;
 };
 
 const NoteMarkdownEditorImpl = forwardRef<
@@ -872,6 +874,23 @@ const NoteMarkdownEditorImpl = forwardRef<
           },
         });
         return true;
+      },
+      focus: (options?: {anchor?: number}) => {
+        const view = viewRef.current;
+        if (!view) {
+          return;
+        }
+        if (options?.anchor !== undefined) {
+          const a = Math.max(
+            0,
+            Math.min(options.anchor, view.state.doc.length),
+          );
+          view.dispatch({
+            selection: EditorSelection.cursor(a),
+            scrollIntoView: true,
+          });
+        }
+        view.focus();
       },
     }),
     [applyMarkdownLoadNow],
