@@ -29,6 +29,14 @@ foo: bar
     expect(extractFirstMarkdownH1(md)).toBe('From body');
   });
 
+  test('does not treat ill-formed frontmatter as metadata; finds H1 in body', () => {
+    const md = `---
+no closing fence
+# Real title
+`;
+    expect(extractFirstMarkdownH1(md)).toBe('Real title');
+  });
+
   test('trims closing hash marks in ATX heading', () => {
     expect(extractFirstMarkdownH1('# Trimmed ##')).toBe('Trimmed');
   });

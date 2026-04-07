@@ -62,6 +62,8 @@ export {
   startOfLocalDayMs,
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export {mergeYamlFrontmatterBody} from './markdown/mergeYamlFrontmatterBody';
+export {splitYamlFrontmatter} from './markdown/splitYamlFrontmatter';
 export type {
   EskerraTableAlignment,
   EskerraTableModelV1,
