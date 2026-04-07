@@ -2881,10 +2881,28 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host {
   min-height: 6rem;
+  /*
+   * Hub cells embed NoteMarkdownEditor without `.note-markdown-editor-wrap`; define editor
+   * tokens here so `.cm-content` padding math matches the main editor, then tighten insets.
+   */
+  --nb-editor-heading-gutter: 9.25ch;
+  --nb-editor-paper-pad-block-start: 0;
 }
 
+/* Compact in-cell editor: drop page-level bottom host padding and symmetric cm margins. */
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host {
   min-height: 5.5rem;
+  padding: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host::after {
+  display: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-content {
+  padding-block: 0;
+  padding-inline: max(2px, calc(0.6rem + var(--nb-editor-heading-gutter) - 30px)) 0;
+  min-height: min(6rem, 100%);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th,
