@@ -168,6 +168,10 @@ export type NoteMarkdownEditorProps = {
   onDeleteNoteShortcut?: () => void;
   placeholder: string;
   busy: boolean;
+  /**
+   * When false, omit the fold gutter (no collapse chevrons). Main inbox editor should keep the default (`true`).
+   */
+  showFoldGutter?: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
   attachmentHost: NoteInboxAttachmentHost;
   /** Shell-owned: Markdown image src → preview URL (for example `lib/resolveVaultImagePreviewUrl`). */
@@ -226,6 +230,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
+    showFoldGutter = true,
     onFoldedRangesPresentChange,
     onFoldableRangesPresentChange,
   } = props;
@@ -556,11 +561,15 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       noteMarkdownListItemFoldService,
       ...noteMarkdownEditorAppearance,
-      foldGutter({
-        openText: '⌄',
-        closedText: '›',
-        markerDOM: open => createFoldGutterMarker(open),
-      }),
+      ...(showFoldGutter
+        ? [
+            foldGutter({
+              openText: '⌄',
+              closedText: '›',
+              markerDOM: open => createFoldGutterMarker(open),
+            }),
+          ]
+        : []),
       history(),
       drawSelection(),
       markdownSelectionAllowMultipleRanges(),
@@ -579,7 +588,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             onMarkdownExternalLinkOpenRef.current(p),
         }),
         indentWithTab,
-        ...foldKeymap,
+        ...(showFoldGutter ? foldKeymap : []),
         ...searchKeymap,
         ...defaultKeymap,
         ...buildNoteMarkdownDeleteLineModYBindings(),

@@ -431,6 +431,7 @@ export function TodayHubCanvas({
                             activeNotePath={uri}
                             initialMarkdown={chunk}
                             sessionKey={cellSessionNonce}
+                            showFoldGutter={false}
                             onMarkdownChange={updateActiveColumnText}
                             onEditorError={onEditorError}
                             onWikiLinkActivate={onWikiLinkActivate}
