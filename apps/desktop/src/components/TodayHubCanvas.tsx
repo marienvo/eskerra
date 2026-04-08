@@ -404,7 +404,14 @@ export function TodayHubCanvas({
           const sections = getSections(uri);
           const isActiveRow = active?.uri === uri;
           return (
-            <div key={uri} className="today-hub-canvas__row">
+            <div
+              key={uri}
+              className={
+                ri === 0
+                  ? 'today-hub-canvas__row today-hub-canvas__row--previous-week'
+                  : 'today-hub-canvas__row'
+              }
+            >
               <div className="today-hub-canvas__row-date-bar">
                 <span className="today-hub-canvas__row-date">{rowLabel(mon)}</span>
               </div>

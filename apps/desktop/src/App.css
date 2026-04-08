@@ -2835,6 +2835,26 @@ button.primary.destructive {
   border-radius: 6px;
 }
 
+/*
+ * Previous calendar week: whole row slightly faded; grayscale only on cell grid (see date AA note below).
+ */
+[data-app-surface='capture']
+  .today-hub-canvas__row.today-hub-canvas__row--previous-week {
+  opacity: 0.67;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__row.today-hub-canvas__row--previous-week
+  .today-hub-canvas__row-cells {
+  filter: grayscale(1);
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__row--previous-week
+  .today-hub-canvas__row-date {
+  color: color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%);
+}
+
 [data-app-surface='capture'] .today-hub-canvas__row:nth-child(even) {
   background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
 }
