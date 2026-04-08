@@ -464,7 +464,14 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
+    let middleClickBlockPasteUntil = 0;
+
     const onEditorPaste = (e: ClipboardEvent, view: EditorView): boolean => {
+      if (Date.now() < middleClickBlockPasteUntil) {
+        e.preventDefault();
+        return true;
+      }
       if (busyRef.current) {
         if (
           e.clipboardData &&
@@ -735,6 +742,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           if (event.button !== 1) {
             return false;
           }
+          middleClickBlockPasteUntil = Date.now() + 200;
           if (onEditorMiddleClick(event, view)) {
             return true;
           }

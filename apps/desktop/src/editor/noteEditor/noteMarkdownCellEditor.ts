@@ -324,11 +324,15 @@ export function buildNoteMarkdownCellExtensions(
     return true;
   };
 
+  // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
+  let middleClickBlockPasteUntil = 0;
+
   const pasteHandlers = EditorView.domEventHandlers({
     mousedown(event, view) {
       if (event.button !== 1) {
         return false;
       }
+      middleClickBlockPasteUntil = Date.now() + 200;
       if (onEditorMiddleClick(event, view)) {
         return true;
       }
@@ -336,6 +340,10 @@ export function buildNoteMarkdownCellExtensions(
       return true;
     },
     paste(event, view) {
+      if (Date.now() < middleClickBlockPasteUntil) {
+        event.preventDefault();
+        return true;
+      }
       if (busyRef.current) {
         if (
           event.clipboardData
