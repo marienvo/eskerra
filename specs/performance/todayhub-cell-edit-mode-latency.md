@@ -2,6 +2,17 @@
 
 This logbook tracks **where time is spent** when a Today Hub canvas cell switches from read-only view to the inline `NoteMarkdownEditor`, so we do not re-test the same guesses without evidence.
 
+## Dev instrumentation (optional)
+
+- Set `localStorage.todayHubPerf = '1'` and reload (dev builds only). The console logs `[todayHubPerf]` lines from `TodayHubCanvas` (`openCell_start`, `openCell_after_flush`, `openCell_finishOpen`, `focus_applied`) and from `NoteMarkdownEditor` for hub cells only (`hub_cm_boot` with `cmInitMs`).
+- **Warm prewarm** is pointer-driven (`pointerenter` on non-empty cold cells), LRU-capped (`MAX_HUB_WARM_CELLS` in `TodayHubCanvas.tsx`); it is an optimization only—cold activation must still work without hover.
+
+## Warm vs cold (implementation note)
+
+- **Cold:** static preview only. **Warm:** read-only `NoteMarkdownEditor` under the same static preview (stacked); **active:** editable editor in the same React subtree so warm→active toggles `readOnly` without remount when the cell was prewarmed.
+- Warm UI: the read-only underlay uses `visibility: hidden` plus `overflow: hidden` on `today-hub-canvas__cell-editor-stack--warm` so no CM glyphs composite with the static overlay (`App.css`).
+- Per-row relative link resolution uses the row file URI (`relativeMarkdownLinkHrefIsResolvedByRowUri`), not “active row or Today.md”.
+
 ## Code paths (reference)
 
 - **Activation:** `openCell` in `apps/desktop/src/components/TodayHubCanvas.tsx` (click / keyboard on read-only cell).

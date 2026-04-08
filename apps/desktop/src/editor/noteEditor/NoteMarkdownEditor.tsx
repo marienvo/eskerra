@@ -38,6 +38,10 @@ import {
 } from '@eskerra/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
+import {
+  todayHubPerfEnabled,
+  todayHubPerfLog,
+} from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
 import {
   isNoteAttachmentImageFilePath,
@@ -181,6 +185,11 @@ export type NoteMarkdownEditorProps = {
   onFoldedRangesPresentChange?: (present: boolean) => void;
   /** Called when the document gains or loses at least one foldable range (same rules as collapse-all). */
   onFoldableRangesPresentChange?: (present: boolean) => void;
+  /**
+   * When true, the document cannot be edited (`EditorState.readOnly` / `EditorView.editable`).
+   * Same extensions and update path as the full editor; toggled via a Compartment (no duplicate mode).
+   */
+  readOnly?: boolean;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -237,7 +246,12 @@ const NoteMarkdownEditorImpl = forwardRef<
     showFoldGutter = true,
     onFoldedRangesPresentChange,
     onFoldableRangesPresentChange,
+    readOnly: readOnlyProp = false,
   } = props;
+
+  const readOnly = readOnlyProp;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   const parentRef = useRef<HTMLDivElement>(null);
   /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
@@ -328,12 +342,19 @@ const NoteMarkdownEditorImpl = forwardRef<
   if (relativeMdLinkCompartmentRef.current === null) {
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
+  const readOnlyCompartmentRef = useRef<Compartment | null>(null);
+  if (readOnlyCompartmentRef.current === null) {
+    readOnlyCompartmentRef.current = new Compartment();
+  }
 
   useLayoutEffect(() => {
     const parent = parentRef.current;
     if (!parent) {
       return;
     }
+
+    const hubPerfStart =
+      todayHubPerfEnabled() && !showFoldGutter ? performance.now() : 0;
 
     const runVaultImagePasteFromDataTransfer = (
       dt: DataTransfer,
@@ -556,9 +577,17 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!relativeMdLinkCompartment) {
       throw new Error('relativeMdLinkCompartment must be initialized');
     }
+    const readOnlyCompartment = readOnlyCompartmentRef.current;
+    if (!readOnlyCompartment) {
+      throw new Error('readOnlyCompartment must be initialized');
+    }
 
     const extensions = [
       noteMarkdownIndentUnit,
+      readOnlyCompartment.of([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
+      ]),
       markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
@@ -738,6 +767,12 @@ const NoteMarkdownEditorImpl = forwardRef<
       foldableRangesPresent(view.state),
     );
 
+    if (hubPerfStart) {
+      todayHubPerfLog('hub_cm_boot', {
+        cmInitMs: Math.round(performance.now() - hubPerfStart),
+      });
+    }
+
     return () => {
       onFoldedRangesPresentChangeRef.current?.(false);
       onFoldableRangesPresentChangeRef.current?.(false);
@@ -774,6 +809,20 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
+  useEffect(() => {
+    const compartment = readOnlyCompartmentRef.current;
+    const view = viewRef.current;
+    if (!compartment || !view) {
+      return;
+    }
+    const roEffect = compartment.reconfigure([
+      EditorState.readOnly.of(readOnly),
+      EditorView.editable.of(!readOnly),
+    ]);
+    view.dispatch({effects: roEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: roEffect});
+  }, [readOnly]);
+
   /**
    * Apply `loadMarkdown` synchronously so the first browser paint after layout already has the real
    * document. A deferred rAF apply runs after paint, which left the placeholder visible until the next frame
@@ -803,8 +852,18 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolvedRef.current,
         ),
       );
-      v.dispatch({effects: [wikiEff, relEff]});
-      dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
+      const roComp = readOnlyCompartmentRef.current;
+      const roEff =
+        roComp != null
+          ? roComp.reconfigure([
+              EditorState.readOnly.of(readOnlyRef.current),
+              EditorView.editable.of(!readOnlyRef.current),
+            ])
+          : null;
+      const effects =
+        roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
+      v.dispatch({effects});
+      dispatchEskerraTableNestedCellEditors(v, {effects});
       onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
       onFoldableRangesPresentChangeRef.current?.(
         foldableRangesPresent(v.state),

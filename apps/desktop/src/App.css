@@ -3098,6 +3098,39 @@ button.primary.destructive {
   font-weight: 500;
 }
 
+[data-app-surface='capture'] .today-hub-canvas__cell-editor-stack {
+  position: relative;
+  width: 100%;
+  min-height: 6rem;
+}
+
+/*
+ * Warm-only: clip CodeMirror (`cm-scroller` overflow visible). Underlay text is hidden with
+ * `visibility:hidden` (opaque fills alone fail on even hub rows with mixed row/cell backgrounds).
+ */
+[data-app-surface='capture'] .today-hub-canvas__cell-editor-stack--warm {
+  overflow: hidden;
+}
+
+/*
+ * Warm hub cell: read-only CodeMirror sits under the static preview (same React subtree as active
+ * so warm→active does not remount the editor). Underlay is invisible but still laid out (prewarm).
+ */
+[data-app-surface='capture'] .today-hub-canvas__cell-warm-underlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-warm-overlay {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__cm-host {
   min-height: 6rem;
   /*

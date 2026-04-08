@@ -1,5 +1,4 @@
 import {
-  Facet,
   type EditorSelection,
   type Extension,
   type Range,
@@ -15,17 +14,6 @@ import {
 
 /** DOM class on each `.cm-line` that should show full markdown marker chrome. */
 export const MARKER_FOCUS_LINE_CLASS = 'cm-eskerra-marker-focus-line';
-
-/**
- * Eskerra **table cell** editors set this so an unfocused cell never gets marker-focus lines.
- * A one-line cell still “intersects” its local selection, which would otherwise keep all markers
- * visible in every cell; clearing decorations when the cell view lacks focus fixes that. The root note
- * editor omits this facet (empty combine → false) so blur still follows document selection.
- */
-export const markdownMarkerFocusLineClearWhenUnfocusedFacet =
-  Facet.define<boolean, boolean>({
-    combine: values => values.some(Boolean),
-  });
 
 const lineDeco = Decoration.line({class: MARKER_FOCUS_LINE_CLASS});
 
@@ -53,26 +41,26 @@ export function computeMarkerFocusLineStarts(
   return [...lineStarts].sort((a, b) => a - b);
 }
 
-/** Decoration line starts; exposed for unit tests (cell vs root blur behavior). */
+/**
+ * Decoration line starts; when the view is not focused, no line gets marker-focus chrome (blur
+ * must not leave wiki brackets / syntax delimiters visible as on a “focused” line).
+ */
 export function computeMarkerFocusDecorationStarts(
   doc: Text,
   selection: EditorSelection,
-  args: {clearWhenUnfocused: boolean; hasFocus: boolean},
+  hasFocus: boolean,
 ): number[] {
-  if (args.clearWhenUnfocused && !args.hasFocus) {
+  if (!hasFocus) {
     return [];
   }
   return computeMarkerFocusLineStarts(doc, selection);
 }
 
 function buildMarkerFocusLineDecorations(view: EditorView): DecorationSet {
-  const clearWhenUnfocused = view.state.facet(
-    markdownMarkerFocusLineClearWhenUnfocusedFacet,
-  );
   const starts = computeMarkerFocusDecorationStarts(
     view.state.doc,
     view.state.selection,
-    {clearWhenUnfocused, hasFocus: view.hasFocus},
+    view.hasFocus,
   );
   const ranges: Range<Decoration>[] = starts.map(from =>
     lineDeco.range(from),
@@ -81,8 +69,7 @@ function buildMarkerFocusLineDecorations(view: EditorView): DecorationSet {
 }
 
 /**
- * Marks lines that should show full marker chrome so CSS can hide markers on other lines (root)
- * or in unfocused table cells (when {@link markdownMarkerFocusLineClearWhenUnfocusedFacet} is set).
+ * Marks lines that should show full markdown marker chrome so CSS can hide markers on other lines.
  */
 export const markdownMarkerFocusLineExtension: Extension = ViewPlugin.fromClass(
   class {

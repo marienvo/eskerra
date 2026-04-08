@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type MutableRefObject,
   type RefObject,
 } from 'react';
@@ -26,16 +28,23 @@ import {
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
   enumerateTodayHubMondays,
+  hubCellStableSessionKey,
+  hubCellWarmKey,
   mergeTodayRowColumns,
   splitTodayRowIntoColumns,
   todayHubColumnCount,
   todayHubRowUri,
+  touchWarmLru,
   type TodayHubWorkspaceBridge,
   type TodayHubSettings,
 } from '../lib/todayHub';
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
+import {todayHubPerfEnabled, todayHubPerfLog} from '../lib/todayHub/todayHubPerf';
 import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
 import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
+
+/** Cap simultaneous warm (read-only underlay) hub cells. Conservative first default. */
+const MAX_HUB_WARM_CELLS = 2;
 
 type TodayHubCanvasProps = {
   vaultRoot: string;
@@ -118,24 +127,30 @@ export function TodayHubCanvas({
   );
 
   const [active, setActive] = useState<{uri: string; col: number} | null>(null);
+  const activeRef = useRef(active);
+  useLayoutEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
+  /** LRU order of `hubCellWarmKey`; warm is optional — never required for correctness. */
+  const [warmOrder, setWarmOrder] = useState<string[]>([]);
+  const hubOpenPerfT0Ref = useRef(0);
 
   const wikiLinkCompletionCandidates = useMemo(
     () => buildInboxWikiLinkCompletionCandidates(noteRefs),
     [noteRefs],
   );
 
-  const relativeMarkdownSourceUriOrDir = active?.uri ?? todayNoteUri;
-
-  const relativeMarkdownLinkHrefIsResolved = useMemo(
-    () => (href: string) =>
-      inboxRelativeMarkdownLinkHrefIsResolved(
-        noteRefs,
-        relativeMarkdownSourceUriOrDir,
-        vaultRoot,
-        href,
-      ),
-    [noteRefs, relativeMarkdownSourceUriOrDir, vaultRoot],
-  );
+  const relativeMarkdownLinkHrefIsResolvedByRowUri = useMemo(() => {
+    const m = new Map<string, (href: string) => boolean>();
+    for (const ru of rowUris) {
+      const k = normUri(ru);
+      m.set(k, href =>
+        inboxRelativeMarkdownLinkHrefIsResolved(noteRefs, k, vaultRoot, href),
+      );
+    }
+    return m;
+  }, [rowUris, noteRefs, vaultRoot]);
 
   const wikiLinkTargetIsResolvedFn = useMemo(
     () => (inner: string) => inboxWikiLinkTargetIsResolved(noteRefs, inner),
@@ -146,7 +161,6 @@ export function TodayHubCanvas({
   const [localRowSections, setLocalRowSections] = useState<Record<string, string[]>>(
     {},
   );
-  const [cellSessionNonce, setCellSessionNonce] = useState(0);
 
   const debounceTimerRef = useRef<number | null>(null);
   const pendingPersistRef = useRef<{uri: string; columnCount: number} | null>(null);
@@ -233,6 +247,13 @@ export function TodayHubCanvas({
       const key = normUri(uri);
       const hubFlushWouldAwait =
         debounceTimerRef.current != null || pendingPersistRef.current != null;
+      if (todayHubPerfEnabled()) {
+        hubOpenPerfT0Ref.current = performance.now();
+        todayHubPerfLog('openCell_start', {
+          hadFlushAwait: hubFlushWouldAwait,
+          clickCaret: clickCaret != null,
+        });
+      }
       const finishOpen = (): void => {
         const raw = inboxContentByUriRef.current[key] ?? '';
         const initial = splitTodayRowIntoColumns(raw, columnCount);
@@ -247,11 +268,28 @@ export function TodayHubCanvas({
           localRowSectionsRef.current = next;
           return next;
         });
-        setCellSessionNonce(n => n + 1);
+        const wk = hubCellWarmKey(key, col);
+        setWarmOrder(prev =>
+          touchWarmLru(prev, wk, MAX_HUB_WARM_CELLS, wk),
+        );
         setActive({uri: key, col});
+        if (todayHubPerfEnabled()) {
+          todayHubPerfLog('openCell_finishOpen', {
+            msSinceOpen: performance.now() - hubOpenPerfT0Ref.current,
+          });
+        }
       };
       if (hubFlushWouldAwait) {
-        void flushScheduledPersist().then(finishOpen);
+        const flushT0 = todayHubPerfEnabled() ? performance.now() : 0;
+        void flushScheduledPersist().then(() => {
+          if (todayHubPerfEnabled()) {
+            todayHubPerfLog('openCell_after_flush', {
+              flushMs: performance.now() - flushT0,
+              totalMs: performance.now() - hubOpenPerfT0Ref.current,
+            });
+          }
+          finishOpen();
+        });
       } else {
         finishOpen();
       }
@@ -289,6 +327,12 @@ export function TodayHubCanvas({
         ed.focus({anchor: caret});
       } else {
         ed.focus();
+      }
+      if (todayHubPerfEnabled()) {
+        todayHubPerfLog('focus_applied', {
+          msSinceOpen: performance.now() - hubOpenPerfT0Ref.current,
+          hadClickCaret: caret != null,
+        });
       }
     };
 
@@ -390,6 +434,24 @@ export function TodayHubCanvas({
     [active, getSections, schedulePersist],
   );
 
+  const noopMarkdownChange = useCallback(() => {}, []);
+
+  const touchWarmForCell = useCallback((uri: string, col: number) => {
+    if (MAX_HUB_WARM_CELLS <= 0) {
+      return;
+    }
+    setWarmOrder(prev => {
+      const a = activeRef.current;
+      const pin = a ? hubCellWarmKey(a.uri, a.col) : null;
+      return touchWarmLru(
+        prev,
+        hubCellWarmKey(normUri(uri), col),
+        MAX_HUB_WARM_CELLS,
+        pin,
+      );
+    });
+  }, []);
+
   const columnHeaders = useMemo(() => {
     const h: string[] = [];
     for (let c = 0; c < columnCount; c++) {
@@ -454,7 +516,95 @@ export function TodayHubCanvas({
               <div className="today-hub-canvas__row-cells">
                 {sections.map((chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
-                  const emptyReadonly = !editing && !chunk.trim();
+                  const warmKey = hubCellWarmKey(uri, ci);
+                  const canPrewarm = chunk.trim().length > 0;
+                  const isWarm = canPrewarm && warmOrder.includes(warmKey);
+                  const emptyReadonly = !editing && !isWarm && !chunk.trim();
+                  const relResolved =
+                    relativeMarkdownLinkHrefIsResolvedByRowUri.get(uri)!;
+
+                  const readonlyInteractiveProps = {
+                    role: 'button' as const,
+                    tabIndex: 0 as const,
+                    'aria-label': chunk.trim() ? undefined : 'Edit cell',
+                    onPointerEnter: () => {
+                      if (canPrewarm) {
+                        touchWarmForCell(uri, ci);
+                      }
+                    },
+                    onKeyDown: (e: ReactKeyboardEvent) => {
+                      if (e.key !== 'Enter' && e.key !== ' ') {
+                        return;
+                      }
+                      e.preventDefault();
+                      openCell(uri, ci, null);
+                    },
+                    onClick: (e: ReactMouseEvent) => {
+                      const root = e.currentTarget.querySelector(
+                        '.today-hub-canvas__cell-static-rich',
+                      );
+                      const caret =
+                        root instanceof HTMLElement
+                          ? todayHubStaticCellDocOffsetFromPointer(
+                              root,
+                              e.clientX,
+                              e.clientY,
+                            )
+                          : null;
+                      openCell(uri, ci, caret);
+                    },
+                  };
+
+                  const staticPreview = (
+                    <>
+                      {chunk.trim() ? (
+                        <TodayHubCellStaticRichText
+                          cellText={chunk}
+                          rowUri={uri}
+                          vaultRoot={vaultRoot}
+                          wikiNavParentRef={wikiNavParentRef}
+                          noteRefs={noteRefs}
+                          onWikiLinkActivate={onWikiLinkActivate}
+                          onMarkdownRelativeLinkActivate={
+                            onMarkdownRelativeLinkActivate
+                          }
+                          onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                        />
+                      ) : null}
+                    </>
+                  );
+
+                  const hubCellEditor = (
+                    <NoteMarkdownEditor
+                      ref={editing ? cellEditorRef : undefined}
+                      vaultRoot={vaultRoot}
+                      attachmentHost={inboxAttachmentHost}
+                      resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                      activeNotePath={uri}
+                      initialMarkdown={chunk}
+                      sessionKey={hubCellStableSessionKey(uri, ci)}
+                      showFoldGutter={false}
+                      readOnly={!editing}
+                      onMarkdownChange={
+                        editing ? updateActiveColumnText : noopMarkdownChange
+                      }
+                      onEditorError={onEditorError}
+                      onWikiLinkActivate={onWikiLinkActivate}
+                      relativeMarkdownLinkHrefIsResolved={relResolved}
+                      onMarkdownRelativeLinkActivate={
+                        onMarkdownRelativeLinkActivate
+                      }
+                      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                      wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
+                      wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                      onSaveShortcut={onSaveShortcut}
+                      placeholder="Write markdown…"
+                      busy={false}
+                    />
+                  );
+
+                  const warmOrActive = editing || isWarm;
+
                   return (
                     <div
                       key={ci}
@@ -464,74 +614,38 @@ export function TodayHubCanvas({
                           : 'today-hub-canvas__cell'
                       }
                     >
-                      {editing ? (
-                        <div className="today-hub-canvas__cm-host">
-                          <NoteMarkdownEditor
-                            ref={cellEditorRef}
-                            vaultRoot={vaultRoot}
-                            attachmentHost={inboxAttachmentHost}
-                            resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                            activeNotePath={uri}
-                            initialMarkdown={chunk}
-                            sessionKey={cellSessionNonce}
-                            showFoldGutter={false}
-                            onMarkdownChange={updateActiveColumnText}
-                            onEditorError={onEditorError}
-                            onWikiLinkActivate={onWikiLinkActivate}
-                            relativeMarkdownLinkHrefIsResolved={
-                              relativeMarkdownLinkHrefIsResolved
+                      {warmOrActive ? (
+                        <div
+                          className={
+                            isWarm && !editing
+                              ? 'today-hub-canvas__cell-editor-stack today-hub-canvas__cell-editor-stack--warm'
+                              : 'today-hub-canvas__cell-editor-stack'
+                          }
+                        >
+                          <div
+                            className={
+                              editing
+                                ? 'today-hub-canvas__cm-host'
+                                : 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
                             }
-                            onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                            onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                            wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
-                            wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                            onSaveShortcut={onSaveShortcut}
-                            placeholder="Write markdown…"
-                            busy={false}
-                          />
+                          >
+                            {hubCellEditor}
+                          </div>
+                          {!editing ? (
+                            <div
+                              {...readonlyInteractiveProps}
+                              className="today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay"
+                            >
+                              {staticPreview}
+                            </div>
+                          ) : null}
                         </div>
                       ) : (
                         <div
-                          role="button"
-                          tabIndex={0}
+                          {...readonlyInteractiveProps}
                           className="today-hub-canvas__cell-readonly"
-                          aria-label={chunk.trim() ? undefined : 'Edit cell'}
-                          onKeyDown={e => {
-                            if (e.key !== 'Enter' && e.key !== ' ') {
-                              return;
-                            }
-                            e.preventDefault();
-                            openCell(uri, ci, null);
-                          }}
-                          onClick={e => {
-                            const root = e.currentTarget.querySelector(
-                              '.today-hub-canvas__cell-static-rich',
-                            );
-                            const caret =
-                              root instanceof HTMLElement
-                                ? todayHubStaticCellDocOffsetFromPointer(
-                                    root,
-                                    e.clientX,
-                                    e.clientY,
-                                  )
-                                : null;
-                            openCell(uri, ci, caret);
-                          }}
                         >
-                          {chunk.trim() ? (
-                            <TodayHubCellStaticRichText
-                              cellText={chunk}
-                              rowUri={uri}
-                              vaultRoot={vaultRoot}
-                              wikiNavParentRef={wikiNavParentRef}
-                              noteRefs={noteRefs}
-                              onWikiLinkActivate={onWikiLinkActivate}
-                              onMarkdownRelativeLinkActivate={
-                                onMarkdownRelativeLinkActivate
-                              }
-                              onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                            />
-                          ) : null}
+                          {staticPreview}
                         </div>
                       )}
                     </div>

@@ -65,36 +65,21 @@ describe('computeMarkerFocusLineStarts', () => {
 });
 
 describe('computeMarkerFocusDecorationStarts', () => {
-  it('returns no lines when clearWhenUnfocused and the editor is not focused', () => {
+  it('returns no lines when the editor is not focused', () => {
     const doc = Text.of(['only']);
     const sel = EditorSelection.single(0);
-    expect(
-      computeMarkerFocusDecorationStarts(doc, sel, {
-        clearWhenUnfocused: true,
-        hasFocus: false,
-      }),
-    ).toEqual([]);
+    expect(computeMarkerFocusDecorationStarts(doc, sel, false)).toEqual([]);
   });
 
-  it('uses selection when clearWhenUnfocused but the editor is focused', () => {
+  it('uses selection when focused', () => {
     const doc = Text.of(['only']);
     const sel = EditorSelection.single(0);
-    expect(
-      computeMarkerFocusDecorationStarts(doc, sel, {
-        clearWhenUnfocused: true,
-        hasFocus: true,
-      }),
-    ).toEqual([0]);
+    expect(computeMarkerFocusDecorationStarts(doc, sel, true)).toEqual([0]);
   });
 
-  it('uses selection when not clearWhenUnfocused even without focus (root editor)', () => {
+  it('returns no lines when unfocused even if selection would mark a line', () => {
     const doc = Text.of(['a', 'b']);
     const sel = EditorSelection.single(doc.line(2).from);
-    expect(
-      computeMarkerFocusDecorationStarts(doc, sel, {
-        clearWhenUnfocused: false,
-        hasFocus: false,
-      }),
-    ).toEqual([doc.line(2).from]);
+    expect(computeMarkerFocusDecorationStarts(doc, sel, false)).toEqual([]);
   });
 });

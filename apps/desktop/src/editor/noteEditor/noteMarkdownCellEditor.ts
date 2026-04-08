@@ -40,7 +40,6 @@ import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
-import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
@@ -402,7 +401,6 @@ export function buildNoteMarkdownCellExtensions(
 
   return [
     noteMarkdownIndentUnit,
-    markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
     markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
