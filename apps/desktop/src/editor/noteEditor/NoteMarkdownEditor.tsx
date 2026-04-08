@@ -963,6 +963,11 @@ const NoteMarkdownEditorImpl = forwardRef<
             selection: EditorSelection.cursor(a),
             ...(scroll ? {scrollIntoView: true} : {}),
           });
+        } else if (view.state.doc.length === 0) {
+          view.dispatch({
+            selection: EditorSelection.cursor(0),
+            scrollIntoView: true,
+          });
         }
         view.focus();
       },

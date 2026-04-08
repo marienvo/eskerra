@@ -537,13 +537,17 @@ export function TodayHubCanvas({
                         return;
                       }
                       e.preventDefault();
-                      openCell(uri, ci, null);
+                      openCell(
+                        uri,
+                        ci,
+                        chunk.trim() ? null : 0,
+                      );
                     },
                     onClick: (e: ReactMouseEvent) => {
                       const root = e.currentTarget.querySelector(
                         '.today-hub-canvas__cell-static-rich',
                       );
-                      const caret =
+                      const caretFromRich =
                         root instanceof HTMLElement
                           ? todayHubStaticCellDocOffsetFromPointer(
                               root,
@@ -551,6 +555,8 @@ export function TodayHubCanvas({
                               e.clientY,
                             )
                           : null;
+                      const caret =
+                        caretFromRich ?? (!chunk.trim() ? 0 : null);
                       openCell(uri, ci, caret);
                     },
                   };
