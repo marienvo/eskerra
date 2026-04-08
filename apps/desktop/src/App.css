@@ -2950,14 +2950,13 @@ button.primary.destructive {
   width: 100%;
   height: 100%;
   min-height: 2.25rem;
-  /* Tighten top slightly vs edit column; +2px left vs shared cm-content formula. */
-  margin: 0 0 0;
+  margin: 0;
   /*
    * Match hub editor `.cm-content` left inset; add trailing inset so static text does not run
    * flush against the cell edge (edit cells use the full width).
    */
   padding: 0;
-  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 20px);
+  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 19px);
   border: none;
   border-radius: inherit;
   background: transparent;
@@ -3010,7 +3009,8 @@ button.primary.destructive {
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
   font-size: 16px;
-  line-height: 1.6;
+  /* 25px line grid at 16px; matches embedded CodeMirror hub cell line height (static was ~25.6px/line via 1.6 + min-height). */
+  line-height: 1.5625;
   font-synthesis: none;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
@@ -3021,7 +3021,7 @@ button.primary.destructive {
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line {
   display: block;
   padding: 0;
-  min-height: 1.6em;
+  min-height: 1.5625em;
 }
 
 /*
@@ -3098,6 +3098,10 @@ button.primary.destructive {
   box-sizing: border-box;
   min-height: 5.5rem;
   padding: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-scroller {
+  line-height: 1.5625;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host::after {
