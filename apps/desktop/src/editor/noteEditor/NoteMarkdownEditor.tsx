@@ -71,6 +71,7 @@ import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraT
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
@@ -589,6 +590,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         }),
         indentWithTab,
         ...(showFoldGutter ? foldKeymap : []),
+        ...buildNoteMarkdownDuplicateLineModDBindings(),
         ...searchKeymap,
         ...defaultKeymap,
         ...buildNoteMarkdownDeleteLineModYBindings(),

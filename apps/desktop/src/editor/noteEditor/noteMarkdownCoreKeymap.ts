@@ -1,4 +1,4 @@
-import {deleteLine} from '@codemirror/commands';
+import {copyLineDown, deleteLine} from '@codemirror/commands';
 import {EditorSelection} from '@codemirror/state';
 import {type EditorView, type KeyBinding} from '@codemirror/view';
 import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
@@ -142,4 +142,13 @@ export function buildNoteMarkdownVaultKeymapBindings(
  */
 export function buildNoteMarkdownDeleteLineModYBindings(): readonly KeyBinding[] {
   return [{key: 'Mod-y', run: deleteLine, preventDefault: true}];
+}
+
+/**
+ * Mod-d (Ctrl+D / Cmd+D): duplicate the selected lines below (`copyLineDown`). Must be registered
+ * before `searchKeymap` so it overrides `selectNextOccurrence`. Stable action id:
+ * `eskerra.vault.editor.duplicateLine`.
+ */
+export function buildNoteMarkdownDuplicateLineModDBindings(): readonly KeyBinding[] {
+  return [{key: 'Mod-d', run: copyLineDown, preventDefault: true}];
 }

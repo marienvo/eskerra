@@ -43,6 +43,7 @@ import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPositio
 import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {
@@ -427,6 +428,7 @@ export function buildNoteMarkdownCellExtensions(
       }),
       indentWithTab,
       ...defaultKeymap,
+      ...buildNoteMarkdownDuplicateLineModDBindings(),
       ...(onOpenNoteWideFind ? [] : searchKeymap),
       ...buildNoteMarkdownDeleteLineModYBindings(),
       ...historyKeymap,
