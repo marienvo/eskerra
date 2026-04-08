@@ -697,7 +697,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         wikiLink: wikiLinkCompartment,
         relativeMarkdownLink: relativeMdLinkCompartment,
       }),
-      wikiLinkAutocompleteExtension(
+      ...wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
       ),
       eskerraTableCellBundleFacet.of(partial =>

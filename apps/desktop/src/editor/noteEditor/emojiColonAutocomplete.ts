@@ -5,13 +5,17 @@
  * `npm run generate-emoji-data` in apps/desktop.
  */
 import {
+  acceptCompletion,
+  completionStatus,
   insertCompletionText,
   pickedCompletion,
+  selectedCompletion,
   type Completion,
   type CompletionContext,
   type CompletionSource,
 } from '@codemirror/autocomplete';
-import type {EditorView} from '@codemirror/view';
+import {Prec, type Extension} from '@codemirror/state';
+import {EditorView, keymap} from '@codemirror/view';
 
 import {getEmojiUsageCount, recordEmojiUsage} from '../../lib/emojiUsageStore';
 import {
@@ -20,6 +24,7 @@ import {
   type EmojiCompletionRow,
   filterSortAndCapEmojiRows,
   isEmojiCompletionDisabledInMarkdown,
+  isEmojiShortcodeColonCompletion,
 } from './emojiColonAutocompleteHelpers';
 
 export const EMOJI_COMPLETION_MAX_OPTIONS = 50;
@@ -64,6 +69,25 @@ function buildEmojiCompletions(
     }),
   );
 }
+
+/** GitHub-style: type a second `:` to accept the highlighted emoji (not inserted). */
+export const emojiColonSecondColonAcceptKeymap: Extension = Prec.highest(
+  keymap.of([
+    {
+      key: ':',
+      run(view: EditorView) {
+        if (completionStatus(view.state) !== 'active') {
+          return false;
+        }
+        const sel = selectedCompletion(view.state);
+        if (!sel || !isEmojiShortcodeColonCompletion(sel)) {
+          return false;
+        }
+        return acceptCompletion(view);
+      },
+    },
+  ]),
+);
 
 export const emojiColonCompletionSource: CompletionSource = (
   context: CompletionContext,

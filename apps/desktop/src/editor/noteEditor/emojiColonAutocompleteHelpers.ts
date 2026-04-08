@@ -28,6 +28,18 @@ export type EmojiCompletionRow = {
   readonly b: string;
 };
 
+/**
+ * Labels from emoji completions use `:${shortcode}:` (see `buildEmojiCompletions`).
+ * Used to treat a second `:` as accept without matching wiki link completions.
+ */
+const EMOJI_SHORTCODE_COMPLETION_LABEL_RE = /^:[\p{L}\p{N}_+-]+:$/u;
+
+export function isEmojiShortcodeColonCompletion(c: {
+  readonly label: string;
+}): boolean {
+  return EMOJI_SHORTCODE_COMPLETION_LABEL_RE.test(c.label);
+}
+
 export function colonQueryFromEmojiPrefixMatch(m: {
   readonly from: number;
   readonly text: string;

@@ -4,6 +4,7 @@ import {
   colonQueryFromEmojiPrefixMatch,
   EMOJI_COLON_PREFIX_PATTERN,
   filterSortAndCapEmojiRows,
+  isEmojiShortcodeColonCompletion,
   type EmojiCompletionRow,
 } from './emojiColonAutocompleteHelpers';
 
@@ -50,6 +51,20 @@ describe('EMOJI_COLON_PREFIX_PATTERN', () => {
 
   test('does not match foo:bar word boundary', () => {
     expect(matchPrefixBeforeCursor('foo:bar')).toBeNull();
+  });
+});
+
+describe('isEmojiShortcodeColonCompletion', () => {
+  test('matches GitHub-style shortcode labels', () => {
+    expect(isEmojiShortcodeColonCompletion({label: ':smile:'})).toBe(true);
+    expect(isEmojiShortcodeColonCompletion({label: ':sweat_smile:'})).toBe(true);
+  });
+
+  test('rejects wiki-style and other labels', () => {
+    expect(isEmojiShortcodeColonCompletion({label: 'Alpha'})).toBe(false);
+    expect(isEmojiShortcodeColonCompletion({label: 'Note: Title'})).toBe(false);
+    expect(isEmojiShortcodeColonCompletion({label: ':incomplete'})).toBe(false);
+    expect(isEmojiShortcodeColonCompletion({label: 'smile:'})).toBe(false);
   });
 });
 

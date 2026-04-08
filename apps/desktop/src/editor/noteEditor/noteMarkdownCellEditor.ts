@@ -493,7 +493,7 @@ export function buildNoteMarkdownCellExtensions(
       markdownRelativeLinkHighlightExtensions(relativeMarkdownLinkHrefIsResolved),
     ),
     markdownExternalLinkHighlightExtension(),
-    wikiLinkAutocompleteExtension(wikiLinkCompletionCandidates),
+    ...wikiLinkAutocompleteExtension(wikiLinkCompletionCandidates),
     ...vaultImagePreviewExtension({
       vaultRoot: vaultRootRef,
       activeNotePath: activeNotePathRef,

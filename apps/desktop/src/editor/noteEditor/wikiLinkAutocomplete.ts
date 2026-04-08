@@ -10,6 +10,7 @@ import {
 import {
   EMOJI_COMPLETION_MAX_OPTIONS,
   emojiColonCompletionSource,
+  emojiColonSecondColonAcceptKeymap,
 } from './emojiColonAutocomplete';
 
 /** Match an unfinished wiki target right after `[[` (no `|` in the target segment). */
@@ -48,13 +49,16 @@ function inboxWikiLinkCompletions(
 
 export function wikiLinkAutocompleteExtension(
   getCandidates: () => ReadonlyArray<InboxWikiLinkCompletionCandidate>,
-): Extension {
-  return autocompletion({
-    activateOnTyping: true,
-    maxRenderedOptions: Math.max(
-      WIKI_LINK_COMPLETION_MAX_OPTIONS,
-      EMOJI_COMPLETION_MAX_OPTIONS,
-    ),
-    override: [inboxWikiLinkCompletions(getCandidates), emojiColonCompletionSource],
-  });
+): readonly Extension[] {
+  return [
+    autocompletion({
+      activateOnTyping: true,
+      maxRenderedOptions: Math.max(
+        WIKI_LINK_COMPLETION_MAX_OPTIONS,
+        EMOJI_COMPLETION_MAX_OPTIONS,
+      ),
+      override: [inboxWikiLinkCompletions(getCandidates), emojiColonCompletionSource],
+    }),
+    emojiColonSecondColonAcceptKeymap,
+  ];
 }
