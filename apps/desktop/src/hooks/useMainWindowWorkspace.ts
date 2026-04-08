@@ -937,9 +937,11 @@ export function useMainWindowWorkspace(options: {
         }
       };
       saveActiveRef.current = true;
-      const next = saveChainRef.current.then(run).finally(() => {
-        saveActiveRef.current = false;
-      });
+      const next = saveChainRef.current
+        .then(() => run())
+        .finally(() => {
+          saveActiveRef.current = false;
+        });
       saveChainRef.current = next.catch(() => undefined);
       await next;
     },

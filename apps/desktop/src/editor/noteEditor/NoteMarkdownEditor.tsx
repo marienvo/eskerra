@@ -206,8 +206,11 @@ export type NoteMarkdownEditorHandle = {
     expectedHref: string;
     replacementHref: string;
   }) => boolean;
-  /** Move focus into this editor; optionally place the caret at a UTF-16 offset (clamped to the document). */
-  focus: (options?: {anchor?: number}) => void;
+  /**
+   * Move focus into this editor; optionally place the caret at a UTF-16 offset (clamped to the document).
+   * When `scrollIntoView` is false, the selection update omits scroll-into-view (faster; use when layout is local).
+   */
+  focus: (options?: {anchor?: number; scrollIntoView?: boolean}) => void;
 };
 
 const NoteMarkdownEditorImpl = forwardRef<
@@ -886,7 +889,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         });
         return true;
       },
-      focus: (options?: {anchor?: number}) => {
+      focus: (options?: {anchor?: number; scrollIntoView?: boolean}) => {
         const view = viewRef.current;
         if (!view) {
           return;
@@ -896,9 +899,10 @@ const NoteMarkdownEditorImpl = forwardRef<
             0,
             Math.min(options.anchor, view.state.doc.length),
           );
+          const scroll = options.scrollIntoView !== false;
           view.dispatch({
             selection: EditorSelection.cursor(a),
-            scrollIntoView: true,
+            ...(scroll ? {scrollIntoView: true} : {}),
           });
         }
         view.focus();

@@ -9,7 +9,6 @@ import {
   type MutableRefObject,
   type RefObject,
 } from 'react';
-
 import {
   buildInboxWikiLinkCompletionCandidates,
   type VaultMarkdownRef,
@@ -155,9 +154,10 @@ export function TodayHubCanvas({
   const localRowSectionsRef = useRef<Record<string, string[]>>({});
   /** Latest hub cell focus request: monotonic gen + optional caret (consumed by focus effect). */
   const hubCellFocusGenerationRef = useRef(0);
-  const pendingHubCellFocusRef = useRef<{gen: number; caret: number | null} | null>(
-    null,
-  );
+  const pendingHubCellFocusRef = useRef<{
+    gen: number;
+    caret: number | null;
+  } | null>(null);
 
   useLayoutEffect(() => {
     inboxContentByUriRef.current = inboxContentByUri;
@@ -231,27 +231,38 @@ export function TodayHubCanvas({
   const openCell = useCallback(
     (uri: string, col: number, clickCaret: number | null = null) => {
       const key = normUri(uri);
-      void flushScheduledPersist().then(() => {
+      const hubFlushWouldAwait =
+        debounceTimerRef.current != null || pendingPersistRef.current != null;
+      const finishOpen = (): void => {
         const raw = inboxContentByUriRef.current[key] ?? '';
         const initial = splitTodayRowIntoColumns(raw, columnCount);
+        const nextGen = hubCellFocusGenerationRef.current + 1;
+        hubCellFocusGenerationRef.current = nextGen;
+        pendingHubCellFocusRef.current = {
+          gen: nextGen,
+          caret: clickCaret,
+        };
         setLocalRowSections(prev => {
           const next = {...prev, [key]: initial};
           localRowSectionsRef.current = next;
           return next;
         });
-        hubCellFocusGenerationRef.current += 1;
-        pendingHubCellFocusRef.current = {
-          gen: hubCellFocusGenerationRef.current,
-          caret: clickCaret,
-        };
         setCellSessionNonce(n => n + 1);
         setActive({uri: key, col});
-      });
+      };
+      if (hubFlushWouldAwait) {
+        void flushScheduledPersist().then(finishOpen);
+      } else {
+        finishOpen();
+      }
     },
     [columnCount, flushScheduledPersist],
   );
 
-  /** Move focus from the main inbox editor into the hub cell editor after mount (same pattern as Eskerra table). */
+  /**
+   * Focus the cell editor after mount: sync when no click offset; one `rAF` when placing the caret
+   * from a pointer offset (see `specs/performance/todayhub-cell-edit-mode-latency.md`).
+   */
   useLayoutEffect(() => {
     if (!active) {
       return;
@@ -261,27 +272,52 @@ export function TodayHubCanvas({
       return;
     }
     const {gen, caret} = pack;
-    const run = (): void => {
+
+    const applyHubCellFocus = (): void => {
       if (hubCellFocusGenerationRef.current !== gen) {
         return;
       }
       if (pendingHubCellFocusRef.current?.gen !== gen) {
         return;
       }
-      pendingHubCellFocusRef.current = null;
       const ed = cellEditorRef.current;
       if (!ed) {
         return;
       }
+      pendingHubCellFocusRef.current = null;
       if (caret != null) {
         ed.focus({anchor: caret});
       } else {
         ed.focus();
       }
     };
-    requestAnimationFrame(() => {
-      requestAnimationFrame(run);
-    });
+
+    // Keyboard: sync focus once the ref is live (+ one window rAF retry if the handle was not ready).
+    // Pointer caret: sync `focus({anchor})` in this layout pass misaligns vs static rich text (see spec).
+    // H1: try `queueMicrotask` first (after all layout effects flush, before paint) to avoid a full
+    // frame wait; fall back to the prior rAF chain when the editor ref is not ready.
+    if (caret != null) {
+      queueMicrotask(() => {
+        applyHubCellFocus();
+        if (pendingHubCellFocusRef.current?.gen === gen) {
+          requestAnimationFrame(() => {
+            applyHubCellFocus();
+            if (pendingHubCellFocusRef.current?.gen === gen) {
+              requestAnimationFrame(() => {
+                applyHubCellFocus();
+              });
+            }
+          });
+        }
+      });
+    } else {
+      applyHubCellFocus();
+      if (pendingHubCellFocusRef.current?.gen === gen) {
+        requestAnimationFrame(() => {
+          applyHubCellFocus();
+        });
+      }
+    }
   }, [active, cellEditorRef]);
 
   useEffect(() => {
