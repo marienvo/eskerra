@@ -1091,10 +1091,13 @@ a:focus:not(:focus-visible) {
 .pane-header--inbox-editor {
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
+  /* Keep Back/Forward + trailing actions on the first row when pills wrap. */
+  align-items: flex-start;
 }
 
 .pane-header--inbox-editor .pane-header-start {
   gap: 0.12rem;
+  align-items: flex-start;
 }
 
 .pane-title {
@@ -1118,11 +1121,11 @@ a:focus:not(:focus-visible) {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
   gap: 0.1rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: visible;
   padding-block: 0;
 }
 
