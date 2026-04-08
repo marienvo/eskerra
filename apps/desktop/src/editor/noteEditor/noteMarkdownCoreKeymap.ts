@@ -12,8 +12,16 @@ export type NoteMarkdownVaultKeymapHandlers = {
   onSaveShortcut?: () => void;
   /** Shell-owned: Mod-Shift-D — request delete for the current note (confirmation outside the editor). */
   onDeleteNoteShortcut?: () => void;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: {
+    inner: string;
+    at: number;
+    openInBackgroundTab?: boolean;
+  }) => void;
+  onMarkdownRelativeLinkActivate: (payload: {
+    href: string;
+    at: number;
+    openInBackgroundTab?: boolean;
+  }) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
 };
 

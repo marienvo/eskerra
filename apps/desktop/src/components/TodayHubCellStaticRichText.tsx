@@ -1,7 +1,7 @@
 import {ensureSyntaxTree} from '@codemirror/language';
 import {useMemo, type MutableRefObject, type ReactElement} from 'react';
 
-import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
+import {isBrowserOpenableMarkdownHref, wikiLinkInnerBrowserOpenableHref} from '@eskerra/core';
 
 import {isActivatableRelativeMarkdownHref} from '../editor/noteEditor/markdownActivatableRelativeHref';
 import {markdownBareBrowserUrlAtPosition} from '../editor/noteEditor/markdownBareUrl';
@@ -19,6 +19,10 @@ import {
   todayHubStaticCellDocOffsetFromPointer,
   todayHubStaticRichTextPointerHitsVisibleLinkToken,
 } from '../lib/todayHubCellStaticPointer';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from '../editor/noteEditor/vaultLinkActivatePayload';
 
 const HIT_TREE_MS = 200;
 
@@ -28,8 +32,10 @@ export type TodayHubCellStaticRichTextProps = {
   vaultRoot: string;
   wikiNavParentRef: MutableRefObject<string | null>;
   noteRefs: readonly {name: string; uri: string}[];
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
 };
 
@@ -66,7 +72,9 @@ export function TodayHubCellStaticRichText({
       <div
         className="today-hub-canvas__cell-static-rich"
         onPointerDown={e => {
-          if (e.button !== 0 || e.shiftKey) {
+          const isPrimary = e.button === 0 && !e.shiftKey;
+          const isMiddleVault = e.button === 1;
+          if (!isPrimary && !isMiddleVault) {
             return;
           }
           const root = e.currentTarget;
@@ -91,9 +99,19 @@ export function TodayHubCellStaticRichText({
           ensureSyntaxTree(hitState, cellText.length, HIT_TREE_MS);
           const inner = wikiLinkActivatableInnerAtDocPosition(hitState.doc, pos);
           if (inner != null) {
+            if (
+              isMiddleVault
+              && wikiLinkInnerBrowserOpenableHref(inner) != null
+            ) {
+              return;
+            }
             e.preventDefault();
             e.stopPropagation();
-            onWikiLinkActivate({inner, at: pos});
+            onWikiLinkActivate({
+              inner,
+              at: pos,
+              ...(isMiddleVault ? {openInBackgroundTab: true} : {}),
+            });
             return;
           }
           const relHit = markdownActivatableRelativeMdLinkAtPosition(
@@ -107,7 +125,11 @@ export function TodayHubCellStaticRichText({
             onMarkdownRelativeLinkActivate({
               href: relHit.href,
               at: relHit.hrefFrom,
+              ...(isMiddleVault ? {openInBackgroundTab: true} : {}),
             });
+            return;
+          }
+          if (!isPrimary) {
             return;
           }
           const extHit = markdownActivatableRelativeMdLinkAtPosition(

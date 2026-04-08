@@ -31,6 +31,10 @@ import {
 } from '@eskerra/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from '../editor/noteEditor/vaultLinkActivatePayload';
 import {
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
@@ -86,28 +90,30 @@ import {
   planVaultWikiLinkRenameMaintenance,
 } from '../lib/vaultWikiLinkRenameMaintenance';
 import {
-  emptyEditorDocumentHistory,
   normalizeEditorDocUri,
-  pushEditorHistoryEntry,
-  remapEditorHistoryPrefix,
   remapVaultUriPrefix,
-  removeEditorHistoryUris,
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
 import {
   isEditorClosedTabReopenable,
-  pushClosedTabsFromCloseAll,
-  pushClosedTabsFromCloseOther,
 } from '../lib/editorClosedTabStack';
 import {
-  closeOtherOpenTabs,
-  ensureOpenTab,
-  normalizeOpenTabList,
-  pickNeighborUriAfterRemovingTab,
-  remapOpenTabUris,
-  removeOpenTab,
-  removeOpenTabsWhere,
-} from '../lib/editorOpenTabs';
+  collectDistinctUrisFromTabs,
+  createEditorWorkspaceTab,
+  ensureActiveTabId,
+  findTabById,
+  firstSurvivorUriFromTabs,
+  migrateOpenTabUrisToWorkspaceTabs,
+  pickNeighborTabIdAfterRemovingTab,
+  pushClosedWorkspaceTabsFromCloseAll,
+  pushClosedWorkspaceTabsFromCloseOther,
+  pushNavigateOnTab,
+  remapAllTabsUriPrefix,
+  removeUriFromAllTabs,
+  tabCurrentUri,
+  tabsFromStored,
+  type EditorWorkspaceTab,
+} from '../lib/editorWorkspaceTabs';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {
@@ -321,9 +327,11 @@ export type UseMainWindowWorkspaceResult = {
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   /** Editor intent entrypoint for wiki link open/create. */
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
   /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   /** Editor intent entrypoint for `http` / `https` / `mailto` inline links. */
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   deleteNote: (uri: string) => Promise<void>;
@@ -362,11 +370,12 @@ export type UseMainWindowWorkspaceResult = {
    * late rAF clear does not re-render the whole workspace.
    */
   inboxBacklinksDeferNonce: number;
-  /** Open note tabs (IDE-style); normalized vault markdown URIs, left-to-right order. */
-  editorOpenTabUris: readonly string[];
-  activateOpenTab: (uri: string) => void;
-  closeEditorTab: (uri: string) => void;
-  closeOtherEditorTabs: (keepUri: string) => void;
+  /** Open editor tabs with per-tab navigation history. */
+  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
+  activeEditorTabId: string | null;
+  activateOpenTab: (tabId: string) => void;
+  closeEditorTab: (tabId: string) => void;
+  closeOtherEditorTabs: (keepTabId: string) => void;
   closeAllEditorTabs: () => void;
   reopenLastClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
@@ -395,6 +404,12 @@ export function useMainWindowWorkspace(options: {
     composingNewEntry: boolean;
     selectedUri: string | null;
     openTabUris?: readonly string[] | null;
+    editorWorkspaceTabs?: ReadonlyArray<{
+      id: string;
+      entries: string[];
+      index: number;
+    }> | null;
+    activeEditorTabId?: string | null;
   } | null;
   inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
@@ -442,10 +457,12 @@ export function useMainWindowWorkspace(options: {
   );
   const [pendingWikiLinkAmbiguityRename, setPendingWikiLinkAmbiguityRename] =
     useState<PendingWikiLinkAmbiguityRename | null>(null);
-  const [editorDocumentHistory, setEditorDocumentHistory] = useState(() =>
-    emptyEditorDocumentHistory(),
+  const [editorWorkspaceTabs, setEditorWorkspaceTabs] = useState<
+    EditorWorkspaceTab[]
+  >([]);
+  const [activeEditorTabId, setActiveEditorTabId] = useState<string | null>(
+    null,
   );
-  const [editorOpenTabUris, setEditorOpenTabUris] = useState<string[]>([]);
   const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
@@ -480,8 +497,8 @@ export function useMainWindowWorkspace(options: {
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const backlinksActiveBodyRef = useRef('');
   const renameNoticeTimeoutRef = useRef<number | null>(null);
-  const editorDocumentHistoryRef = useRef(emptyEditorDocumentHistory());
-  const editorOpenTabUrisRef = useRef<string[]>([]);
+  const editorWorkspaceTabsRef = useRef<EditorWorkspaceTab[]>([]);
+  const activeEditorTabIdRef = useRef<string | null>(null);
   /** User-initiated tab closes only (for Reopen closed tab). */
   const editorClosedTabsStackRef = useRef<string[]>([]);
   const notesRef = useRef<NoteRow[]>([]);
@@ -554,12 +571,12 @@ export function useMainWindowWorkspace(options: {
   }, [selectedNoteBacklinkUris]);
 
   useLayoutEffect(() => {
-    editorDocumentHistoryRef.current = editorDocumentHistory;
-  }, [editorDocumentHistory]);
+    editorWorkspaceTabsRef.current = editorWorkspaceTabs;
+  }, [editorWorkspaceTabs]);
 
   useLayoutEffect(() => {
-    editorOpenTabUrisRef.current = editorOpenTabUris;
-  }, [editorOpenTabUris]);
+    activeEditorTabIdRef.current = activeEditorTabId;
+  }, [activeEditorTabId]);
 
   useLayoutEffect(() => {
     notesRef.current = notes;
@@ -1032,7 +1049,15 @@ export function useMainWindowWorkspace(options: {
   flushInboxSaveRef.current = flushInboxSave;
 
   const openMarkdownInEditor = useCallback(
-    async (uri: string, options?: {skipHistory?: boolean}) => {
+    async (
+      uri: string,
+      options?: {
+        skipHistory?: boolean;
+        newTab?: boolean;
+        /** When `newTab` is true: default `true` (focus new tab). */
+        activateNewTab?: boolean;
+      },
+    ) => {
       const openGen = ++openMarkdownGenerationRef.current;
       const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
@@ -1069,17 +1094,23 @@ export function useMainWindowWorkspace(options: {
         setDiskConflictSoft(null);
         diskConflictSoftRef.current = null;
       }
-      if (options?.skipHistory) {
-        const saved =
-          editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
-        inboxEditorShellScrollDirectiveRef.current = {
-          kind: 'restore',
-          top: saved.top,
-          left: saved.left,
-        };
-      } else {
-        inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
+      const isBackgroundNewTab =
+        options?.newTab === true && options?.activateNewTab === false;
+
+      if (!isBackgroundNewTab) {
+        if (options?.skipHistory) {
+          const saved =
+            editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
+          inboxEditorShellScrollDirectiveRef.current = {
+            kind: 'restore',
+            top: saved.top,
+            left: saved.left,
+          };
+        } else {
+          inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
+        }
       }
+
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
       const snapshot =
@@ -1143,6 +1174,58 @@ export function useMainWindowWorkspace(options: {
         return;
       }
 
+      if (isBackgroundNewTab) {
+        const newTab = createEditorWorkspaceTab(targetNorm);
+        const nextTabs = [...editorWorkspaceTabsRef.current, newTab];
+        editorWorkspaceTabsRef.current = nextTabs;
+        setEditorWorkspaceTabs(nextTabs);
+        if (prefetchBody !== undefined) {
+          inboxContentByUriRef.current = {
+            ...inboxContentByUriRef.current,
+            [targetNorm]: prefetchBody,
+          };
+          setInboxContentByUri(prev => {
+            if (prev[targetNorm] === prefetchBody) {
+              return prev;
+            }
+            return {...prev, [targetNorm]: prefetchBody!};
+          });
+        }
+        return;
+      }
+
+      let nextTabs = editorWorkspaceTabsRef.current;
+      let nextActiveId = activeEditorTabIdRef.current;
+
+      if (options?.newTab && options?.activateNewTab !== false) {
+        const newTab = createEditorWorkspaceTab(targetNorm);
+        nextTabs = [...nextTabs, newTab];
+        nextActiveId = newTab.id;
+      } else {
+        const activeId = ensureActiveTabId(nextTabs, nextActiveId);
+        if (activeId == null) {
+          const first = createEditorWorkspaceTab(targetNorm);
+          nextTabs = [first];
+          nextActiveId = first.id;
+        } else {
+          nextTabs = nextTabs.map(t => {
+            if (t.id !== activeId) {
+              return t;
+            }
+            if (options?.skipHistory) {
+              return t;
+            }
+            return pushNavigateOnTab(t, uri);
+          });
+          nextActiveId = activeId;
+        }
+      }
+
+      editorWorkspaceTabsRef.current = nextTabs;
+      activeEditorTabIdRef.current = nextActiveId;
+      setEditorWorkspaceTabs(nextTabs);
+      setActiveEditorTabId(nextActiveId);
+
       if (prefetchBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
         inboxContentByUriRef.current = {...inboxContentByUriRef.current, [targetNorm]: prefetchBody};
@@ -1168,7 +1251,6 @@ export function useMainWindowWorkspace(options: {
       selectedUriRef.current = targetNorm;
       composingNewEntryRef.current = false;
 
-      // Apply the visible note switch at normal priority so tab/tree navigation feels immediate.
       if (prefetchBody !== undefined) {
         setInboxContentByUri(prev => {
           if (prev[targetNorm] === prefetchBody) {
@@ -1180,10 +1262,6 @@ export function useMainWindowWorkspace(options: {
       if (resolvedEditorBody !== undefined) {
         setBacklinksActiveBody(resolvedEditorBody);
       }
-      if (!options?.skipHistory) {
-        setEditorDocumentHistory(h => pushEditorHistoryEntry(h, uri));
-      }
-      setEditorOpenTabUris(prev => ensureOpenTab(prev, targetNorm));
       setComposingNewEntry(false);
       setSelectedUri(targetNorm);
     },
@@ -1198,43 +1276,78 @@ export function useMainWindowWorkspace(options: {
   );
 
   const activateOpenTab = useCallback(
-    (uri: string) => {
-      void openMarkdownInEditor(uri, {skipHistory: true});
+    (tabId: string) => {
+      const tab = findTabById(editorWorkspaceTabsRef.current, tabId);
+      const u = tab ? tabCurrentUri(tab) : null;
+      if (!u) {
+        return;
+      }
+      activeEditorTabIdRef.current = tabId;
+      setActiveEditorTabId(tabId);
+      void openMarkdownInEditor(u, {skipHistory: true});
     },
     [openMarkdownInEditor],
   );
 
   const closeEditorTab = useCallback(
-    (uri: string) => {
+    (tabId: string) => {
       void (async () => {
-        const norm = normalizeEditorDocUri(uri);
-        const tabsBefore = editorOpenTabUrisRef.current;
-        const wasSelected = selectedUriRef.current === norm;
+        const tabsBefore = editorWorkspaceTabsRef.current;
+        const tabClosing = findTabById(tabsBefore, tabId);
+        const wasActive = activeEditorTabIdRef.current === tabId;
 
-        if (wasSelected) {
+        if (wasActive) {
           await flushInboxSaveRef.current();
         } else {
           await saveChainRef.current.catch(() => undefined);
         }
 
-        const nextUri = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
-
-        editorClosedTabsStackRef.current.push(norm);
+        const closedUri = tabClosing ? tabCurrentUri(tabClosing) : null;
+        if (closedUri) {
+          editorClosedTabsStackRef.current.push(closedUri);
+        }
         bumpEditorClosedStack();
 
-        setEditorOpenTabUris(prev => removeOpenTab(prev, norm));
-        setEditorDocumentHistory(prev =>
-          removeEditorHistoryUris(prev, u => u === norm),
-        );
-        editorShellScrollByUriRef.current.delete(norm);
+        if (tabClosing) {
+          for (const u of tabClosing.history.entries) {
+            editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(u));
+          }
+        }
 
-        if (!wasSelected) {
+        const nextTabId = pickNeighborTabIdAfterRemovingTab(tabsBefore, tabId);
+        const nextTabs = tabsBefore.filter(t => t.id !== tabId);
+        editorWorkspaceTabsRef.current = nextTabs;
+        setEditorWorkspaceTabs(nextTabs);
+
+        if (!wasActive) {
           return;
         }
 
-        if (nextUri) {
-          await openMarkdownInEditor(nextUri, {skipHistory: true});
+        if (nextTabId) {
+          activeEditorTabIdRef.current = nextTabId;
+          setActiveEditorTabId(nextTabId);
+          const neighbor = findTabById(nextTabs, nextTabId);
+          const nextUri = neighbor ? tabCurrentUri(neighbor) : null;
+          if (nextUri) {
+            await openMarkdownInEditor(nextUri, {skipHistory: true});
+          } else {
+            activeEditorTabIdRef.current = null;
+            setActiveEditorTabId(null);
+            selectedUriRef.current = null;
+            composingNewEntryRef.current = false;
+            lastPersistedRef.current = null;
+            setSelectedUri(null);
+            setComposingNewEntry(false);
+            clearInboxYamlFrontmatterEditorRefs({
+              block: inboxEditorYamlFrontmatterBlockRef,
+              leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+            });
+            setEditorBody('');
+            setInboxEditorResetNonce(n => n + 1);
+          }
         } else {
+          activeEditorTabIdRef.current = null;
+          setActiveEditorTabId(null);
           selectedUriRef.current = null;
           composingNewEntryRef.current = false;
           lastPersistedRef.current = null;
@@ -1253,30 +1366,39 @@ export function useMainWindowWorkspace(options: {
   );
 
   const closeOtherEditorTabs = useCallback(
-    (keepUri: string) => {
+    (keepTabId: string) => {
       void (async () => {
-        const keep = normalizeEditorDocUri(keepUri);
-        const prevTabs = [...editorOpenTabUrisRef.current];
+        const prevTabs = [...editorWorkspaceTabsRef.current];
+        const keepTab = findTabById(prevTabs, keepTabId);
+        const keepUri = keepTab ? tabCurrentUri(keepTab) : null;
+        if (keepUri == null) {
+          return;
+        }
         await saveChainRef.current.catch(() => undefined);
-        if (selectedUriRef.current !== keep) {
-          await openMarkdownInEditor(keep, {skipHistory: true});
+        if (activeEditorTabIdRef.current !== keepTabId) {
+          activeEditorTabIdRef.current = keepTabId;
+          setActiveEditorTabId(keepTabId);
+          await openMarkdownInEditor(keepUri, {skipHistory: true});
         } else {
           await flushInboxSaveRef.current();
         }
-        pushClosedTabsFromCloseOther(editorClosedTabsStackRef.current, prevTabs, keep);
-        bumpEditorClosedStack();
-        setEditorOpenTabUris(prev => {
-          for (const u of prev) {
-            const n = normalizeEditorDocUri(u);
-            if (n !== keep) {
-              editorShellScrollByUriRef.current.delete(n);
-            }
-          }
-          return closeOtherOpenTabs(prev, keep);
-        });
-        setEditorDocumentHistory(prev =>
-          removeEditorHistoryUris(prev, u => u !== keep),
+        pushClosedWorkspaceTabsFromCloseOther(
+          editorClosedTabsStackRef.current,
+          prevTabs,
+          keepTabId,
         );
+        bumpEditorClosedStack();
+        for (const t of prevTabs) {
+          if (t.id === keepTabId) {
+            continue;
+          }
+          for (const u of t.history.entries) {
+            editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(u));
+          }
+        }
+        const next = prevTabs.filter(t => t.id === keepTabId);
+        editorWorkspaceTabsRef.current = next;
+        setEditorWorkspaceTabs(next);
       })();
     },
     [openMarkdownInEditor, bumpEditorClosedStack],
@@ -1285,20 +1407,25 @@ export function useMainWindowWorkspace(options: {
   const closeAllEditorTabs = useCallback(() => {
     void (async () => {
       await flushInboxSaveRef.current();
-      const tabs = normalizeOpenTabList(editorOpenTabUrisRef.current);
+      const tabs = [...editorWorkspaceTabsRef.current];
       if (tabs.length === 0) {
         return;
       }
-      const sel = selectedUriRef.current
-        ? normalizeEditorDocUri(selectedUriRef.current)
-        : null;
-      pushClosedTabsFromCloseAll(editorClosedTabsStackRef.current, tabs, sel);
+      pushClosedWorkspaceTabsFromCloseAll(
+        editorClosedTabsStackRef.current,
+        tabs,
+        activeEditorTabIdRef.current,
+      );
       bumpEditorClosedStack();
-      for (const u of tabs) {
-        editorShellScrollByUriRef.current.delete(u);
+      for (const t of tabs) {
+        for (const u of t.history.entries) {
+          editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(u));
+        }
       }
-      setEditorOpenTabUris([]);
-      setEditorDocumentHistory(emptyEditorDocumentHistory());
+      editorWorkspaceTabsRef.current = [];
+      setEditorWorkspaceTabs([]);
+      activeEditorTabIdRef.current = null;
+      setActiveEditorTabId(null);
       selectedUriRef.current = null;
       composingNewEntryRef.current = false;
       lastPersistedRef.current = null;
@@ -1324,7 +1451,7 @@ export function useMainWindowWorkspace(options: {
           notesRef.current.map(n => n.uri.replace(/\\/g, '/')),
         );
         if (isEditorClosedTabReopenable(uri, root, noteSet)) {
-          await openMarkdownInEditor(uri);
+          await openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
           return;
         }
       }
@@ -1364,8 +1491,10 @@ export function useMainWindowWorkspace(options: {
         const label = local.displayName.trim();
         setSettingsName(label !== '' ? label : 'Eskerra');
         await refreshNotes(root);
-        setEditorDocumentHistory(emptyEditorDocumentHistory());
-        setEditorOpenTabUris([]);
+        editorWorkspaceTabsRef.current = [];
+        setEditorWorkspaceTabs([]);
+        activeEditorTabIdRef.current = null;
+        setActiveEditorTabId(null);
         editorClosedTabsStackRef.current = [];
         setEditorClosedStackVersion(n => n + 1);
         setSelectedUri(null);
@@ -1424,18 +1553,19 @@ export function useMainWindowWorkspace(options: {
     let cancelled = false;
 
     const applyExternalOpenNoteDeleted = async (normTab: string) => {
-      const tabsBefore = [...editorOpenTabUrisRef.current];
       const wasSelected = selectedUriRef.current === normTab;
-      const nextHistory = removeEditorHistoryUris(
-        editorDocumentHistoryRef.current,
+      const nextTabs = removeUriFromAllTabs(
+        editorWorkspaceTabsRef.current,
         u => u === normTab,
       );
-      const focusFromHistory =
-        nextHistory.index >= 0 && nextHistory.entries.length > 0
-          ? nextHistory.entries[nextHistory.index]!
-          : null;
-      const focusFromTabs = pickNeighborUriAfterRemovingTab(tabsBefore, normTab);
-      const nextAfterRemove = focusFromHistory ?? focusFromTabs;
+      const nextActive = ensureActiveTabId(
+        nextTabs,
+        activeEditorTabIdRef.current,
+      );
+      editorWorkspaceTabsRef.current = nextTabs;
+      setEditorWorkspaceTabs(nextTabs);
+      activeEditorTabIdRef.current = nextActive;
+      setActiveEditorTabId(nextActive);
 
       if (diskConflictRef.current?.uri === normTab) {
         setDiskConflict(null);
@@ -1446,8 +1576,6 @@ export function useMainWindowWorkspace(options: {
         diskConflictSoftRef.current = null;
       }
 
-      setEditorOpenTabUris(prev => removeOpenTab(prev, normTab));
-      setEditorDocumentHistory(nextHistory);
       editorShellScrollByUriRef.current.delete(normTab);
 
       const cacheNext = removeInboxNoteBodyFromCache(
@@ -1462,6 +1590,13 @@ export function useMainWindowWorkspace(options: {
       if (!wasSelected) {
         return;
       }
+
+      const activeTab = nextActive
+        ? findTabById(nextTabs, nextActive)
+        : undefined;
+      const nextAfterRemove =
+        (activeTab ? tabCurrentUri(activeTab) : null)
+        ?? firstSurvivorUriFromTabs(nextTabs);
 
       if (nextAfterRemove) {
         await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
@@ -1492,16 +1627,16 @@ export function useMainWindowWorkspace(options: {
         );
       }
       const fullRefresh = normPaths.length === 0;
-      const tabs = [...editorOpenTabUrisRef.current];
+      const tabs = collectDistinctUrisFromTabs(editorWorkspaceTabsRef.current);
 
       for (const tabUri of tabs) {
         const normTab = normalizeEditorDocUri(tabUri);
         if (!normTab.toLowerCase().endsWith('.md')) {
           continue;
         }
-        const stillOpen = editorOpenTabUrisRef.current.some(
-          u => normalizeEditorDocUri(u) === normTab,
-        );
+        const stillOpen = collectDistinctUrisFromTabs(
+          editorWorkspaceTabsRef.current,
+        ).some(u => normalizeEditorDocUri(u) === normTab);
         if (!stillOpen) {
           continue;
         }
@@ -2129,24 +2264,28 @@ export function useMainWindowWorkspace(options: {
       await saveChainRef.current.catch(() => undefined);
 
       const norm = normalizeEditorDocUri(uri);
-      const tabsBefore = editorOpenTabUrisRef.current;
       const wasOpen = selectedUriRef.current === norm;
-      const nextHistory = removeEditorHistoryUris(
-        editorDocumentHistoryRef.current,
+      const nextTabs = removeUriFromAllTabs(
+        editorWorkspaceTabsRef.current,
         u => u === norm,
       );
-      const focusFromHistory =
-        nextHistory.index >= 0 && nextHistory.entries.length > 0
-          ? nextHistory.entries[nextHistory.index]!
-          : null;
-      const focusFromTabs = pickNeighborUriAfterRemovingTab(tabsBefore, norm);
-      const nextAfterRemove = focusFromHistory ?? focusFromTabs;
-
-      setEditorOpenTabUris(prev => removeOpenTab(prev, uri));
-      setEditorDocumentHistory(nextHistory);
+      const nextActive = ensureActiveTabId(
+        nextTabs,
+        activeEditorTabIdRef.current,
+      );
+      editorWorkspaceTabsRef.current = nextTabs;
+      setEditorWorkspaceTabs(nextTabs);
+      activeEditorTabIdRef.current = nextActive;
+      setActiveEditorTabId(nextActive);
       editorShellScrollByUriRef.current.delete(norm);
 
       if (wasOpen) {
+        const activeTab = nextActive
+          ? findTabById(nextTabs, nextActive)
+          : undefined;
+        const nextAfterRemove =
+          (activeTab ? tabCurrentUri(activeTab) : null)
+          ?? firstSurvivorUriFromTabs(nextTabs);
         if (nextAfterRemove) {
           await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
         } else {
@@ -2357,10 +2496,13 @@ export function useMainWindowWorkspace(options: {
             uri,
             nextUri,
           );
-          setEditorDocumentHistory(prev =>
-            remapEditorHistoryPrefix(prev, uri, nextUri),
+          const remappedRenameTabs = remapAllTabsUriPrefix(
+            editorWorkspaceTabsRef.current,
+            uri,
+            nextUri,
           );
-          setEditorOpenTabUris(prev => remapOpenTabUris(prev, uri, nextUri));
+          editorWorkspaceTabsRef.current = remappedRenameTabs;
+          setEditorWorkspaceTabs(remappedRenameTabs);
         }
         if (applyResult.failed.length > 0) {
           const list = applyResult.failed.map(f => f.uri).join(', ');
@@ -2424,7 +2566,7 @@ export function useMainWindowWorkspace(options: {
   }, []);
 
   const activateWikiLink = useCallback(
-    async ({inner, at}: {inner: string; at: number}) => {
+    async ({inner, at, openInBackgroundTab}: VaultWikiLinkActivatePayload) => {
       if (!vaultRoot) {
         return;
       }
@@ -2471,7 +2613,12 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(result.uri);
+          await openMarkdownInEditor(
+            result.uri,
+            openInBackgroundTab
+              ? {newTab: true, activateNewTab: false}
+              : undefined,
+          );
           return;
         }
         if (result.kind === 'ambiguous') {
@@ -2496,14 +2643,18 @@ export function useMainWindowWorkspace(options: {
   );
 
   const onWikiLinkActivate = useCallback(
-    (payload: {inner: string; at: number}) => {
+    (payload: VaultWikiLinkActivatePayload) => {
       void activateWikiLink(payload);
     },
     [activateWikiLink],
   );
 
   const activateRelativeMarkdownLink = useCallback(
-    async ({href, at}: {href: string; at: number}) => {
+    async ({
+      href,
+      at,
+      openInBackgroundTab,
+    }: VaultRelativeMarkdownLinkActivatePayload) => {
       if (!vaultRoot) {
         return;
       }
@@ -2549,7 +2700,12 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(result.uri);
+          await openMarkdownInEditor(
+            result.uri,
+            openInBackgroundTab
+              ? {newTab: true, activateNewTab: false}
+              : undefined,
+          );
           return;
         }
         setErr('This link is not a relative vault markdown note.');
@@ -2561,7 +2717,7 @@ export function useMainWindowWorkspace(options: {
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
-    (payload: {href: string; at: number}) => {
+    (payload: VaultRelativeMarkdownLinkActivatePayload) => {
       void activateRelativeMarkdownLink(payload);
     },
     [activateRelativeMarkdownLink],
@@ -2587,7 +2743,6 @@ export function useMainWindowWorkspace(options: {
       }
       autosaveSchedulerRef.current.cancel();
       const normDir = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
-      const tabsBeforeDelete = editorOpenTabUrisRef.current;
       const selected = selectedUriRef.current?.replace(/\\/g, '/');
       const clearsSelection =
         selected != null
@@ -2630,22 +2785,25 @@ export function useMainWindowWorkspace(options: {
           const f = normDir;
           return u === f || u.startsWith(`${f}/`);
         };
-        const newTabs = removeOpenTabsWhere(tabsBeforeDelete, tabPred);
-        const nextHistory = removeEditorHistoryUris(
-          editorDocumentHistoryRef.current,
-          u => {
-            const f = normDir;
-            return u === f || u.startsWith(`${f}/`);
-          },
+        const newTabs = removeUriFromAllTabs(
+          editorWorkspaceTabsRef.current,
+          tabPred,
         );
-        setEditorOpenTabUris(newTabs);
-        setEditorDocumentHistory(nextHistory);
+        const nextActive = ensureActiveTabId(
+          newTabs,
+          activeEditorTabIdRef.current,
+        );
+        editorWorkspaceTabsRef.current = newTabs;
+        setEditorWorkspaceTabs(newTabs);
+        activeEditorTabIdRef.current = nextActive;
+        setActiveEditorTabId(nextActive);
         if (clearsSelection) {
-          const fromHistory =
-            nextHistory.index >= 0 && nextHistory.entries.length > 0
-              ? nextHistory.entries[nextHistory.index]!
-              : null;
-          const nextUri = fromHistory ?? newTabs[0] ?? null;
+          const activeTab = nextActive
+            ? findTabById(newTabs, nextActive)
+            : undefined;
+          const nextUri =
+            (activeTab ? tabCurrentUri(activeTab) : null)
+            ?? firstSurvivorUriFromTabs(newTabs);
           if (nextUri) {
             await openMarkdownInEditor(nextUri, {skipHistory: true});
           }
@@ -2726,10 +2884,13 @@ export function useMainWindowWorkspace(options: {
             lastPersistedRef.current = {...lp, uri: mappedLp};
           }
         }
-        setEditorDocumentHistory(prev =>
-          remapEditorHistoryPrefix(prev, oldUri, normalizedNext),
+        const remappedTabs = remapAllTabsUriPrefix(
+          editorWorkspaceTabsRef.current,
+          oldUri,
+          normalizedNext,
         );
-        setEditorOpenTabUris(prev => remapOpenTabUris(prev, oldUri, normalizedNext));
+        editorWorkspaceTabsRef.current = remappedTabs;
+        setEditorWorkspaceTabs(remappedTabs);
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
       } catch (e) {
@@ -2819,12 +2980,13 @@ export function useMainWindowWorkspace(options: {
           }
         }
       }
-      setEditorDocumentHistory(prev =>
-        remapEditorHistoryPrefix(prev, result.previousUri, result.nextUri),
+      const remappedMoveTabs = remapAllTabsUriPrefix(
+        editorWorkspaceTabsRef.current,
+        result.previousUri,
+        result.nextUri,
       );
-      setEditorOpenTabUris(prev =>
-        remapOpenTabUris(prev, result.previousUri, result.nextUri),
-      );
+      editorWorkspaceTabsRef.current = remappedMoveTabs;
+      setEditorWorkspaceTabs(remappedMoveTabs);
     },
     [vaultRoot],
   );
@@ -2871,7 +3033,6 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       autosaveSchedulerRef.current.cancel();
-      const tabsBeforeBulk = editorOpenTabUrisRef.current;
       const normSel = selectedUriRef.current?.replace(/\\/g, '/');
       const shouldClearEditor =
         normSel != null
@@ -2946,15 +3107,18 @@ export function useMainWindowWorkspace(options: {
             );
           }
         }
-        const nextHistory = removeEditorHistoryUris(
-          editorDocumentHistoryRef.current,
+        const newTabs = removeUriFromAllTabs(
+          editorWorkspaceTabsRef.current,
           u => vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
         );
-        const newTabs = removeOpenTabsWhere(tabsBeforeBulk, u =>
-          vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
+        const nextActive = ensureActiveTabId(
+          newTabs,
+          activeEditorTabIdRef.current,
         );
-        setEditorDocumentHistory(nextHistory);
-        setEditorOpenTabUris(newTabs);
+        editorWorkspaceTabsRef.current = newTabs;
+        setEditorWorkspaceTabs(newTabs);
+        activeEditorTabIdRef.current = nextActive;
+        setActiveEditorTabId(nextActive);
         const sm = editorShellScrollByUriRef.current;
         for (const key of [...sm.keys()]) {
           if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
@@ -2962,11 +3126,12 @@ export function useMainWindowWorkspace(options: {
           }
         }
         if (shouldClearEditor) {
-          const fromHistory =
-            nextHistory.index >= 0 && nextHistory.entries.length > 0
-              ? nextHistory.entries[nextHistory.index]!
-              : null;
-          const nextUri = fromHistory ?? newTabs[0] ?? null;
+          const activeTab = nextActive
+            ? findTabById(newTabs, nextActive)
+            : undefined;
+          const nextUri =
+            (activeTab ? tabCurrentUri(activeTab) : null)
+            ?? firstSurvivorUriFromTabs(newTabs);
           if (nextUri) {
             await openMarkdownInEditor(nextUri, {skipHistory: true});
           }
@@ -3018,8 +3183,15 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
   );
 
+  const activeTabHistory = useMemo(() => {
+    const tab = activeEditorTabId
+      ? findTabById(editorWorkspaceTabs, activeEditorTabId)
+      : undefined;
+    return tab?.history ?? {entries: [], index: -1};
+  }, [activeEditorTabId, editorWorkspaceTabs]);
+
   const editorHistoryCanGoBack = useMemo(() => {
-    const {entries, index} = editorDocumentHistory;
+    const {entries, index} = activeTabHistory;
     if (entries.length === 0) {
       return false;
     }
@@ -3027,20 +3199,23 @@ export function useMainWindowWorkspace(options: {
       return index >= 0;
     }
     return index > 0;
-  }, [composingNewEntry, editorDocumentHistory]);
+  }, [composingNewEntry, activeTabHistory]);
 
   const editorHistoryCanGoForward = useMemo(() => {
-    const {entries, index} = editorDocumentHistory;
+    const {entries, index} = activeTabHistory;
     if (busy || composingNewEntry) {
       return false;
     }
     return index >= 0 && index < entries.length - 1;
-  }, [busy, composingNewEntry, editorDocumentHistory]);
+  }, [busy, composingNewEntry, activeTabHistory]);
 
   const editorHistoryGoBack = useCallback(() => {
     void (async () => {
       await flushInboxSaveRef.current();
-      const snap = editorDocumentHistoryRef.current;
+      const id = activeEditorTabIdRef.current;
+      const tabs = editorWorkspaceTabsRef.current;
+      const tab = id ? findTabById(tabs, id) : undefined;
+      const snap = tab?.history ?? {entries: [], index: -1};
       if (composingNewEntryRef.current) {
         if (snap.entries.length === 0 || snap.index < 0) {
           return;
@@ -3061,7 +3236,13 @@ export function useMainWindowWorkspace(options: {
       }
       const nextIndex = snap.index - 1;
       const uri = snap.entries[nextIndex]!;
-      setEditorDocumentHistory(prev => ({...prev, index: nextIndex}));
+      const nextTabs = tabs.map(t =>
+        t.id === id
+          ? {...t, history: {...t.history, index: nextIndex}}
+          : t,
+      );
+      editorWorkspaceTabsRef.current = nextTabs;
+      setEditorWorkspaceTabs(nextTabs);
       await openMarkdownInEditor(uri, {skipHistory: true});
     })();
   }, [openMarkdownInEditor]);
@@ -3072,13 +3253,22 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       await flushInboxSaveRef.current();
-      const snap = editorDocumentHistoryRef.current;
+      const id = activeEditorTabIdRef.current;
+      const tabs = editorWorkspaceTabsRef.current;
+      const tab = id ? findTabById(tabs, id) : undefined;
+      const snap = tab?.history ?? {entries: [], index: -1};
       if (snap.index < 0 || snap.index >= snap.entries.length - 1) {
         return;
       }
       const nextIndex = snap.index + 1;
       const uri = snap.entries[nextIndex]!;
-      setEditorDocumentHistory(prev => ({...prev, index: nextIndex}));
+      const nextTabs = tabs.map(t =>
+        t.id === id
+          ? {...t, history: {...t.history, index: nextIndex}}
+          : t,
+      );
+      editorWorkspaceTabsRef.current = nextTabs;
+      setEditorWorkspaceTabs(nextTabs);
       await openMarkdownInEditor(uri, {skipHistory: true});
     })();
   }, [openMarkdownInEditor]);
@@ -3115,14 +3305,71 @@ export function useMainWindowWorkspace(options: {
         );
       };
       const rawTabs = restoredInboxState.openTabUris;
+      const storedWorkspaceTabs = restoredInboxState.editorWorkspaceTabs;
       let restoredTabs: string[] = [];
-      if (rawTabs != null && rawTabs.length > 0) {
-        const filtered = rawTabs.filter(filterStoredTab);
-        if (filtered.length > 0) {
-          restoredTabs = normalizeOpenTabList(filtered);
-          setEditorOpenTabUris(restoredTabs);
+
+      if (storedWorkspaceTabs != null && storedWorkspaceTabs.length > 0) {
+        const sanitized = storedWorkspaceTabs
+          .map(t => {
+            const entries = t.entries
+              .map(e => e.replace(/\\/g, '/'))
+              .filter(filterStoredTab);
+            if (entries.length === 0) {
+              return null;
+            }
+            let index =
+              typeof t.index === 'number' && Number.isFinite(t.index)
+                ? Math.floor(t.index)
+                : 0;
+            if (index < 0 || index >= entries.length) {
+              index = entries.length - 1;
+            }
+            const id = typeof t.id === 'string' ? t.id.trim() : '';
+            if (!id) {
+              return null;
+            }
+            return {id, entries, index};
+          })
+          .filter((x): x is {id: string; entries: string[]; index: number} => x != null);
+        if (sanitized.length > 0) {
+          const nextTabs = tabsFromStored(sanitized);
+          let nextActive =
+            typeof restoredInboxState.activeEditorTabId === 'string'
+              ? restoredInboxState.activeEditorTabId.trim()
+              : null;
+          if (nextActive && !nextTabs.some(t => t.id === nextActive)) {
+            nextActive = null;
+          }
+          nextActive = ensureActiveTabId(nextTabs, nextActive);
+          editorWorkspaceTabsRef.current = nextTabs;
+          activeEditorTabIdRef.current = nextActive;
+          setEditorWorkspaceTabs(nextTabs);
+          setActiveEditorTabId(nextActive);
+          restoredTabs = nextTabs
+            .map(t => tabCurrentUri(t))
+            .filter((u): u is string => u != null);
         }
       }
+
+      if (
+        editorWorkspaceTabsRef.current.length === 0
+        && rawTabs != null
+        && rawTabs.length > 0
+      ) {
+        const filtered = rawTabs.filter(filterStoredTab);
+        const migrated = migrateOpenTabUrisToWorkspaceTabs(filtered);
+        if (migrated.length > 0) {
+          const nextActive = migrated[0]!.id;
+          editorWorkspaceTabsRef.current = migrated;
+          activeEditorTabIdRef.current = nextActive;
+          setEditorWorkspaceTabs(migrated);
+          setActiveEditorTabId(nextActive);
+          restoredTabs = migrated
+            .map(t => tabCurrentUri(t))
+            .filter((u): u is string => u != null);
+        }
+      }
+
       if (restoredInboxState.composingNewEntry) {
         startNewEntry();
       } else if (restoredInboxState.selectedUri) {
@@ -3207,7 +3454,8 @@ export function useMainWindowWorkspace(options: {
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorOpenTabUris,
+    editorWorkspaceTabs,
+    activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
     closeOtherEditorTabs,

@@ -41,6 +41,10 @@ import {
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
 import {todayHubPerfEnabled, todayHubPerfLog} from '../lib/todayHub/todayHubPerf';
 import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from '../editor/noteEditor/vaultLinkActivatePayload';
 import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
 
 /** Cap simultaneous warm (read-only underlay) hub cells. Conservative first default. */
@@ -57,8 +61,10 @@ type TodayHubCanvasProps = {
   bridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
   wikiNavParentRef: MutableRefObject<string | null>;
   cellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onEditorError: (message: string) => void;
   onSaveShortcut: () => void;

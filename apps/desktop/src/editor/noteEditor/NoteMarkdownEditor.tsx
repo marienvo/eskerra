@@ -34,6 +34,7 @@ import {
   isExternalMarkdownHref,
   MARKDOWN_EXTENSION,
   stripMarkdownLinkHrefToPathPart,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkCompletionCandidate,
 } from '@eskerra/core';
 
@@ -86,6 +87,10 @@ import {
   wikiLinkActivatableInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from './vaultLinkActivatePayload';
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
@@ -156,11 +161,13 @@ export type NoteMarkdownEditorProps = {
   /** Shown when image paste or drop fails; also used when vault image import is unavailable. */
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
   /** Shell-owned: relative `.md` href resolves to an existing indexed note (for styling). */
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   /** Shell-owned: open `http` / `https` / `mailto` inline links in the system browser. */
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
@@ -569,6 +576,46 @@ const NoteMarkdownEditorImpl = forwardRef<
       return false;
     };
 
+    const onEditorMiddleClick = (e: MouseEvent, view: EditorView): boolean => {
+      if (e.button !== 1) {
+        return false;
+      }
+      const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+      if (pos == null) {
+        return false;
+      }
+      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      if (inner) {
+        if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
+          return false;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        onWikiLinkActivateRef.current({
+          inner,
+          at: pos,
+          openInBackgroundTab: true,
+        });
+        return true;
+      }
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownRelativeLinkActivateRef.current({
+          href: relHit.href,
+          at: relHit.hrefFrom,
+          openInBackgroundTab: true,
+        });
+        return true;
+      }
+      return false;
+    };
+
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
@@ -684,9 +731,12 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       EditorView.domEventHandlers({
-        mousedown(event) {
+        mousedown(event, view) {
           if (event.button !== 1) {
             return false;
+          }
+          if (onEditorMiddleClick(event, view)) {
+            return true;
           }
           event.preventDefault();
           return true;

@@ -48,6 +48,10 @@ import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
+  tabCurrentUri,
+  tabsToStored,
+} from './lib/editorWorkspaceTabs';
+import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
   MIN_RESIZABLE_PANE_PX,
@@ -98,6 +102,12 @@ export default function App() {
     composingNewEntry: boolean;
     selectedUri: string | null;
     openTabUris?: readonly string[];
+    editorWorkspaceTabs?: ReadonlyArray<{
+      id: string;
+      entries: string[];
+      index: number;
+    }>;
+    activeEditorTabId?: string | null;
   } | null>(null);
   const {
     vaultRoot,
@@ -154,7 +164,8 @@ export default function App() {
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorOpenTabUris,
+    editorWorkspaceTabs,
+    activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
     closeOtherEditorTabs,
@@ -461,6 +472,8 @@ export default function App() {
             composingNewEntry: ui.inbox.composingNewEntry,
             selectedUri: ui.inbox.selectedUri,
             openTabUris: ui.inbox.openTabUris,
+            editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
+            activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
           });
         }
         setLayoutsReady(true);
@@ -511,7 +524,11 @@ export default function App() {
       inbox: {
         composingNewEntry,
         selectedUri,
-        openTabUris: [...editorOpenTabUris],
+        openTabUris: editorWorkspaceTabs
+          .map(t => tabCurrentUri(t))
+          .filter((u): u is string => u != null),
+        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
+        activeEditorTabId,
       },
     };
     const t = window.setTimeout(() => {
@@ -527,7 +544,8 @@ export default function App() {
     notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
-    editorOpenTabUris,
+    editorWorkspaceTabs,
+    activeEditorTabId,
     inboxShellRestored,
   ]);
 
@@ -922,7 +940,8 @@ export default function App() {
                       onEditorHistoryGoBack={editorHistoryGoBack}
                       onEditorHistoryGoForward={editorHistoryGoForward}
                       inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                      editorOpenTabUris={editorOpenTabUris}
+                      editorWorkspaceTabs={editorWorkspaceTabs}
+                      activeEditorTabId={activeEditorTabId}
                       onActivateOpenTab={activateOpenTab}
                       onCloseEditorTab={closeEditorTab}
                       onCloseOtherEditorTabs={closeOtherEditorTabs}

@@ -18,6 +18,7 @@ import type {MutableRefObject} from 'react';
 
 import {
   isBrowserOpenableMarkdownHref,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkCompletionCandidate,
 } from '@eskerra/core';
 
@@ -51,6 +52,10 @@ import {
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from './vaultLinkActivatePayload';
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {
@@ -87,8 +92,10 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
   attachmentHostRef: MutableRefObject<NoteInboxAttachmentHost>;
   busyRef: MutableRefObject<boolean>;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut?: () => void;
   onDeleteNoteShortcut?: () => void;
@@ -198,6 +205,42 @@ export function buildNoteMarkdownCellExtensions(
     return false;
   };
 
+  const onEditorMiddleClick = (e: MouseEvent, view: EditorView): boolean => {
+    if (e.button !== 1) {
+      return false;
+    }
+    const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+    if (pos == null) {
+      return false;
+    }
+    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    if (inner) {
+      if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
+        return false;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onWikiLinkActivate({inner, at: pos, openInBackgroundTab: true});
+      return true;
+    }
+    const relHit = markdownActivatableRelativeMdLinkAtPosition(
+      view.state,
+      pos,
+      isActivatableRelativeMarkdownHref,
+    );
+    if (relHit) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMarkdownRelativeLinkActivate({
+        href: relHit.href,
+        at: relHit.hrefFrom,
+        openInBackgroundTab: true,
+      });
+      return true;
+    }
+    return false;
+  };
+
   const pasteOk = () => args.pasteSessionRef.current === args.pasteSessionId;
 
   const runVaultImagePasteFromDataTransfer = (
@@ -282,9 +325,12 @@ export function buildNoteMarkdownCellExtensions(
   };
 
   const pasteHandlers = EditorView.domEventHandlers({
-    mousedown(event) {
+    mousedown(event, view) {
       if (event.button !== 1) {
         return false;
+      }
+      if (onEditorMiddleClick(event, view)) {
+        return true;
       }
       event.preventDefault();
       return true;

@@ -47,6 +47,11 @@ import {
   type TodayHubWorkspaceBridge,
 } from '../lib/todayHub';
 
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from '../editor/noteEditor/vaultLinkActivatePayload';
+import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {MaterialIcon} from './MaterialIcon';
@@ -95,8 +100,10 @@ type VaultTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
@@ -124,10 +131,11 @@ type VaultTabProps = {
   onEditorHistoryGoForward: () => void;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
-  editorOpenTabUris: readonly string[];
-  onActivateOpenTab: (uri: string) => void;
-  onCloseEditorTab: (uri: string) => void;
-  onCloseOtherEditorTabs: (keepUri: string) => void;
+  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
+  activeEditorTabId: string | null;
+  onActivateOpenTab: (tabId: string) => void;
+  onCloseEditorTab: (tabId: string) => void;
+  onCloseOtherEditorTabs: (keepTabId: string) => void;
   onCloseAllEditorTabs: () => void;
   onReopenClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
@@ -462,7 +470,8 @@ export function VaultTab({
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
   inboxBacklinksDeferNonce,
-  editorOpenTabUris,
+  editorWorkspaceTabs,
+  activeEditorTabId,
   onActivateOpenTab,
   onCloseEditorTab,
   onCloseOtherEditorTabs,
@@ -1075,8 +1084,8 @@ export function VaultTab({
                 ) : (
                   <EditorPaneOpenNoteTabs
                     notes={notes}
-                    tabUris={editorOpenTabUris}
-                    selectedUri={selectedUri}
+                    workspaceTabs={editorWorkspaceTabs}
+                    activeTabId={activeEditorTabId}
                     busy={busy}
                     onActivateTab={onActivateOpenTab}
                     onCloseTab={onCloseEditorTab}
@@ -1087,7 +1096,7 @@ export function VaultTab({
               </div>
               <div className="pane-header-trailing-actions">
                 {!composingNewEntry
-                && (editorOpenTabUris.length > 0 || canReopenClosedEditorTab) ? (
+                && (editorWorkspaceTabs.length > 0 || canReopenClosedEditorTab) ? (
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -1113,7 +1122,7 @@ export function VaultTab({
                       >
                         <DropdownMenu.Item
                           className="note-list-context-menu__item"
-                          disabled={busy || editorOpenTabUris.length === 0}
+                          disabled={busy || editorWorkspaceTabs.length === 0}
                           onSelect={() => {
                             onCloseAllEditorTabs();
                           }}
