@@ -1874,6 +1874,8 @@ button.primary.destructive {
   --nb-editor-list-nest-step: 0.5rem;
   /* Fold gutter column width; matches rail + `EditorView.theme` + `.cm-gutters` in App.css. */
   --nb-editor-fold-gutter-width: 1.375rem;
+  /* Max width of the text column inside `.note-markdown-editor-page` (excluding fold rail). */
+  --nb-editor-page-body-max: 1035px;
   /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
   --nb-editor-paper-pad-block-start: 4rem;
 
@@ -1904,7 +1906,7 @@ button.primary.destructive {
 .note-markdown-editor-page {
   width: 100%;
   max-width: calc(
-    690px + var(--nb-editor-heading-gutter) + var(--nb-editor-fold-gutter-width)
+    var(--nb-editor-page-body-max) + var(--nb-editor-heading-gutter) + var(--nb-editor-fold-gutter-width)
   );
   margin-inline: auto;
   box-sizing: border-box;
