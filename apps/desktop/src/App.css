@@ -2888,6 +2888,7 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-readonly {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -2897,7 +2898,10 @@ button.primary.destructive {
   min-height: 2.25rem;
   /* Tighten top slightly vs edit column; +2px left vs shared cm-content formula. */
   margin: 0 0 0;
-  /* Match hub editor `.cm-content`: left inset only; no padding top/right/bottom. */
+  /*
+   * Match hub editor `.cm-content` left inset; add trailing inset so static text does not run
+   * flush against the cell edge (edit cells use the full width).
+   */
   padding: 0;
   padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 20px);
   border: none;
