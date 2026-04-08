@@ -1,10 +1,12 @@
 import {historyKeymap} from '@codemirror/commands';
+import {searchKeymap} from '@codemirror/search';
 import {EditorState, EditorSelection} from '@codemirror/state';
 import {EditorView, keymap, runScopeHandlers} from '@codemirror/view';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
 import {
   buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
   runWikiLinkActivateFromCaret,
 } from './noteMarkdownCoreKeymap';
@@ -64,6 +66,38 @@ describe('buildNoteMarkdownDeleteLineModYBindings', () => {
       'editor',
     );
     expect(view.state.doc.toString()).toBe('alpha\ngamma');
+    view.destroy();
+  });
+});
+
+describe('buildNoteMarkdownDuplicateLineModDBindings', () => {
+  it('duplicates the active line on Ctrl+D before searchKeymap (overrides selectNextOccurrence)', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const doc = 'alpha\nbeta\ngamma';
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        keymap.of([
+          ...buildNoteMarkdownDuplicateLineModDBindings(),
+          ...searchKeymap,
+        ]),
+      ],
+    });
+    const view = new EditorView({state, parent});
+    const betaLineStart = doc.indexOf('beta');
+    view.dispatch({selection: EditorSelection.cursor(betaLineStart)});
+    runScopeHandlers(
+      view,
+      new KeyboardEvent('keydown', {
+        key: 'd',
+        code: 'KeyD',
+        ctrlKey: true,
+        bubbles: true,
+      }),
+      'editor',
+    );
+    expect(view.state.doc.toString()).toBe('alpha\nbeta\nbeta\ngamma');
     view.destroy();
   });
 });

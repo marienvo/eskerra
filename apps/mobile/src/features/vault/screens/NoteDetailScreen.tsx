@@ -7,6 +7,8 @@ import {Pressable, StyleSheet} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {splitYamlFrontmatter} from '@eskerra/core';
+
 import {normalizeNoteUri} from '../../../core/storage/noteUriNormalize';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {isNavigateToAddNoteAction} from '../../../navigation/navigationActionGuards';
@@ -74,6 +76,12 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
   );
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+
+  const noteText = content || '';
+  const {frontmatter, body} = splitYamlFrontmatter(noteText);
+  const markdownSource = frontmatter !== null ? body : noteText;
+  const markdownForDisplay =
+    markdownSource.trim() === '' ? '*Empty entry*' : markdownSource;
 
   const applyFocusedNoteHeaders = useCallback(() => {
     const tabNavigation = navigation.getParent();
@@ -241,7 +249,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
               link: {color: '#4f9dff'},
               paragraph: {color: markdownTextColor},
             }}>
-            {content || '*Empty entry*'}
+            {markdownForDisplay}
           </Markdown>
         </ScrollView>
       ) : null}

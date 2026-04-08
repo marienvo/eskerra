@@ -11,6 +11,11 @@ export type StoredMainWindowInbox = {
   selectedUri: string | null;
   /** Open editor tabs (vault markdown URIs); optional for backward compatibility. */
   openTabUris?: string[];
+  /**
+   * IDE-style tabs with per-tab back/forward stacks. When present, preferred over `openTabUris`.
+   */
+  editorWorkspaceTabs?: Array<{id: string; entries: string[]; index: number}>;
+  activeEditorTabId?: string | null;
 };
 
 export type StoredMainWindowUi = {
@@ -101,6 +106,50 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
       if (uris.length > 0) {
         inbox.openTabUris = uris;
       }
+    }
+    if (Array.isArray(ib.editorWorkspaceTabs)) {
+      const tabs: NonNullable<StoredMainWindowInbox['editorWorkspaceTabs']> = [];
+      for (const rawTab of ib.editorWorkspaceTabs) {
+        if (rawTab === null || typeof rawTab !== 'object' || Array.isArray(rawTab)) {
+          continue;
+        }
+        const t = rawTab as Record<string, unknown>;
+        const id = typeof t.id === 'string' ? t.id.trim() : '';
+        if (!id) {
+          continue;
+        }
+        const entries: string[] = [];
+        if (Array.isArray(t.entries)) {
+          for (const e of t.entries) {
+            if (typeof e === 'string') {
+              const u = e.trim().replace(/\\/g, '/');
+              if (u) {
+                entries.push(u);
+              }
+            }
+          }
+        }
+        if (entries.length === 0) {
+          continue;
+        }
+        let index =
+          typeof t.index === 'number' && Number.isFinite(t.index)
+            ? Math.floor(t.index)
+            : 0;
+        if (index < 0 || index >= entries.length) {
+          index = entries.length - 1;
+        }
+        tabs.push({id, entries, index});
+      }
+      if (tabs.length > 0) {
+        inbox.editorWorkspaceTabs = tabs;
+      }
+    }
+    if (ib.activeEditorTabId === null) {
+      inbox.activeEditorTabId = null;
+    } else if (typeof ib.activeEditorTabId === 'string') {
+      const id = ib.activeEditorTabId.trim();
+      inbox.activeEditorTabId = id === '' ? null : id;
     }
   }
 

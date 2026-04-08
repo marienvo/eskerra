@@ -41,10 +41,21 @@ import {
 } from '../lib/vaultTreeBulkPlan';
 
 import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
+import {
+  todayHubColumnCount,
+  type TodayHubSettings,
+  type TodayHubWorkspaceBridge,
+} from '../lib/todayHub';
 
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from '../editor/noteEditor/vaultLinkActivatePayload';
+import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {MaterialIcon} from './MaterialIcon';
+import {TodayHubCanvas} from './TodayHubCanvas';
 import {VaultTreePane} from './VaultTreePane';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
@@ -89,8 +100,10 @@ type VaultTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
   busy: boolean;
@@ -118,13 +131,25 @@ type VaultTabProps = {
   onEditorHistoryGoForward: () => void;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
-  editorOpenTabUris: readonly string[];
-  onActivateOpenTab: (uri: string) => void;
-  onCloseEditorTab: (uri: string) => void;
-  onCloseOtherEditorTabs: (keepUri: string) => void;
+  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
+  activeEditorTabId: string | null;
+  onActivateOpenTab: (tabId: string) => void;
+  onCloseEditorTab: (tabId: string) => void;
+  onCloseOtherEditorTabs: (keepTabId: string) => void;
   onCloseAllEditorTabs: () => void;
   onReopenClosedEditorTab: () => void;
   canReopenClosedEditorTab: boolean;
+  showTodayHubCanvas: boolean;
+  todayHubSettings: TodayHubSettings | null;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
+  persistTodayHubRow: (
+    rowUri: string,
+    mergedMarkdown: string,
+    columnCount: number,
+  ) => Promise<void>;
 };
 
 type InboxBacklinksSectionProps = {
@@ -139,6 +164,8 @@ type EditorPaneBodyProps = {
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxAttachmentHost: ReturnType<typeof createNoteInboxAttachmentHost>;
   vaultRoot: string;
+  vaultMarkdownRefs: VaultMarkdownRef[];
+  inboxContentByUri: Record<string, string>;
   composingNewEntry: boolean;
   selectedUri: string | null;
   editorBody: string;
@@ -157,6 +184,17 @@ type EditorPaneBodyProps = {
   backlinkRows: readonly {uri: string; fileName: string; title: string}[];
   onSelectNote: VaultTabProps['onSelectNote'];
   inboxBacklinksDeferNonce: number;
+  showTodayHubCanvas: boolean;
+  todayHubSettings: TodayHubSettings | null;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
+  persistTodayHubRow: (
+    rowUri: string,
+    mergedMarkdown: string,
+    columnCount: number,
+  ) => Promise<void>;
 };
 
 function InboxBacklinksSection({
@@ -222,6 +260,8 @@ function EditorPaneBody({
   inboxEditorShellScrollRef,
   inboxAttachmentHost,
   vaultRoot,
+  vaultMarkdownRefs,
+  inboxContentByUri,
   composingNewEntry,
   selectedUri,
   editorBody,
@@ -240,6 +280,13 @@ function EditorPaneBody({
   backlinkRows,
   onSelectNote,
   inboxBacklinksDeferNonce,
+  showTodayHubCanvas,
+  todayHubSettings,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -334,7 +381,30 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
-              {!composingNewEntry && selectedUri ? (
+              {showTodayHubCanvas &&
+              selectedUri &&
+              todayHubSettings &&
+              !composingNewEntry ? (
+                <TodayHubCanvas
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.columns.join('\0')}`}
+                  vaultRoot={vaultRoot}
+                  todayNoteUri={selectedUri}
+                  hubSettings={todayHubSettings}
+                  inboxContentByUri={inboxContentByUri}
+                  vaultMarkdownRefs={vaultMarkdownRefs}
+                  bridgeRef={todayHubBridgeRef}
+                  wikiNavParentRef={todayHubWikiNavParentRef}
+                  cellEditorRef={todayHubCellEditorRef}
+                  onWikiLinkActivate={onWikiLinkActivate}
+                  onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                  onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                  onEditorError={onEditorError}
+                  onSaveShortcut={onSaveShortcut}
+                  prehydrateTodayHubRows={prehydrateTodayHubRows}
+                  persistTodayHubRow={persistTodayHubRow}
+                />
+              ) : null}
+              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
                 <InboxBacklinksSection
                   selectedUri={selectedUri}
                   backlinkRows={backlinkRows}
@@ -400,13 +470,21 @@ export function VaultTab({
   onEditorHistoryGoBack,
   onEditorHistoryGoForward,
   inboxBacklinksDeferNonce,
-  editorOpenTabUris,
+  editorWorkspaceTabs,
+  activeEditorTabId,
   onActivateOpenTab,
   onCloseEditorTab,
   onCloseOtherEditorTabs,
   onCloseAllEditorTabs,
   onReopenClosedEditorTab,
   canReopenClosedEditorTab,
+  showTodayHubCanvas,
+  todayHubSettings,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
 }: VaultTabProps) {
   const reopenClosedTabKbdLabel = useMemo(
     () => reopenClosedTabMenuShortcutLabel(),
@@ -1006,8 +1084,8 @@ export function VaultTab({
                 ) : (
                   <EditorPaneOpenNoteTabs
                     notes={notes}
-                    tabUris={editorOpenTabUris}
-                    selectedUri={selectedUri}
+                    workspaceTabs={editorWorkspaceTabs}
+                    activeTabId={activeEditorTabId}
                     busy={busy}
                     onActivateTab={onActivateOpenTab}
                     onCloseTab={onCloseEditorTab}
@@ -1018,7 +1096,7 @@ export function VaultTab({
               </div>
               <div className="pane-header-trailing-actions">
                 {!composingNewEntry
-                && (editorOpenTabUris.length > 0 || canReopenClosedEditorTab) ? (
+                && (editorWorkspaceTabs.length > 0 || canReopenClosedEditorTab) ? (
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -1044,7 +1122,7 @@ export function VaultTab({
                       >
                         <DropdownMenu.Item
                           className="note-list-context-menu__item"
-                          disabled={busy || editorOpenTabUris.length === 0}
+                          disabled={busy || editorWorkspaceTabs.length === 0}
                           onSelect={() => {
                             onCloseAllEditorTabs();
                           }}
@@ -1091,6 +1169,8 @@ export function VaultTab({
                   inboxEditorShellScrollRef={inboxEditorShellScrollRef}
                   inboxAttachmentHost={inboxAttachmentHost}
                   vaultRoot={vaultRoot}
+                  vaultMarkdownRefs={vaultMarkdownRefs}
+                  inboxContentByUri={inboxContentByUri}
                   composingNewEntry={composingNewEntry}
                   selectedUri={selectedUri}
                   editorBody={editorBody}
@@ -1109,6 +1189,13 @@ export function VaultTab({
                   backlinkRows={backlinkRows}
                   onSelectNote={onSelectNote}
                   inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+                  showTodayHubCanvas={showTodayHubCanvas}
+                  todayHubSettings={todayHubSettings}
+                  todayHubBridgeRef={todayHubBridgeRef}
+                  todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+                  todayHubCellEditorRef={todayHubCellEditorRef}
+                  prehydrateTodayHubRows={prehydrateTodayHubRows}
+                  persistTodayHubRow={persistTodayHubRow}
                 />
                 {composingNewEntry ? (
                   <div className="pane-footer">

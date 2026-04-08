@@ -5,6 +5,7 @@ import {
 } from '@codemirror/autocomplete';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {openSearchPanel, search, searchKeymap} from '@codemirror/search';
 import {
   Compartment,
   EditorSelection,
@@ -17,6 +18,7 @@ import type {MutableRefObject} from 'react';
 
 import {
   isBrowserOpenableMarkdownHref,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkCompletionCandidate,
 } from '@eskerra/core';
 
@@ -39,9 +41,9 @@ import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
-import {markdownMarkerFocusLineClearWhenUnfocusedFacet} from './markdownMarkerFocusLine';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {
@@ -50,6 +52,10 @@ import {
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from './vaultLinkActivatePayload';
 
 function eskerraCellCharFilter(): Extension {
   return EditorState.transactionFilter.of(tr => {
@@ -86,8 +92,10 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   resolveVaultImagePreviewUrl: VaultImagePreviewUrlResolver;
   attachmentHostRef: MutableRefObject<NoteInboxAttachmentHost>;
   busyRef: MutableRefObject<boolean>;
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut?: () => void;
   onDeleteNoteShortcut?: () => void;
@@ -99,6 +107,11 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
   /** Bumped when the cell editor is recreated so async paste ignores stale callbacks. */
   pasteSessionRef: MutableRefObject<number>;
   pasteSessionId: number;
+  /**
+   * When set (table shell), Mod-f flushes the shell draft and opens find on the parent note editor
+   * instead of a per-cell search panel.
+   */
+  onOpenNoteWideFind?: () => void;
 };
 
 export type EskerraTableCellBundlePartial = Pick<
@@ -110,6 +123,7 @@ export type EskerraTableCellBundlePartial = Pick<
   | 'onReportError'
   | 'pasteSessionRef'
   | 'pasteSessionId'
+  | 'onOpenNoteWideFind'
 >;
 
 export type EskerraCellBundleFactory = (
@@ -140,6 +154,7 @@ export function buildNoteMarkdownCellExtensions(
     onDeleteNoteShortcut,
     onReportError,
     onDocChanged,
+    onOpenNoteWideFind,
     tableCallbacks: tc,
   } = args;
 
@@ -185,6 +200,42 @@ export function buildNoteMarkdownCellExtensions(
       e.preventDefault();
       e.stopPropagation();
       onMarkdownExternalLinkOpen({href: bareHit.href, at: bareHit.hrefFrom});
+      return true;
+    }
+    return false;
+  };
+
+  const onEditorMiddleClick = (e: MouseEvent, view: EditorView): boolean => {
+    if (e.button !== 1) {
+      return false;
+    }
+    const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+    if (pos == null) {
+      return false;
+    }
+    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    if (inner) {
+      if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
+        return false;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onWikiLinkActivate({inner, at: pos, openInBackgroundTab: true});
+      return true;
+    }
+    const relHit = markdownActivatableRelativeMdLinkAtPosition(
+      view.state,
+      pos,
+      isActivatableRelativeMarkdownHref,
+    );
+    if (relHit) {
+      e.preventDefault();
+      e.stopPropagation();
+      onMarkdownRelativeLinkActivate({
+        href: relHit.href,
+        at: relHit.hrefFrom,
+        openInBackgroundTab: true,
+      });
       return true;
     }
     return false;
@@ -273,15 +324,26 @@ export function buildNoteMarkdownCellExtensions(
     return true;
   };
 
+  // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
+  let middleClickBlockPasteUntil = 0;
+
   const pasteHandlers = EditorView.domEventHandlers({
-    mousedown(event) {
+    mousedown(event, view) {
       if (event.button !== 1) {
         return false;
+      }
+      middleClickBlockPasteUntil = Date.now() + 200;
+      if (onEditorMiddleClick(event, view)) {
+        return true;
       }
       event.preventDefault();
       return true;
     },
     paste(event, view) {
+      if (Date.now() < middleClickBlockPasteUntil) {
+        event.preventDefault();
+        return true;
+      }
       if (busyRef.current) {
         if (
           event.clipboardData
@@ -376,9 +438,23 @@ export function buildNoteMarkdownCellExtensions(
     {key: '|', run: () => true},
   ]);
 
+  const noteWideFindKeymap = Prec.highest(
+    keymap.of([
+      {
+        key: 'Mod-f',
+        run: view => {
+          if (onOpenNoteWideFind) {
+            onOpenNoteWideFind();
+            return true;
+          }
+          return openSearchPanel(view);
+        },
+      },
+    ]),
+  );
+
   return [
     noteMarkdownIndentUnit,
-    markdownMarkerFocusLineClearWhenUnfocusedFacet.of(true),
     markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
@@ -390,8 +466,10 @@ export function buildNoteMarkdownCellExtensions(
     ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),
     markdownInlineCodeSurroundInputHandler(),
+    ...(onOpenNoteWideFind ? [] : [search()]),
     eskerraCellCharFilter(),
     Prec.highest(tableNavKeymap),
+    noteWideFindKeymap,
     keymap.of([
       ...buildNoteMarkdownVaultKeymapBindings({
         onSaveShortcut,
@@ -402,6 +480,8 @@ export function buildNoteMarkdownCellExtensions(
       }),
       indentWithTab,
       ...defaultKeymap,
+      ...buildNoteMarkdownDuplicateLineModDBindings(),
+      ...(onOpenNoteWideFind ? [] : searchKeymap),
       ...buildNoteMarkdownDeleteLineModYBindings(),
       ...historyKeymap,
     ]),
@@ -413,7 +493,7 @@ export function buildNoteMarkdownCellExtensions(
       markdownRelativeLinkHighlightExtensions(relativeMarkdownLinkHrefIsResolved),
     ),
     markdownExternalLinkHighlightExtension(),
-    wikiLinkAutocompleteExtension(wikiLinkCompletionCandidates),
+    ...wikiLinkAutocompleteExtension(wikiLinkCompletionCandidates),
     ...vaultImagePreviewExtension({
       vaultRoot: vaultRootRef,
       activeNotePath: activeNotePathRef,

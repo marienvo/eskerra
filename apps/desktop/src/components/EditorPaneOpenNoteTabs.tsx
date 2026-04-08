@@ -9,36 +9,36 @@ import {
   type MouseEvent,
 } from 'react';
 
-import {editorTabPillDisplayName} from '../lib/editorTabPillDisplayName';
+import {
+  editorOpenTabPillIconName,
+  editorOpenTabPillLabel,
+  type EditorOpenTabPillIconName,
+} from '../lib/editorOpenTabPillLabel';
+import {tabCurrentUri, type EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
 import {MaterialIcon} from './MaterialIcon';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
-function labelForOpenTab(notes: readonly NoteRow[], uri: string): string {
-  const row = notes.find(n => n.uri === uri);
-  if (row) {
-    return editorTabPillDisplayName(row.name);
-  }
-  const tail = uri.split(/[/\\]/).pop()?.trim();
-  return editorTabPillDisplayName(tail || uri);
-}
-
 type EditorOpenTabPillProps = {
-  uri: string;
+  tabId: string;
+  uri: string | null;
   label: string;
+  iconName: EditorOpenTabPillIconName;
   active: boolean;
   busy: boolean;
   multiTabs: boolean;
-  onActivateTab: (uri: string) => void;
-  onCloseTab: (uri: string) => void;
+  onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
   onRenameNote: (uri: string) => void;
-  onCloseOtherTabs: (keepUri: string) => void;
+  onCloseOtherTabs: (keepTabId: string) => void;
 };
 
 const EditorOpenTabPill = memo(function EditorOpenTabPill({
+  tabId,
   uri,
   label,
+  iconName,
   active,
   busy,
   multiTabs,
@@ -76,9 +76,9 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
     (e: MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      onCloseTab(uri);
+      onCloseTab(tabId);
     },
-    [onCloseTab, uri],
+    [onCloseTab, tabId],
   );
 
   const onPillAuxClick = useCallback(
@@ -88,9 +88,9 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
       }
       e.preventDefault();
       e.stopPropagation();
-      onCloseTab(uri);
+      onCloseTab(tabId);
     },
-    [onCloseTab, uri],
+    [onCloseTab, tabId],
   );
 
   const onPillMiddleMouseDown = useCallback(
@@ -134,11 +134,11 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
                 }
               : {})}
             onClick={() => {
-              onActivateTab(uri);
+              onActivateTab(tabId);
             }}
           >
             <span className="editor-open-tab-pill__icon" aria-hidden>
-              <MaterialIcon name="description" size={12} />
+              <MaterialIcon name={iconName} size={12} />
             </span>
             <span ref={labelRef} className="editor-open-tab-pill__label">
               {label}
@@ -165,9 +165,11 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
         >
           <ContextMenu.Item
             className="note-list-context-menu__item"
-            disabled={busy}
+            disabled={busy || uri == null}
             onSelect={() => {
-              onRenameNote(uri);
+              if (uri) {
+                onRenameNote(uri);
+              }
             }}
           >
             Rename note
@@ -176,16 +178,16 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             className="note-list-context-menu__item"
             disabled={busy}
             onSelect={() => {
-              onCloseTab(uri);
+              onCloseTab(tabId);
             }}
           >
             Close tab
           </ContextMenu.Item>
           <ContextMenu.Item
             className="note-list-context-menu__item"
-            disabled={busy || !multiTabs}
+            disabled={busy || !multiTabs || uri == null}
             onSelect={() => {
-              onCloseOtherTabs(uri);
+              onCloseOtherTabs(tabId);
             }}
           >
             Close other tabs
@@ -198,26 +200,26 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
 
 export type EditorPaneOpenNoteTabsProps = {
   notes: readonly NoteRow[];
-  tabUris: readonly string[];
-  selectedUri: string | null;
+  workspaceTabs: readonly EditorWorkspaceTab[];
+  activeTabId: string | null;
   busy: boolean;
-  onActivateTab: (uri: string) => void;
-  onCloseTab: (uri: string) => void;
+  onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
   onRenameNote: (uri: string) => void;
-  onCloseOtherTabs: (keepUri: string) => void;
+  onCloseOtherTabs: (keepTabId: string) => void;
 };
 
 export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
   notes,
-  tabUris,
-  selectedUri,
+  workspaceTabs,
+  activeTabId,
   busy,
   onActivateTab,
   onCloseTab,
   onRenameNote,
   onCloseOtherTabs,
 }: EditorPaneOpenNoteTabsProps) {
-  if (tabUris.length === 0) {
+  if (workspaceTabs.length === 0) {
     return (
       <span className="pane-title pane-title--truncate editor-open-tabs-placeholder">
         Editor
@@ -225,18 +227,24 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
     );
   }
 
-  const multiTabs = tabUris.length > 1;
+  const multiTabs = workspaceTabs.length > 1;
 
   return (
     <div className="editor-open-tabs-scroll" role="tablist" aria-label="Open notes">
-      {tabUris.map(uri => {
-        const active = uri === selectedUri;
-        const label = labelForOpenTab(notes, uri);
+      {workspaceTabs.map(tab => {
+        const uri = tabCurrentUri(tab);
+        const active = tab.id === activeTabId;
+        const label = uri
+          ? editorOpenTabPillLabel(notes, uri)
+          : 'Editor';
+        const iconName = uri ? editorOpenTabPillIconName(uri) : 'description';
         return (
           <EditorOpenTabPill
-            key={uri}
+            key={tab.id}
+            tabId={tab.id}
             uri={uri}
             label={label}
+            iconName={iconName}
             active={active}
             busy={busy}
             multiTabs={multiTabs}

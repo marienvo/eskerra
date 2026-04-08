@@ -22,6 +22,7 @@
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/language": "^6.12.3",
+    "@codemirror/search": "^6.5.11",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
     "@eskerra/core": "*",
@@ -38,6 +39,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-window-state": "^2.4.1",
+    "cmdk": "^1.1.1",
     "material-icons": "^1.13.14",
     "react": "19.2.3",
     "react-dom": "19.2.3"

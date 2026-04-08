@@ -6,6 +6,7 @@ import {
   unfoldAll,
 } from '@codemirror/language';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {search, searchKeymap, searchPanelOpen} from '@codemirror/search';
 import {
   Compartment,
   EditorSelection,
@@ -33,10 +34,15 @@ import {
   isExternalMarkdownHref,
   MARKDOWN_EXTENSION,
   stripMarkdownLinkHrefToPathPart,
+  wikiLinkInnerBrowserOpenableHref,
   type InboxWikiLinkCompletionCandidate,
 } from '@eskerra/core';
 
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
+import {
+  todayHubPerfEnabled,
+  todayHubPerfLog,
+} from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
 import {
   isNoteAttachmentImageFilePath,
@@ -70,6 +76,7 @@ import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraT
 import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
+  buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
@@ -80,9 +87,46 @@ import {
   wikiLinkActivatableInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
+import type {
+  VaultRelativeMarkdownLinkActivatePayload,
+  VaultWikiLinkActivatePayload,
+} from './vaultLinkActivatePayload';
 
 const defaultWikiLinkCompletionCandidates: readonly InboxWikiLinkCompletionCandidate[] =
   [];
+
+/** Extra px below the sticky search bar so scroll-into-view clears the panel (outer scroll + `overflow: visible` scroller). */
+const NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX = 8;
+
+function captureSearchPanelTopInsetPx(view: EditorView): number {
+  const panels = view.dom.querySelector('.cm-panels-top');
+  if (!panels) {
+    return NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX;
+  }
+  return (
+    Math.round(panels.getBoundingClientRect().height)
+    + NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX
+  );
+}
+
+/**
+ * Search + scroll padding for the capture editor: sticky `.cm-panels-top` sits in the outer
+ * `overflow-y` scroller, so default `scrollIntoView` margins miss the real obstruction.
+ */
+const noteMarkdownSearchExtensionBundle: readonly Extension[] = [
+  search({
+    scrollToMatch: range =>
+      EditorView.scrollIntoView(range, {
+        y: 'start',
+        yMargin: NOTE_CAPTURE_SEARCH_SCROLL_MARGIN_PX,
+      }),
+  }),
+  EditorView.scrollMargins.of(view =>
+    searchPanelOpen(view.state)
+      ? {top: captureSearchPanelTopInsetPx(view)}
+      : null,
+  ),
+];
 
 function foldedRangesPresent(state: EditorState): boolean {
   return foldedRanges(state).size > 0;
@@ -117,11 +161,13 @@ export type NoteMarkdownEditorProps = {
   /** Shown when image paste or drop fails; also used when vault image import is unavailable. */
   onEditorError?: (message: string) => void;
   /** Shell-owned wiki-link action handler. */
-  onWikiLinkActivate: (payload: {inner: string; at: number}) => void;
+  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
   /** Shell-owned: relative `.md` href resolves to an existing indexed note (for styling). */
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   /** Shell-owned relative markdown link open/create (same click rules as wiki links). */
-  onMarkdownRelativeLinkActivate: (payload: {href: string; at: number}) => void;
+  onMarkdownRelativeLinkActivate: (
+    payload: VaultRelativeMarkdownLinkActivatePayload,
+  ) => void;
   /** Shell-owned: open `http` / `https` / `mailto` inline links in the system browser. */
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   /** Shell-owned: `[[inner]]` resolves to exactly one vault note (for styling). */
@@ -134,6 +180,10 @@ export type NoteMarkdownEditorProps = {
   onDeleteNoteShortcut?: () => void;
   placeholder: string;
   busy: boolean;
+  /**
+   * When false, omit the fold gutter (no collapse chevrons). Main inbox editor should keep the default (`true`).
+   */
+  showFoldGutter?: boolean;
   /** Shell-owned Tauri clipboard, OS drop, and vault persistence. */
   attachmentHost: NoteInboxAttachmentHost;
   /** Shell-owned: Markdown image src → preview URL (for example `lib/resolveVaultImagePreviewUrl`). */
@@ -142,6 +192,11 @@ export type NoteMarkdownEditorProps = {
   onFoldedRangesPresentChange?: (present: boolean) => void;
   /** Called when the document gains or loses at least one foldable range (same rules as collapse-all). */
   onFoldableRangesPresentChange?: (present: boolean) => void;
+  /**
+   * When true, the document cannot be edited (`EditorState.readOnly` / `EditorView.editable`).
+   * Same extensions and update path as the full editor; toggled via a Compartment (no duplicate mode).
+   */
+  readOnly?: boolean;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -167,6 +222,11 @@ export type NoteMarkdownEditorHandle = {
     expectedHref: string;
     replacementHref: string;
   }) => boolean;
+  /**
+   * Move focus into this editor; optionally place the caret at a UTF-16 offset (clamped to the document).
+   * When `scrollIntoView` is false, the selection update omits scroll-into-view (faster; use when layout is local).
+   */
+  focus: (options?: {anchor?: number; scrollIntoView?: boolean}) => void;
 };
 
 const NoteMarkdownEditorImpl = forwardRef<
@@ -190,9 +250,15 @@ const NoteMarkdownEditorImpl = forwardRef<
     onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
+    showFoldGutter = true,
     onFoldedRangesPresentChange,
     onFoldableRangesPresentChange,
+    readOnly: readOnlyProp = false,
   } = props;
+
+  const readOnly = readOnlyProp;
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   const parentRef = useRef<HTMLDivElement>(null);
   /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
@@ -283,12 +349,19 @@ const NoteMarkdownEditorImpl = forwardRef<
   if (relativeMdLinkCompartmentRef.current === null) {
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
+  const readOnlyCompartmentRef = useRef<Compartment | null>(null);
+  if (readOnlyCompartmentRef.current === null) {
+    readOnlyCompartmentRef.current = new Compartment();
+  }
 
   useLayoutEffect(() => {
     const parent = parentRef.current;
     if (!parent) {
       return;
     }
+
+    const hubPerfStart =
+      todayHubPerfEnabled() && !showFoldGutter ? performance.now() : 0;
 
     const runVaultImagePasteFromDataTransfer = (
       dt: DataTransfer,
@@ -391,7 +464,14 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
+    let middleClickBlockPasteUntil = 0;
+
     const onEditorPaste = (e: ClipboardEvent, view: EditorView): boolean => {
+      if (Date.now() < middleClickBlockPasteUntil) {
+        e.preventDefault();
+        return true;
+      }
       if (busyRef.current) {
         if (
           e.clipboardData &&
@@ -503,6 +583,46 @@ const NoteMarkdownEditorImpl = forwardRef<
       return false;
     };
 
+    const onEditorMiddleClick = (e: MouseEvent, view: EditorView): boolean => {
+      if (e.button !== 1) {
+        return false;
+      }
+      const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+      if (pos == null) {
+        return false;
+      }
+      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      if (inner) {
+        if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
+          return false;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        onWikiLinkActivateRef.current({
+          inner,
+          at: pos,
+          openInBackgroundTab: true,
+        });
+        return true;
+      }
+      const relHit = markdownActivatableRelativeMdLinkAtPosition(
+        view.state,
+        pos,
+        isActivatableRelativeMarkdownHref,
+      );
+      if (relHit) {
+        e.preventDefault();
+        e.stopPropagation();
+        onMarkdownRelativeLinkActivateRef.current({
+          href: relHit.href,
+          at: relHit.hrefFrom,
+          openInBackgroundTab: true,
+        });
+        return true;
+      }
+      return false;
+    };
+
     const wikiLinkCompartment = wikiLinkCompartmentRef.current;
     if (!wikiLinkCompartment) {
       throw new Error('wikiLinkCompartment must be initialized');
@@ -511,26 +631,39 @@ const NoteMarkdownEditorImpl = forwardRef<
     if (!relativeMdLinkCompartment) {
       throw new Error('relativeMdLinkCompartment must be initialized');
     }
+    const readOnlyCompartment = readOnlyCompartmentRef.current;
+    if (!readOnlyCompartment) {
+      throw new Error('readOnlyCompartment must be initialized');
+    }
 
     const extensions = [
       noteMarkdownIndentUnit,
+      readOnlyCompartment.of([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
+      ]),
       markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
       }),
       noteMarkdownListItemFoldService,
       ...noteMarkdownEditorAppearance,
-      foldGutter({
-        openText: '⌄',
-        closedText: '›',
-        markerDOM: open => createFoldGutterMarker(open),
-      }),
+      ...(showFoldGutter
+        ? [
+            foldGutter({
+              openText: '⌄',
+              closedText: '›',
+              markerDOM: open => createFoldGutterMarker(open),
+            }),
+          ]
+        : []),
       history(),
       drawSelection(),
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
       markdownInlineCodeSurroundInputHandler(),
+      ...noteMarkdownSearchExtensionBundle,
       keymap.of([
         ...buildNoteMarkdownVaultKeymapBindings({
           onSaveShortcut: () => onSaveShortcutRef.current?.(),
@@ -542,7 +675,9 @@ const NoteMarkdownEditorImpl = forwardRef<
             onMarkdownExternalLinkOpenRef.current(p),
         }),
         indentWithTab,
-        ...foldKeymap,
+        ...(showFoldGutter ? foldKeymap : []),
+        ...buildNoteMarkdownDuplicateLineModDBindings(),
+        ...searchKeymap,
         ...defaultKeymap,
         ...buildNoteMarkdownDeleteLineModYBindings(),
         ...historyKeymap,
@@ -562,7 +697,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         wikiLink: wikiLinkCompartment,
         relativeMarkdownLink: relativeMdLinkCompartment,
       }),
-      wikiLinkAutocompleteExtension(
+      ...wikiLinkAutocompleteExtension(
         () => wikiLinkCompletionCandidatesRef.current,
       ),
       eskerraTableCellBundleFacet.of(partial =>
@@ -603,9 +738,13 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       EditorView.domEventHandlers({
-        mousedown(event) {
+        mousedown(event, view) {
           if (event.button !== 1) {
             return false;
+          }
+          middleClickBlockPasteUntil = Date.now() + 200;
+          if (onEditorMiddleClick(event, view)) {
+            return true;
           }
           event.preventDefault();
           return true;
@@ -686,6 +825,12 @@ const NoteMarkdownEditorImpl = forwardRef<
       foldableRangesPresent(view.state),
     );
 
+    if (hubPerfStart) {
+      todayHubPerfLog('hub_cm_boot', {
+        cmInitMs: Math.round(performance.now() - hubPerfStart),
+      });
+    }
+
     return () => {
       onFoldedRangesPresentChangeRef.current?.(false);
       onFoldableRangesPresentChangeRef.current?.(false);
@@ -722,6 +867,20 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
+  useEffect(() => {
+    const compartment = readOnlyCompartmentRef.current;
+    const view = viewRef.current;
+    if (!compartment || !view) {
+      return;
+    }
+    const roEffect = compartment.reconfigure([
+      EditorState.readOnly.of(readOnly),
+      EditorView.editable.of(!readOnly),
+    ]);
+    view.dispatch({effects: roEffect});
+    dispatchEskerraTableNestedCellEditors(view, {effects: roEffect});
+  }, [readOnly]);
+
   /**
    * Apply `loadMarkdown` synchronously so the first browser paint after layout already has the real
    * document. A deferred rAF apply runs after paint, which left the placeholder visible until the next frame
@@ -751,8 +910,18 @@ const NoteMarkdownEditorImpl = forwardRef<
           relativeMarkdownLinkHrefIsResolvedRef.current,
         ),
       );
-      v.dispatch({effects: [wikiEff, relEff]});
-      dispatchEskerraTableNestedCellEditors(v, {effects: [wikiEff, relEff]});
+      const roComp = readOnlyCompartmentRef.current;
+      const roEff =
+        roComp != null
+          ? roComp.reconfigure([
+              EditorState.readOnly.of(readOnlyRef.current),
+              EditorView.editable.of(!readOnlyRef.current),
+            ])
+          : null;
+      const effects =
+        roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
+      v.dispatch({effects});
+      dispatchEskerraTableNestedCellEditors(v, {effects});
       onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
       onFoldableRangesPresentChangeRef.current?.(
         foldableRangesPresent(v.state),
@@ -836,6 +1005,29 @@ const NoteMarkdownEditorImpl = forwardRef<
           },
         });
         return true;
+      },
+      focus: (options?: {anchor?: number; scrollIntoView?: boolean}) => {
+        const view = viewRef.current;
+        if (!view) {
+          return;
+        }
+        if (options?.anchor !== undefined) {
+          const a = Math.max(
+            0,
+            Math.min(options.anchor, view.state.doc.length),
+          );
+          const scroll = options.scrollIntoView !== false;
+          view.dispatch({
+            selection: EditorSelection.cursor(a),
+            ...(scroll ? {scrollIntoView: true} : {}),
+          });
+        } else if (view.state.doc.length === 0) {
+          view.dispatch({
+            selection: EditorSelection.cursor(0),
+            scrollIntoView: true,
+          });
+        }
+        view.focus();
       },
     }),
     [applyMarkdownLoadNow],

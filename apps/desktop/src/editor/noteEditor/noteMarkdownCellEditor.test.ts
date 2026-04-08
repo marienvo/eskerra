@@ -35,6 +35,14 @@ function keydown(view: EditorView, key: string): void {
   );
 }
 
+function keydownModF(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {key: 'f', ctrlKey: true, bubbles: true}),
+    'editor',
+  );
+}
+
 async function waitForSelectedCompletion(view: EditorView): Promise<void> {
   for (let i = 0; i < 200; i++) {
     if (selectedCompletion(view.state) != null) {
@@ -223,5 +231,105 @@ describe('noteMarkdownCellEditor table keymap vs completion', () => {
 
     keydown(view!, 'Escape');
     expect(escapeFromCellCalls).toBe(1);
+  });
+
+  it('Mod-f runs onOpenNoteWideFind when provided', () => {
+    let wideFindCalls = 0;
+    const tableCallbacks: NoteMarkdownCellEditorCallbacks = {
+      current: {
+        onTabFromCell: () => false,
+        onEnterFromCell: () => false,
+        onEscapeFromCell: () => false,
+      },
+    };
+    const wikiLinkCompartment = new Compartment();
+    const relativeMdLinkCompartment = new Compartment();
+    const extensions = buildNoteMarkdownCellExtensions({
+      wikiLinkCompartment,
+      relativeMdLinkCompartment,
+      wikiLinkTargetIsResolved: () => false,
+      relativeMarkdownLinkHrefIsResolved: () => false,
+      wikiLinkCompletionCandidates: () => [],
+      vaultRootRef: {current: '/vault'},
+      activeNotePathRef: {current: null},
+      resolveVaultImagePreviewUrl: () => '',
+      attachmentHostRef: {current: mockAttachmentHost()},
+      busyRef: {current: false},
+      onWikiLinkActivate: () => {},
+      onMarkdownRelativeLinkActivate: () => {},
+      onMarkdownExternalLinkOpen: () => {},
+      onReportError: () => {},
+      onDocChanged: () => {},
+      tableCallbacks,
+      pasteSessionRef: {current: 0},
+      pasteSessionId: 0,
+      onOpenNoteWideFind: () => {
+        wideFindCalls++;
+      },
+    });
+
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'x',
+      selection: EditorSelection.cursor(1),
+      extensions,
+    });
+    view = new EditorView({state, parent});
+
+    keydownModF(view!);
+    expect(wideFindCalls).toBe(1);
+  });
+
+  it('second colon accepts emoji completion without inserting a trailing colon', async () => {
+    const tableCallbacks: NoteMarkdownCellEditorCallbacks = {
+      current: {
+        onTabFromCell: () => false,
+        onEnterFromCell: () => false,
+        onEscapeFromCell: () => false,
+      },
+    };
+    const wikiLinkCompartment = new Compartment();
+    const relativeMdLinkCompartment = new Compartment();
+    const extensions = buildNoteMarkdownCellExtensions({
+      wikiLinkCompartment,
+      relativeMdLinkCompartment,
+      wikiLinkTargetIsResolved: () => false,
+      relativeMarkdownLinkHrefIsResolved: () => false,
+      wikiLinkCompletionCandidates: () => [],
+      vaultRootRef: {current: '/vault'},
+      activeNotePathRef: {current: null},
+      resolveVaultImagePreviewUrl: () => '',
+      attachmentHostRef: {current: mockAttachmentHost()},
+      busyRef: {current: false},
+      onWikiLinkActivate: () => {},
+      onMarkdownRelativeLinkActivate: () => {},
+      onMarkdownExternalLinkOpen: () => {},
+      onReportError: () => {},
+      onDocChanged: () => {},
+      tableCallbacks,
+      pasteSessionRef: {current: 0},
+      pasteSessionId: 0,
+    });
+
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: ':smile',
+      selection: EditorSelection.cursor(':smile'.length),
+      extensions,
+    });
+    view = new EditorView({state, parent});
+
+    expect(startCompletion(view!)).toBe(true);
+    await waitForSelectedCompletion(view!);
+    expect(completionStatus(view!.state)).not.toBeNull();
+
+    await new Promise<void>(r => {
+      setTimeout(r, 80);
+    });
+
+    keydown(view!, ':');
+    expect(view!.state.doc.toString()).toBe('😄');
   });
 });

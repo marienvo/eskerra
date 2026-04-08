@@ -21,6 +21,7 @@ import {
   DesktopStartupSplash,
   type DesktopStartupSplashPhase,
 } from './components/DesktopStartupSplash';
+import {QuickOpenNotePalette} from './components/QuickOpenNotePalette';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {EpisodesPane} from './components/EpisodesPane';
@@ -47,6 +48,10 @@ import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
+  tabCurrentUri,
+  tabsToStored,
+} from './lib/editorWorkspaceTabs';
+import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
   MIN_RESIZABLE_PANE_PX,
@@ -61,6 +66,11 @@ import {
   loadMainWindowUi,
   saveMainWindowUi,
 } from './lib/mainWindowUiStore';
+import {
+  initialDoubleShiftState,
+  reduceDoubleShiftKeyDown,
+  reduceDoubleShiftKeyUp,
+} from './lib/doubleShiftKeySequence';
 import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 
@@ -92,6 +102,12 @@ export default function App() {
     composingNewEntry: boolean;
     selectedUri: string | null;
     openTabUris?: readonly string[];
+    editorWorkspaceTabs?: ReadonlyArray<{
+      id: string;
+      entries: string[];
+      index: number;
+    }>;
+    activeEditorTabId?: string | null;
   } | null>(null);
   const {
     vaultRoot,
@@ -148,13 +164,21 @@ export default function App() {
     editorHistoryGoForward,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorOpenTabUris,
+    editorWorkspaceTabs,
+    activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
     closeOtherEditorTabs,
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -234,6 +258,49 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown, true);
     };
   }, [vaultRoot, busy]);
+
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false);
+  const quickOpenOpenRef = useRef(false);
+  quickOpenOpenRef.current = quickOpenOpen;
+
+  useEffect(() => {
+    let state = initialDoubleShiftState;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+        return;
+      }
+      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+        return;
+      }
+      if (e.repeat) {
+        return;
+      }
+      const next = reduceDoubleShiftKeyUp(
+        state,
+        performance.now(),
+        e.key,
+        e.ctrlKey,
+        e.metaKey,
+        e.altKey,
+      );
+      state = next.state;
+      if (next.shouldOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setQuickOpenOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+  }, [vaultRoot, busy]);
+
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
   const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
@@ -405,6 +472,8 @@ export default function App() {
             composingNewEntry: ui.inbox.composingNewEntry,
             selectedUri: ui.inbox.selectedUri,
             openTabUris: ui.inbox.openTabUris,
+            editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
+            activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
           });
         }
         setLayoutsReady(true);
@@ -455,7 +524,11 @@ export default function App() {
       inbox: {
         composingNewEntry,
         selectedUri,
-        openTabUris: [...editorOpenTabUris],
+        openTabUris: editorWorkspaceTabs
+          .map(t => tabCurrentUri(t))
+          .filter((u): u is string => u != null),
+        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
+        activeEditorTabId,
       },
     };
     const t = window.setTimeout(() => {
@@ -471,7 +544,8 @@ export default function App() {
     notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
-    editorOpenTabUris,
+    editorWorkspaceTabs,
+    activeEditorTabId,
     inboxShellRestored,
   ]);
 
@@ -866,14 +940,22 @@ export default function App() {
                       onEditorHistoryGoBack={editorHistoryGoBack}
                       onEditorHistoryGoForward={editorHistoryGoForward}
                       inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                      editorOpenTabUris={editorOpenTabUris}
+                      editorWorkspaceTabs={editorWorkspaceTabs}
+                      activeEditorTabId={activeEditorTabId}
                       onActivateOpenTab={activateOpenTab}
                       onCloseEditorTab={closeEditorTab}
                       onCloseOtherEditorTabs={closeOtherEditorTabs}
                       onCloseAllEditorTabs={closeAllEditorTabs}
                       onReopenClosedEditorTab={reopenLastClosedEditorTab}
                       canReopenClosedEditorTab={canReopenClosedEditorTab}
-                  />
+                      showTodayHubCanvas={showTodayHubCanvas}
+                      todayHubSettings={todayHubSettings}
+                      todayHubBridgeRef={todayHubBridgeRef}
+                      todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+                      todayHubCellEditorRef={todayHubCellEditorRef}
+                      prehydrateTodayHubRows={prehydrateTodayHubRows}
+                      persistTodayHubRow={persistTodayHubRow}
+                    />
               </main>
             </div>
                 }
@@ -943,6 +1025,13 @@ export default function App() {
             center={statusBarCenter}
             onOpenSettings={() => void openSettingsWindow()}
             onReadMoreStatusMessage={onReadMoreStatusMessage}
+          />
+          <QuickOpenNotePalette
+            open={quickOpenOpen}
+            onOpenChange={setQuickOpenOpen}
+            vaultRoot={vaultRoot}
+            refs={vaultMarkdownRefs}
+            onPickNote={selectNote}
           />
         </div>
       </div>

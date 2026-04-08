@@ -2,6 +2,7 @@ import type {EskerraTableAlignment, EskerraTableModelV1} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {EditorState} from '@codemirror/state';
 import type {Compartment} from '@codemirror/state';
+import {openSearchPanel} from '@codemirror/search';
 import {EditorView} from '@codemirror/view';
 import {
   useCallback,
@@ -1160,6 +1161,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   baselineText={baselineText}
                   lineFromRef={lineFromRef}
                   onCellDocChange={onCellDocChange}
+                  flushDraft={flushDraft}
                   staticRichPaintKey={staticRichPaintKey}
                 />
               ))}
@@ -1197,6 +1199,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                       baselineText={baselineText}
                       lineFromRef={lineFromRef}
                       onCellDocChange={onCellDocChange}
+                      flushDraft={flushDraft}
                       staticRichPaintKey={staticRichPaintKey}
                     />
                   );
@@ -1249,6 +1252,7 @@ type ShellCellProps = {
   baselineText: string;
   lineFromRef: MutableRefObject<number>;
   onCellDocChange: (row: number, col: number, text: string) => void;
+  flushDraft: () => void;
   staticRichPaintKey: number;
 };
 
@@ -1273,6 +1277,7 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     baselineText,
     lineFromRef,
     onCellDocChange,
+    flushDraft,
     staticRichPaintKey,
   } = props;
 
@@ -1338,6 +1343,10 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
         },
         pasteSessionRef,
         pasteSessionId,
+        onOpenNoteWideFind: () => {
+          flushDraft();
+          openSearchPanel(parentView);
+        },
       },
       factory,
     );
@@ -1360,7 +1369,7 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
       v.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cellText applied in follow-up effect; compartments stable per shell
-  }, [isActive, row, col, parentView]);
+  }, [isActive, row, col, parentView, flushDraft]);
 
   useEffect(() => {
     const v = viewRef.current;

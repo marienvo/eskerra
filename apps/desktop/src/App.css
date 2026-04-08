@@ -1091,10 +1091,13 @@ a:focus:not(:focus-visible) {
 .pane-header--inbox-editor {
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
+  /* Keep Back/Forward + trailing actions on the first row when pills wrap. */
+  align-items: flex-start;
 }
 
 .pane-header--inbox-editor .pane-header-start {
   gap: 0.12rem;
+  align-items: flex-start;
 }
 
 .pane-title {
@@ -1118,11 +1121,11 @@ a:focus:not(:focus-visible) {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
   gap: 0.1rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  overflow: visible;
   padding-block: 0;
 }
 
@@ -1507,6 +1510,10 @@ a:focus:not(:focus-visible) {
   color: color-mix(in srgb, #ffe994 78%, var(--color-muted));
 }
 
+.vault-tree-row__icon--today {
+  color: color-mix(in srgb, var(--color-accent) 42%, var(--color-muted));
+}
+
 .vault-tree-row__label {
   flex: 1;
   min-width: 0;
@@ -1650,6 +1657,111 @@ a:focus:not(:focus-visible) {
   color: var(--color-error);
 }
 
+.quick-open-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+html.tauri-main-chrome .quick-open-overlay {
+  border-radius: var(--shell-overlay-radius, var(--window-radius));
+}
+
+.quick-open-content {
+  position: fixed;
+  z-index: 201;
+  left: 50%;
+  top: max(12px, 8vh);
+  transform: translateX(-50%);
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: min(70vh, 28rem);
+  display: flex;
+  flex-direction: column;
+  padding: 0.65rem 0.75rem 0.55rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.18);
+  outline: none;
+}
+
+.quick-open-a11y-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.quick-open-command {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.quick-open-command__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-surface-elevated, var(--color-surface));
+  color: var(--color-text);
+  outline: none;
+}
+
+.quick-open-command__input:focus {
+  border-color: var(--color-primary-border, var(--color-primary));
+}
+
+.quick-open-command__list {
+  max-height: min(52vh, 22rem);
+  overflow: auto;
+  margin: 0 -0.15rem;
+  padding: 0.15rem 0.15rem 0;
+}
+
+.quick-open-command__empty {
+  padding: 0.65rem 0.45rem;
+  font-size: 0.88rem;
+  color: var(--color-muted);
+}
+
+.quick-open-command__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12rem;
+  padding: 0.42rem 0.5rem;
+  margin-bottom: 2px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: default;
+  user-select: none;
+}
+
+.quick-open-command__item[data-selected='true'] {
+  background: var(--color-row-hover);
+}
+
+.quick-open-command__item-title {
+  font-weight: 500;
+}
+
+.quick-open-command__item-path {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+
 .alert-dialog-overlay {
   position: fixed;
   inset: 0;
@@ -1765,6 +1877,8 @@ button.primary.destructive {
   --nb-editor-list-nest-step: 0.5rem;
   /* Fold gutter column width; matches rail + `EditorView.theme` + `.cm-gutters` in App.css. */
   --nb-editor-fold-gutter-width: 1.375rem;
+  /* Max width of the text column inside `.note-markdown-editor-page` (excluding fold rail). */
+  --nb-editor-page-body-max: 1035px;
   /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
   --nb-editor-paper-pad-block-start: 4rem;
 
@@ -1795,7 +1909,7 @@ button.primary.destructive {
 .note-markdown-editor-page {
   width: 100%;
   max-width: calc(
-    690px + var(--nb-editor-heading-gutter) + var(--nb-editor-fold-gutter-width)
+    var(--nb-editor-page-body-max) + var(--nb-editor-heading-gutter) + var(--nb-editor-fold-gutter-width)
   );
   margin-inline: auto;
   box-sizing: border-box;
@@ -1924,6 +2038,175 @@ button.primary.destructive {
   background: transparent;
   color: inherit;
   min-height: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panels,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panels.cm-panels-top {
+  background: var(--nb-editor-paper);
+  color: var(--nb-editor-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/*
+ * CodeMirror’s default search panel is a flat list of nodes; without layout, options and labels misalign
+ * and clip. Use a fixed grid (see @codemirror/search SearchPanel DOM).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content)) minmax(0, 1fr);
+  column-gap: 0.5rem;
+  row-gap: 0.45rem;
+  align-items: center;
+  padding: 0.55rem 2.25rem 0.6rem 0.65rem;
+  border-bottom: 1px solid var(--nb-editor-inline-code-border);
+  font-family: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: visible;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search br {
+  display: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label {
+  font: inherit;
+  margin: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='search'],
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='replace'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.4rem 1.75rem 0.4rem 0.5rem;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  color: inherit;
+  background: var(--nb-editor-code-block-bg);
+  border: 1px solid var(--nb-editor-inline-code-border);
+  border-radius: 6px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search input[name='replace'] {
+  grid-row: 4;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='next'] {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='prev'] {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='select'] {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='case']) {
+  grid-column: 1;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='re']) {
+  grid-column: 2;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label:has(input[name='word']) {
+  grid-column: 3;
+  grid-row: 3;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  color: var(--nb-editor-text);
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search label input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='replace'] {
+  grid-column: 1;
+  grid-row: 5;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='replaceAll'] {
+  grid-column: 2;
+  grid-row: 5;
+  justify-self: start;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search .cm-button,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close'] {
+  padding: 0.32rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-soft, var(--color-border));
+  background: var(--color-button-secondary-bg, color-mix(in srgb, var(--nb-editor-paper) 90%, var(--nb-editor-inline-code-border) 10%));
+  color: inherit;
+  cursor: default;
+  font-size: 0.8125rem;
+  line-height: 1.25;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close'] {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  min-width: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--nb-editor-faint);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-panel.cm-search button[name='close']:hover {
+  color: var(--nb-editor-text);
+}
+
+/*
+ * Inline code uses an opaque background; default `cm-searchMatch` tint is easy to miss. Reinforce with
+ * a stronger mix + outline (same nesting patterns CodeMirror may emit).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code.cm-searchMatch,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code .cm-searchMatch {
+  background: color-mix(in srgb, #ffff00 44%, var(--nb-editor-inline-code-bg) 56%);
+  outline: 1px solid color-mix(in srgb, #b8a400 50%, var(--nb-editor-inline-code-border) 50%);
+  outline-offset: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code.cm-searchMatch.cm-searchMatch-selected,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-code .cm-searchMatch.cm-searchMatch-selected {
+  background: color-mix(in srgb, #ff6a00 40%, var(--nb-editor-inline-code-bg) 60%);
+  outline-color: color-mix(in srgb, var(--nb-editor-accent) 42%, var(--nb-editor-inline-code-border) 58%);
 }
 
 /*
@@ -2488,6 +2771,404 @@ button.primary.destructive {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+/* Today hub: weekly grid below main CodeMirror (above backlinks). */
+[data-app-surface='capture'] .today-hub-canvas {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  /* Integer px (rem-derived at 16px root) avoids fuzzy sub-pixel layout in the grid chrome. */
+  padding: 12px 56px 16px 0;
+  border-top: 1px solid var(--nb-editor-inline-code-border);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  padding-inline: 90px 20px; /* left indentation to align with markdown content */
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 620;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__header-top {
+  display: block;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__header-cols {
+  display: grid;
+  gap: 8px 10px;
+  align-items: end;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(112px, 1fr)
+  );
+}
+
+[data-app-surface='capture'] .today-hub-canvas__title {
+  display: inline-block;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__col-head {
+  min-width: 112px;
+  padding-left: 34px; /* left indentation to align with markdown content */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: 6px 8px;
+  padding-inline: 0 20px;
+  border-radius: 6px;
+}
+
+/*
+ * Previous calendar week: opacity + grayscale only on `.row-cells` (not the row wrapper) so the date
+ * label is not under a group opacity layer (subpixel AA). Date luminance is approximated with `color-mix`.
+ */
+[data-app-surface='capture']
+  .today-hub-canvas__row.today-hub-canvas__row--previous-week
+  .today-hub-canvas__row-cells {
+  opacity: 0.67;
+  filter: grayscale(1);
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__row--previous-week
+  .today-hub-canvas__row-date {
+  color: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%) 67%,
+    var(--color-surface-primary) 33%
+  );
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row:nth-child(even) {
+  background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar {
+  padding-top: 2px;
+  padding-inline-start: 90px; /* left indentation to align with markdown content */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-cells {
+  display: grid;
+  gap: 8px 10px;
+  align-items: stretch;
+  padding-inline-start: 20px;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(112px, 1fr)
+  );
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 6rem;
+  background: var(--color-surface-primary);
+  /* Shared with hub `.cm-content` and readonly cells (no top/right/bottom inset). */
+  --nb-editor-heading-gutter: 9.25ch;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
+  position: relative;
+  /* Keep the empty-cell frame above the readonly layer (still hit-testable: ::before is pointer-events: none). */
+  isolation: isolate;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly:before {
+  /* Dotted look without `border-style: dotted` (UAs often smear or ovalize dots). */
+  content: "";
+  pointer-events: none;
+  display: block;
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  /* Nudge 1px up so the top stroke is not lost to parent/subpixel clipping (row chrome sits flush above). */
+  top: -1px;
+  left: 70px; /* left indentation to align with markdown content */
+  right: auto;
+  bottom: auto;
+  /* Grid columns can stay sub-pixel wide (`1fr`); snap the frame to whole px for stable dot tiling. */
+  width: max(0px, calc(100% - 70px));
+  height: max(0px, calc(100% + 1px));
+  width: max(0px, round(down, calc(100% - 70px), 1px));
+  height: max(0px, round(down, calc(100% + 1px), 1px));
+  border: 1px solid transparent;
+  --today-hub-empty-dot: color-mix(
+    in srgb,
+    var(--nb-editor-faint) 55%,
+    var(--nb-editor-paper) 45%
+  );
+  /*
+   * Single centered dot per tile misses a 1px border ring (circle sits in the interior).
+   * Anchor radials on each edge; use edge-aligned `background-position` so fractional widths/heights
+   * do not shear the right/bottom into a solid smear (same dot shape as other sides).
+   */
+  background-image:
+    linear-gradient(var(--nb-editor-paper), var(--nb-editor-paper)),
+    radial-gradient(
+      circle at 4px 0,
+      var(--today-hub-empty-dot) 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 4px 100%,
+      var(--today-hub-empty-dot) 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 0 4px,
+      var(--today-hub-empty-dot) 1px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle at 100% 4px,
+      var(--today-hub-empty-dot) 1px,
+      transparent 2px
+    );
+  background-size: auto, 8px 8px, 8px 8px, 8px 8px, 8px 8px;
+  background-position:
+    0 0,
+    0 0,
+    0 100%,
+    left 0,
+    right 0;
+  background-origin: border-box;
+  background-clip: padding-box, border-box, border-box, border-box, border-box;
+  background-repeat: repeat, repeat, repeat, repeat, repeat;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-readonly {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  min-height: 2.25rem;
+  margin: 0;
+  /*
+   * Match hub editor `.cm-content` left inset; add trailing inset so static text does not run
+   * flush against the cell edge (edit cells use the full width).
+   */
+  padding: 0;
+  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 19px);
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-readonly:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Inactive hub columns: wrap static spans in `.note-markdown-editor-host` so capture markdown token
+ * rules apply; override paper fold-rail width stretch meant for the real editor.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-paper
+  .today-hub-canvas
+  .today-hub-canvas__markdown-token-scope.note-markdown-editor-host {
+  margin-inline-start: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+  padding: 0;
+  flex: none;
+  display: block;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-paper
+  .today-hub-canvas
+  .today-hub-canvas__markdown-token-scope.note-markdown-editor-host::after {
+  display: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich {
+  display: block;
+  box-sizing: border-box;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: default;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  font-size: 16px;
+  /* 25px line grid at 16px; matches embedded CodeMirror hub cell line height (static was ~25.6px/line via 1.6 + min-height). */
+  line-height: 1.5625;
+  font-synthesis: none;
+  text-rendering: auto;
+  -webkit-font-smoothing: antialiased;
+  color: var(--nb-editor-text, inherit);
+}
+
+/* Match capture `.cm-line`: block rhythm only from heading/hr/fence rules on the same element. */
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line {
+  display: block;
+  padding: 0;
+  min-height: 1.5625em;
+}
+
+/*
+ * Inactive hub cells: same marker / link presentation as non-marker-focus lines and table shell
+ * static rich (hide delimiter chrome; softer link underlines).
+ */
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-header-mark {
+  visibility: hidden;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-syntax-mark,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-percent-mark,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-equal-highlight-mark,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-wiki-bracket,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-hr,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-rel-link-href,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-external-href {
+  display: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-rel-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-external-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-wiki-link {
+  text-underline-offset: 1px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  font-weight: 500;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-editor-stack {
+  position: relative;
+  width: 100%;
+  min-height: 6rem;
+}
+
+/*
+ * Warm-only: clip CodeMirror (`cm-scroller` overflow visible). Underlay text is hidden with
+ * `visibility:hidden` (opaque fills alone fail on even hub rows with mixed row/cell backgrounds).
+ */
+[data-app-surface='capture'] .today-hub-canvas__cell-editor-stack--warm {
+  overflow: hidden;
+}
+
+/*
+ * Warm hub cell: read-only CodeMirror sits under the static preview (same React subtree as active
+ * so warm→active does not remount the editor). Underlay is invisible but still laid out (prewarm).
+ */
+[data-app-surface='capture'] .today-hub-canvas__cell-warm-underlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-warm-overlay {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host {
+  min-height: 6rem;
+  /*
+   * Hub cells embed NoteMarkdownEditor without `.note-markdown-editor-wrap`; define editor
+   * tokens here so `.cm-content` padding math matches the main editor, then tighten insets.
+   * `--nb-editor-heading-gutter` lives on `.today-hub-canvas__cell` for parity with readonly.
+   */
+  --nb-editor-paper-pad-block-start: 0;
+}
+
+/*
+ * Compact in-cell editor: drop page-level bottom host padding and symmetric cm margins.
+ * Cancel `.note-markdown-editor-paper .note-markdown-editor-host` fold-rail shift — hub cells have
+ * no fold gutter (`showFoldGutter={false}`), so negative margin would pull the editor ~1.375rem left.
+ */
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host {
+  margin-inline-start: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 5.5rem;
+  padding: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-scroller {
+  line-height: 1.5625;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host::after {
+  display: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-content {
+  padding-block: 0;
+  padding-inline: max(2px, calc(0.6rem + var(--nb-editor-heading-gutter) - 30px)) 0;
+  min-height: min(6rem, 100%);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th,

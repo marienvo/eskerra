@@ -1,0 +1,36 @@
+import {vaultPathDirname} from '@eskerra/core';
+
+import {editorTabPillDisplayName} from './editorTabPillDisplayName';
+import {vaultUriIsTodayMarkdownFile} from './vaultTreeLoadChildren';
+
+/**
+ * Tab strip label for an open note URI. `Today.md` uses the **parent folder name** (hub-style daily note).
+ */
+export function editorOpenTabPillLabel(
+  notes: readonly {name: string; uri: string}[],
+  uri: string,
+): string {
+  const norm = uri.replace(/\\/g, '/');
+  if (vaultUriIsTodayMarkdownFile(norm)) {
+    const parent = vaultPathDirname(norm);
+    const folderSeg = parent.split('/').filter(Boolean).pop();
+    if (folderSeg) {
+      return folderSeg;
+    }
+  }
+  const row = notes.find(
+    n => n.uri === uri || n.uri.replace(/\\/g, '/') === norm,
+  );
+  if (row) {
+    return editorTabPillDisplayName(row.name);
+  }
+  const tail = norm.split('/').pop()?.trim();
+  return editorTabPillDisplayName(tail || uri);
+}
+
+export type EditorOpenTabPillIconName = 'description' | 'today';
+
+/** Material icon ligature for the open-tab pill (see `EditorPaneOpenNoteTabs`). */
+export function editorOpenTabPillIconName(uri: string): EditorOpenTabPillIconName {
+  return vaultUriIsTodayMarkdownFile(uri.replace(/\\/g, '/')) ? 'today' : 'description';
+}

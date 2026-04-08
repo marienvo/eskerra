@@ -128,6 +128,30 @@ describe('normalizeMainWindowUiPayload', () => {
     expect(out?.inbox.openTabUris).toEqual(['/v/a.md', '/v/b.md']);
   });
 
+  it('parses editorWorkspaceTabs and activeEditorTabId when present', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      inbox: {
+        editorWorkspaceTabs: [
+          {id: 't1', entries: ['  /v/a.md  '], index: 0},
+          {id: '', entries: ['/v/b.md'], index: 0},
+          {id: 't2', entries: [], index: 0},
+          {
+            id: 't3',
+            entries: ['/v/c.md', '/v/d.md'],
+            index: 99,
+          },
+        ],
+        activeEditorTabId: '  t3  ',
+      },
+    });
+    expect(out?.inbox.editorWorkspaceTabs).toEqual([
+      {id: 't1', entries: ['/v/a.md'], index: 0},
+      {id: 't3', entries: ['/v/c.md', '/v/d.md'], index: 1},
+    ]);
+    expect(out?.inbox.activeEditorTabId).toBe('t3');
+  });
+
   it('parses notificationsPanelVisible', () => {
     const hidden = normalizeMainWindowUiPayload({
       vaultRoot: '/v',
