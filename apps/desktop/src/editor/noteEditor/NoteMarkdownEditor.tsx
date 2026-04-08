@@ -29,6 +29,7 @@ import {
   useState,
 } from 'react';
 
+import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
 import {
   isBrowserOpenableMarkdownHref,
   isExternalMarkdownHref,
@@ -742,7 +743,8 @@ const NoteMarkdownEditorImpl = forwardRef<
           if (event.button !== 1) {
             return false;
           }
-          middleClickBlockPasteUntil = Date.now() + 200;
+          middleClickBlockPasteUntil =
+            Date.now() + MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS;
           if (onEditorMiddleClick(event, view)) {
             return true;
           }
