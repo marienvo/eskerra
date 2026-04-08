@@ -385,3 +385,7 @@ Baseline (pre-H1, ten clicks): mean **`focusRunMs` ~95.7**. **Delta: ~(96−72)/
 
 - Do **not** ship **sync-first** `focus({ anchor })` on the pointer path without caret verification; **`EditorView.requestMeasure` / `afterNextMeasure`** paths were **rejected** (misaligned caret) in earlier sessions.
 - Strong levers if **TH3/TH4** dominate again: **reuse one hub cell editor** (avoid full CM recreate per open), or a **layout-correct** measured focus strategy that is **not** the broken `requestMeasure` experiment.
+
+## Shared editor overlay (experiment reverted)
+
+A single absolutely positioned shared `NoteMarkdownEditor` over the active cell was tried and **reverted**: it did not meet the click-to-edit UX bar versus the **pointer-prewarm** / inline per-cell active editor baseline in [TodayHubCanvas](../../apps/desktop/src/components/TodayHubCanvas.tsx). Any future reuse of that approach requires fresh `todayHubPerf` evidence against that baseline.
