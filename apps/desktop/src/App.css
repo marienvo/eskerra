@@ -3033,8 +3033,15 @@ button.primary.destructive {
   --nb-editor-paper-pad-block-start: 0;
 }
 
-/* Compact in-cell editor: drop page-level bottom host padding and symmetric cm margins. */
+/*
+ * Compact in-cell editor: drop page-level bottom host padding and symmetric cm margins.
+ * Cancel `.note-markdown-editor-paper .note-markdown-editor-host` fold-rail shift — hub cells have
+ * no fold gutter (`showFoldGutter={false}`), so negative margin would pull the editor ~1.375rem left.
+ */
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host {
+  margin-inline-start: 0;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 5.5rem;
   padding: 0;
 }
