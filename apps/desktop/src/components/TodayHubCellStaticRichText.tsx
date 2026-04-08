@@ -15,7 +15,10 @@ import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
 } from '../lib/inboxWikiLinkNavigation';
-import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
+import {
+  todayHubStaticCellDocOffsetFromPointer,
+  todayHubStaticRichTextPointerHitsVisibleLinkToken,
+} from '../lib/todayHubCellStaticPointer';
 
 const HIT_TREE_MS = 200;
 
@@ -67,6 +70,15 @@ export function TodayHubCellStaticRichText({
             return;
           }
           const root = e.currentTarget;
+          if (
+            !todayHubStaticRichTextPointerHitsVisibleLinkToken(
+              root,
+              e.clientX,
+              e.clientY,
+            )
+          ) {
+            return;
+          }
           const pos = todayHubStaticCellDocOffsetFromPointer(
             root,
             e.clientX,

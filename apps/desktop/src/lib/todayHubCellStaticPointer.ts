@@ -1,7 +1,46 @@
 /** Pointer → UTF-16 offset for Today Hub static cell DOM (same layout as read-only rich text). */
 
+/** Pixels past the last laid-out character before we treat the click as end-of-line (trailing whitespace). */
+const TRAILING_WHITESPACE_HIT_SLACK_PX = 3;
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
+}
+
+/**
+ * True if `el` is inside a link span that stays visible in
+ * `[data-app-surface='capture'] .today-hub-canvas__cell-static-rich` (brackets + hrefs are
+ * `display: none` there).
+ */
+export function isVisibleTodayHubStaticLinkTokenElement(el: Element): boolean {
+  if (el.closest('.cm-wiki-link')) {
+    return true;
+  }
+  const rel = el.closest('.cm-md-rel-link');
+  if (rel && !rel.classList.contains('cm-md-rel-link-href')) {
+    return true;
+  }
+  const ext = el.closest('.cm-md-external-link');
+  if (ext && !ext.classList.contains('cm-md-external-href')) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a primary hit at `(clientX, clientY)` lies on visible link paint (not bare `.cm-line`
+ * padding / trailing gap).
+ */
+export function todayHubStaticRichTextPointerHitsVisibleLinkToken(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const hit = root.ownerDocument.elementFromPoint(clientX, clientY);
+  if (!hit || !root.contains(hit)) {
+    return false;
+  }
+  return isVisibleTodayHubStaticLinkTokenElement(hit);
 }
 
 /**
@@ -28,6 +67,7 @@ function localOffsetInLineFromCaretGeometry(
   let bestDist = Infinity;
   let bestOffset = 0;
   let base = 0;
+  let maxRight = -Infinity;
   const tw = doc.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT);
   let n: Node | null;
   while ((n = tw.nextNode())) {
@@ -44,6 +84,7 @@ function localOffsetInLineFromCaretGeometry(
       const rects = r.getClientRects();
       for (let i = 0; i < rects.length; i++) {
         const br = rects[i];
+        maxRight = Math.max(maxRight, br.right);
         const cx = clamp(clientX, br.left, br.right);
         const cy = clamp(clientY, br.top, br.bottom);
         const d = (clientX - cx) ** 2 + (clientY - cy) ** 2;
@@ -58,6 +99,9 @@ function localOffsetInLineFromCaretGeometry(
 
   if (bestDist === Infinity) {
     return null;
+  }
+  if (Number.isFinite(maxRight) && clientX > maxRight + TRAILING_WHITESPACE_HIT_SLACK_PX) {
+    return base;
   }
   return bestOffset;
 }
