@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import {CalendarIcon, FileTextIcon} from '@radix-ui/react-icons';
+import {DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {
   memo,
   useCallback,
@@ -27,9 +27,9 @@ const TAB_PILL_ICON_DIM = {
 
 function EditorOpenTabPillLeadingIcon({iconName}: {iconName: EditorOpenTabPillIconName}) {
   return iconName === 'today' ? (
-    <CalendarIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+    <DashboardIcon {...TAB_PILL_ICON_DIM} aria-hidden />
   ) : (
-    <FileTextIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+    <ReaderIcon {...TAB_PILL_ICON_DIM} aria-hidden />
   );
 }
 
@@ -136,11 +136,13 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             type="button"
             role="tab"
             aria-selected={active}
-            className={
-              labelTruncated
-                ? 'editor-open-tab-pill__main app-tooltip-trigger'
-                : 'editor-open-tab-pill__main'
-            }
+            className={[
+              'editor-open-tab-pill__main',
+              iconName === 'today' ? 'editor-open-tab-pill__main--today' : '',
+              labelTruncated ? 'app-tooltip-trigger' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             disabled={busy}
             {...(labelTruncated
               ? {

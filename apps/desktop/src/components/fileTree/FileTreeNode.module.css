@@ -16,10 +16,10 @@
   border-radius: 4px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--file-tree-node-font-size);
   line-height: 26px;
-  font-weight: 400;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
   text-align: start;
   cursor: default;
   user-select: none;
@@ -33,7 +33,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-inline-end: 6px;
+  margin-inline-end: var(--file-tree-icon-label-gap);
   color: var(--color-muted);
 }
 
@@ -53,7 +53,7 @@
 }
 
 .labelToday {
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight-emphasis);
 }
 
 .rightSlot {

@@ -37,7 +37,7 @@ import {
   type VaultTreeItemData,
 } from '../lib/vaultTreeLoadChildren';
 import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
-import {CalendarIcon, ChevronRightIcon, FileTextIcon} from '@radix-ui/react-icons';
+import {ChevronRightIcon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {
   FILE_TREE_ICON_SIZE_PX,
@@ -59,12 +59,12 @@ function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
     height: FILE_TREE_ICON_SIZE_PX,
   } as const;
   if (kind === 'today') {
-    return renderToStaticMarkup(<CalendarIcon {...p} />);
+    return renderToStaticMarkup(<DashboardIcon {...p} />);
   }
   if (kind === 'folder') {
     return renderToStaticMarkup(<ChevronRightIcon {...p} />);
   }
-  return renderToStaticMarkup(<FileTextIcon {...p} />);
+  return renderToStaticMarkup(<ReaderIcon {...p} />);
 }
 
 function vaultTreeRowPrimaryMarkdownUri(data: VaultTreeItemData): string | null {

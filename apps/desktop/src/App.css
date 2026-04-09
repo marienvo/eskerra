@@ -1139,6 +1139,7 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   background: transparent;
   transition: background 0.12s ease;
+  padding-block: 2px;
 }
 
 /* Inactive tabs: no fill until hover/focus-within (active tab keeps chrome). */
@@ -1157,19 +1158,24 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.14rem;
-  /* No vertical padding: 15px Radix icons stay aligned without making the pill taller than before. */
+  /* Icon–label space matches `FileTreeNode` `.iconCell` (`--file-tree-icon-label-gap`). */
+  gap: 0;
   padding: 0 0.02rem 0 0.22rem;
   border: none;
   border-radius: 3px 0 0 3px;
   background: transparent;
   cursor: default;
   color: var(--color-text);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
+  font-size: var(--file-tree-node-font-size);
+  line-height: normal;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
   font-synthesis: none;
   text-align: left;
+}
+
+.editor-open-tab-pill__main--today {
+  font-weight: var(--file-tree-node-font-weight-emphasis);
 }
 
 .editor-open-tab-pill__main:disabled {
@@ -1181,8 +1187,9 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-inline-end: var(--file-tree-icon-label-gap);
   line-height: 0;
-  opacity: 0.75;
+  color: var(--color-muted);
 }
 
 .editor-open-tab-pill__icon svg {
@@ -1195,6 +1202,8 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .editor-open-tab-pill__close {
@@ -1399,10 +1408,10 @@ a:focus:not(:focus-visible) {
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--file-tree-node-font-size);
   line-height: 26px;
-  font-weight: 400;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
   text-align: start;
   cursor: default;
   /* Keep gap 0; icon-to-label spacing is `margin-inline-end` on `.iconCell` in FileTreeNode.module.css (module `gap` would lose to this rule otherwise). */

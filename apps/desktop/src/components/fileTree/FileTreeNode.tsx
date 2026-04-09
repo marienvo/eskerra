@@ -1,8 +1,8 @@
 import {
-  CalendarIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  FileTextIcon,
+  DashboardIcon,
+  ReaderIcon,
 } from '@radix-ui/react-icons';
 import {
   type ComponentPropsWithoutRef,
@@ -32,7 +32,7 @@ function RowIcon({
   isFolderExpanded: boolean;
 }) {
   if (treeType === 'today') {
-    return <CalendarIcon {...ICON_DIM} aria-hidden />;
+    return <DashboardIcon {...ICON_DIM} aria-hidden />;
   }
   if (treeType === 'folder') {
     return isFolderExpanded ? (
@@ -41,7 +41,7 @@ function RowIcon({
       <ChevronRightIcon {...ICON_DIM} aria-hidden />
     );
   }
-  return <FileTextIcon {...ICON_DIM} aria-hidden />;
+  return <ReaderIcon {...ICON_DIM} aria-hidden />;
 }
 
 export type FileTreeNodeProps = {

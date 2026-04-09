@@ -109,6 +109,13 @@ html {
   --color-row-hover: #e8e8e8;
   /* IDE-style tree selection (subtle; works on light surfaces). */
   --color-vault-tree-row-selected: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
+
+  /* Vault tree rows + editor open-tab pills: shared type typography (kept in sync). */
+  --file-tree-node-font-size: 13px;
+  --file-tree-node-font-weight: 400;
+  --file-tree-node-font-weight-emphasis: 500;
+  --file-tree-node-font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  --file-tree-icon-label-gap: 6px;
   --color-button-secondary-bg: #eef0f2;
 
   /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
