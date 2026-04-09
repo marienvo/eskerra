@@ -82,9 +82,16 @@ function eskerraCellCharFilter(): Extension {
   });
 }
 
-function sanitizeCellInsert(s: string): string {
+/** Exported for table cell context menu paste (strip pipe / newlines). */
+export function sanitizeCellInsert(s: string): string {
   return s.replace(/[\r\n|]+/g, ' ').trim();
 }
+
+export type TableCellContextMenuOpen = (detail: {
+  clientX: number;
+  clientY: number;
+  view: EditorView;
+}) => void;
 
 export type EskerraTableCellKeyboardCallbacks = {
   onTabFromCell: (shift: boolean) => boolean;
@@ -124,6 +131,8 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
    * instead of a per-cell search panel.
    */
   onOpenNoteWideFind?: () => void;
+  /** When set, right-click opens the shared markdown context menu (bridge to React layer). */
+  tableCellContextMenuOpenRef?: MutableRefObject<TableCellContextMenuOpen | null>;
 };
 
 export type EskerraTableCellBundlePartial = Pick<
@@ -167,6 +176,7 @@ export function buildNoteMarkdownCellExtensions(
     onReportError,
     onDocChanged,
     onOpenNoteWideFind,
+    tableCellContextMenuOpenRef,
     tableCallbacks: tc,
   } = args;
 
@@ -483,6 +493,23 @@ export function buildNoteMarkdownCellExtensions(
       return false;
     },
     click: onEditorClick,
+    contextmenu(event, view) {
+      if (event.button !== 2) {
+        return false;
+      }
+      const openMenu = tableCellContextMenuOpenRef?.current;
+      if (!openMenu) {
+        return false;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      openMenu({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        view,
+      });
+      return true;
+    },
   });
 
   const tableNavKeymap = keymap.of([

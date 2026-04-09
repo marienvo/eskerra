@@ -65,6 +65,7 @@ import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatable
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
+import {MarkdownTableCellContextMenu} from './MarkdownTableCellContextMenu';
 import {NoteMarkdownEditorContextMenu} from './NoteMarkdownEditorContextMenu';
 import {
   markdownFormattingModKeymap,
@@ -77,7 +78,11 @@ import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
-import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {
+  buildNoteMarkdownCellExtensions,
+  sanitizeCellInsert,
+  type TableCellContextMenuOpen,
+} from './noteMarkdownCellEditor';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
@@ -362,6 +367,16 @@ const NoteMarkdownEditorImpl = forwardRef<
   if (relativeMdLinkCompartmentRef.current === null) {
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
+
+  const tableCellMenuViewRef = useRef<EditorView | null>(null);
+  const tableCellContextMenuOpenRef = useRef<TableCellContextMenuOpen | null>(
+    null,
+  );
+  const [tableCellMenuOpen, setTableCellMenuOpen] = useState(false);
+  const [tableCellMenuAnchor, setTableCellMenuAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   if (readOnlyCompartmentRef.current === null) {
     readOnlyCompartmentRef.current = new Compartment();
@@ -780,6 +795,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             resolveVaultImagePreviewUrlRef.current(vr, ap, src),
           attachmentHostRef,
           busyRef,
+          tableCellContextMenuOpenRef,
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
@@ -1232,24 +1248,50 @@ const NoteMarkdownEditorImpl = forwardRef<
     ? 'note-markdown-editor-host note-markdown-editor-host--drop-target'
     : 'note-markdown-editor-host';
 
+  tableCellContextMenuOpenRef.current = d => {
+    tableCellMenuViewRef.current = d.view;
+    setTableCellMenuAnchor({x: d.clientX, y: d.clientY});
+    setTableCellMenuOpen(true);
+  };
+
+  const readMarkdownEditorClipboard = useCallback(async () => {
+    const r = await attachmentHost.readNativeClipboardPaste(vaultRoot);
+    return r.kind === 'text' ? r.text : null;
+  }, [attachmentHost, vaultRoot]);
+
   return (
-    <NoteMarkdownEditorContextMenu
-      getView={() => viewRef.current}
-      readOnly={readOnly}
-      busy={busy}
-      readClipboardText={async () => {
-        const r = await attachmentHost.readNativeClipboardPaste(vaultRoot);
-        return r.kind === 'text' ? r.text : null;
-      }}
-    >
-      <div
-        ref={hostRef}
-        className={hostClassName}
-        data-note-markdown-editor
+    <>
+      <NoteMarkdownEditorContextMenu
+        getView={() => viewRef.current}
+        readOnly={readOnly}
+        busy={busy}
+        readClipboardText={readMarkdownEditorClipboard}
       >
-        <div ref={parentRef} className="note-markdown-editor-cm-root" />
-      </div>
-    </NoteMarkdownEditorContextMenu>
+        <div
+          ref={hostRef}
+          className={hostClassName}
+          data-note-markdown-editor
+        >
+          <div ref={parentRef} className="note-markdown-editor-cm-root" />
+        </div>
+      </NoteMarkdownEditorContextMenu>
+      <MarkdownTableCellContextMenu
+        open={tableCellMenuOpen}
+        anchor={tableCellMenuAnchor}
+        getView={() => tableCellMenuViewRef.current}
+        readOnly={readOnly}
+        busy={busy}
+        readClipboardText={readMarkdownEditorClipboard}
+        sanitizePasteText={sanitizeCellInsert}
+        onOpenChange={o => {
+          if (!o) {
+            tableCellMenuViewRef.current = null;
+            setTableCellMenuAnchor(null);
+          }
+          setTableCellMenuOpen(o);
+        }}
+      />
+    </>
   );
 });
 

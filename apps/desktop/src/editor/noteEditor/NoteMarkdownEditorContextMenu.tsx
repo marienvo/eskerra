@@ -1,22 +1,9 @@
-import {selectAll} from '@codemirror/commands';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import type {ReactNode} from 'react';
 
 import type {EditorView} from '@codemirror/view';
 
-import {
-  runMarkdownBoldSurround,
-  runMarkdownClearOneInlineLayerSurround,
-  runMarkdownHighlightSurround,
-  runMarkdownInlineCodeSurround,
-  runMarkdownItalicSurround,
-  runMarkdownMutedSurround,
-  runMarkdownStrikethroughSurround,
-} from './markdownSelectionSurround';
-import {
-  insertMarkdownExternalLinkTemplate,
-  insertMarkdownLinkTemplate,
-} from './noteMarkdownLinkInsert';
+import {bindMarkdownEditorContextMenuHandlers} from './markdownEditorContextMenuActions';
 
 export type NoteMarkdownEditorContextMenuProps = {
   children: ReactNode;
@@ -26,30 +13,14 @@ export type NoteMarkdownEditorContextMenuProps = {
   readClipboardText: () => Promise<string | null>;
 };
 
-function runWithFocus(view: EditorView, fn: (v: EditorView) => boolean): void {
-  fn(view);
-  view.focus();
-}
-
-async function readClipboardWithFallback(
-  readClipboardText: () => Promise<string | null>,
-): Promise<string | null> {
-  try {
-    const t = await navigator.clipboard.readText();
-    if (t.length > 0) {
-      return t;
-    }
-  } catch {
-    /* use host fallback */
-  }
-  return readClipboardText();
-}
-
 export function NoteMarkdownEditorContextMenu(
   props: NoteMarkdownEditorContextMenuProps,
 ) {
   const {children, getView, readOnly, busy, readClipboardText} = props;
   const blockEdit = readOnly || busy;
+  const h = bindMarkdownEditorContextMenuHandlers(getView, readClipboardText, {
+    blockEdit,
+  });
 
   return (
     <ContextMenu.Root>
@@ -63,24 +34,14 @@ export function NoteMarkdownEditorContextMenu(
           <ContextMenu.Item
             className="note-list-context-menu__item"
             disabled={blockEdit}
-            onSelect={() => {
-              const view = getView();
-              if (view) {
-                runWithFocus(view, insertMarkdownLinkTemplate);
-              }
-            }}
+            onSelect={h.addLink}
           >
             Add link
           </ContextMenu.Item>
           <ContextMenu.Item
             className="note-list-context-menu__item"
             disabled={blockEdit}
-            onSelect={() => {
-              const view = getView();
-              if (view) {
-                runWithFocus(view, insertMarkdownExternalLinkTemplate);
-              }
-            }}
+            onSelect={h.addExternalLink}
           >
             Add external link
           </ContextMenu.Item>
@@ -98,72 +59,42 @@ export function NoteMarkdownEditorContextMenu(
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownBoldSurround);
-                    }
-                  }}
+                  onSelect={h.bold}
                 >
                   Bold
                 </ContextMenu.Item>
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownItalicSurround);
-                    }
-                  }}
+                  onSelect={h.italic}
                 >
                   Italic
                 </ContextMenu.Item>
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownStrikethroughSurround);
-                    }
-                  }}
+                  onSelect={h.strikethrough}
                 >
                   Strikethrough
                 </ContextMenu.Item>
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownHighlightSurround);
-                    }
-                  }}
+                  onSelect={h.highlight}
                 >
                   Highlight
                 </ContextMenu.Item>
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownInlineCodeSurround);
-                    }
-                  }}
+                  onSelect={h.code}
                 >
                   Code
                 </ContextMenu.Item>
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownMutedSurround);
-                    }
-                  }}
+                  onSelect={h.comment}
                 >
                   Comment
                 </ContextMenu.Item>
@@ -171,12 +102,7 @@ export function NoteMarkdownEditorContextMenu(
                 <ContextMenu.Item
                   className="note-list-context-menu__item"
                   disabled={blockEdit}
-                  onSelect={() => {
-                    const view = getView();
-                    if (view) {
-                      runWithFocus(view, runMarkdownClearOneInlineLayerSurround);
-                    }
-                  }}
+                  onSelect={h.clearFormatting}
                 >
                   Clear formatting
                 </ContextMenu.Item>
@@ -189,84 +115,26 @@ export function NoteMarkdownEditorContextMenu(
           <ContextMenu.Item
             className="note-list-context-menu__item"
             disabled={blockEdit}
-            onSelect={() => {
-              const view = getView();
-              if (!view) {
-                return;
-              }
-              const {from, to} = view.state.selection.main;
-              if (from === to) {
-                view.focus();
-                return;
-              }
-              const text = view.state.doc.sliceString(from, to);
-              void navigator.clipboard.writeText(text).then(() => {
-                view.dispatch({
-                  changes: {from, to, insert: ''},
-                  selection: {anchor: from},
-                  scrollIntoView: true,
-                });
-                view.focus();
-              });
-            }}
+            onSelect={h.cut}
           >
             Cut
           </ContextMenu.Item>
           <ContextMenu.Item
             className="note-list-context-menu__item"
-            onSelect={() => {
-              const view = getView();
-              if (!view) {
-                return;
-              }
-              const {from, to} = view.state.selection.main;
-              if (from === to) {
-                view.focus();
-                return;
-              }
-              const text = view.state.doc.sliceString(from, to);
-              void navigator.clipboard.writeText(text).finally(() => view.focus());
-            }}
+            onSelect={h.copy}
           >
             Copy
           </ContextMenu.Item>
           <ContextMenu.Item
             className="note-list-context-menu__item"
             disabled={blockEdit}
-            onSelect={() => {
-              const view = getView();
-              if (!view) {
-                return;
-              }
-              void (async () => {
-                const text = await readClipboardWithFallback(readClipboardText);
-                if (text == null || text.length === 0) {
-                  view.focus();
-                  return;
-                }
-                const sel = view.state.selection.main;
-                const insertFrom = Math.min(sel.anchor, sel.head);
-                const insertTo = Math.max(sel.anchor, sel.head);
-                view.dispatch({
-                  changes: {from: insertFrom, to: insertTo, insert: text},
-                  selection: {anchor: insertFrom + text.length},
-                  scrollIntoView: true,
-                });
-                view.focus();
-              })();
-            }}
+            onSelect={h.paste}
           >
             Paste
           </ContextMenu.Item>
           <ContextMenu.Item
             className="note-list-context-menu__item"
-            onSelect={() => {
-              const view = getView();
-              if (view) {
-                selectAll(view);
-                view.focus();
-              }
-            }}
+            onSelect={h.selectAll}
           >
             Select all
           </ContextMenu.Item>
