@@ -5,6 +5,7 @@ import {
   collectDistinctUrisFromTabs,
   createEditorWorkspaceTab,
   ensureActiveTabId,
+  findTabIdWithCurrentUri,
   migrateOpenTabUrisToWorkspaceTabs,
   pickNeighborTabIdAfterRemovingTab,
   pushNavigateOnTab,
@@ -50,6 +51,16 @@ describe('editorWorkspaceTabs', () => {
     const a = createEditorWorkspaceTab('/a.md');
     expect(ensureActiveTabId([a], 'missing')).toBe(a.id);
     expect(ensureActiveTabId([a], a.id)).toBe(a.id);
+  });
+
+  it('findTabIdWithCurrentUri matches current history slot only', () => {
+    const a = createEditorWorkspaceTab('/a.md');
+    let b = createEditorWorkspaceTab('/b.md');
+    b = pushNavigateOnTab(b, '/c.md');
+    const tabs = [a, b];
+    expect(findTabIdWithCurrentUri(tabs, '/a.md')).toBe(a.id);
+    expect(findTabIdWithCurrentUri(tabs, ' /c.md ')).toBe(b.id);
+    expect(findTabIdWithCurrentUri(tabs, '/b.md')).toBeNull();
   });
 
   it('migrateOpenTabUrisToWorkspaceTabs dedupes', () => {

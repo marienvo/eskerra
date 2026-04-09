@@ -102,6 +102,7 @@ import {
   createEditorWorkspaceTab,
   ensureActiveTabId,
   findTabById,
+  findTabIdWithCurrentUri,
   firstSurvivorUriFromTabs,
   migrateOpenTabUrisToWorkspaceTabs,
   pickNeighborTabIdAfterRemovingTab,
@@ -320,8 +321,12 @@ export type UseMainWindowWorkspaceResult = {
   hydrateVault: (root: string) => Promise<void>;
   startNewEntry: () => void;
   cancelNewEntry: () => void;
+  /** Open or focus: if a tab already shows `uri`, activate it; else navigate the active tab. */
   selectNote: (uri: string) => void;
-  /** Open note in a new editor tab and focus it (e.g. file tree middle-click). */
+  /**
+   * Prefer activating an existing tab that already shows `uri`; otherwise open a new tab and focus it
+   * (e.g. file tree middle-click).
+   */
   selectNoteInNewActiveTab: (uri: string) => void;
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
@@ -2211,16 +2216,26 @@ export function useMainWindowWorkspace(options: {
 
   const selectNote = useCallback(
     (uri: string) => {
+      const existingId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
+      if (existingId != null) {
+        activateOpenTab(existingId);
+        return;
+      }
       void openMarkdownInEditor(uri);
     },
-    [openMarkdownInEditor],
+    [activateOpenTab, openMarkdownInEditor],
   );
 
   const selectNoteInNewActiveTab = useCallback(
     (uri: string) => {
+      const existingId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
+      if (existingId != null) {
+        activateOpenTab(existingId);
+        return;
+      }
       void openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
     },
-    [openMarkdownInEditor],
+    [activateOpenTab, openMarkdownInEditor],
   );
 
   const submitNewEntry = useCallback(async () => {
