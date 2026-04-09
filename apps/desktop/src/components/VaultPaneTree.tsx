@@ -257,6 +257,9 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   const revealScrollFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const vaultTreeInnerRef = useRef<HTMLDivElement | null>(null);
   const [vaultTreeLayoutNonce, setVaultTreeLayoutNonce] = useState(0);
+  /** Latest open note URI; reveal effect reads this only when `revealActiveNoteNonce` bumps. */
+  const editorActiveUriRef = useRef(editorActiveMarkdownUri);
+  editorActiveUriRef.current = editorActiveMarkdownUri;
 
   const clearDropTarget = () => setDropTargetUri(null);
 
@@ -454,7 +457,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     if (revealActiveNoteNonce === 0) {
       return;
     }
-    const uri = editorActiveMarkdownUri;
+    const uri = editorActiveUriRef.current;
     if (!uri || (!uri.startsWith(`${rootId}/`) && uri !== rootId)) {
       return;
     }
@@ -522,7 +525,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         revealScrollFallbackTimeoutRef.current = null;
       }
     };
-  }, [revealActiveNoteNonce, editorActiveMarkdownUri, rootId]);
+  }, [revealActiveNoteNonce, rootId]);
 
   useLayoutEffect(() => {
     const id = pendingScrollToTreeIdRef.current;
