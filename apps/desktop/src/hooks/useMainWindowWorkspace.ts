@@ -67,7 +67,7 @@ import {
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
 import {
-  enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   parseTodayHubFrontmatter,
   splitTodayRowIntoColumns,
   todayHubRowSectionsAllBlank,
@@ -493,6 +493,7 @@ export function useMainWindowWorkspace(options: {
   const todayHubWikiNavParentRef = useRef<string | null>(null);
   const todayHubCellEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
   const todayHubRowLastPersistedRef = useRef<Map<string, string>>(new Map());
+  const todayHubSettingsRef = useRef<TodayHubSettings | null>(null);
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const backlinksActiveBodyRef = useRef('');
@@ -771,6 +772,10 @@ export function useMainWindowWorkspace(options: {
     );
     return parseTodayHubFrontmatter(full);
   }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry]);
+
+  useLayoutEffect(() => {
+    todayHubSettingsRef.current = todayHubSettings;
+  }, [todayHubSettings]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -1822,7 +1827,8 @@ export function useMainWindowWorkspace(options: {
         && !composingNewEntryRef.current
       ) {
         const hubDir = vaultUriParentDirectory(normToday);
-        for (const m of enumerateTodayHubMondays(new Date())) {
+        const hubStart = todayHubSettingsRef.current?.start ?? 'monday';
+        for (const m of enumerateTodayHubWeekStarts(new Date(), hubStart)) {
           const rowUri = normalizeEditorDocUri(todayHubRowUri(hubDir, m));
           if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, rowUri, root)) {
             continue;

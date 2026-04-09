@@ -2,10 +2,12 @@ import {describe, expect, it} from 'vitest';
 
 import {
   enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
   mergeTodayRowColumns,
   parseTodayHubFrontmatter,
   splitTodayRowIntoColumns,
+  startOfLocalWeek,
   startOfLocalWeekMonday,
   todayHubColumnCount,
   todayHubRowSectionsAllBlank,
@@ -37,6 +39,16 @@ describe('startOfLocalWeekMonday', () => {
   });
 });
 
+describe('startOfLocalWeek', () => {
+  it('returns Saturday for a Tuesday when week starts Saturday', () => {
+    const tue = new Date(2026, 3, 7);
+    const sat = startOfLocalWeek(tue, 6);
+    expect(sat.getFullYear()).toBe(2026);
+    expect(sat.getMonth()).toBe(3);
+    expect(sat.getDate()).toBe(4);
+  });
+});
+
 describe('enumerateTodayHubMondays', () => {
   it('returns 53 Mondays starting at previous week', () => {
     const now = new Date(2026, 3, 7);
@@ -45,6 +57,17 @@ describe('enumerateTodayHubMondays', () => {
     expect(formatTodayHubMondayStem(mondays[0])).toBe('2026-03-30');
     expect(formatTodayHubMondayStem(mondays[1])).toBe('2026-04-06');
     expect(formatTodayHubMondayStem(mondays[52])).toBe('2027-03-29');
+  });
+});
+
+describe('enumerateTodayHubWeekStarts', () => {
+  it('returns 53 week starts when start is saturday', () => {
+    const now = new Date(2026, 3, 7);
+    const starts = enumerateTodayHubWeekStarts(now, 'saturday');
+    expect(starts).toHaveLength(53);
+    expect(formatTodayHubMondayStem(starts[0])).toBe('2026-03-28');
+    expect(formatTodayHubMondayStem(starts[1])).toBe('2026-04-04');
+    expect(formatTodayHubMondayStem(starts[52])).toBe('2027-03-27');
   });
 });
 
@@ -78,6 +101,22 @@ start: monday
     expect(s.columns).toEqual(['Next actions']);
     expect(s.start).toBe('monday');
     expect(todayHubColumnCount(s)).toBe(2);
+  });
+
+  it('reads start: Saturday (case-insensitive)', () => {
+    const md = `---
+start: Saturday
+---
+`;
+    expect(parseTodayHubFrontmatter(md).start).toBe('saturday');
+  });
+
+  it('ignores unknown start value (defaults to monday)', () => {
+    const md = `---
+start: funday
+---
+`;
+    expect(parseTodayHubFrontmatter(md).start).toBe('monday');
   });
 
   it('reads multiple columns', () => {

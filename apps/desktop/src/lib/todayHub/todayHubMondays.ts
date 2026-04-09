@@ -1,23 +1,35 @@
+import {type TodayHubStartDay, todayHubStartJsDay} from './parseTodayHubFrontmatter';
+
 /**
- * Local-calendar Monday start of the ISO-style week (Monday = first day).
+ * Local-calendar first day of the week containing `reference`, using
+ * JavaScript weekday numbers (Sunday = 0 … Saturday = 6).
  */
-export function startOfLocalWeekMonday(reference: Date): Date {
+export function startOfLocalWeek(reference: Date, startDayJs: number): Date {
   const x = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate());
   const day = x.getDay();
-  const diffFromMonday = day === 0 ? -6 : 1 - day;
-  x.setDate(x.getDate() + diffFromMonday);
+  const diff = -((day - startDayJs + 7) % 7);
+  x.setDate(x.getDate() + diff);
   return x;
 }
 
 /**
- * 53 consecutive Mondays: previous week's Monday, then +7 days each step (local date).
+ * Local-calendar Monday start of the ISO-style week (Monday = first day).
  */
-export function enumerateTodayHubMondays(now: Date): Date[] {
-  const thisMonday = startOfLocalWeekMonday(now);
+export function startOfLocalWeekMonday(reference: Date): Date {
+  return startOfLocalWeek(reference, 1);
+}
+
+/**
+ * 53 consecutive week-start dates: previous week's anchor, then +7 days each step (local date).
+ * Row files use `YYYY-MM-DD` of each anchor day.
+ */
+export function enumerateTodayHubWeekStarts(now: Date, start: TodayHubStartDay): Date[] {
+  const js = todayHubStartJsDay(start);
+  const thisWeekStart = startOfLocalWeek(now, js);
   const anchorDay = new Date(
-    thisMonday.getFullYear(),
-    thisMonday.getMonth(),
-    thisMonday.getDate() - 7,
+    thisWeekStart.getFullYear(),
+    thisWeekStart.getMonth(),
+    thisWeekStart.getDate() - 7,
   );
   const out: Date[] = [];
   for (let k = 0; k < 53; k++) {
@@ -28,15 +40,20 @@ export function enumerateTodayHubMondays(now: Date): Date[] {
   return out;
 }
 
-/** `YYYY-MM-DD` for the row filename stem (local calendar). */
-export function formatTodayHubMondayStem(monday: Date): string {
-  const y = monday.getFullYear();
-  const mo = String(monday.getMonth() + 1).padStart(2, '0');
-  const da = String(monday.getDate()).padStart(2, '0');
+/** Same as `enumerateTodayHubWeekStarts(now, 'monday')`. */
+export function enumerateTodayHubMondays(now: Date): Date[] {
+  return enumerateTodayHubWeekStarts(now, 'monday');
+}
+
+/** `YYYY-MM-DD` for the row filename stem (local calendar); identifies the week's first day. */
+export function formatTodayHubMondayStem(weekStart: Date): string {
+  const y = weekStart.getFullYear();
+  const mo = String(weekStart.getMonth() + 1).padStart(2, '0');
+  const da = String(weekStart.getDate()).padStart(2, '0');
   return `${y}-${mo}-${da}`;
 }
 
-export function todayHubRowUri(hubDirectoryUri: string, monday: Date): string {
+export function todayHubRowUri(hubDirectoryUri: string, weekStart: Date): string {
   const base = hubDirectoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
-  return `${base}/${formatTodayHubMondayStem(monday)}.md`;
+  return `${base}/${formatTodayHubMondayStem(weekStart)}.md`;
 }

@@ -27,7 +27,7 @@ import {
 } from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
-  enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   hubCellStableSessionKey,
   hubCellWarmKey,
   mergeTodayRowColumns,
@@ -120,11 +120,14 @@ export function TodayHubCanvas({
 
   const columnCount = todayHubColumnCount(hubSettings);
 
-  const mondays = useMemo(() => enumerateTodayHubMondays(new Date()), []);
+  const weekStarts = useMemo(
+    () => enumerateTodayHubWeekStarts(new Date(), hubSettings.start),
+    [hubSettings.start],
+  );
 
   const rowUris = useMemo(
-    () => mondays.map(m => todayHubRowUri(hubDirectoryUri, m)),
-    [mondays, hubDirectoryUri],
+    () => weekStarts.map(d => todayHubRowUri(hubDirectoryUri, d)),
+    [weekStarts, hubDirectoryUri],
   );
 
   const noteRefs = useMemo(
@@ -503,7 +506,7 @@ export function TodayHubCanvas({
         </div>
       </div>
       <div className="today-hub-canvas__rows">
-        {mondays.map((mon, ri) => {
+        {weekStarts.map((weekStart, ri) => {
           const uri = normUri(rowUris[ri]!);
           const sections = getSections(uri);
           const isActiveRow = active?.uri === uri;
@@ -517,7 +520,7 @@ export function TodayHubCanvas({
               }
             >
               <div className="today-hub-canvas__row-date-bar">
-                <span className="today-hub-canvas__row-date">{rowLabel(mon)}</span>
+                <span className="today-hub-canvas__row-date">{rowLabel(weekStart)}</span>
               </div>
               <div className="today-hub-canvas__row-cells">
                 {sections.map((chunk, ci) => {

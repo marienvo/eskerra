@@ -386,7 +386,7 @@ function EditorPaneBody({
               todayHubSettings &&
               !composingNewEntry ? (
                 <TodayHubCanvas
-                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.columns.join('\0')}`}
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}`}
                   vaultRoot={vaultRoot}
                   todayNoteUri={selectedUri}
                   hubSettings={todayHubSettings}
