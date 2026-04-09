@@ -12,7 +12,7 @@ import {markdownActivatableRelativeMdLinkAtPosition} from '../markdownActivatabl
 import {markdownEskerra} from '../markdownEskerraLanguage';
 import {noteMarkdownParserExtensions} from '../markdownEditorStyling';
 import {relativeMdLinkHrefIsResolvedFacet} from '../markdownRelativeLinkCodemirror';
-import {wikiLinkActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDocPosition';
+import {wikiLinkPointerActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDocPosition';
 import {wikiLinkIsResolvedFacet} from '../wikiLinkCodemirror';
 import {buildCellStaticSegments} from './eskerraTableCellStaticSegments';
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableShellLinkBridgeFacet';
@@ -120,7 +120,10 @@ export function EskerraTableCellStaticRichText(
           return;
         }
         ensureSyntaxTree(hitState, cellText.length, HIT_TREE_MS);
-        const inner = wikiLinkActivatableInnerAtDocPosition(hitState.doc, pos);
+        const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+          hitState.doc,
+          pos,
+        );
         if (inner != null) {
           e.preventDefault();
           e.stopPropagation();

@@ -56,3 +56,23 @@ export function wikiLinkActivatableInnerAtDocPosition(
   }
   return match.inner;
 }
+
+/**
+ * Wiki link inner for **pointer** activation only (`innerFrom` <= pos < `innerTo`), excluding
+ * the document offset of the first closing `]`. On non-marker-focus lines `]]` uses
+ * `display: none`, so coordinates just past the visible label can map onto that offset; **Mod-Enter**
+ * still uses {@link wikiLinkActivatableInnerAtDocPosition} so the caret slot before `]]` keeps working.
+ */
+export function wikiLinkPointerActivatableInnerAtDocPosition(
+  doc: Text,
+  pos: number,
+): string | null {
+  const match = wikiLinkMatchAtDocPosition(doc, pos);
+  if (match == null) {
+    return null;
+  }
+  if (pos < match.innerFrom || pos >= match.innerTo) {
+    return null;
+  }
+  return match.inner;
+}

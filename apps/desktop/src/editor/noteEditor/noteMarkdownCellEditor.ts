@@ -41,7 +41,12 @@ import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
-import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {
+  discardStoredPrimaryPointerDownForLinkClick,
+  recordPrimaryPointerDownForLinkClick,
+  resolveDocPositionForLinkPrimaryClick,
+} from './linkClickUseMousedownPosition';
+import {wikiLinkPointerActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
@@ -160,14 +165,21 @@ export function buildNoteMarkdownCellExtensions(
   } = args;
 
   const onEditorClick = (e: MouseEvent, view: EditorView): boolean => {
-    if (e.button !== 0 || e.shiftKey) {
+    if (e.button !== 0) {
       return false;
     }
-    const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+    if (e.shiftKey) {
+      discardStoredPrimaryPointerDownForLinkClick(view);
+      return false;
+    }
+    const pos = resolveDocPositionForLinkPrimaryClick(view, e);
     if (pos == null) {
       return false;
     }
-    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+      view.state.doc,
+      pos,
+    );
     if (inner) {
       e.preventDefault();
       e.stopPropagation();
@@ -214,7 +226,10 @@ export function buildNoteMarkdownCellExtensions(
     if (pos == null) {
       return false;
     }
-    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+      view.state.doc,
+      pos,
+    );
     if (inner) {
       if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
         return false;
@@ -330,6 +345,7 @@ export function buildNoteMarkdownCellExtensions(
 
   const pasteHandlers = EditorView.domEventHandlers({
     mousedown(event, view) {
+      recordPrimaryPointerDownForLinkClick(view, event);
       if (event.button !== 1) {
         return false;
       }

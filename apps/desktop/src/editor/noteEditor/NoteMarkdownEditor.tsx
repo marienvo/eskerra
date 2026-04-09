@@ -85,8 +85,13 @@ import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTab
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
-  wikiLinkActivatableInnerAtDocPosition,
+  discardStoredPrimaryPointerDownForLinkClick,
+  recordPrimaryPointerDownForLinkClick,
+  resolveDocPositionForLinkPrimaryClick,
+} from './linkClickUseMousedownPosition';
+import {
   wikiLinkMatchAtDocPosition,
+  wikiLinkPointerActivatableInnerAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
@@ -530,13 +535,17 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
       if (e.shiftKey) {
+        discardStoredPrimaryPointerDownForLinkClick(view);
         return false;
       }
-      const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+      const pos = resolveDocPositionForLinkPrimaryClick(view, e);
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+        view.state.doc,
+        pos,
+      );
       if (inner) {
         e.preventDefault();
         e.stopPropagation();
@@ -592,7 +601,10 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+        view.state.doc,
+        pos,
+      );
       if (inner) {
         if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
           return false;
@@ -740,6 +752,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       EditorView.domEventHandlers({
         mousedown(event, view) {
+          recordPrimaryPointerDownForLinkClick(view, event);
           if (event.button !== 1) {
             return false;
           }
