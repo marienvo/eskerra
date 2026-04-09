@@ -1232,6 +1232,10 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
 }
 
+.editor-open-tab-pill__close:not(:disabled) svg {
+  opacity: 0.72;
+}
+
 .editor-open-tab-pill__close:disabled {
   opacity: 0.45;
 }
