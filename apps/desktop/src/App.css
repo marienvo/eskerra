@@ -1208,31 +1208,41 @@ a:focus:not(:focus-visible) {
 
 .editor-open-tab-pill__close {
   flex-shrink: 0;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.28rem;
-  margin: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  min-width: 1.05rem;
+  margin: 0 0.12rem 0 0.08rem;
   padding: 0;
   border: none;
-  border-radius: 0 3px 3px 0;
-  border-left: 1px solid transparent;
+  border-radius: 50%;
   background: transparent;
   cursor: default;
   color: var(--color-muted);
+  line-height: 0;
 }
 
-.editor-open-tab-pill--active .editor-open-tab-pill__close {
-  border-left-color: color-mix(in srgb, var(--color-text) 10%, transparent);
+/* Radix Cross2: block + no flex shrink; 15×15 comes from props (`FILE_TREE_ICON_SIZE_PX`). */
+.editor-open-tab-pill__close svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .editor-open-tab-pill__close:disabled {
   opacity: 0.45;
 }
 
-.editor-open-tab-pill__close:not(:disabled):hover {
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+/* Beat `.icon-btn-ghost:hover`; background only — icon stays muted. */
+.editor-open-tab-pill__close.icon-btn-ghost:hover:not(:disabled) {
+  color: var(--color-muted);
+  background: color-mix(
+    in srgb,
+    var(--color-icon-ghost-hover-bg) 82%,
+    var(--color-accent-subtle-bg) 18%
+  );
 }
 
 /* Episodes list: matches mobile PodcastsTabHeader vault-refresh strip (indeterminate). */

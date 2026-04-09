@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import {DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
+import {Cross2Icon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {
   memo,
   useCallback,
@@ -18,7 +18,6 @@ import {
 import {tabCurrentUri, type EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
 import {FILE_TREE_ICON_SIZE_PX} from './fileTree/fileTreeConstants';
-import {MaterialIcon} from './MaterialIcon';
 
 const TAB_PILL_ICON_DIM = {
   width: FILE_TREE_ICON_SIZE_PX,
@@ -170,7 +169,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             disabled={busy}
             onClick={onCloseClick}
           >
-            <MaterialIcon name="close" size={12} />
+            <Cross2Icon {...TAB_PILL_ICON_DIM} aria-hidden />
           </button>
         </div>
       </ContextMenu.Trigger>
