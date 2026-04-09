@@ -1100,6 +1100,16 @@ a:focus:not(:focus-visible) {
   align-items: flex-start;
 }
 
+/* Back / Forward (first two buttons) and trailing tab-menu: 2px lower vs wrapped pills. */
+.pane-header--inbox-editor .pane-header-start > button:nth-child(1),
+.pane-header--inbox-editor .pane-header-start > button:nth-child(2) {
+  transform: translateY(2px);
+}
+
+.pane-header--inbox-editor .pane-header-trailing-actions .pane-header-add-btn {
+  transform: translateY(2px);
+}
+
 .pane-title {
   font-weight: 600;
   font-size: 0.85rem;
