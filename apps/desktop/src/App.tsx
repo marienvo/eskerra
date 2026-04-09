@@ -43,6 +43,7 @@ import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
+import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
 import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {openSettingsWindow} from './lib/openSettingsWindow';
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
@@ -226,6 +227,7 @@ export default function App() {
     editorHistoryGoBack,
     editorHistoryGoForward,
   });
+  usePreventMiddleClickPaste();
 
   const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
   const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
