@@ -2915,8 +2915,23 @@ button.primary.destructive {
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
+  /*
+   * Match `--nb-editor-font-size` so `ch` in `--nb-editor-heading-gutter` / body padding matches
+   * CodeMirror (scoped under `.cm-scroller`). Without this, readonly inherits `.today-hub-canvas`
+   * 0.88rem while `.cm-content` sits under 15px prose — same `padding-inline` token resolved to
+   * different px (~5.4px drift in logs).
+   */
+  font-size: var(--nb-editor-font-size);
   /* Shared with hub `.cm-content` and readonly cells (no top/right/bottom inset). */
   --nb-editor-heading-gutter: 9.25ch;
+  /*
+   * Single source of truth for where body text starts vs the cell edge (`ch` must match editor:
+   * see `font-size` above).
+   */
+  --today-hub-body-pad-inline-start: max(
+    2px,
+    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
+  );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -2998,12 +3013,9 @@ button.primary.destructive {
   height: 100%;
   min-height: 2.25rem;
   margin: 0;
-  /*
-   * Match hub editor `.cm-content` left inset; add trailing inset so static text does not run
-   * flush against the cell edge (edit cells use the full width).
-   */
+  /* Left inset: `var(--today-hub-body-pad-inline-start)` on `.today-hub-canvas__cell`. */
   padding: 0;
-  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 19px);
+  padding-inline-start: var(--today-hub-body-pad-inline-start);
   border: none;
   border-radius: inherit;
   background: transparent;
@@ -3194,7 +3206,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-content {
   padding-block: 0;
-  padding-inline: max(2px, calc(0.6rem + var(--nb-editor-heading-gutter) - 30px)) 0;
+  padding-inline: var(--today-hub-body-pad-inline-start) 0;
   min-height: min(6rem, 100%);
 }
 

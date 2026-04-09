@@ -27,10 +27,24 @@ then `getComputedStyle` still reports the **same** `line-height` as CodeMirror (
 
 **Rule:** Hub static `.cm-line` must rely on **inherited `line-height` only** (plus normal block/heading/list padding from shared `cm-md-*` rules). Do not add a separate per-line `min-height` for “grid” parity unless CodeMirror hub lines get the **identical** rule (and layout has been verified — CodeMirror line metrics are sensitive).
 
+## Horizontal inset (read vs edit)
+
+Body text must start at the **same** horizontal offset in:
+
+- `.today-hub-canvas__cell-readonly` (`padding-inline-start`), and
+- `.today-hub-canvas__cm-host .note-markdown-editor-host .cm-content` (`padding-inline` start).
+
+**Single token:** `.today-hub-canvas__cell` defines `--today-hub-body-pad-inline-start`. Both rules consume it. Do not duplicate `calc(0.6rem + … - Npx)` with different `N` (a prior bug used `-19px` on readonly and `-30px` on `.cm-content`, shifting edit mode ~5–6px left vs read in WebKit).
+
+**`ch` / font-size:** `--nb-editor-heading-gutter` is `9.25ch`. `ch` resolves against the element’s **used font size**. Hub cells must set `font-size: var(--nb-editor-font-size)` on **`.today-hub-canvas__cell`** so readonly (which would otherwise inherit `0.88rem` from `.today-hub-canvas`) uses the same `ch` width as `.cm-scroller` / `.cm-content`. Otherwise `padding-inline` can match **by token** but diverge **by computed px** (~5px).
+
+**Debug:** Log `getComputedStyle(readonly).paddingInlineStart` vs `getComputedStyle(.cm-content).paddingInlineStart` for the same row; they must match.
+
 ## Debug checklist
 
 1. Compare `getComputedStyle(.cm-scroller)` vs `getComputedStyle(.today-hub-canvas__cell-static-rich)` for `font-size` and `line-height`.
 2. Compare **first** `.cm-line` under each: `line-height`, **`min-height`**, and **`clientHeight`**. Mismatched `clientHeight` with identical `line-height` strongly suggests an extra static-only constraint (often `min-height`).
+3. Compare **horizontal:** `paddingInlineStart` on readonly vs hub `.cm-content` (see above).
 
 ## Related CSS entry points
 
