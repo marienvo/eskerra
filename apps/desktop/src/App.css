@@ -1158,7 +1158,8 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   gap: 0.14rem;
-  padding: 0.06rem 0.02rem 0.06rem 0.22rem;
+  /* No vertical padding: 15px Radix icons stay aligned without making the pill taller than before. */
+  padding: 0 0.02rem 0 0.22rem;
   border: none;
   border-radius: 3px 0 0 3px;
   background: transparent;
@@ -1179,7 +1180,13 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+  line-height: 0;
   opacity: 0.75;
+}
+
+.editor-open-tab-pill__icon svg {
+  display: block;
 }
 
 .editor-open-tab-pill__label {
@@ -1387,7 +1394,7 @@ a:focus:not(:focus-visible) {
   max-height: 26px;
   margin: 0;
   padding-block: 0;
-  padding-inline-end: 8px;
+  /* Horizontal padding: `FileTreeNode` inline style (`fileTreeConstants` EDGE + trailing). */
   box-sizing: border-box;
   border: none;
   background: transparent;
@@ -1398,8 +1405,9 @@ a:focus:not(:focus-visible) {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   text-align: start;
   cursor: default;
+  /* Keep gap 0; icon-to-label spacing is `margin-inline-end` on `.iconCell` in FileTreeNode.module.css (module `gap` would lose to this rule otherwise). */
   gap: 0;
-  border-radius: 0;
+  border-radius: 4px;
 }
 
 .vault-tree-row:hover {
@@ -1485,7 +1493,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
 }
 
-/* Row icon and label live in `FileTreeNode.module.css` (Lucide at 24px to match 24 viewBox). */
+/* Row icon and label: `FileTreeNode.module.css` (Radix 15×15 + `.iconCell` margin for label inset). */
 
 .visually-hidden {
   position: absolute;

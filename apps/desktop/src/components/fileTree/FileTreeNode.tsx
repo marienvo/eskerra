@@ -1,18 +1,28 @@
-import {CalendarRange, FileText, Folder, FolderOpen} from 'lucide-react';
+import {
+  CalendarIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FileTextIcon,
+} from '@radix-ui/react-icons';
 import {
   type ComponentPropsWithoutRef,
   type ReactNode,
   forwardRef,
 } from 'react';
 
-import {FILE_TREE_ICON_SIZE_PX, FILE_TREE_INDENT_PX} from './fileTreeConstants';
+import {
+  FILE_TREE_ICON_SIZE_PX,
+  FILE_TREE_INDENT_PX,
+  FILE_TREE_ROW_EDGE_INSET_PX,
+  FILE_TREE_ROW_TRAILING_PAD_PX,
+} from './fileTreeConstants';
 import styles from './FileTreeNode.module.css';
 import type {TreeNodeType} from './treeNodeTypes';
 
-const ICON = {
-  size: FILE_TREE_ICON_SIZE_PX,
-  strokeWidth: 2 as const,
-};
+const ICON_DIM = {
+  width: FILE_TREE_ICON_SIZE_PX,
+  height: FILE_TREE_ICON_SIZE_PX,
+} as const;
 
 function RowIcon({
   treeType,
@@ -22,14 +32,16 @@ function RowIcon({
   isFolderExpanded: boolean;
 }) {
   if (treeType === 'today') {
-    return <CalendarRange {...ICON} aria-hidden />;
+    return <CalendarIcon {...ICON_DIM} aria-hidden />;
   }
   if (treeType === 'folder') {
-    return isFolderExpanded
-      ? <FolderOpen {...ICON} aria-hidden />
-      : <Folder {...ICON} aria-hidden />;
+    return isFolderExpanded ? (
+      <ChevronDownIcon {...ICON_DIM} aria-hidden />
+    ) : (
+      <ChevronRightIcon {...ICON_DIM} aria-hidden />
+    );
   }
-  return <FileText {...ICON} aria-hidden />;
+  return <FileTextIcon {...ICON_DIM} aria-hidden />;
 }
 
 export type FileTreeNodeProps = {
@@ -63,7 +75,13 @@ export const FileTreeNode = forwardRef<HTMLButtonElement, FileTreeNodeProps>(
         type="button"
         data-selected={selected ? 'true' : 'false'}
         className={[styles.row, className].filter(Boolean).join(' ')}
-        style={{...style, paddingInlineStart: depth * FILE_TREE_INDENT_PX}}
+        style={{
+          ...style,
+          paddingInlineStart:
+            FILE_TREE_ROW_EDGE_INSET_PX + depth * FILE_TREE_INDENT_PX,
+          paddingInlineEnd:
+            FILE_TREE_ROW_EDGE_INSET_PX + FILE_TREE_ROW_TRAILING_PAD_PX,
+        }}
         {...buttonProps}
       >
         <span className={styles.iconCell}>

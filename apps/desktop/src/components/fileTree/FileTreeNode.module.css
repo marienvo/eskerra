@@ -4,15 +4,16 @@
   max-height: 26px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* Row `gap` is overridden by `.vault-tree-row { gap: 0 }` on the same element; use `.iconCell` margin for icon–label space. */
+  gap: 0;
   padding-block: 0;
-  padding-inline-end: 8px;
-  padding-inline-start: 0;
+  /* Horizontal padding comes from inline style on the tree node (`EDGE_INSET` + indent / trailing). */
+  padding-inline: 0;
   margin: 0;
   box-sizing: border-box;
   width: 100%;
   border: none;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   color: inherit;
   font-size: 13px;
@@ -26,12 +27,13 @@
 }
 
 .iconCell {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-inline-end: 6px;
   color: var(--color-muted);
 }
 

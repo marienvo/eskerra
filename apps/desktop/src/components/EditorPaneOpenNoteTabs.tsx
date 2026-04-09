@@ -1,4 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import {CalendarIcon, FileTextIcon} from '@radix-ui/react-icons';
 import {
   memo,
   useCallback,
@@ -16,7 +17,21 @@ import {
 } from '../lib/editorOpenTabPillLabel';
 import {tabCurrentUri, type EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
+import {FILE_TREE_ICON_SIZE_PX} from './fileTree/fileTreeConstants';
 import {MaterialIcon} from './MaterialIcon';
+
+const TAB_PILL_ICON_DIM = {
+  width: FILE_TREE_ICON_SIZE_PX,
+  height: FILE_TREE_ICON_SIZE_PX,
+} as const;
+
+function EditorOpenTabPillLeadingIcon({iconName}: {iconName: EditorOpenTabPillIconName}) {
+  return iconName === 'today' ? (
+    <CalendarIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+  ) : (
+    <FileTextIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+  );
+}
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -138,7 +153,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             }}
           >
             <span className="editor-open-tab-pill__icon" aria-hidden>
-              <MaterialIcon name={iconName} size={12} />
+              <EditorOpenTabPillLeadingIcon iconName={iconName} />
             </span>
             <span ref={labelRef} className="editor-open-tab-pill__label">
               {label}

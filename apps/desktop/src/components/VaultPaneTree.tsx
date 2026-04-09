@@ -37,7 +37,7 @@ import {
   type VaultTreeItemData,
 } from '../lib/vaultTreeLoadChildren';
 import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
-import {CalendarRange, File, Folder} from 'lucide-react';
+import {CalendarIcon, ChevronRightIcon, FileTextIcon} from '@radix-ui/react-icons';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {
   FILE_TREE_ICON_SIZE_PX,
@@ -54,14 +54,17 @@ const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
 
 function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
-  const p = {size: FILE_TREE_ICON_SIZE_PX, strokeWidth: 2};
+  const p = {
+    width: FILE_TREE_ICON_SIZE_PX,
+    height: FILE_TREE_ICON_SIZE_PX,
+  } as const;
   if (kind === 'today') {
-    return renderToStaticMarkup(<CalendarRange {...p} />);
+    return renderToStaticMarkup(<CalendarIcon {...p} />);
   }
   if (kind === 'folder') {
-    return renderToStaticMarkup(<Folder {...p} />);
+    return renderToStaticMarkup(<ChevronRightIcon {...p} />);
   }
-  return renderToStaticMarkup(<File {...p} />);
+  return renderToStaticMarkup(<FileTextIcon {...p} />);
 }
 
 function vaultTreeRowPrimaryMarkdownUri(data: VaultTreeItemData): string | null {
