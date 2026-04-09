@@ -2643,12 +2643,25 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(
+          const existingTabId = findTabIdWithCurrentUri(
+            editorWorkspaceTabsRef.current,
             result.uri,
-            openInBackgroundTab
-              ? {newTab: true, activateNewTab: false}
-              : undefined,
           );
+          if (openInBackgroundTab) {
+            if (existingTabId != null) {
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: false,
+            });
+            return;
+          }
+          if (existingTabId != null) {
+            activateOpenTab(existingTabId);
+            return;
+          }
+          await openMarkdownInEditor(result.uri);
           return;
         }
         if (result.kind === 'ambiguous') {
@@ -2669,7 +2682,14 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [
+      activateOpenTab,
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+    ],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -2730,12 +2750,25 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(
+          const existingTabId = findTabIdWithCurrentUri(
+            editorWorkspaceTabsRef.current,
             result.uri,
-            openInBackgroundTab
-              ? {newTab: true, activateNewTab: false}
-              : undefined,
           );
+          if (openInBackgroundTab) {
+            if (existingTabId != null) {
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: false,
+            });
+            return;
+          }
+          if (existingTabId != null) {
+            activateOpenTab(existingTabId);
+            return;
+          }
+          await openMarkdownInEditor(result.uri);
           return;
         }
         setErr('This link is not a relative vault markdown note.');
@@ -2743,7 +2776,14 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [
+      activateOpenTab,
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+    ],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
