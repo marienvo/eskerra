@@ -490,6 +490,21 @@ export function VaultTab({
     () => reopenClosedTabMenuShortcutLabel(),
     [],
   );
+  const [revealTreeNonce, setRevealTreeNonce] = useState(0);
+  const normalizedVaultRootForTree = useMemo(
+    () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+    [vaultRoot],
+  );
+  const revealActiveNoteDisabled =
+    composingNewEntry
+    || selectedUri == null
+    || (
+      selectedUri !== normalizedVaultRootForTree
+      && !selectedUri.startsWith(`${normalizedVaultRootForTree}/`)
+    );
+  const bumpRevealActiveNoteInTree = useCallback(() => {
+    setRevealTreeNonce(n => n + 1);
+  }, []);
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
@@ -1030,7 +1045,10 @@ export function VaultTab({
             fs={fs}
             fsRefreshNonce={fsRefreshNonce}
             vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-            selectedMarkdownUri={composingNewEntry ? null : selectedUri}
+            editorActiveMarkdownUri={composingNewEntry ? null : selectedUri}
+            revealActiveNoteNonce={revealTreeNonce}
+            onRevealActiveNoteInTree={bumpRevealActiveNoteInTree}
+            revealActiveNoteDisabled={revealActiveNoteDisabled}
             busy={busy}
             onAddEntry={onAddEntry}
             onOpenMarkdownNote={onSelectNote}

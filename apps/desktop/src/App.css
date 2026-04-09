@@ -1383,23 +1383,25 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   width: 100%;
-  /* Fixed height must match VaultPaneTree VAULT_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
-  height: 32px;
-  min-height: 32px;
-  max-height: 32px;
+  /* Fixed height must match VaultPaneTree FILE_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
   margin: 0;
   padding-block: 0;
-  padding-inline-end: 4px;
+  padding-inline-end: 8px;
   box-sizing: border-box;
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 0.8125rem;
-  line-height: 1.2;
+  font-size: 13px;
+  line-height: 26px;
+  font-weight: 400;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   text-align: start;
   cursor: default;
   gap: 0;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .vault-tree-row:hover {
@@ -1407,18 +1409,20 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row--selected {
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-vault-tree-row-selected);
+  color: var(--color-text);
 }
 
 .vault-tree-row--selected:hover {
-  background: color-mix(in srgb, var(--color-accent) 88%, #000);
-  color: #fff;
+  background: var(--color-vault-tree-row-selected);
 }
 
-.vault-tree-row--selected .vault-tree-row__icon,
-.vault-tree-row--selected .vault-tree-row__chevron {
-  color: rgba(255, 255, 255, 0.9);
+.vault-tree-row:focus {
+  outline: none;
+}
+
+.vault-tree-row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--color-focus-ring);
 }
 
 .vault-tree-row--drop-target {
@@ -1428,9 +1432,8 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row--selected.vault-tree-row--drop-target {
-  background: var(--color-accent);
-  color: #fff;
-  outline: 2px solid rgba(255, 255, 255, 0.85);
+  background: var(--color-row-hover);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
 
@@ -1462,15 +1465,19 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-drag-ghost__icon {
-  font-size: 24px !important;
-  width: 24px;
-  height: 24px;
-  line-height: 24px !important;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   color: var(--color-muted);
+}
+
+.vault-tree-drag-ghost__icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .vault-tree-drag-ghost__label {
@@ -1480,49 +1487,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
 }
 
-.vault-tree-row__chevron {
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-}
-
-.vault-tree-row__chevron-spacer {
-  flex: 0 0 28px;
-}
-
-.vault-tree-row__icon {
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-}
-
-/* Subtle tints — most weight stays on muted so it stays calm (selected row overrides below). */
-.vault-tree-row__icon--article {
-  color: color-mix(in srgb, var(--color-accent) 34%, var(--color-muted));
-}
-
-/* Soft but unmistakably yellow: yellow leads the mix so it does not read as gray. */
-.vault-tree-row__icon--folder {
-  color: color-mix(in srgb, #ffe994 78%, var(--color-muted));
-}
-
-.vault-tree-row__icon--today {
-  color: color-mix(in srgb, var(--color-accent) 42%, var(--color-muted));
-}
-
-.vault-tree-row__label {
-  flex: 1;
-  min-width: 0;
-  margin-inline-start: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
-}
+/* Row icon and label live in `FileTreeNode.module.css` (Lucide, 20px, IDE density). */
 
 .visually-hidden {
   position: absolute;

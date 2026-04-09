@@ -10,7 +10,10 @@ export type VaultTreePaneProps = {
   fs: VaultFilesystem;
   fsRefreshNonce: number;
   vaultTreeSelectionClearNonce: number;
-  selectedMarkdownUri: string | null;
+  editorActiveMarkdownUri: string | null;
+  revealActiveNoteNonce: number;
+  onRevealActiveNoteInTree: () => void;
+  revealActiveNoteDisabled: boolean;
   busy: boolean;
   onAddEntry: () => void;
   onOpenMarkdownNote: (uri: string) => void;
@@ -35,7 +38,10 @@ export function VaultTreePane({
   fs,
   fsRefreshNonce,
   vaultTreeSelectionClearNonce,
-  selectedMarkdownUri,
+  editorActiveMarkdownUri,
+  revealActiveNoteNonce,
+  onRevealActiveNoteInTree,
+  revealActiveNoteDisabled,
   busy,
   onAddEntry,
   onOpenMarkdownNote,
@@ -51,19 +57,34 @@ export function VaultTreePane({
     <div className="panel-surface" data-app-surface="capture">
       <div className="pane-header">
         <span className="pane-title">Vault</span>
-        <button
-          type="button"
-          className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-          onClick={onAddEntry}
-          disabled={busy}
-          aria-label="Add entry"
-          data-tooltip="Add entry"
-          data-tooltip-placement="inline-start"
-        >
-          <span className="pane-header-add-btn__glyph" aria-hidden>
-            <MaterialIcon name="add" size={12} />
-          </span>
-        </button>
+        <div className="pane-header-trailing-actions">
+          <button
+            type="button"
+            className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+            onClick={onRevealActiveNoteInTree}
+            disabled={busy || revealActiveNoteDisabled}
+            aria-label="Show active note in tree"
+            data-tooltip="Show active note in tree"
+            data-tooltip-placement="inline-start"
+          >
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <MaterialIcon name="location_searching" size={12} />
+            </span>
+          </button>
+          <button
+            type="button"
+            className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+            onClick={onAddEntry}
+            disabled={busy}
+            aria-label="Add entry"
+            data-tooltip="Add entry"
+            data-tooltip-placement="inline-start"
+          >
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <MaterialIcon name="add" size={12} />
+            </span>
+          </button>
+        </div>
       </div>
       <div className="vault-tree-panel">
         <VaultPaneTree
@@ -71,7 +92,8 @@ export function VaultTreePane({
           fs={fs}
           fsRefreshNonce={fsRefreshNonce}
           vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-          selectedMarkdownUri={selectedMarkdownUri}
+          editorActiveMarkdownUri={editorActiveMarkdownUri}
+          revealActiveNoteNonce={revealActiveNoteNonce}
           busy={busy}
           onOpenMarkdownNote={onOpenMarkdownNote}
           onRenameMarkdownRequest={onRenameMarkdownRequest}

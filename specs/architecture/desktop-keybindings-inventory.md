@@ -34,6 +34,7 @@ Machine- and human-readable catalog of **desktop (Tauri) vault UI** keyboard beh
 | `eskerra.vault.tree.rangeSelectUp` | `Shift+ArrowUp` | Vault tree | `@headless-tree` `selectionFeature` + `hotkeysCoreFeature` |
 | `eskerra.vault.tree.rangeSelectDown` | `Shift+ArrowDown` | Vault tree | Same |
 | `eskerra.vault.tree.selectAll` | `Control+KeyA` | Vault tree | Same |
+| `eskerra.vault.tree.openPrimary` | `Enter` | Vault tree (focused row) | `@headless-tree` primary action → **`VaultPaneTree`** `onOpenMarkdownNote` (markdown / Today hub rows); folders expand via pointer or tree shortcuts |
 | `eskerra.dialog.renameNote.submit` | `Enter` | Rename note dialog input | [`VaultTab.tsx`](../../apps/desktop/src/components/VaultTab.tsx) |
 | `eskerra.dialog.renameFolder.submit` | `Enter` | Rename folder dialog input | Same |
 | `eskerra.vault.editor.imagePreview.toggleExpand` | `Enter`, `Space` | Focused vault image preview widget | [`vaultImagePreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/vaultImagePreviewCodemirror.ts) |

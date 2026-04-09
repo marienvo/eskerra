@@ -107,6 +107,8 @@ html {
 
   /* Capture: list/button hover */
   --color-row-hover: #e8e8e8;
+  /* IDE-style tree selection (subtle; works on light surfaces). */
+  --color-vault-tree-row-selected: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
   --color-button-secondary-bg: #eef0f2;
 
   /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
