@@ -222,7 +222,7 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.06rem;
   transform: translate(-50%, calc(-50% + 2px));
   pointer-events: none;
 }
@@ -242,11 +242,17 @@ a:focus:not(:focus-visible) {
   -webkit-user-select: none;
 }
 
-.window-title-bar-transport__time--duration {
+.window-title-bar-transport__time--position {
   text-align: end;
+  margin-inline-end: 0.24rem;
 }
 
-/* Shared: title-bar playback controls */
+.window-title-bar-transport__time--duration {
+  text-align: start;
+  margin-inline-start: 0.24rem;
+}
+
+/* Shared: title-bar playback controls (only used in TitleBarTransport) */
 .app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
@@ -255,10 +261,22 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  /* Play/pause: 32×32 circle, 28px play/pause icon (seek stays 22px). */
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  border-radius: 50%;
   background: transparent;
   color: var(--color-shell-icon-muted);
   cursor: default;
+}
+
+.app-playback-chrome-btn--seek {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
 }
 
 @keyframes app-playback-chrome-spin {
@@ -283,10 +301,6 @@ a:focus:not(:focus-visible) {
 .app-playback-chrome-btn:not(:disabled):hover {
   background: var(--color-shell-hover-bg);
   color: var(--color-shell-icon);
-}
-
-.app-playback-chrome-btn--play {
-  border-radius: 8px;
 }
 
 .window-title-bar-trailing {

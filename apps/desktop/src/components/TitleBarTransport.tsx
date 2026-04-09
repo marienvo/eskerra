@@ -26,7 +26,6 @@ export function TitleBarTransport({
 }: TitleBarTransportProps) {
   const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
-  const playTooltip = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
   const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
 
   return (
@@ -35,27 +34,26 @@ export function TitleBarTransport({
       role="group"
       aria-label="Playback"
     >
-      <span className="window-title-bar-transport__time" aria-hidden>
+      <span
+        className="window-title-bar-transport__time window-title-bar-transport__time--position"
+        aria-hidden
+      >
         {positionLabel}
       </span>
       <button
         type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--seek"
         aria-label="Rewind 10 seconds"
-        data-tooltip="Rewind 10 seconds"
-        data-tooltip-placement="inline-end"
         disabled={seekDisabled}
         onClick={() => void onSeekBack()}
       >
-        <MaterialIcon name="replay_10" size={24} aria-hidden />
+        <MaterialIcon name="replay_10" size={22} aria-hidden />
       </button>
       <button
         type="button"
-        className="app-playback-chrome-btn app-playback-chrome-btn--play app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--play"
         aria-busy={isLoading}
         aria-label={playLabel}
-        data-tooltip={playTooltip}
-        data-tooltip-placement="inline-end"
         disabled={isLoading}
         onClick={() => void onTogglePlay()}
       >
@@ -64,26 +62,24 @@ export function TitleBarTransport({
             aria-hidden
             className="app-playback-chrome-btn__spin"
             name="autorenew"
-            size={24}
+            size={28}
           />
         ) : (
           <MaterialIcon
             name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-            size={24}
+            size={28}
             aria-hidden
           />
         )}
       </button>
       <button
         type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--seek"
         aria-label="Forward 10 seconds"
-        data-tooltip="Forward 10 seconds"
-        data-tooltip-placement="inline-start"
         disabled={seekDisabled}
         onClick={() => void onSeekForward()}
       >
-        <MaterialIcon name="forward_10" size={24} aria-hidden />
+        <MaterialIcon name="forward_10" size={22} aria-hidden />
       </button>
       <span className="window-title-bar-transport__time window-title-bar-transport__time--duration" aria-hidden>
         {durationLabel}
