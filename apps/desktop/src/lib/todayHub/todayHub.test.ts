@@ -155,7 +155,17 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
     const text = 'a\n\n::today-section::\n\nb\n\n::today-section::\n\nc\n\n::today-section::\n\nd';
     const parts = splitTodayRowIntoColumns(text, 2);
     expect(parts[0]).toBe('a');
-    expect(parts[1]).toBe('b\n\n::today-section::\n\nc\n\n::today-section::\n\nd');
+    // Stray delimiter-only lines inside the tail chunk are stripped (never shown in cell editors).
+    expect(parts[1]).toBe('b\n\n\nc\n\n\nd');
+  });
+
+  it('strips spurious marker-only lines when markers repeat without valid newlines between', () => {
+    const text =
+      '123\n\n::today-section::\n\n::today-section::\n\nsdf\n\n::today-section::';
+    const parts = splitTodayRowIntoColumns(text, 2);
+    expect(parts[0]).toBe('123');
+    expect(parts[1]).toBe('\nsdf\n\n\n');
+    expect(parts[1]).not.toContain('::today-section::');
   });
 
   it('splits when section ends at EOF after marker (no trailing blank line)', () => {
@@ -168,6 +178,13 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
     const raw = '1\n::today-section::\n\n';
     const parts = splitTodayRowIntoColumns(raw, 2);
     expect(parts).toEqual(['1', '']);
+  });
+
+  it('keeps empty middle column slots when merging (does not collapse to fewer chunks)', () => {
+    const sections = ['left', '', 'right'];
+    const merged = mergeTodayRowColumns(sections);
+    expect(splitTodayRowIntoColumns(merged, 3)).toEqual(sections);
+    expect(roundTrip(sections, 3)).toBe(merged);
   });
 
   it('todayHubRowSectionsAllBlank', () => {
@@ -186,5 +203,10 @@ describe('roundTrip', () => {
   it('stable for two columns', () => {
     const sections = ['# T\n\none', 'two\n'];
     expect(roundTrip(sections, 2)).toBe(mergeTodayRowColumns(sections));
+  });
+
+  it('stable for three columns with blank middle', () => {
+    const sections = ['a\n', '  \n', 'c'];
+    expect(roundTrip(sections, 3)).toBe(mergeTodayRowColumns(sections));
   });
 });
