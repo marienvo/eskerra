@@ -50,7 +50,7 @@ const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
 
 function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
-  const p = {size: FILE_TREE_ICON_SIZE_PX, strokeWidth: 1.5};
+  const p = {size: FILE_TREE_ICON_SIZE_PX, strokeWidth: 2};
   if (kind === 'today') {
     return renderToStaticMarkup(<CalendarRange {...p} />);
   }
@@ -255,6 +255,8 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   const [treeViewRevision, setTreeViewRevision] = useState(0);
   const pendingScrollToTreeIdRef = useRef<string | null>(null);
   const revealScrollFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vaultTreeInnerRef = useRef<HTMLDivElement | null>(null);
+  const [vaultTreeLayoutNonce, setVaultTreeLayoutNonce] = useState(0);
 
   const clearDropTarget = () => setDropTargetUri(null);
 
@@ -434,6 +436,20 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   const virtualItems = virtualizer.getVirtualItems();
   const itemIds = useMemo(() => items.map(item => item.getId()), [items]);
 
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      setVaultTreeLayoutNonce(n => n + 1);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     if (revealActiveNoteNonce === 0) {
       return;
@@ -521,6 +537,37 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     pendingScrollToTreeIdRef.current = null;
   }, [itemIds, virtualizer, treeViewRevision]);
 
+  useLayoutEffect(() => {
+    const inner = vaultTreeInnerRef.current;
+    if (!inner || virtualItems.length === 0) {
+      if (inner) {
+        inner.style.paddingLeft = '';
+        inner.style.paddingTop = '';
+      }
+      return;
+    }
+    const wrap = inner.querySelector(
+      '.vault-tree-row-virtual-wrap',
+    ) as HTMLElement | null;
+    if (!wrap) {
+      inner.style.paddingLeft = '';
+      inner.style.paddingTop = '';
+      return;
+    }
+
+    /**
+     * Subpixel alignment without `translate3d` on this inner (compositor blur on SVG strokes).
+     * Padding nudge avoids margins on a `width: 100%` inner spilling wider than the scrollport.
+     */
+    inner.style.paddingLeft = '0px';
+    inner.style.paddingTop = '0px';
+    const pre = wrap.getBoundingClientRect();
+    const dx = Math.round(pre.left) - pre.left;
+    const dy = Math.round(pre.top) - pre.top;
+    inner.style.paddingLeft = dx !== 0 ? `${dx}px` : '';
+    inner.style.paddingTop = dy !== 0 ? `${dy}px` : '';
+  }, [virtualItems, virtualizer, vaultTreeLayoutNonce, treeViewRevision]);
+
   const containerProps = tree.getContainerProps('Vault');
 
   const selectedIdsForBulk = tree.getState().selectedItems;
@@ -562,6 +609,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         }}
       >
         <div
+          ref={vaultTreeInnerRef}
           className="vault-tree__inner"
           style={{height: `${virtualizer.getTotalSize()}px`, position: 'relative'}}
         >
@@ -580,11 +628,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   className="vault-tree-row-virtual-wrap vault-tree-row-virtual-wrap--placeholder"
                   style={{
                     position: 'absolute',
-                    top: 0,
+                    top: rowOffsetYPx,
                     left: 0,
                     width: '100%',
                     height: VAULT_TREE_ROW_HEIGHT_PX,
-                    transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                   }}
                   aria-hidden
                 />
@@ -751,11 +798,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 className="vault-tree-row-virtual-wrap"
                 style={{
                   position: 'absolute',
-                  top: 0,
+                  top: rowOffsetYPx,
                   left: 0,
                   width: '100%',
                   height: VAULT_TREE_ROW_HEIGHT_PX,
-                  transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                 }}
               >
                 <ContextMenu.Root>

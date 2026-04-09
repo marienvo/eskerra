@@ -1,4 +1,4 @@
-import {CalendarRange,  FileText, Folder, FolderOpen} from 'lucide-react';
+import {CalendarRange, FileText, Folder, FolderOpen} from 'lucide-react';
 import {
   type ComponentPropsWithoutRef,
   type ReactNode,
@@ -11,7 +11,7 @@ import type {TreeNodeType} from './treeNodeTypes';
 
 const ICON = {
   size: FILE_TREE_ICON_SIZE_PX,
-  strokeWidth: 1.5 as const,
+  strokeWidth: 2 as const,
 };
 
 function RowIcon({

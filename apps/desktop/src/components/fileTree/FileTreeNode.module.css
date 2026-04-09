@@ -26,13 +26,18 @@
 }
 
 .iconCell {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--color-muted);
+}
+
+.iconCell svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .label {
@@ -41,6 +46,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .labelToday {

@@ -1374,9 +1374,7 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   overflow: hidden;
   width: 100%;
-  /* Crisper text on compositor layer: fractional translateY causes smeared/bold-like labels */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Avoid whole-row font smoothing: it softens sibling Lucide SVG strokes. Row label opts in below. */
 }
 
 .vault-tree-row {
@@ -1465,8 +1463,8 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-drag-ghost__icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   display: inline-flex !important;
   align-items: center;
@@ -1475,8 +1473,8 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-drag-ghost__icon svg {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: block;
 }
 
@@ -1487,7 +1485,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
 }
 
-/* Row icon and label live in `FileTreeNode.module.css` (Lucide, 20px, IDE density). */
+/* Row icon and label live in `FileTreeNode.module.css` (Lucide at 24px to match 24 viewBox). */
 
 .visually-hidden {
   position: absolute;
