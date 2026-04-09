@@ -2,7 +2,7 @@
   "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "eskerra",
   "mainBinaryName": "eskerra",
-  "version": "../package.json",
+  "version": "../../mobile/package.json",
   "identifier": "com.eskerra.desktop",
   "build": {
     "frontendDist": "../dist",

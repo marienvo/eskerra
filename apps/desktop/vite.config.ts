@@ -3,14 +3,14 @@ import path from 'node:path';
 import {defineConfig} from 'vite';
 import react from '@vitejs/plugin-react';
 
-const desktopPkg = JSON.parse(
-  readFileSync(path.join(__dirname, 'package.json'), 'utf8'),
+const mobilePkg = JSON.parse(
+  readFileSync(path.join(__dirname, '../mobile/package.json'), 'utf8'),
 ) as {version: string};
 
 // https://vite.dev/config/
 export default defineConfig({
   define: {
-    __DESKTOP_APP_VERSION__: JSON.stringify(desktopPkg.version),
+    __DESKTOP_APP_VERSION__: JSON.stringify(mobilePkg.version),
   },
   plugins: [react()],
   clearScreen: false,

@@ -16,7 +16,7 @@
     "postinstall": "patch-package",
     "start": "react-native start",
     "test": "jest",
-    "test:scripts": "node --test ../../scripts/bump-release-version-lib.test.mjs"
+    "test:scripts": "node --test ../../scripts/bump-release-version-lib.test.mjs ../../scripts/sync-app-version-artifacts-lib.test.mjs"
   },
   "dependencies": {
     "@gluestack-style/react": "^1.0.57",
