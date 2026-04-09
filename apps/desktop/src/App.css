@@ -2442,6 +2442,12 @@ button.primary.destructive {
   font-weight: var(--file-tree-node-font-weight);
 }
 
+[data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link:hover,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link:hover,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-link:hover {
+  text-decoration: none;
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
   max-width: 100%;
   padding: 0.5rem 0;
