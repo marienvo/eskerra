@@ -45,6 +45,7 @@ import {
   todayHubPerfLog,
 } from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import {
   isNoteAttachmentImageFilePath,
   type NoteInboxAttachmentHost,
@@ -80,7 +81,10 @@ import {
   buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
-import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import {
+  markdownCaretInOpaquePasteBlock,
+  markdownSmartExpandExtension,
+} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
@@ -471,6 +475,36 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const tryPasteRichHtmlFromDataTransfer = (
+      dt: DataTransfer,
+      e: ClipboardEvent,
+      viewForPaste: EditorView,
+    ): boolean => {
+      const htmlRaw = dt.getData('text/html') ?? '';
+      const plain = dt.getData('text/plain') ?? '';
+      if (markdownCaretInOpaquePasteBlock(
+        viewForPaste.state,
+        viewForPaste.state.selection.main.head,
+      )) {
+        return false;
+      }
+      const md = tryClipboardHtmlToMarkdownInsert(htmlRaw, plain);
+      if (md == null) {
+        return false;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const sel = viewForPaste.state.selection.main;
+      const insertFrom = Math.min(sel.anchor, sel.head);
+      const insertTo = Math.max(sel.anchor, sel.head);
+      viewForPaste.dispatch({
+        changes: {from: insertFrom, to: insertTo, insert: md},
+        selection: EditorSelection.cursor(insertFrom + md.length),
+        scrollIntoView: true,
+      });
+      return true;
+    };
+
     // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
     let middleClickBlockPasteUntil = 0;
 
@@ -505,6 +539,12 @@ const NoteMarkdownEditorImpl = forwardRef<
           );
           return true;
         }
+        if (
+          e.clipboardData
+          && tryPasteRichHtmlFromDataTransfer(e.clipboardData, e, view)
+        ) {
+          return true;
+        }
         return false;
       }
 
@@ -518,9 +558,19 @@ const NoteMarkdownEditorImpl = forwardRef<
           return runVaultImagePasteFromDataTransfer(dt, view);
         }
         if (plainTrimmed === '' && !probablyImage) {
+          const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
+          if (
+            htmlWhenPlainEmpty.trim() !== ''
+            && tryPasteRichHtmlFromDataTransfer(dt, e, view)
+          ) {
+            return true;
+          }
           e.preventDefault();
           e.stopPropagation();
           return runNativeClipboardPasteWhenWebDataEmpty(view);
+        }
+        if (tryPasteRichHtmlFromDataTransfer(dt, e, view)) {
+          return true;
         }
         return false;
       }

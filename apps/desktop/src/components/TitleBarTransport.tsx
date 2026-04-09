@@ -47,7 +47,7 @@ export function TitleBarTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekBack()}
       >
-        <MaterialIcon name="replay_10" size={22} aria-hidden />
+        <MaterialIcon name="replay_10" size={24} aria-hidden />
       </button>
       <button
         type="button"
@@ -62,12 +62,12 @@ export function TitleBarTransport({
             aria-hidden
             className="app-playback-chrome-btn__spin"
             name="autorenew"
-            size={28}
+            size={24}
           />
         ) : (
           <MaterialIcon
             name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-            size={28}
+            size={24}
             aria-hidden
           />
         )}
@@ -79,7 +79,7 @@ export function TitleBarTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekForward()}
       >
-        <MaterialIcon name="forward_10" size={22} aria-hidden />
+        <MaterialIcon name="forward_10" size={24} aria-hidden />
       </button>
       <span className="window-title-bar-transport__time window-title-bar-transport__time--duration" aria-hidden>
         {durationLabel}

@@ -25,6 +25,7 @@ import {
 import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
@@ -58,7 +59,10 @@ import {
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
-import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import {
+  markdownCaretInOpaquePasteBlock,
+  markdownSmartExpandExtension,
+} from './markdownSmartExpandSelection';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -399,9 +403,61 @@ export function buildNoteMarkdownCellExtensions(
         }
         const plainTrimmed = (dt.getData('text/plain') ?? '').trim();
         if (plainTrimmed === '' && !probablyImage) {
+          const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
+          if (
+            htmlWhenPlainEmpty.trim() !== ''
+            && !markdownCaretInOpaquePasteBlock(
+              view.state,
+              view.state.selection.main.head,
+            )
+          ) {
+            const mdEmptyPlain = tryClipboardHtmlToMarkdownInsert(
+              htmlWhenPlainEmpty,
+              '',
+            );
+            if (mdEmptyPlain != null) {
+              const cleaned = sanitizeCellInsert(mdEmptyPlain);
+              if (cleaned.length > 0) {
+                event.preventDefault();
+                const sel = view.state.selection.main;
+                const f = Math.min(sel.anchor, sel.head);
+                const t = Math.max(sel.anchor, sel.head);
+                view.dispatch({
+                  changes: {from: f, to: t, insert: cleaned},
+                  selection: {anchor: f + cleaned.length},
+                });
+                return true;
+              }
+            }
+          }
           event.preventDefault();
           event.stopPropagation();
           return runNativeClipboardPasteWhenWebDataEmpty(view);
+        }
+        const htmlRaw = dt.getData('text/html') ?? '';
+        if (
+          htmlRaw.trim() !== ''
+          && !markdownCaretInOpaquePasteBlock(
+            view.state,
+            view.state.selection.main.head,
+          )
+        ) {
+          const plainForHtml = dt.getData('text/plain') ?? '';
+          const md = tryClipboardHtmlToMarkdownInsert(htmlRaw, plainForHtml);
+          if (md != null) {
+            const cleaned = sanitizeCellInsert(md);
+            if (cleaned.length > 0) {
+              event.preventDefault();
+              const sel = view.state.selection.main;
+              const f = Math.min(sel.anchor, sel.head);
+              const t = Math.max(sel.anchor, sel.head);
+              view.dispatch({
+                changes: {from: f, to: t, insert: cleaned},
+                selection: {anchor: f + cleaned.length},
+              });
+              return true;
+            }
+          }
         }
       }
       const plain = event.clipboardData?.getData('text/plain') ?? '';
