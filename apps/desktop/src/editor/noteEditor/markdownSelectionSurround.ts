@@ -531,6 +531,11 @@ export type SymmetricSurroundConfig =
       readonly mode: 'singleDouble';
       readonly single: string;
       readonly double: string;
+      /**
+       * When true (e.g. Mod-I): selection inside outer single delimiters unwraps instead of
+       * upgrading to double (strong). Typing `*` keeps the promote-to-`**` behavior.
+       */
+      readonly outerSingleUnwrapsInsteadOfUpgrade?: boolean;
     }
   | {
       readonly mode: 'pairedOnly';
@@ -667,6 +672,15 @@ export function computeSymmetricSurroundChange(
 
     if (outerSingleDelim(doc, from, to, single, double)) {
       const inner = doc.sliceString(from, to);
+      if (cfg.outerSingleUnwrapsInsteadOfUpgrade) {
+        return {
+          from: from - 1,
+          to: to + 1,
+          insert: inner,
+          selFrom: from - 1,
+          selTo: from - 1 + inner.length,
+        };
+      }
       const insert = `${double}${inner}${double}`;
       return {
         from: from - 1,
@@ -705,6 +719,18 @@ const SURROUND_STAR: SymmetricSurroundConfig = {
   mode: 'singleDouble',
   single: '*',
   double: '**',
+};
+
+const SURROUND_BOLD_STAR: SymmetricSurroundConfig = {
+  mode: 'pairedOnly',
+  double: '**',
+};
+
+const SURROUND_STAR_ITALIC_SHORTCUT: SymmetricSurroundConfig = {
+  mode: 'singleDouble',
+  single: '*',
+  double: '**',
+  outerSingleUnwrapsInsteadOfUpgrade: true,
 };
 
 const SURROUND_UNDERSCORE: SymmetricSurroundConfig = {
@@ -881,6 +907,49 @@ function trySymmetricSurround(view: EditorView, cfg: SymmetricSurroundConfig): b
     planned.push(c);
   }
   return dispatchSurround(view, planned);
+}
+
+/** Toggle `**…**` around non-empty markdown-plain selections (vault note + table cells). */
+export function runMarkdownBoldSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_BOLD_STAR);
+}
+
+/**
+ * Toggle `*…*` around selections; outer single-`*` unwraps instead of promoting to `**`
+ * (differs from typing `*`).
+ */
+export function runMarkdownItalicSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_STAR_ITALIC_SHORTCUT);
+}
+
+/** Toggle `~~…~~` around selections. */
+export function runMarkdownStrikethroughSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_STRIKE);
+}
+
+/** Toggle inline code fences around selections (same rules as backtick surround). */
+export function runMarkdownInlineCodeSurround(view: EditorView): boolean {
+  return tryInlineCodeSurround(view);
+}
+
+/**
+ * Common word-processor chords for inline markdown (`Mod` = Cmd on macOS, Ctrl elsewhere).
+ * Registered with {@link Prec.high} so it wins over default keymaps where needed.
+ */
+export function markdownFormattingModKeymap(): Extension {
+  return Prec.high(
+    keymap.of([
+      {key: 'Mod-b', run: runMarkdownBoldSurround, preventDefault: true},
+      {key: 'Mod-i', run: runMarkdownItalicSurround, preventDefault: true},
+      {
+        key: 'Mod-Shift-x',
+        run: runMarkdownStrikethroughSurround,
+        preventDefault: true,
+      },
+      {key: 'Mod-e', run: runMarkdownInlineCodeSurround, preventDefault: true},
+      {key: 'Mod-`', run: runMarkdownInlineCodeSurround, preventDefault: true},
+    ]),
+  );
 }
 
 function runStarSurround(view: EditorView): boolean {

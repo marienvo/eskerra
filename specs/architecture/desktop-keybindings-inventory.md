@@ -23,6 +23,10 @@ Machine- and human-readable catalog of **desktop (Tauri) vault UI** keyboard beh
 | `eskerra.vault.editor.unfoldAll` | `Ctrl-Alt-]` / `Cmd-Alt-]` | Root editor only | Same |
 | `eskerra.vault.editor.indentWithTab` | `Tab`, `Shift-Tab` (standard CodeMirror) | Root + cell (cell: superseded by table nav where applicable) | `@codemirror/commands` via editor keymaps |
 | `eskerra.vault.editor.markdown.surround` | `[`, `(`, `Shift-9`, `{`, `Shift-[`, `"`, `Shift-'`, `'`, `*`, `_`, `` ` ``, `~`, `%`, `=` (+ other shifted variants where applicable) | Root + cell | [`markdownSelectionSurround.ts`](../../apps/desktop/src/editor/noteEditor/markdownSelectionSurround.ts) |
+| `eskerra.vault.editor.markdown.bold` | `Mod-b` | Root + cell | [`markdownSelectionSurround.ts`](../../apps/desktop/src/editor/noteEditor/markdownSelectionSurround.ts) (`markdownFormattingModKeymap`), wired from [`NoteMarkdownEditor.tsx`](../../apps/desktop/src/editor/noteEditor/NoteMarkdownEditor.tsx), [`noteMarkdownCellEditor.ts`](../../apps/desktop/src/editor/noteEditor/noteMarkdownCellEditor.ts) |
+| `eskerra.vault.editor.markdown.italic` | `Mod-i` (non-empty selection; empty selection falls through to default `selectParentSyntax`) | Root + cell | Same |
+| `eskerra.vault.editor.markdown.strikethrough` | `Mod-Shift-x` | Root + cell | Same |
+| `eskerra.vault.editor.markdown.inlineCode` | `Mod-e`, `` Mod-` `` | Root + cell | Same |
 | `eskerra.vault.editor.markdown.standard` | default + history keymaps | Root + cell | `@codemirror/commands` |
 | `eskerra.vault.editor.smartExpand` | `Ctrl+w` **or** `Cmd+w` (no `Shift`) | Vault markdown editor root + table cell | [`markdownSmartExpandSelection.ts`](../../apps/desktop/src/editor/noteEditor/markdownSmartExpandSelection.ts) (`keydown` on editor; not CodeMirror `keymap`—avoids Shift+W matching plain `Ctrl+w`) |
 | `eskerra.vault.editor.smartShrink` | `Ctrl+Shift+w` **or** `Cmd+Shift+w` | Same | Same |

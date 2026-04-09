@@ -66,6 +66,7 @@ import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition
 import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
 import {
+  markdownFormattingModKeymap,
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
@@ -726,6 +727,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
+      markdownFormattingModKeymap(),
       markdownInlineCodeSurroundInputHandler(),
       ...noteMarkdownSearchExtensionBundle,
       keymap.of([

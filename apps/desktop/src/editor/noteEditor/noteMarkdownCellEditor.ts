@@ -55,6 +55,7 @@ import {
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {
+  markdownFormattingModKeymap,
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
@@ -540,6 +541,7 @@ export function buildNoteMarkdownCellExtensions(
     markdownSelectionAllowMultipleRanges(),
     ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),
+    markdownFormattingModKeymap(),
     markdownInlineCodeSurroundInputHandler(),
     ...(onOpenNoteWideFind ? [] : [search()]),
     eskerraCellCharFilter(),
