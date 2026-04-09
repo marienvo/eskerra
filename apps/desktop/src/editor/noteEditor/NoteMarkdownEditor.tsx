@@ -93,6 +93,7 @@ import {
   wikiLinkMatchAtDocPosition,
   wikiLinkPointerActivatableInnerAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
+import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -802,6 +803,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           borderLeftColor: 'inherit',
         },
       }),
+      wikiEOLCaretPointerFixExtension(),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());

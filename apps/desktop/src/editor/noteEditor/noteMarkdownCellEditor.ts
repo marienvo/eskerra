@@ -47,6 +47,7 @@ import {
   resolveDocPositionForLinkPrimaryClick,
 } from './linkClickUseMousedownPosition';
 import {wikiLinkPointerActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
@@ -538,6 +539,7 @@ export function buildNoteMarkdownCellExtensions(
         borderLeftColor: 'inherit',
       },
     }),
+    wikiEOLCaretPointerFixExtension(),
     EditorView.updateListener.of(update => {
       if (update.docChanged) {
         onDocChanged();
