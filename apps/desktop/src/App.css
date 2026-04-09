@@ -1894,6 +1894,9 @@ button.primary.destructive {
   --nb-editor-page-body-max: 1035px;
   /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
   --nb-editor-paper-pad-block-start: 4rem;
+  /* Prose metrics (capture markdown editor body + matching surfaces); Eskerra row math stays in sync in TS. */
+  --nb-editor-font-size: 15px;
+  --nb-editor-line-height: 1.55;
 
   flex: 1;
   display: flex;
@@ -1961,9 +1964,9 @@ button.primary.destructive {
   z-index: 6;
   align-self: flex-start;
   width: var(--nb-editor-fold-gutter-width);
-  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + 1.6em);
-  font-size: 16px;
-  line-height: 1.6;
+  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + (1em * var(--nb-editor-line-height)));
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2059,6 +2062,7 @@ button.primary.destructive {
   color: var(--nb-editor-text);
   width: 100%;
   box-sizing: border-box;
+  font-size: var(--nb-editor-font-size);
 }
 
 /*
@@ -2098,7 +2102,7 @@ button.primary.destructive {
   min-width: 0;
   box-sizing: border-box;
   padding: 0.4rem 1.75rem 0.4rem 0.5rem;
-  font-size: 0.9375rem;
+  font-size: 0.9375em;
   line-height: 1.35;
   color: inherit;
   background: var(--nb-editor-code-block-bg);
@@ -2150,7 +2154,7 @@ button.primary.destructive {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8125rem;
+  font-size: 0.8125em;
   line-height: 1.3;
   color: var(--nb-editor-text);
   white-space: nowrap;
@@ -2184,7 +2188,7 @@ button.primary.destructive {
   background: var(--color-button-secondary-bg, color-mix(in srgb, var(--nb-editor-paper) 90%, var(--nb-editor-inline-code-border) 10%));
   color: inherit;
   cursor: default;
-  font-size: 0.8125rem;
+  font-size: 0.8125em;
   line-height: 1.25;
 }
 
@@ -2194,7 +2198,7 @@ button.primary.destructive {
   right: 0.35rem;
   padding: 0.1rem 0.35rem;
   min-width: 0;
-  font-size: 1.15rem;
+  font-size: 1.15em;
   line-height: 1;
   background: transparent;
   border: none;
@@ -2262,8 +2266,8 @@ button.primary.destructive {
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
   /* Fixed size: fluid clamp with vw made text feel like it “zoomed” when resizing the window. */
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   text-rendering: auto;
   /* Parity with .note-list button / .episode-row: avoid faux-bold synthesis on WebKitGTK. */
   font-synthesis: none;
@@ -2624,8 +2628,8 @@ button.primary.destructive {
    */
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   font-synthesis: none;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
@@ -3051,20 +3055,24 @@ button.primary.destructive {
   word-break: break-word;
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  /* 25px line grid at 16px; matches embedded CodeMirror hub cell line height (static was ~25.6px/line via 1.6 + min-height). */
-  line-height: 1.5625;
+  font-size: var(--nb-editor-font-size);
+  /* Tighter than main editor line-height (historically 1.5625 vs 1.6); keep the same ratio vs `--nb-editor-line-height`. */
+  line-height: calc(var(--nb-editor-line-height) * 1.5625 / 1.6);
   font-synthesis: none;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
   color: var(--nb-editor-text, inherit);
 }
 
-/* Match capture `.cm-line`: block rhythm only from heading/hr/fence rules on the same element. */
+/*
+ * Match capture `.cm-line`: block rhythm from inherited hub line-height only (same as
+ * `.today-hub-canvas__cm-host .cm-scroller`). Do not set `min-height` here: runtime probes showed it
+ * rounded to a taller integer `clientHeight` than CodeMirror lines (23px vs 22px) while computed
+ * `line-height` matched — see specs/architecture/today-hub-editor-parity.md.
+ */
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line {
   display: block;
   padding: 0;
-  min-height: 1.5625em;
 }
 
 /*
@@ -3177,7 +3185,7 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-scroller {
-  line-height: 1.5625;
+  line-height: calc(var(--nb-editor-line-height) * 1.5625 / 1.6);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host::after {
@@ -4158,7 +4166,8 @@ button.primary.destructive {
   content: '';
   position: absolute;
   inset-inline: 0;
-  bottom: 19px;
+  /* Tuned for ~16px/1.6 body; nudge with compact `--nb-editor-*` so the rule line stays centered in the block. */
+  bottom: 17px;
   height: 2px;
   pointer-events: none;
   background: var(--color-text);
