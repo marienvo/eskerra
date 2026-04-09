@@ -26,6 +26,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
     "@eskerra/core": "*",
+    "@fontsource-variable/inter": "^5.2.8",
     "@headless-tree/core": "^1.6.3",
     "@headless-tree/react": "^1.6.3",
     "@radix-ui/react-alert-dialog": "^1.1.15",

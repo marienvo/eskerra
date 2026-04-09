@@ -27,7 +27,7 @@ export function EpisodesPane({
 
   return (
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
-      <div className="pane-header pane-header--episodes">
+      <div className="pane-header pane-header--episodes pane-header--workspace-panel">
         <span className="pane-title">Episodes</span>
         <button
           type="button"

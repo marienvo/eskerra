@@ -137,7 +137,6 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             aria-selected={active}
             className={[
               'editor-open-tab-pill__main',
-              iconName === 'today' ? 'editor-open-tab-pill__main--today' : '',
               labelTruncated ? 'app-tooltip-trigger' : '',
             ]
               .filter(Boolean)

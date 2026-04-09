@@ -23,6 +23,7 @@ The **primary** (main) window uses a full-bleed **SVG** layer (`AppChromeBackgro
 | `--color-shell-status-info` | `var(--color-text)` | **Foreground** for **`AppStatusBar`** transient **info** chip text (same as `.info-banner` body). |
 | `--color-shell-status-info-bg` | Same mix as `.info-banner` background (see [`index.css`](../../apps/desktop/src/index.css)) | **Background** for the info chip. |
 | `--color-shell-status-info-border` | Same mix as `.info-banner` bottom border (see [`index.css`](../../apps/desktop/src/index.css)) | **Border** for the info chip. |
+| `--font-sans` | `'Inter Variable', Inter, system-ui, …` | **UI and body** sans stack. **Inter Variable** is self-hosted from [`@fontsource-variable/inter`](https://www.npmjs.com/package/@fontsource-variable/inter) in [`main.tsx`](../../apps/desktop/src/main.tsx); it exposes **100–900** so every `font-weight` used in desktop CSS (including **620** / **650**) maps to a real axis value. Editor prose still prefers **Avenir** first when installed; it falls back through this stack. |
 
 ## Do not
 

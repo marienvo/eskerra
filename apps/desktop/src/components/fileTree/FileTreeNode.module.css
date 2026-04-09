@@ -52,10 +52,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.labelToday {
-  font-weight: var(--file-tree-node-font-weight-emphasis);
-}
-
 .rightSlot {
   flex: 0 0 auto;
   display: inline-flex;

@@ -1115,6 +1115,18 @@ a:focus:not(:focus-visible) {
   font-size: 0.85rem;
 }
 
+/* Vault / Episodes / Notifications panel titles: match file tree typography, bold, slightly taller bar. */
+.pane-header--workspace-panel {
+  padding-block: calc(0.32rem + 1px);
+}
+
+.pane-header--workspace-panel .pane-title {
+  font-family: var(--file-tree-node-font-family);
+  font-size: var(--file-tree-node-font-size);
+  font-weight: var(--file-tree-node-font-weight-semibold);
+  font-synthesis: none;
+}
+
 .pane-title--truncate {
   flex: 1 1 auto;
   min-width: 0;
@@ -1182,10 +1194,6 @@ a:focus:not(:focus-visible) {
   font-family: var(--file-tree-node-font-family);
   font-synthesis: none;
   text-align: left;
-}
-
-.editor-open-tab-pill__main--today {
-  font-weight: var(--file-tree-node-font-weight-emphasis);
 }
 
 .editor-open-tab-pill__main:disabled {
@@ -1649,7 +1657,7 @@ a:focus:not(:focus-visible) {
   font-size: 0.72rem;
   font-weight: 500;
   color: var(--color-muted);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
 }
 
@@ -2251,8 +2259,8 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-scroller {
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
   /* Fixed size: fluid clamp with vw made text feel like it “zoomed” when resizing the window. */
   font-size: 16px;
   line-height: 1.6;
@@ -2401,8 +2409,8 @@ button.primary.destructive {
 }
 
 /*
- * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
- * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
+ * Softer underline on lines without marker focus; link colors and weight match marker-focus lines
+ * (resolved = --color-interactive-text, unresolved = --nb-editor-faint; body weight via --file-tree-node-font-weight).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -2411,7 +2419,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -2421,7 +2429,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -2431,7 +2439,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
@@ -2608,8 +2616,8 @@ button.primary.destructive {
    * Match `.cm-scroller` so cells and `<textarea>` are not monospace (WebKit form defaults)
    * and line box matches row-height math in eskerraTableWrappedRowHeight.ts.
    */
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
   font-size: 16px;
   line-height: 1.6;
   font-synthesis: none;
@@ -3035,8 +3043,8 @@ button.primary.destructive {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
   font-size: 16px;
   /* 25px line grid at 16px; matches embedded CodeMirror hub cell line height (static was ~25.6px/line via 1.6 + min-height). */
   line-height: 1.5625;
@@ -3089,21 +3097,21 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-external-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-wiki-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-editor-stack {
@@ -3569,7 +3577,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -3579,7 +3587,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -3589,7 +3597,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']

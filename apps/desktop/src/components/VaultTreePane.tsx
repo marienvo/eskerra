@@ -57,7 +57,7 @@ export function VaultTreePane({
 }: VaultTreePaneProps) {
   return (
     <div className="panel-surface" data-app-surface="capture">
-      <div className="pane-header">
+      <div className="pane-header pane-header--workspace-panel">
         <span className="pane-title">Vault</span>
         <div className="pane-header-trailing-actions">
           <button

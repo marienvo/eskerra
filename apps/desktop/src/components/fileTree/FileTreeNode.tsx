@@ -87,14 +87,7 @@ export const FileTreeNode = forwardRef<HTMLButtonElement, FileTreeNodeProps>(
         <span className={styles.iconCell}>
           <RowIcon treeType={treeType} isFolderExpanded={isFolderExpanded} />
         </span>
-        <span
-          className={[
-            styles.label,
-            treeType === 'today' ? styles.labelToday : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
+        <span className={styles.label}>
           {label}
         </span>
         {rightSlot ? <span className={styles.rightSlot}>{rightSlot}</span> : null}
