@@ -1215,7 +1215,8 @@ a:focus:not(:focus-visible) {
   width: 1.05rem;
   height: 1.05rem;
   min-width: 1.05rem;
-  margin: 0 0.12rem 0 0.08rem;
+  /* Extra space between truncated label and the round close control. */
+  margin: 0 0.12rem 0 0.38rem;
   padding: 0;
   border: none;
   border-radius: 50%;
