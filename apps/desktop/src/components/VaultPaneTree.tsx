@@ -26,7 +26,11 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
-import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
+import {
+  buildSparseLonelyExpandPlan,
+  createVaultSparsePlanLoader,
+  pickLonelySubfolderWhenNoMarkdown,
+} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {
   loadVaultTreeVisibleChildRows,
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
@@ -260,6 +264,8 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   /** Latest open note URI; reveal effect reads this only when `revealActiveNoteNonce` bumps. */
   const editorActiveUriRef = useRef(editorActiveMarkdownUri);
   editorActiveUriRef.current = editorActiveMarkdownUri;
+  /** Serialize sparse deep opens so concurrent expansions do not interleave cache writes. */
+  const sparseWalkTailRef = useRef(Promise.resolve());
 
   const clearDropTarget = () => setDropTargetUri(null);
 
@@ -314,23 +320,67 @@ export const VaultPaneTree = memo(function VaultPaneTree({
           lastModified: null,
         };
       },
-      getChildrenWithData: async parentId =>
-        loadVaultTreeVisibleChildRows({
+      getChildrenWithData: async parentId => {
+        const rows = await loadVaultTreeVisibleChildRows({
           parentUri: parentId,
           fs,
           itemStoreRef,
-        }),
-    },
-    onLoadedChildren: (parentId, childrenIds) => {
-      const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
-        parentUri: parentId,
-      });
-      if (!lonely) {
-        return;
-      }
-      queueMicrotask(() => {
-        treeRef.current?.getItemInstance(lonely)?.expand();
-      });
+        });
+        const childrenIds = rows.map(r => r.id);
+        const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
+          parentUri: parentId,
+        });
+        if (lonely) {
+          await new Promise<void>(resolve => {
+            sparseWalkTailRef.current = sparseWalkTailRef.current
+              .then(async () => {
+                const t = treeRef.current;
+                if (!t) {
+                  resolve();
+                  return;
+                }
+                try {
+                  const loadChildRows = createVaultSparsePlanLoader({fs, itemStoreRef});
+                  const plan = await buildSparseLonelyExpandPlan({
+                    firstLonelyUri: lonely,
+                    itemStoreRef,
+                    loadChildRows,
+                  });
+                  for (const batch of plan.cacheBatches) {
+                    const parentInst = t.getItemInstance(batch.parentUri);
+                    if (!parentInst) {
+                      continue;
+                    }
+                    for (const row of batch.rows) {
+                      t.getItemInstance(row.id).updateCachedData(row.data, true);
+                    }
+                    parentInst.updateCachedChildrenIds(
+                      batch.rows.map(r => r.id),
+                      true,
+                    );
+                  }
+                  if (plan.expandChain.length > 0) {
+                    t.applySubStateUpdate('expandedItems', expandedItems => {
+                      const expanded = new Set(expandedItems);
+                      for (const id of plan.expandChain) {
+                        expanded.add(id);
+                      }
+                      return [...expanded];
+                    });
+                  }
+                } catch {
+                  /* ignore */
+                } finally {
+                  resolve();
+                }
+              })
+              .catch(() => {
+                resolve();
+              });
+          });
+        }
+        return rows;
+      },
     },
     // `hotkeysCoreFeature` dispatches selectionFeature presets (Shift+Arrow range select, Ctrl+A).
     // Keep it: removing it drops those tree shortcuts. `toggleSelectedItem` (Ctrl+Space) stays off
@@ -347,6 +397,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   });
 
   treeRef.current = tree;
+
+  useEffect(() => {
+    sparseWalkTailRef.current = Promise.resolve();
+  }, [rootId]);
 
   useEffect(() => {
     const t = treeRef.current;
