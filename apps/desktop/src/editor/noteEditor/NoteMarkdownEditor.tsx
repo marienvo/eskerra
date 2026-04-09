@@ -65,6 +65,7 @@ import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatable
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
+import {NoteMarkdownEditorContextMenu} from './NoteMarkdownEditorContextMenu';
 import {
   markdownFormattingModKeymap,
   markdownInlineCodeSurroundInputHandler,
@@ -1232,13 +1233,23 @@ const NoteMarkdownEditorImpl = forwardRef<
     : 'note-markdown-editor-host';
 
   return (
-    <div
-      ref={hostRef}
-      className={hostClassName}
-      data-note-markdown-editor
+    <NoteMarkdownEditorContextMenu
+      getView={() => viewRef.current}
+      readOnly={readOnly}
+      busy={busy}
+      readClipboardText={async () => {
+        const r = await attachmentHost.readNativeClipboardPaste(vaultRoot);
+        return r.kind === 'text' ? r.text : null;
+      }}
     >
-      <div ref={parentRef} className="note-markdown-editor-cm-root" />
-    </div>
+      <div
+        ref={hostRef}
+        className={hostClassName}
+        data-note-markdown-editor
+      >
+        <div ref={parentRef} className="note-markdown-editor-cm-root" />
+      </div>
+    </NoteMarkdownEditorContextMenu>
   );
 });
 

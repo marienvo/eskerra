@@ -1684,6 +1684,20 @@ a:focus:not(:focus-visible) {
   color: var(--color-error);
 }
 
+.note-markdown-editor-context-menu__sep {
+  height: 1px;
+  margin: 0.2rem 0;
+  background: var(--color-border-soft, var(--color-border));
+}
+
+.note-markdown-editor-context-menu__sub {
+  min-width: 10rem;
+}
+
+.note-markdown-editor-context-menu__subtrigger[data-state="open"] {
+  background: var(--color-row-hover);
+}
+
 .quick-open-overlay {
   position: fixed;
   inset: 0;

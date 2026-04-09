@@ -14,6 +14,7 @@ import {
   markdownFormattingModKeymap,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
+  runMarkdownClearOneInlineLayerSurround,
   selectionIsMarkdownPlain,
   selectionIsMarkdownPlainForInlineCodeSurround,
   stripBalancedBraces,
@@ -725,6 +726,39 @@ describe('markdownSelectionSurround', () => {
 
     modBKeydown(view!);
     expect(view!.state.doc.toString()).toBe('**aa** **bb**');
+  });
+
+  it('clear one layer strips emphasis or inline code (main range)', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const open = (doc: string, from: number, to: number) =>
+      EditorState.create({
+        doc,
+        selection: EditorSelection.create([EditorSelection.range(from, to)]),
+        extensions: minimalMarkdownExtensions(),
+      });
+
+    view = new EditorView({state: open('*z*', 0, 3), parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(true);
+    expect(view!.state.doc.toString()).toBe('z');
+
+    view!.destroy();
+    view = new EditorView({state: open('`a`', 0, 3), parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(true);
+    expect(view!.state.doc.toString()).toBe('a');
+  });
+
+  it('clear one layer is no-op when selection is empty', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'plain',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(false);
+    expect(view!.state.doc.toString()).toBe('plain');
   });
 });
 

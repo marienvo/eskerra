@@ -932,6 +932,58 @@ export function runMarkdownInlineCodeSurround(view: EditorView): boolean {
   return tryInlineCodeSurround(view);
 }
 
+/** Toggle `==…==` (highlight) around selections. */
+export function runMarkdownHighlightSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_HIGHLIGHT);
+}
+
+/** Toggle `%%…%%` (muted / comment) around selections. */
+export function runMarkdownMutedSurround(view: EditorView): boolean {
+  return trySymmetricSurround(view, SURROUND_MUTED);
+}
+
+function changeIsUnwrap(c: SurroundChange): boolean {
+  return c.to - c.from > c.insert.length;
+}
+
+/**
+ * Best-effort: remove one outer inline-markdown layer for the main selection (non-empty).
+ * Tries, in order: inline code, `**`, `*`, `~~`, `==`, `%%`. Returns false if nothing matched.
+ * Multi-cursor: not supported; only {@link EditorSelection.main} is considered.
+ */
+export function runMarkdownClearOneInlineLayerSurround(view: EditorView): boolean {
+  const state = view.state;
+  const range = state.selection.main;
+  if (range.empty) {
+    return false;
+  }
+  const c = computeClearOneInlineLayerChange(state, range);
+  if (!c) {
+    return false;
+  }
+  return dispatchSurround(view, [c]);
+}
+
+function computeClearOneInlineLayerChange(
+  state: EditorState,
+  range: SelectionRange,
+): SurroundChange | null {
+  const unwrapCandidates: Array<SurroundChange | null> = [
+    computeInlineCodeSurroundChange(state, range),
+    computeSymmetricSurroundChange(state, range, SURROUND_BOLD_STAR),
+    computeSymmetricSurroundChange(state, range, SURROUND_STAR_ITALIC_SHORTCUT),
+    computeSymmetricSurroundChange(state, range, SURROUND_STRIKE),
+    computeSymmetricSurroundChange(state, range, SURROUND_HIGHLIGHT),
+    computeSymmetricSurroundChange(state, range, SURROUND_MUTED),
+  ];
+  for (const c of unwrapCandidates) {
+    if (c && changeIsUnwrap(c)) {
+      return c;
+    }
+  }
+  return null;
+}
+
 /**
  * Common word-processor chords for inline markdown (`Mod` = Cmd on macOS, Ctrl elsewhere).
  * Registered with {@link Prec.high} so it wins over default keymaps where needed.
