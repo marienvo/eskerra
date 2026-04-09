@@ -25,7 +25,9 @@ min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6);
 
 then `getComputedStyle` still reports the **same** `line-height` as CodeMirror (~22.7px at 15px / 1.55 base), but **layout can round differently**: static lines may get **`clientHeight` one pixel taller** than CodeMirror lines, so bullets appear to “jump” vertically.
 
-**Rule:** Hub static `.cm-line` must rely on **inherited `line-height` only** (plus normal block/heading/list padding from shared `cm-md-*` rules). Do not add a separate per-line `min-height` for “grid” parity unless CodeMirror hub lines get the **identical** rule (and layout has been verified — CodeMirror line metrics are sensitive).
+**Rule:** Hub static `.cm-line` must rely on **inherited `line-height` only** (plus normal block/heading/list padding from shared `cm-md-*` rules). Do not add **universal** per-line `min-height`: it inflated `clientHeight` vs CodeMirror on lines that already had text.
+
+**Exception — blank lines:** Empty markdown lines render as `:empty` `.cm-line` nodes with no strut; they collapse without `min-height`. Use **`.cm-line:empty` only** with one hub line box: `min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6)` (same ratio as hub line-height).
 
 ## Horizontal inset (read vs edit)
 

@@ -3078,13 +3078,20 @@ button.primary.destructive {
 
 /*
  * Match capture `.cm-line`: block rhythm from inherited hub line-height only (same as
- * `.today-hub-canvas__cm-host .cm-scroller`). Do not set `min-height` here: runtime probes showed it
- * rounded to a taller integer `clientHeight` than CodeMirror lines (23px vs 22px) while computed
- * `line-height` matched — see specs/architecture/today-hub-editor-parity.md.
+ * `.today-hub-canvas__cm-host .cm-scroller`). Do not set `min-height` on non-empty lines: it
+ * rounded to a taller `clientHeight` than CodeMirror (23px vs 22px) while computed `line-height`
+ * matched — see specs/architecture/today-hub-editor-parity.md.
+ *
+ * Blank lines are `<div class="cm-line"></div>` (`:empty`); with no in-flow content they collapse
+ * to 0px unless given an explicit min block size.
  */
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line {
   display: block;
   padding: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line:empty {
+  min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6);
 }
 
 /*
