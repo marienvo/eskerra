@@ -177,6 +177,8 @@ export type VaultPaneTreeProps = {
   revealActiveNoteNonce: number;
   busy: boolean;
   onOpenMarkdownNote: (uri: string) => void;
+  /** Middle-click (or non-primary open): new editor tab, focused. */
+  onOpenMarkdownNoteInNewActiveTab: (uri: string) => void;
   onRenameMarkdownRequest: (uri: string) => void;
   onDeleteMarkdownRequest: (uri: string) => void;
   onRenameFolderRequest: (uri: string) => void;
@@ -222,6 +224,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   revealActiveNoteNonce,
   busy,
   onOpenMarkdownNote,
+  onOpenMarkdownNoteInNewActiveTab,
   onRenameMarkdownRequest,
   onDeleteMarkdownRequest,
   onRenameFolderRequest,
@@ -750,6 +753,36 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     return;
                   }
                   rowAriaOnClick?.(e.nativeEvent);
+                }}
+                onMouseDown={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (e.button !== 1 || busy) {
+                    return;
+                  }
+                  if (
+                    !primaryMdUri
+                    || (data.kind !== 'article' && data.kind !== 'todayHub')
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onAuxClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (e.button !== 1 || busy) {
+                    return;
+                  }
+                  if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+                    return;
+                  }
+                  if (
+                    !primaryMdUri
+                    || (data.kind !== 'article' && data.kind !== 'todayHub')
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri);
                 }}
                 onDoubleClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
                   if (busy || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {

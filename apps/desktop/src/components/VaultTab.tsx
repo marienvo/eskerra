@@ -92,6 +92,7 @@ type VaultTabProps = {
   backlinkUris: readonly string[];
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
+  onSelectNoteInNewActiveTab: (uri: string) => void;
   onAddEntry: () => void;
   composingNewEntry: boolean;
   onCancelNewEntry: () => void;
@@ -441,6 +442,7 @@ export function VaultTab({
   backlinkUris,
   selectedUri,
   onSelectNote,
+  onSelectNoteInNewActiveTab,
   onAddEntry,
   composingNewEntry,
   onCancelNewEntry,
@@ -1052,6 +1054,7 @@ export function VaultTab({
             busy={busy}
             onAddEntry={onAddEntry}
             onOpenMarkdownNote={onSelectNote}
+            onOpenMarkdownNoteInNewActiveTab={onSelectNoteInNewActiveTab}
             onRenameMarkdownRequest={openRenameDialog}
             onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
             onRenameFolderRequest={openRenameFolderDialog}

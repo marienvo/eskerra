@@ -17,6 +17,7 @@ export type VaultTreePaneProps = {
   busy: boolean;
   onAddEntry: () => void;
   onOpenMarkdownNote: (uri: string) => void;
+  onOpenMarkdownNoteInNewActiveTab: (uri: string) => void;
   onRenameMarkdownRequest: (uri: string) => void;
   onDeleteMarkdownRequest: (uri: string) => void;
   onRenameFolderRequest: (uri: string) => void;
@@ -45,6 +46,7 @@ export function VaultTreePane({
   busy,
   onAddEntry,
   onOpenMarkdownNote,
+  onOpenMarkdownNoteInNewActiveTab,
   onRenameMarkdownRequest,
   onDeleteMarkdownRequest,
   onRenameFolderRequest,
@@ -96,6 +98,7 @@ export function VaultTreePane({
           revealActiveNoteNonce={revealActiveNoteNonce}
           busy={busy}
           onOpenMarkdownNote={onOpenMarkdownNote}
+          onOpenMarkdownNoteInNewActiveTab={onOpenMarkdownNoteInNewActiveTab}
           onRenameMarkdownRequest={onRenameMarkdownRequest}
           onDeleteMarkdownRequest={onDeleteMarkdownRequest}
           onRenameFolderRequest={onRenameFolderRequest}

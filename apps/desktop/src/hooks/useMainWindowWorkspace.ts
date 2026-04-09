@@ -321,6 +321,8 @@ export type UseMainWindowWorkspaceResult = {
   startNewEntry: () => void;
   cancelNewEntry: () => void;
   selectNote: (uri: string) => void;
+  /** Open note in a new editor tab and focus it (e.g. file tree middle-click). */
+  selectNoteInNewActiveTab: (uri: string) => void;
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
@@ -2214,6 +2216,13 @@ export function useMainWindowWorkspace(options: {
     [openMarkdownInEditor],
   );
 
+  const selectNoteInNewActiveTab = useCallback(
+    (uri: string) => {
+      void openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
+    },
+    [openMarkdownInEditor],
+  );
+
   const submitNewEntry = useCallback(async () => {
     if (!vaultRoot) {
       return;
@@ -3437,6 +3446,7 @@ export function useMainWindowWorkspace(options: {
     startNewEntry,
     cancelNewEntry,
     selectNote,
+    selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
     flushInboxSave,
