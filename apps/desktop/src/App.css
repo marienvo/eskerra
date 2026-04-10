@@ -2336,6 +2336,19 @@ button.primary.destructive {
 }
 
 /*
+ * Prose measure: bullet/ordered/task lists and paragraph-style lines only.
+ * Headings, fenced code, horizontal rules, and Eskerra table document lines stay full width.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-md-heading-line):not(.cm-md-list-line):not(.cm-md-hr-line):not(
+    .cm-eskerra-table-line
+  ):not(.cm-eskerra-table-line--alt):not([class*='cm-md-fence-line']) {
+  max-width: 728px;
+}
+
+/*
  * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
