@@ -2980,8 +2980,8 @@ button.primary.destructive {
   display: flex;
   justify-content: flex-end;
   padding-block: 6px 8px;
-  /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22). */
-  padding-inline-end: calc(20px + 56px + 22px + 20px);
+  /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22), minus 19px for week-end label. */
+  padding-inline-end: calc(20px + 56px + 22px + 20px - 19px);
   padding-bottom: 30px; /* "gap" between rows */
 }
 
