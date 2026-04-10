@@ -118,3 +118,5 @@ When a **status message** is truncated in the bar (**ellipsis**), a **Read more*
 ## Pointer and cursor (desktop app chrome)
 
 The desktop shell is a **native-style app**, not a marketing site. Unless a control has a **special affordance** (for example **panel resize separators** use **`col-resize` / `row-resize`**), chrome **buttons** and **list rows** use the **default arrow** (`cursor: default`). **Disabled** controls keep **muted styling** but **do not** use a “forbidden” cursor; they also use **`cursor: default`**.
+
+**Exception — Today Hub read-only cell preview:** **`.today-hub-canvas__cell-readonly`** and **`.today-hub-canvas__cell-static-rich`** use **`cursor: text`** so the inactive cell reads as body copy that opens into the editor; vault links in the static preview still use **`cursor: pointer`** from shared markdown token rules.

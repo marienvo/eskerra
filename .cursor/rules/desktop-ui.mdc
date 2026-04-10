@@ -17,3 +17,4 @@ Authoritative detail: `specs/design/desktop-shell-patterns.md`.
 - Treat the desktop UI as a **desktop app**: **`cursor: default`** on **buttons**, **rail tabs**, **list rows**, and similar chrome. **Do not** use **`cursor: pointer`** for those.
 - **Disabled** elements: **no** **`cursor: not-allowed`**; keep **`cursor: default`** with existing opacity / color disabled styling.
 - **Exception:** **Panel separators** keep **`col-resize` / `row-resize`** (and any other explicit resize affordances).
+- **Exception:** **Today Hub** read-only cell preview (`.today-hub-canvas__cell-readonly` / `.today-hub-canvas__cell-static-rich`) uses **`cursor: text`**; links inside still use pointer from markdown token CSS.

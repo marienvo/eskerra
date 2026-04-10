@@ -3050,7 +3050,8 @@ button.primary.destructive {
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: default;
+  /* I-beam: read-only hub cells open into the text editor; links still use `cursor: pointer`. */
+  cursor: text;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-readonly:focus-visible {
@@ -3089,7 +3090,7 @@ button.primary.destructive {
   max-inline-size: 100%;
   margin: 0;
   padding: 0;
-  cursor: default;
+  cursor: text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
