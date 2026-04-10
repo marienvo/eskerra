@@ -69,3 +69,39 @@ export function mergeTodayRowColumns(sections: string[]): string {
 export function todayHubRowSectionsAllBlank(sections: string[]): boolean {
   return sections.every(s => s.trim() === '');
 }
+
+/** Lines that contain only spaces or tabs become empty lines (same as a blank markdown line). */
+function spaceTabOnlyLinesToEmpty(text: string): string {
+  return text
+    .split('\n')
+    .map(line => (/^[ \t]*$/.test(line) ? '' : line))
+    .join('\n');
+}
+
+function trimLeadingTrailingEmptyLines(text: string): string {
+  const lines = text.split('\n');
+  let start = 0;
+  let end = lines.length;
+  while (start < end && lines[start] === '') {
+    start += 1;
+  }
+  while (end > start && lines[end - 1] === '') {
+    end -= 1;
+  }
+  return lines.slice(start, end).join('\n');
+}
+
+/**
+ * Canonical hub row body for disk: space/tab-only lines become empty lines; each column is trimmed
+ * of leading/trailing blank lines; multi-column joins use exactly {@link TODAY_HUB_SECTION_DELIMITER}
+ * (one blank line before and after `::today-section::`).
+ *
+ * Call this when persisting a weekly hub row file.
+ */
+export function normalizeTodayHubRowForDisk(fullText: string, columnCount: number): string {
+  const normalized = spaceTabOnlyLinesToEmpty(fullText.replace(/\r\n/g, '\n'));
+  const sections = splitTodayRowIntoColumns(normalized, columnCount).map(s =>
+    trimLeadingTrailingEmptyLines(s),
+  );
+  return mergeTodayRowColumns(sections);
+}

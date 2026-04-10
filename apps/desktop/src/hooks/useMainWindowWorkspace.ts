@@ -69,6 +69,7 @@ import {
 import {
   enumerateTodayHubWeekStarts,
   parseTodayHubFrontmatter,
+  normalizeTodayHubRowForDisk,
   splitTodayRowIntoColumns,
   todayHubRowSectionsAllBlank,
   todayHubRowUri,
@@ -910,7 +911,8 @@ export function useMainWindowWorkspace(options: {
       const run = async (): Promise<void> => {
         setErr(null);
         try {
-          const sections = splitTodayRowIntoColumns(merged, columnCount);
+          const toPersist = normalizeTodayHubRowForDisk(merged, columnCount);
+          const sections = splitTodayRowIntoColumns(toPersist, columnCount);
           if (todayHubRowSectionsAllBlank(sections)) {
             try {
               if (await fs.exists(norm)) {
@@ -938,7 +940,7 @@ export function useMainWindowWorkspace(options: {
             setFsRefreshNonce(n => n + 1);
             return;
           }
-          const md = await persistTransientMarkdownImages(merged, root);
+          const md = await persistTransientMarkdownImages(toPersist, root);
           if (markdownContainsTransientImageUrls(md)) {
             setErr(
               'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',

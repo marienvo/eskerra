@@ -21,6 +21,7 @@ export {
 } from './parseTodayHubFrontmatter';
 export {
   mergeTodayRowColumns,
+  normalizeTodayHubRowForDisk,
   splitTodayRowIntoColumns,
   todayHubRowSectionsAllBlank,
 } from './splitMergeTodayRowColumns';
