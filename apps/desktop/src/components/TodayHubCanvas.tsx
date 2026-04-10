@@ -448,6 +448,38 @@ export function TodayHubCanvas({
 
   const noopMarkdownChange = useCallback(() => {}, []);
 
+  const closeEmptyActiveCellIfStillEmpty = useCallback(
+    async (uri: string, col: number) => {
+      const a = activeRef.current;
+      if (!a || normUri(a.uri) !== normUri(uri) || a.col !== col) {
+        return;
+      }
+      const ed = cellEditorRef.current;
+      if (!ed) {
+        return;
+      }
+      if (ed.getMarkdown().trim().length > 0) {
+        return;
+      }
+      const key = normUri(uri);
+      const base =
+        localRowSectionsRef.current[key] ??
+        splitTodayRowIntoColumns(
+          inboxContentByUriRef.current[key] ?? '',
+          columnCount,
+        );
+      const cur = [...base];
+      cur[col] = '';
+      const next = {...localRowSectionsRef.current, [key]: cur};
+      localRowSectionsRef.current = next;
+      setLocalRowSections(next);
+      await flushScheduledPersist();
+      setActive(null);
+      wikiNavParentRef.current = null;
+    },
+    [cellEditorRef, columnCount, flushScheduledPersist, wikiNavParentRef],
+  );
+
   const touchWarmForCell = useCallback((uri: string, col: number) => {
     if (MAX_HUB_WARM_CELLS <= 0) {
       return;
@@ -643,6 +675,13 @@ export function TodayHubCanvas({
                       wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
+                      onEditableBlur={
+                        editing && !chunk.trim()
+                          ? () => {
+                              void closeEmptyActiveCellIfStillEmpty(uri, ci);
+                            }
+                          : undefined
+                      }
                       placeholder="Write markdown…"
                       busy={false}
                     />
