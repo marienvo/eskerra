@@ -27,7 +27,7 @@ then `getComputedStyle` still reports the **same** `line-height` as CodeMirror (
 
 **Rule:** Hub static `.cm-line` must rely on **inherited `line-height` only** (plus normal block/heading/list padding from shared `cm-md-*` rules). Do not add **universal** per-line `min-height`: it inflated `clientHeight` vs CodeMirror on lines that already had text.
 
-**Exception — blank lines:** Empty markdown lines render as `:empty` `.cm-line` nodes with no strut; they collapse without `min-height`. Use **`.cm-line:empty` only** with one hub line box: `min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6)` (same ratio as hub line-height).
+**Exception — blank lines:** Empty markdown lines render as `:empty` `.cm-line` nodes with no strut; they collapse without `min-height`. Use **`.cm-line:empty` only** with `min-height: 1lh` so the blank line’s block size matches the **used** hub line height (inherited from `.today-hub-canvas__cell-static-rich`). Do **not** use `calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6)` here: it can round **1px taller** than CodeMirror lines while `line-height` still matches on paper.
 
 ## Horizontal inset (read vs edit)
 

@@ -3119,7 +3119,11 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line:empty {
-  min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6);
+  /*
+   * Match the used line box of non-empty hub static lines and CodeMirror `.cm-line` (see
+   * specs/architecture/today-hub-editor-parity.md). `calc(1em * …)` can round to +1px vs CM.
+   */
+  min-height: 1lh;
 }
 
 /*
