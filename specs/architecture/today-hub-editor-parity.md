@@ -42,11 +42,20 @@ Body text must start at the **same** horizontal offset in:
 
 **Debug:** Log `getComputedStyle(readonly).paddingInlineStart` vs `getComputedStyle(.cm-content).paddingInlineStart` for the same row; they must match.
 
+## List indentation (read vs edit)
+
+CodeMirror’s `.cm-content` uses **`white-space: break-spaces`** (see `@codemirror/view` base theme) and the default **`EditorState.tabSize` facet value of 4** (tabs in the document render at four columns).
+
+Hub static preview used **`white-space: pre-wrap`** without an explicit `tab-size`, so nested lists could look **more indented in read mode** than in edit (browser default tab width and different wrapping rules).
+
+**Rule:** `.today-hub-canvas__cell-static-rich` must use **`white-space: break-spaces`** and **`tab-size: 4`** so list lines match the editor’s horizontal spacing.
+
 ## Debug checklist
 
 1. Compare `getComputedStyle(.cm-scroller)` vs `getComputedStyle(.today-hub-canvas__cell-static-rich)` for `font-size` and `line-height`.
 2. Compare **first** `.cm-line` under each: `line-height`, **`min-height`**, and **`clientHeight`**. Mismatched `clientHeight` with identical `line-height` strongly suggests an extra static-only constraint (often `min-height`).
 3. Compare **horizontal:** `paddingInlineStart` on readonly vs hub `.cm-content` (see above).
+4. Compare **`whiteSpace`** and **`tabSize`** on `.today-hub-canvas__cell-static-rich` vs hub `.cm-content` (see “List indentation”).
 
 ## Related CSS entry points
 

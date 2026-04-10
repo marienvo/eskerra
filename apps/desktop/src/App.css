@@ -3193,7 +3193,9 @@ button.primary.destructive {
   margin: 0;
   padding: 0;
   cursor: text;
-  white-space: pre-wrap;
+  /* Match CodeMirror `.cm-content` (`white-space: break-spaces`; default `EditorState.tabSize` 4). */
+  white-space: break-spaces;
+  tab-size: 4;
   overflow-wrap: anywhere;
   word-break: break-word;
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
