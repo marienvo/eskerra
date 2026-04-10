@@ -2973,6 +2973,14 @@ button.primary.destructive {
   z-index: 1;
 }
 
+/* First week row only: extra space below the main editor before the first date strip. */
+[data-app-surface='capture']
+  .today-hub-canvas__rows
+  > .today-hub-canvas__row:first-child
+  .today-hub-canvas__row-date-bar:not(.today-hub-canvas__row-date-bar--footer) {
+  padding-top: 55px;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar--footer {
   display: flex;
   justify-content: flex-end;
