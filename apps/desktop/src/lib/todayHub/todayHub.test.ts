@@ -12,6 +12,7 @@ import {
   todayHubColumnCount,
   todayHubRowSectionsAllBlank,
   todayHubRowUri,
+  todayHubWeekEndInclusive,
 } from './index';
 
 describe('startOfLocalWeekMonday', () => {
@@ -76,6 +77,16 @@ describe('todayHubRowUri', () => {
     const mon = new Date(2026, 3, 6);
     expect(todayHubRowUri('/vault/Daily', mon)).toBe('/vault/Daily/2026-04-06.md');
     expect(todayHubRowUri('/vault/Daily/', mon)).toBe('/vault/Daily/2026-04-06.md');
+  });
+});
+
+describe('todayHubWeekEndInclusive', () => {
+  it('is six calendar days after the week start (local)', () => {
+    const start = new Date(2026, 3, 6);
+    const end = todayHubWeekEndInclusive(start);
+    expect(end.getFullYear()).toBe(2026);
+    expect(end.getMonth()).toBe(3);
+    expect(end.getDate()).toBe(12);
   });
 });
 

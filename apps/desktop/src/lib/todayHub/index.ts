@@ -8,6 +8,7 @@ export {
   startOfLocalWeek,
   startOfLocalWeekMonday,
   todayHubRowUri,
+  todayHubWeekEndInclusive,
 } from './todayHubMondays';
 export {
   TODAY_HUB_START_DAYS,

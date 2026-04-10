@@ -34,6 +34,7 @@ import {
   splitTodayRowIntoColumns,
   todayHubColumnCount,
   todayHubRowUri,
+  todayHubWeekEndInclusive,
   touchWarmLru,
   type TodayHubWorkspaceBridge,
   type TodayHubSettings,
@@ -471,16 +472,18 @@ export function TodayHubCanvas({
     return h;
   }, [columnCount, hubSettings.columns]);
 
-  const rowLabel = useCallback((d: Date) => {
+  const rowLabel = useCallback((weekStart: Date) => {
+    const weekEnd = todayHubWeekEndInclusive(weekStart);
+    const full: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    };
     try {
-      return d.toLocaleDateString(undefined, {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      return `${weekStart.toLocaleDateString(undefined, full)} – ${weekEnd.toLocaleDateString(undefined, full)}`;
     } catch {
-      return String(d.getTime());
+      return `${weekStart.getTime()} – ${weekEnd.getTime()}`;
     }
   }, []);
 
