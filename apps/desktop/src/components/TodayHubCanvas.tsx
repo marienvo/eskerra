@@ -143,6 +143,8 @@ export function TodayHubCanvas({
 
   /** LRU order of `hubCellWarmKey`; warm is optional — never required for correctness. */
   const [warmOrder, setWarmOrder] = useState<string[]>([]);
+  /** Invalidates pending double-rAF warm scheduling when the pointer leaves the cell. */
+  const hubWarmDeferGenRef = useRef<Record<string, number>>({});
   const hubOpenPerfT0Ref = useRef(0);
 
   const wikiLinkCompletionCandidates = useMemo(
@@ -538,8 +540,28 @@ export function TodayHubCanvas({
                     'aria-label': chunk.trim() ? undefined : 'Edit cell',
                     onPointerEnter: () => {
                       if (canPrewarm) {
-                        touchWarmForCell(uri, ci);
+                        if (warmOrder.includes(warmKey)) {
+                          touchWarmForCell(uri, ci);
+                        } else {
+                          hubWarmDeferGenRef.current[warmKey] =
+                            (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
+                          const deferGen = hubWarmDeferGenRef.current[warmKey];
+                          requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                              if (
+                                hubWarmDeferGenRef.current[warmKey] !== deferGen
+                              ) {
+                                return;
+                              }
+                              touchWarmForCell(uri, ci);
+                            });
+                          });
+                        }
                       }
+                    },
+                    onPointerLeave: () => {
+                      hubWarmDeferGenRef.current[warmKey] =
+                        (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
                     },
                     onKeyDown: (e: ReactKeyboardEvent) => {
                       if (e.key !== 'Enter' && e.key !== ' ') {
@@ -629,7 +651,14 @@ export function TodayHubCanvas({
                           : 'today-hub-canvas__cell'
                       }
                     >
-                      {warmOrActive ? (
+                      {emptyReadonly ? (
+                        <div
+                          {...readonlyInteractiveProps}
+                          className="today-hub-canvas__cell-readonly"
+                        >
+                          {staticPreview}
+                        </div>
+                      ) : (
                         <div
                           className={
                             isWarm && !editing
@@ -637,30 +666,33 @@ export function TodayHubCanvas({
                               : 'today-hub-canvas__cell-editor-stack'
                           }
                         >
-                          <div
-                            className={
-                              editing
-                                ? 'today-hub-canvas__cm-host'
-                                : 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
-                            }
-                          >
-                            {hubCellEditor}
-                          </div>
                           {!editing ? (
-                            <div
-                              {...readonlyInteractiveProps}
-                              className="today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay"
-                            >
-                              {staticPreview}
+                            <>
+                              <div
+                                className={
+                                  warmOrActive
+                                    ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
+                                    : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant'
+                                }
+                              >
+                                {warmOrActive ? hubCellEditor : null}
+                              </div>
+                              <div
+                                {...readonlyInteractiveProps}
+                                className={
+                                  isWarm
+                                    ? 'today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay'
+                                    : 'today-hub-canvas__cell-readonly'
+                                }
+                              >
+                                {staticPreview}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="today-hub-canvas__cm-host">
+                              {hubCellEditor}
                             </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div
-                          {...readonlyInteractiveProps}
-                          className="today-hub-canvas__cell-readonly"
-                        >
-                          {staticPreview}
+                          )}
                         </div>
                       )}
                     </div>

@@ -3246,6 +3246,15 @@ button.primary.destructive {
   visibility: hidden;
 }
 
+/* Cold hub cell: placeholder slot so warm does not remount the readonly static preview subtree. */
+[data-app-surface='capture'] .today-hub-canvas__cell-hub-underlay--dormant {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__cell-warm-overlay {
   position: relative;
   z-index: 1;
