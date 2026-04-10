@@ -72,6 +72,35 @@ describe('markdownExternalLinkCodemirror', () => {
     ).toBe(true);
   });
 
+  it('decorates bare https URL with bare-url class', () => {
+    const doc = 'See https://example.com/a/b here.';
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdown({
+          base: commonmarkLanguage,
+          extensions: noteMarkdownParserExtensions,
+        }),
+      ],
+    });
+    view = new EditorView({state, parent});
+
+    const intervals = collectMarkIntervals(view);
+    const urlFrom = doc.indexOf('https:');
+    const urlTo = urlFrom + 'https://example.com/a/b'.length;
+    expect(
+      intervals.some(
+        i =>
+          i.from === urlFrom
+          && i.to === urlTo
+          && i.class
+            === 'cm-md-external-link cm-md-external-link-glyph cm-md-external-bare-url',
+      ),
+    ).toBe(true);
+  });
+
   it('puts glyph on URL when inline link has no visible label', () => {
     const doc = 'See [](https://example.com) here.';
     const parent = document.createElement('div');
@@ -96,7 +125,7 @@ describe('markdownExternalLinkCodemirror', () => {
           i.from === urlFrom
           && i.to === urlTo
           && i.class
-            === 'cm-md-external-link cm-md-external-href cm-md-external-link-glyph',
+            === 'cm-md-external-link cm-md-external-href cm-md-external-link-glyph cm-md-external-bare-url',
       ),
     ).toBe(true);
     expect(intervals.filter(i => i.class?.includes('cm-md-external-link-glyph')))

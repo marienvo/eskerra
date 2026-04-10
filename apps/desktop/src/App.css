@@ -2325,6 +2325,17 @@ button.primary.destructive {
 }
 
 /*
+ * List items: long bare URLs / paths are one unbreakable inline otherwise; the line can wrap
+ * immediately after `.cm-md-list-mark` and leave the bullet alone. Let the whole list line
+ * participate in soft wrapping (links keep `overflow-wrap: anywhere` too).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line[class*='cm-md-list-line'] {
+  overflow-wrap: anywhere;
+}
+
+/*
  * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
@@ -2383,6 +2394,8 @@ button.primary.destructive {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  /* Long labels / paths: avoid pushing the list marker to its own line (unbreakable “word”). */
+  overflow-wrap: anywhere;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--resolved {
@@ -2397,6 +2410,7 @@ button.primary.destructive {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link--resolved {
@@ -2412,6 +2426,18 @@ button.primary.destructive {
   text-underline-offset: 2px;
   cursor: pointer;
   color: var(--color-interactive-text);
+  /* Bare and markdown `http(s)` spans; otherwise the line breaks after the list mark only. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * URL text (not the styled label): WebKit + `white-space: break-spaces` can still keep a long href
+ * on the next line after the list mark unless we allow breaks between arbitrary characters.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-href,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-bare-url {
+  word-break: break-all;
+  line-break: anywhere;
 }
 
 /*
