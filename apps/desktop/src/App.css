@@ -2480,16 +2480,15 @@ button.primary.destructive {
 }
 
 /*
- * Softer underline on lines without marker focus; link colors and weight match marker-focus lines
- * (resolved = --color-interactive-text, unresolved = --nb-editor-faint; body weight via --file-tree-node-font-weight).
+ * Non-marker-focus lines: same underline offset and default `currentColor` decoration as the
+ * caret line (no semi-transparent mix — that read as thinner / washed out on HiDPI). Body weight
+ * stays via --file-tree-node-font-weight.
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -2497,9 +2496,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -2507,9 +2504,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3199,23 +3194,17 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3688,9 +3677,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3698,9 +3685,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3708,9 +3693,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
