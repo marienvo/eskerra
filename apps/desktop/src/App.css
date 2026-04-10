@@ -1947,6 +1947,33 @@ button.primary.destructive {
 }
 
 /*
+ * Today hub: second `.note-markdown-editor-page` row below the white paper; both rows size to
+ * content so the hub sits directly under the editor without a flex-grown empty paper band.
+ */
+.note-markdown-editor-scroll--today-hub > .note-markdown-editor-page {
+  flex: 0 0 auto;
+}
+
+.note-markdown-editor-paper--today-hub-shell {
+  background: transparent;
+  box-shadow: none;
+}
+
+/*
+ * With Today hub open: no lateral or full-height frame on the editor paper — side borders ran the
+ * full column height and still read as one continuous edge through hub date strips. Week rows read
+ * as gray date bars plus white rounded cells (no extra wrapper shadow around the grid).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-scroll--today-hub
+  > .note-markdown-editor-page:first-of-type
+  > .note-markdown-editor-paper:not(.note-markdown-editor-paper--today-hub-shell) {
+  box-shadow: none;
+  border: none;
+  box-sizing: border-box;
+}
+
+/*
  * Centered row: fold rail (panel gray only) + paper column. Fold chevrons render in the rail via a
  * negative-margin host shift (see `.note-markdown-editor-host`).
  */
@@ -1980,7 +2007,6 @@ button.primary.destructive {
   display: flex;
   flex-direction: column;
   background: var(--nb-editor-paper);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.025);
 }
 
 /*
@@ -2858,69 +2884,43 @@ button.primary.destructive {
   table-layout: fixed;
 }
 
-/* Today hub: weekly grid below main CodeMirror (above backlinks). */
+/* Today hub: weekly grid below main CodeMirror (sits on margin gray, not the white paper card). */
 [data-app-surface='capture'] .today-hub-canvas {
   flex: 0 0 auto;
+  width: 100%;
   box-sizing: border-box;
+  background: transparent;
   /* Integer px (rem-derived at 16px root) avoids fuzzy sub-pixel layout in the grid chrome. */
-  padding: 12px 56px 16px 0;
-  border-top: 1px solid var(--nb-editor-inline-code-border);
+  padding: 0 56px 16px 0;
   font-size: 0.88rem;
   line-height: 1.45;
   overflow-x: auto;
 }
 
-[data-app-surface='capture'] .today-hub-canvas__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  padding-inline: 90px 20px; /* left indentation to align with markdown content */
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 620;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__header-top {
-  display: block;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__header-cols {
-  display: grid;
-  gap: 8px 10px;
-  align-items: end;
-  grid-template-columns: repeat(
-    var(--today-hub-col-count, 1),
-    minmax(112px, 1fr)
-  );
-}
-
-[data-app-surface='capture'] .today-hub-canvas__title {
-  display: inline-block;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__col-head {
-  min-width: 112px;
-  padding-left: 34px; /* left indentation to align with markdown content */
-}
-
 [data-app-surface='capture'] .today-hub-canvas__rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-block: 6px 8px;
+  gap: 8px;
   padding-inline: 0 20px;
-  border-radius: 6px;
+  /* Editor font-size so `ch` in gutter/body padding matches hub cells and CodeMirror. */
+  font-size: var(--nb-editor-font-size);
+  --nb-editor-heading-gutter: 9.25ch;
+  --today-hub-body-pad-inline-start: max(
+    2px,
+    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
+  );
+  /*
+   * Hub column titles + week start: align with list/paragraph text after `cm-md-list-mark` spacing
+   * (~0.8em vs body inset at default 15px editor size).
+   */
+  --today-hub-header-pad-inline-start: calc(
+    var(--today-hub-body-pad-inline-start) + 0.8em
+  );
 }
 
 /*
@@ -2936,21 +2936,81 @@ button.primary.destructive {
 
 [data-app-surface='capture']
   .today-hub-canvas__row--previous-week
-  .today-hub-canvas__row-date {
+  .today-hub-canvas__row-date,
+[data-app-surface='capture']
+  .today-hub-canvas__row--previous-week
+  .today-hub-canvas__row-date-end,
+[data-app-surface='capture']
+  .today-hub-canvas__row--previous-week
+  .today-hub-canvas__col-head {
   color: color-mix(
     in srgb,
-    color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%) 67%,
-    var(--color-surface-primary) 33%
+    color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%) 72%,
+    var(--nb-editor-margin-bg) 28%
   );
 }
 
-[data-app-surface='capture'] .today-hub-canvas__row:nth-child(even) {
-  background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
+/* Zebra only behind the cell grid (grid gaps), not behind the week date strip. */
+[data-app-surface='capture']
+  .today-hub-canvas__row:nth-child(even)
+  .today-hub-canvas__row-cells {
+  background: color-mix(in srgb, var(--color-surface-secondary) 38%, transparent);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar {
-  padding-top: 2px;
-  padding-inline-start: 98px; /* +8px vs cells: full week labels need a bit more inset */
+  /* Full width of the hub paper column: cancel row (20px) + canvas (56px) inline padding +22px extra bleed. */
+  align-self: stretch;
+  min-width: 0;
+  width: calc(100% + 20px + 56px + 22px);
+  max-width: none;
+  margin-inline-end: calc(-1 * (20px + 56px + 22px));
+  margin-inline-start: 0;
+  /* Lighter than panel margin so week bands stay subtle next to the editor rail. */
+  background: var(--nb-editor-margin-bg);
+  padding-block: 8px 6px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar--footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: 6px 8px;
+  /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22). */
+  padding-inline-end: calc(20px + 56px + 22px + 20px);
+  padding-bottom: 30px; /* "gap" between rows */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar-cols {
+  /* Bar is wider than the row paper column; keep grid width aligned with `.row-cells`. */
+  width: calc(100% - (20px + 56px + 22px));
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px 10px;
+  align-items: end;
+  padding-inline-start: 20px;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(112px, 1fr)
+  );
+  min-width: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar-head {
+  min-width: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar .today-hub-canvas__col-head {
+  display: block;
+  min-width: 112px;
+  padding-inline-start: var(--today-hub-header-pad-inline-start);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 620;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-cells {
@@ -2962,9 +3022,11 @@ button.primary.destructive {
     var(--today-hub-col-count, 1),
     minmax(112px, 1fr)
   );
+  box-sizing: border-box;
 }
 
-[data-app-surface='capture'] .today-hub-canvas__row-date {
+[data-app-surface='capture'] .today-hub-canvas__row-date,
+[data-app-surface='capture'] .today-hub-canvas__row-date-end {
   color: var(--color-text-primary);
   font-weight: 600;
   font-size: 0.82rem;
@@ -2972,28 +3034,17 @@ button.primary.destructive {
   letter-spacing: normal;
 }
 
+[data-app-surface='capture'] .today-hub-canvas__row-date {
+  display: block;
+  padding-inline-start: var(--today-hub-header-pad-inline-start);
+}
+
 [data-app-surface='capture'] .today-hub-canvas__cell {
   box-sizing: border-box;
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
-  /*
-   * Match `--nb-editor-font-size` so `ch` in `--nb-editor-heading-gutter` / body padding matches
-   * CodeMirror (scoped under `.cm-scroller`). Without this, readonly inherits `.today-hub-canvas`
-   * 0.88rem while `.cm-content` sits under 15px prose — same `padding-inline` token resolved to
-   * different px (~5.4px drift in logs).
-   */
-  font-size: var(--nb-editor-font-size);
-  /* Shared with hub `.cm-content` and readonly cells (no top/right/bottom inset). */
-  --nb-editor-heading-gutter: 9.25ch;
-  /*
-   * Single source of truth for where body text starts vs the cell edge (`ch` must match editor:
-   * see `font-size` above).
-   */
-  --today-hub-body-pad-inline-start: max(
-    2px,
-    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
-  );
+  border-radius: 6px;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -3012,13 +3063,15 @@ button.primary.destructive {
   box-sizing: border-box;
   /* Nudge 1px up so the top stroke is not lost to parent/subpixel clipping (row chrome sits flush above). */
   top: -1px;
-  left: 70px; /* left indentation to align with markdown content */
+  /* Match readonly / `.cm-content` inset (`--today-hub-body-pad-inline-start`), not column titles. */
+  left: var(--today-hub-body-pad-inline-start);
   right: auto;
   bottom: auto;
   /* Grid columns can stay sub-pixel wide (`1fr`); snap the frame to whole px for stable dot tiling. */
-  width: max(0px, calc(100% - 70px));
-  height: max(0px, calc(100% + 1px));
-  width: max(0px, round(down, calc(100% - 70px), 1px));
+  width: max(
+    0px,
+    round(down, calc(100% - var(--today-hub-body-pad-inline-start)), 1px)
+  );
   height: max(0px, round(down, calc(100% + 1px), 1px));
   border: 1px solid transparent;
   --today-hub-empty-dot: color-mix(
@@ -3075,7 +3128,7 @@ button.primary.destructive {
   height: 100%;
   min-height: 2.25rem;
   margin: 0;
-  /* Left inset: `var(--today-hub-body-pad-inline-start)` on `.today-hub-canvas__cell`. */
+  /* Left inset: `var(--today-hub-body-pad-inline-start)` from `.today-hub-canvas__row`. */
   padding: 0;
   padding-inline-start: var(--today-hub-body-pad-inline-start);
   border: none;
@@ -3255,7 +3308,7 @@ button.primary.destructive {
   /*
    * Hub cells embed NoteMarkdownEditor without `.note-markdown-editor-wrap`; define editor
    * tokens here so `.cm-content` padding math matches the main editor, then tighten insets.
-   * `--nb-editor-heading-gutter` lives on `.today-hub-canvas__cell` for parity with readonly.
+   * `--nb-editor-heading-gutter` is inherited from `.today-hub-canvas__row` for parity with readonly.
    */
   --nb-editor-paper-pad-block-start: 0;
 }

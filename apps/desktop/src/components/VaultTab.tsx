@@ -307,11 +307,21 @@ function EditorPaneBody({
     setEditorHasFoldableRanges(next);
   }, []);
 
+  const scrollTodayHubLayout =
+    showTodayHubCanvas &&
+    Boolean(selectedUri) &&
+    todayHubSettings != null &&
+    !composingNewEntry;
+
   return (
     <div className="editor note-markdown-editor-wrap">
         <div
           ref={inboxEditorShellScrollRef}
-          className="note-markdown-editor-scroll"
+          className={
+            scrollTodayHubLayout
+              ? 'note-markdown-editor-scroll note-markdown-editor-scroll--today-hub'
+              : 'note-markdown-editor-scroll'
+          }
         >
           <div className="note-markdown-editor-page">
             <div className="note-markdown-editor-fold-rail">
@@ -382,10 +392,23 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
-              {showTodayHubCanvas &&
-              selectedUri &&
-              todayHubSettings &&
-              !composingNewEntry ? (
+              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
+                <InboxBacklinksSection
+                  selectedUri={selectedUri}
+                  backlinkRows={backlinkRows}
+                  onSelectNote={onSelectNote}
+                  deferNonce={inboxBacklinksDeferNonce}
+                />
+              ) : null}
+            </div>
+          </div>
+          {showTodayHubCanvas &&
+          selectedUri &&
+          todayHubSettings &&
+          !composingNewEntry ? (
+            <div className="note-markdown-editor-page note-markdown-editor-page--today-hub">
+              <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
+              <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
                 <TodayHubCanvas
                   key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}`}
                   vaultRoot={vaultRoot}
@@ -404,17 +427,9 @@ function EditorPaneBody({
                   prehydrateTodayHubRows={prehydrateTodayHubRows}
                   persistTodayHubRow={persistTodayHubRow}
                 />
-              ) : null}
-              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
-                <InboxBacklinksSection
-                  selectedUri={selectedUri}
-                  backlinkRows={backlinkRows}
-                  onSelectNote={onSelectNote}
-                  deferNonce={inboxBacklinksDeferNonce}
-                />
-              ) : null}
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
     </div>
   );

@@ -472,8 +472,7 @@ export function TodayHubCanvas({
     return h;
   }, [columnCount, hubSettings.columns]);
 
-  const rowLabel = useCallback((weekStart: Date) => {
-    const weekEnd = todayHubWeekEndInclusive(weekStart);
+  const formatHubWeekDate = useCallback((d: Date) => {
     const full: Intl.DateTimeFormatOptions = {
       weekday: 'long',
       year: 'numeric',
@@ -481,9 +480,9 @@ export function TodayHubCanvas({
       day: 'numeric',
     };
     try {
-      return `${weekStart.toLocaleDateString(undefined, full)} – ${weekEnd.toLocaleDateString(undefined, full)}`;
+      return d.toLocaleDateString(undefined, full);
     } catch {
-      return `${weekStart.getTime()} – ${weekEnd.getTime()}`;
+      return String(d.getTime());
     }
   }, []);
 
@@ -498,23 +497,12 @@ export function TodayHubCanvas({
         } as CSSProperties
       }
     >
-      <div className="today-hub-canvas__header">
-        <div className="today-hub-canvas__header-top">
-          <span className="today-hub-canvas__title">Weeks</span>
-        </div>
-        <div className="today-hub-canvas__header-cols">
-          {columnHeaders.map((label, ci) => (
-            <span key={ci} className="today-hub-canvas__col-head">
-              {label || ' '}
-            </span>
-          ))}
-        </div>
-      </div>
       <div className="today-hub-canvas__rows">
         {weekStarts.map((weekStart, ri) => {
           const uri = normUri(rowUris[ri]!);
           const sections = getSections(uri);
           const isActiveRow = active?.uri === uri;
+          const weekEnd = todayHubWeekEndInclusive(weekStart);
           return (
             <div
               key={uri}
@@ -525,7 +513,24 @@ export function TodayHubCanvas({
               }
             >
               <div className="today-hub-canvas__row-date-bar">
-                <span className="today-hub-canvas__row-date">{rowLabel(weekStart)}</span>
+                <div className="today-hub-canvas__row-date-bar-cols">
+                  {columnHeaders.map((label, ci) => (
+                    <div
+                      key={ci}
+                      className="today-hub-canvas__row-date-bar-head"
+                    >
+                      {ci === 0 ? (
+                        <span className="today-hub-canvas__row-date">
+                          {formatHubWeekDate(weekStart)}
+                        </span>
+                      ) : (
+                        <span className="today-hub-canvas__col-head">
+                          {label || '\u00a0'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="today-hub-canvas__row-cells">
                 {sections.map((chunk, ci) => {
@@ -701,6 +706,11 @@ export function TodayHubCanvas({
                     </div>
                   );
                 })}
+              </div>
+              <div className="today-hub-canvas__row-date-bar today-hub-canvas__row-date-bar--footer">
+                <span className="today-hub-canvas__row-date-end">
+                  {formatHubWeekDate(weekEnd)}
+                </span>
               </div>
             </div>
           );
