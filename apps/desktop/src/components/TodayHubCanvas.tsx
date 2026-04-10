@@ -34,6 +34,7 @@ import {
   splitTodayRowIntoColumns,
   todayHubColumnCount,
   todayHubRowUri,
+  todayHubWeekEndInclusive,
   touchWarmLru,
   type TodayHubWorkspaceBridge,
   type TodayHubSettings,
@@ -143,6 +144,8 @@ export function TodayHubCanvas({
 
   /** LRU order of `hubCellWarmKey`; warm is optional — never required for correctness. */
   const [warmOrder, setWarmOrder] = useState<string[]>([]);
+  /** Invalidates pending double-rAF warm scheduling when the pointer leaves the cell. */
+  const hubWarmDeferGenRef = useRef<Record<string, number>>({});
   const hubOpenPerfT0Ref = useRef(0);
 
   const wikiLinkCompletionCandidates = useMemo(
@@ -445,6 +448,38 @@ export function TodayHubCanvas({
 
   const noopMarkdownChange = useCallback(() => {}, []);
 
+  const closeEmptyActiveCellIfStillEmpty = useCallback(
+    async (uri: string, col: number) => {
+      const a = activeRef.current;
+      if (!a || normUri(a.uri) !== normUri(uri) || a.col !== col) {
+        return;
+      }
+      const ed = cellEditorRef.current;
+      if (!ed) {
+        return;
+      }
+      if (ed.getMarkdown().trim().length > 0) {
+        return;
+      }
+      const key = normUri(uri);
+      const base =
+        localRowSectionsRef.current[key] ??
+        splitTodayRowIntoColumns(
+          inboxContentByUriRef.current[key] ?? '',
+          columnCount,
+        );
+      const cur = [...base];
+      cur[col] = '';
+      const next = {...localRowSectionsRef.current, [key]: cur};
+      localRowSectionsRef.current = next;
+      setLocalRowSections(next);
+      await flushScheduledPersist();
+      setActive(null);
+      wikiNavParentRef.current = null;
+    },
+    [cellEditorRef, columnCount, flushScheduledPersist, wikiNavParentRef],
+  );
+
   const touchWarmForCell = useCallback((uri: string, col: number) => {
     if (MAX_HUB_WARM_CELLS <= 0) {
       return;
@@ -469,14 +504,15 @@ export function TodayHubCanvas({
     return h;
   }, [columnCount, hubSettings.columns]);
 
-  const rowLabel = useCallback((d: Date) => {
+  const formatHubWeekDate = useCallback((d: Date) => {
+    const full: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    };
     try {
-      return d.toLocaleDateString(undefined, {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      return d.toLocaleDateString(undefined, full);
     } catch {
       return String(d.getTime());
     }
@@ -493,23 +529,12 @@ export function TodayHubCanvas({
         } as CSSProperties
       }
     >
-      <div className="today-hub-canvas__header">
-        <div className="today-hub-canvas__header-top">
-          <span className="today-hub-canvas__title">Weeks</span>
-        </div>
-        <div className="today-hub-canvas__header-cols">
-          {columnHeaders.map((label, ci) => (
-            <span key={ci} className="today-hub-canvas__col-head">
-              {label || ' '}
-            </span>
-          ))}
-        </div>
-      </div>
       <div className="today-hub-canvas__rows">
         {weekStarts.map((weekStart, ri) => {
           const uri = normUri(rowUris[ri]!);
           const sections = getSections(uri);
           const isActiveRow = active?.uri === uri;
+          const weekEnd = todayHubWeekEndInclusive(weekStart);
           return (
             <div
               key={uri}
@@ -520,7 +545,24 @@ export function TodayHubCanvas({
               }
             >
               <div className="today-hub-canvas__row-date-bar">
-                <span className="today-hub-canvas__row-date">{rowLabel(weekStart)}</span>
+                <div className="today-hub-canvas__row-date-bar-cols">
+                  {columnHeaders.map((label, ci) => (
+                    <div
+                      key={ci}
+                      className="today-hub-canvas__row-date-bar-head"
+                    >
+                      {ci === 0 ? (
+                        <span className="today-hub-canvas__row-date">
+                          {formatHubWeekDate(weekStart)}
+                        </span>
+                      ) : (
+                        <span className="today-hub-canvas__col-head">
+                          {label || '\u00a0'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="today-hub-canvas__row-cells">
                 {sections.map((chunk, ci) => {
@@ -538,8 +580,28 @@ export function TodayHubCanvas({
                     'aria-label': chunk.trim() ? undefined : 'Edit cell',
                     onPointerEnter: () => {
                       if (canPrewarm) {
-                        touchWarmForCell(uri, ci);
+                        if (warmOrder.includes(warmKey)) {
+                          touchWarmForCell(uri, ci);
+                        } else {
+                          hubWarmDeferGenRef.current[warmKey] =
+                            (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
+                          const deferGen = hubWarmDeferGenRef.current[warmKey];
+                          requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                              if (
+                                hubWarmDeferGenRef.current[warmKey] !== deferGen
+                              ) {
+                                return;
+                              }
+                              touchWarmForCell(uri, ci);
+                            });
+                          });
+                        }
                       }
+                    },
+                    onPointerLeave: () => {
+                      hubWarmDeferGenRef.current[warmKey] =
+                        (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
                     },
                     onKeyDown: (e: ReactKeyboardEvent) => {
                       if (e.key !== 'Enter' && e.key !== ' ') {
@@ -613,6 +675,13 @@ export function TodayHubCanvas({
                       wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
+                      onEditableBlur={
+                        editing && !chunk.trim()
+                          ? () => {
+                              void closeEmptyActiveCellIfStillEmpty(uri, ci);
+                            }
+                          : undefined
+                      }
                       placeholder="Write markdown…"
                       busy={false}
                     />
@@ -629,7 +698,14 @@ export function TodayHubCanvas({
                           : 'today-hub-canvas__cell'
                       }
                     >
-                      {warmOrActive ? (
+                      {emptyReadonly ? (
+                        <div
+                          {...readonlyInteractiveProps}
+                          className="today-hub-canvas__cell-readonly"
+                        >
+                          {staticPreview}
+                        </div>
+                      ) : (
                         <div
                           className={
                             isWarm && !editing
@@ -637,35 +713,43 @@ export function TodayHubCanvas({
                               : 'today-hub-canvas__cell-editor-stack'
                           }
                         >
-                          <div
-                            className={
-                              editing
-                                ? 'today-hub-canvas__cm-host'
-                                : 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
-                            }
-                          >
-                            {hubCellEditor}
-                          </div>
                           {!editing ? (
-                            <div
-                              {...readonlyInteractiveProps}
-                              className="today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay"
-                            >
-                              {staticPreview}
+                            <>
+                              <div
+                                className={
+                                  warmOrActive
+                                    ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
+                                    : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant'
+                                }
+                              >
+                                {warmOrActive ? hubCellEditor : null}
+                              </div>
+                              <div
+                                {...readonlyInteractiveProps}
+                                className={
+                                  isWarm
+                                    ? 'today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay'
+                                    : 'today-hub-canvas__cell-readonly'
+                                }
+                              >
+                                {staticPreview}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="today-hub-canvas__cm-host">
+                              {hubCellEditor}
                             </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div
-                          {...readonlyInteractiveProps}
-                          className="today-hub-canvas__cell-readonly"
-                        >
-                          {staticPreview}
+                          )}
                         </div>
                       )}
                     </div>
                   );
                 })}
+              </div>
+              <div className="today-hub-canvas__row-date-bar today-hub-canvas__row-date-bar--footer">
+                <span className="today-hub-canvas__row-date-end">
+                  {formatHubWeekDate(weekEnd)}
+                </span>
               </div>
             </div>
           );

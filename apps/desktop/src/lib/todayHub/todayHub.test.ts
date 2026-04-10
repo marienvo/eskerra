@@ -5,6 +5,7 @@ import {
   enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
   mergeTodayRowColumns,
+  normalizeTodayHubRowForDisk,
   parseTodayHubFrontmatter,
   splitTodayRowIntoColumns,
   startOfLocalWeek,
@@ -12,6 +13,7 @@ import {
   todayHubColumnCount,
   todayHubRowSectionsAllBlank,
   todayHubRowUri,
+  todayHubWeekEndInclusive,
 } from './index';
 
 describe('startOfLocalWeekMonday', () => {
@@ -76,6 +78,16 @@ describe('todayHubRowUri', () => {
     const mon = new Date(2026, 3, 6);
     expect(todayHubRowUri('/vault/Daily', mon)).toBe('/vault/Daily/2026-04-06.md');
     expect(todayHubRowUri('/vault/Daily/', mon)).toBe('/vault/Daily/2026-04-06.md');
+  });
+});
+
+describe('todayHubWeekEndInclusive', () => {
+  it('is six calendar days after the week start (local)', () => {
+    const start = new Date(2026, 3, 6);
+    const end = todayHubWeekEndInclusive(start);
+    expect(end.getFullYear()).toBe(2026);
+    expect(end.getMonth()).toBe(3);
+    expect(end.getDate()).toBe(12);
   });
 });
 
@@ -190,6 +202,30 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
   it('todayHubRowSectionsAllBlank', () => {
     expect(todayHubRowSectionsAllBlank(['', '  \n'])).toBe(true);
     expect(todayHubRowSectionsAllBlank(['x'])).toBe(false);
+  });
+});
+
+describe('normalizeTodayHubRowForDisk', () => {
+  it('turns space/tab-only lines into empty lines and trims column edges', () => {
+    expect(normalizeTodayHubRowForDisk(' \n\t\na\n  ', 1)).toBe('a');
+  });
+
+  it('keeps internal blank lines', () => {
+    expect(normalizeTodayHubRowForDisk('a\n\nb', 1)).toBe('a\n\nb');
+  });
+
+  it('round-trips canonical multi-column merge', () => {
+    const canonical = mergeTodayRowColumns(['hello', 'world']);
+    expect(normalizeTodayHubRowForDisk(canonical, 2)).toBe(canonical);
+  });
+
+  it('collapses messy spacing around delimiter to canonical', () => {
+    const canonical = mergeTodayRowColumns(['hello', 'world']);
+    expect(normalizeTodayHubRowForDisk('hello\n\n\n::today-section::\n\nworld', 2)).toBe(canonical);
+  });
+
+  it('normalizes CRLF before processing', () => {
+    expect(normalizeTodayHubRowForDisk('a\r\n\r\nb', 1)).toBe('a\n\nb');
   });
 });
 

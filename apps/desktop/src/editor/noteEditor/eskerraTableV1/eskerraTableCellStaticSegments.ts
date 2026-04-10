@@ -4,7 +4,10 @@ import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
 import {isBrowserOpenableMarkdownHref, wikiLinkInnerBrowserOpenableHref} from '@eskerra/core';
 
-import {CM_MD_EXTERNAL_LINK_GLYPH_CLASS} from '../markdownExternalLinkCodemirror';
+import {
+  CM_MD_EXTERNAL_BARE_URL_CLASS,
+  CM_MD_EXTERNAL_LINK_GLYPH_CLASS,
+} from '../markdownExternalLinkCodemirror';
 import {collectBareBrowserUrlIntervals} from '../markdownBareUrl';
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
 import {markdownEskerra} from '../markdownEskerraLanguage';
@@ -195,7 +198,7 @@ function collectExternalMdIntervals(state: EditorState): StyledInterval[] {
         labelSpan != null && labelSpan.to > labelSpan.from;
       const hrefClass = hasVisibleLabel
         ? `${labelClass} cm-md-external-href`
-        : `${labelClass} cm-md-external-href ${g}`;
+        : `${labelClass} cm-md-external-href ${g} ${CM_MD_EXTERNAL_BARE_URL_CLASS}`;
       out.push({from: ref.from, to: ref.to, priority: 2, classes: hrefClass});
       if (hasVisibleLabel && labelSpan != null) {
         out.push({
@@ -218,7 +221,7 @@ function collectBareBrowserStyledIntervals(state: EditorState): StyledInterval[]
       from: iv.from,
       to: iv.to,
       priority: 2,
-      classes: `cm-md-external-link ${g}`,
+      classes: `cm-md-external-link ${g} ${CM_MD_EXTERNAL_BARE_URL_CLASS}`,
     });
   }
   return out;

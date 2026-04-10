@@ -215,6 +215,12 @@ export type NoteMarkdownEditorProps = {
    * Same extensions and update path as the full editor; toggled via a Compartment (no duplicate mode).
    */
   readOnly?: boolean;
+  /**
+   * Fires after the editable editor loses focus (skipped when `readOnly`). Deferred one microtask so
+   * focus moved into CodeMirror tooltips/panels or the markdown context menu does not count. Today
+   * Hub uses this for empty cells to collapse back to the dashed placeholder.
+   */
+  onEditableBlur?: () => void;
 };
 
 export type NoteMarkdownEditorHandle = {
@@ -272,11 +278,15 @@ const NoteMarkdownEditorImpl = forwardRef<
     onFoldedRangesPresentChange,
     onFoldableRangesPresentChange,
     readOnly: readOnlyProp = false,
+    onEditableBlur,
   } = props;
 
   const readOnly = readOnlyProp;
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
+
+  const onEditableBlurRef = useRef(onEditableBlur);
+  onEditableBlurRef.current = onEditableBlur;
 
   const parentRef = useRef<HTMLDivElement>(null);
   /** `.note-markdown-editor-host`: used to mount the sticky raw-table escape banner outside CodeMirror. */
@@ -892,6 +902,34 @@ const NoteMarkdownEditorImpl = forwardRef<
           if (prev !== next) {
             onFold(next);
           }
+        }
+        if (
+          update.focusChanged &&
+          !update.view.hasFocus &&
+          !readOnlyRef.current &&
+          onEditableBlurRef.current
+        ) {
+          const view = update.view;
+          queueMicrotask(() => {
+            if (view.hasFocus) {
+              return;
+            }
+            const cb = onEditableBlurRef.current;
+            if (!cb) {
+              return;
+            }
+            const ae = document.activeElement;
+            if (ae instanceof Element) {
+              if (
+                ae.closest('.cm-tooltip') ||
+                ae.closest('.cm-panels') ||
+                ae.closest('.note-markdown-editor-context-menu')
+              ) {
+                return;
+              }
+            }
+            cb();
+          });
         }
       }),
     ];

@@ -1947,6 +1947,33 @@ button.primary.destructive {
 }
 
 /*
+ * Today hub: second `.note-markdown-editor-page` row below the white paper; both rows size to
+ * content so the hub sits directly under the editor without a flex-grown empty paper band.
+ */
+.note-markdown-editor-scroll--today-hub > .note-markdown-editor-page {
+  flex: 0 0 auto;
+}
+
+.note-markdown-editor-paper--today-hub-shell {
+  background: transparent;
+  box-shadow: none;
+}
+
+/*
+ * With Today hub open: no lateral or full-height frame on the editor paper — side borders ran the
+ * full column height and still read as one continuous edge through hub date strips. Week rows read
+ * as gray date bars plus white rounded cells (no extra wrapper shadow around the grid).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-scroll--today-hub
+  > .note-markdown-editor-page:first-of-type
+  > .note-markdown-editor-paper:not(.note-markdown-editor-paper--today-hub-shell) {
+  box-shadow: none;
+  border: none;
+  box-sizing: border-box;
+}
+
+/*
  * Centered row: fold rail (panel gray only) + paper column. Fold chevrons render in the rail via a
  * negative-margin host shift (see `.note-markdown-editor-host`).
  */
@@ -1980,7 +2007,6 @@ button.primary.destructive {
   display: flex;
   flex-direction: column;
   background: var(--nb-editor-paper);
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.025);
 }
 
 /*
@@ -2325,6 +2351,30 @@ button.primary.destructive {
 }
 
 /*
+ * List items: long bare URLs / paths are one unbreakable inline otherwise; the line can wrap
+ * immediately after `.cm-md-list-mark` and leave the bullet alone. Let the whole list line
+ * participate in soft wrapping (links keep `overflow-wrap: anywhere` too).
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line[class*='cm-md-list-line'] {
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Prose measure: bullet/ordered/task lists and paragraph-style lines only.
+ * Headings, fenced code, horizontal rules, and Eskerra table document lines stay full width.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-md-list-line,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-md-heading-line):not(.cm-md-list-line):not(.cm-md-hr-line):not(
+    .cm-eskerra-table-line
+  ):not(.cm-eskerra-table-line--alt):not([class*='cm-md-fence-line']) {
+  max-width: 728px;
+}
+
+/*
  * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
@@ -2383,6 +2433,8 @@ button.primary.destructive {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  /* Long labels / paths: avoid pushing the list marker to its own line (unbreakable “word”). */
+  overflow-wrap: anywhere;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--resolved {
@@ -2397,6 +2449,7 @@ button.primary.destructive {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link--resolved {
@@ -2412,6 +2465,18 @@ button.primary.destructive {
   text-underline-offset: 2px;
   cursor: pointer;
   color: var(--color-interactive-text);
+  /* Bare and markdown `http(s)` spans; otherwise the line breaks after the list mark only. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * URL text (not the styled label): WebKit + `white-space: break-spaces` can still keep a long href
+ * on the next line after the list mark unless we allow breaks between arbitrary characters.
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-href,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-bare-url {
+  word-break: break-all;
+  line-break: anywhere;
 }
 
 /*
@@ -2441,16 +2506,15 @@ button.primary.destructive {
 }
 
 /*
- * Softer underline on lines without marker focus; link colors and weight match marker-focus lines
- * (resolved = --color-interactive-text, unresolved = --nb-editor-faint; body weight via --file-tree-node-font-weight).
+ * Non-marker-focus lines: same underline offset and default `currentColor` decoration as the
+ * caret line (no semi-transparent mix — that read as thinner / washed out on HiDPI). Body weight
+ * stays via --file-tree-node-font-weight.
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -2458,9 +2522,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -2468,9 +2530,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -2824,74 +2884,54 @@ button.primary.destructive {
   table-layout: fixed;
 }
 
-/* Today hub: weekly grid below main CodeMirror (above backlinks). */
+/* Today hub: weekly grid below main CodeMirror (sits on margin gray, not the white paper card). */
 [data-app-surface='capture'] .today-hub-canvas {
   flex: 0 0 auto;
+  width: 100%;
   box-sizing: border-box;
+  background: transparent;
+  /* Lighter gray for date strip + column titles (inherits into rows). */
+  --today-hub-chrome-label-color: color-mix(
+    in srgb,
+    var(--nb-editor-faint) 72%,
+    var(--nb-editor-text) 28%
+  );
   /* Integer px (rem-derived at 16px root) avoids fuzzy sub-pixel layout in the grid chrome. */
-  padding: 12px 56px 16px 0;
-  border-top: 1px solid var(--nb-editor-inline-code-border);
+  padding: 0 56px 16px 0;
   font-size: 0.88rem;
   line-height: 1.45;
   overflow-x: auto;
 }
 
-[data-app-surface='capture'] .today-hub-canvas__header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  padding-inline: 90px 20px; /* left indentation to align with markdown content */
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
-  font-weight: 620;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__header-top {
-  display: block;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__header-cols {
-  display: grid;
-  gap: 8px 10px;
-  align-items: end;
-  grid-template-columns: repeat(
-    var(--today-hub-col-count, 1),
-    minmax(112px, 1fr)
-  );
-}
-
-[data-app-surface='capture'] .today-hub-canvas__title {
-  display: inline-block;
-}
-
-[data-app-surface='capture'] .today-hub-canvas__col-head {
-  min-width: 112px;
-  padding-left: 34px; /* left indentation to align with markdown content */
-}
-
 [data-app-surface='capture'] .today-hub-canvas__rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-block: 6px 8px;
+  gap: 8px;
   padding-inline: 0 20px;
-  border-radius: 6px;
+  /* Editor font-size so `ch` in gutter/body padding matches hub cells and CodeMirror. */
+  font-size: var(--nb-editor-font-size);
+  --nb-editor-heading-gutter: 9.25ch;
+  --today-hub-body-pad-inline-start: max(
+    2px,
+    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
+  );
+  /*
+   * Hub column titles + week start: align with list/paragraph text after `cm-md-list-mark` spacing
+   * (~0.8em vs body inset at default 15px editor size).
+   */
+  --today-hub-header-pad-inline-start: calc(
+    var(--today-hub-body-pad-inline-start) + 0.8em
+  );
 }
 
 /*
  * Previous calendar week: opacity + grayscale only on `.row-cells` (not the row wrapper) so the date
- * label is not under a group opacity layer (subpixel AA). Date luminance is approximated with `color-mix`.
+ * strip is not under a group opacity layer (subpixel AA) and keeps normal chrome label color.
  */
 [data-app-surface='capture']
   .today-hub-canvas__row.today-hub-canvas__row--previous-week
@@ -2900,23 +2940,92 @@ button.primary.destructive {
   filter: grayscale(1);
 }
 
-[data-app-surface='capture']
-  .today-hub-canvas__row--previous-week
-  .today-hub-canvas__row-date {
-  color: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%) 67%,
-    var(--color-surface-primary) 33%
-  );
-}
+/*
+ * Week strip chrome (`.row-date`, `.col-head`, footer `.row-date-end`) keeps the same label color as
+ * other rows; only `.row-cells` uses opacity + grayscale for the previous calendar week.
+ */
 
-[data-app-surface='capture'] .today-hub-canvas__row:nth-child(even) {
-  background: color-mix(in srgb, var(--color-surface-secondary) 55%, transparent);
+/* Zebra only behind the cell grid (grid gaps), not behind the week date strip. */
+[data-app-surface='capture']
+  .today-hub-canvas__row:nth-child(even)
+  .today-hub-canvas__row-cells {
+  background: color-mix(in srgb, var(--color-surface-secondary) 38%, transparent);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar {
-  padding-top: 2px;
-  padding-inline-start: 90px; /* left indentation to align with markdown content */
+  /* Full width of the hub paper column: cancel row (20px) + canvas (56px) inline padding +22px extra bleed. */
+  align-self: stretch;
+  min-width: 0;
+  width: calc(100% + 20px + 56px + 22px);
+  max-width: none;
+  margin-inline-end: calc(-1 * (20px + 56px + 22px));
+  margin-inline-start: 0;
+  /* Lighter than panel margin so week bands stay subtle next to the editor rail. */
+  background: var(--nb-editor-margin-bg);
+  padding-block: 8px 6px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+/* First week row only: extra space below the main editor before the first date strip. */
+[data-app-surface='capture']
+  .today-hub-canvas__rows
+  > .today-hub-canvas__row:first-child
+  .today-hub-canvas__row-date-bar:not(.today-hub-canvas__row-date-bar--footer) {
+  padding-top: 55px;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar--footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-block: 6px 8px;
+  /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22), minus 19px for week-end label. */
+  padding-inline-end: calc(20px + 56px + 22px + 20px - 19px);
+  padding-bottom: 30px; /* "gap" between rows */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar-cols {
+  /* Bar is wider than the row paper column; keep grid width aligned with `.row-cells`. */
+  width: calc(100% - (20px + 56px + 22px));
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px 10px;
+  align-items: end;
+  padding-inline-start: 20px;
+  grid-template-columns: repeat(
+    var(--today-hub-col-count, 1),
+    minmax(112px, 1fr)
+  );
+  min-width: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar-head {
+  min-width: 0;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar .today-hub-canvas__col-head {
+  display: block;
+  min-width: 112px;
+  padding-inline-start: var(--today-hub-header-pad-inline-start);
+  color: var(--today-hub-chrome-label-color);
+  font-size: 0.78rem;
+  font-weight: 620;
+  letter-spacing: 0.03em;
+  line-height: 1.35;
+}
+
+/*
+ * WebKitGTK: hub week strip labels used computed font-smoothing `auto` (uneven LCD AA on small type);
+ * match capture `.cm-scroller` / `.section-heading` — grayscale AA + no faux bold on small labels.
+ */
+[data-app-surface='capture'] .today-hub-canvas__row-date,
+[data-app-surface='capture'] .today-hub-canvas__row-date-end,
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar .today-hub-canvas__col-head {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  text-rendering: auto;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-cells {
@@ -2928,14 +3037,21 @@ button.primary.destructive {
     var(--today-hub-col-count, 1),
     minmax(112px, 1fr)
   );
+  box-sizing: border-box;
 }
 
-[data-app-surface='capture'] .today-hub-canvas__row-date {
-  color: var(--color-text-primary);
+[data-app-surface='capture'] .today-hub-canvas__row-date,
+[data-app-surface='capture'] .today-hub-canvas__row-date-end {
+  color: var(--today-hub-chrome-label-color);
   font-weight: 600;
   font-size: 0.82rem;
   text-transform: none;
   letter-spacing: normal;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__row-date {
+  display: block;
+  padding-inline-start: var(--today-hub-header-pad-inline-start);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell {
@@ -2943,23 +3059,7 @@ button.primary.destructive {
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
-  /*
-   * Match `--nb-editor-font-size` so `ch` in `--nb-editor-heading-gutter` / body padding matches
-   * CodeMirror (scoped under `.cm-scroller`). Without this, readonly inherits `.today-hub-canvas`
-   * 0.88rem while `.cm-content` sits under 15px prose — same `padding-inline` token resolved to
-   * different px (~5.4px drift in logs).
-   */
-  font-size: var(--nb-editor-font-size);
-  /* Shared with hub `.cm-content` and readonly cells (no top/right/bottom inset). */
-  --nb-editor-heading-gutter: 9.25ch;
-  /*
-   * Single source of truth for where body text starts vs the cell edge (`ch` must match editor:
-   * see `font-size` above).
-   */
-  --today-hub-body-pad-inline-start: max(
-    2px,
-    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
-  );
+  border-radius: 6px;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -2978,13 +3078,15 @@ button.primary.destructive {
   box-sizing: border-box;
   /* Nudge 1px up so the top stroke is not lost to parent/subpixel clipping (row chrome sits flush above). */
   top: -1px;
-  left: 70px; /* left indentation to align with markdown content */
+  /* Match readonly / `.cm-content` inset (`--today-hub-body-pad-inline-start`), not column titles. */
+  left: var(--today-hub-body-pad-inline-start);
   right: auto;
   bottom: auto;
   /* Grid columns can stay sub-pixel wide (`1fr`); snap the frame to whole px for stable dot tiling. */
-  width: max(0px, calc(100% - 70px));
-  height: max(0px, calc(100% + 1px));
-  width: max(0px, round(down, calc(100% - 70px), 1px));
+  width: max(
+    0px,
+    round(down, calc(100% - var(--today-hub-body-pad-inline-start)), 1px)
+  );
   height: max(0px, round(down, calc(100% + 1px), 1px));
   border: 1px solid transparent;
   --today-hub-empty-dot: color-mix(
@@ -3041,7 +3143,7 @@ button.primary.destructive {
   height: 100%;
   min-height: 2.25rem;
   margin: 0;
-  /* Left inset: `var(--today-hub-body-pad-inline-start)` on `.today-hub-canvas__cell`. */
+  /* Left inset: `var(--today-hub-body-pad-inline-start)` from `.today-hub-canvas__row`. */
   padding: 0;
   padding-inline-start: var(--today-hub-body-pad-inline-start);
   border: none;
@@ -3050,7 +3152,8 @@ button.primary.destructive {
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: default;
+  /* I-beam: read-only hub cells open into the text editor; links still use `cursor: pointer`. */
+  cursor: text;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-readonly:focus-visible {
@@ -3089,8 +3192,10 @@ button.primary.destructive {
   max-inline-size: 100%;
   margin: 0;
   padding: 0;
-  cursor: default;
-  white-space: pre-wrap;
+  cursor: text;
+  /* Match CodeMirror `.cm-content` (`white-space: break-spaces`; default `EditorState.tabSize` 4). */
+  white-space: break-spaces;
+  tab-size: 4;
   overflow-wrap: anywhere;
   word-break: break-word;
   font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
@@ -3119,7 +3224,11 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line:empty {
-  min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6);
+  /*
+   * Match the used line box of non-empty hub static lines and CodeMirror `.cm-line` (see
+   * specs/architecture/today-hub-editor-parity.md). `calc(1em * …)` can round to +1px vs CM.
+   */
+  min-height: 1lh;
 }
 
 /*
@@ -3155,23 +3264,17 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3202,6 +3305,15 @@ button.primary.destructive {
   visibility: hidden;
 }
 
+/* Cold hub cell: placeholder slot so warm does not remount the readonly static preview subtree. */
+[data-app-surface='capture'] .today-hub-canvas__cell-hub-underlay--dormant {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__cell-warm-overlay {
   position: relative;
   z-index: 1;
@@ -3213,7 +3325,7 @@ button.primary.destructive {
   /*
    * Hub cells embed NoteMarkdownEditor without `.note-markdown-editor-wrap`; define editor
    * tokens here so `.cm-content` padding math matches the main editor, then tighten insets.
-   * `--nb-editor-heading-gutter` lives on `.today-hub-canvas__cell` for parity with readonly.
+   * `--nb-editor-heading-gutter` is inherited from `.today-hub-canvas__row` for parity with readonly.
    */
   --nb-editor-paper-pad-block-start: 0;
 }
@@ -3635,9 +3747,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-rel-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3645,9 +3755,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-external-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 
@@ -3655,9 +3763,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-wiki-link {
-  text-underline-offset: 1px;
-  text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 2px;
   font-weight: var(--file-tree-node-font-weight);
 }
 

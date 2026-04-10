@@ -17,6 +17,9 @@ const TREE_ENSURE_BUDGET_MS = 200;
 /** Shared with table static segments and CSS — exactly one glyph per logical external link. */
 export const CM_MD_EXTERNAL_LINK_GLYPH_CLASS = 'cm-md-external-link-glyph';
 
+/** Bare / URL-only browser spans — `word-break` in `App.css` (list lines + long hrefs). */
+export const CM_MD_EXTERNAL_BARE_URL_CLASS = 'cm-md-external-bare-url';
+
 /** Builds external (http/https/mailto) markdown link decorations. Exported for tests. */
 export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet {
   ensureSyntaxTree(view.state, view.state.doc.length, TREE_ENSURE_BUDGET_MS);
@@ -44,7 +47,7 @@ export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet 
         labelSpan != null && labelSpan.to > labelSpan.from;
       const hrefClass = hasVisibleLabel
         ? `${cls} cm-md-external-href`
-        : `${cls} cm-md-external-href ${g}`;
+        : `${cls} cm-md-external-href ${g} ${CM_MD_EXTERNAL_BARE_URL_CLASS}`;
       ranges.push(Decoration.mark({class: hrefClass}).range(ref.from, ref.to));
       if (hasVisibleLabel && labelSpan != null) {
         ranges.push(
@@ -59,7 +62,9 @@ export function buildExternalMdLinkDecorations(view: EditorView): DecorationSet 
   const bareIntervals = collectBareBrowserUrlIntervals(view.state);
   for (const iv of bareIntervals) {
     ranges.push(
-      Decoration.mark({class: `cm-md-external-link ${g}`}).range(iv.from, iv.to),
+      Decoration.mark({
+        class: `cm-md-external-link ${g} ${CM_MD_EXTERNAL_BARE_URL_CLASS}`,
+      }).range(iv.from, iv.to),
     );
   }
   return ranges.length ? Decoration.set(ranges, true) : Decoration.none;

@@ -45,6 +45,15 @@ export function enumerateTodayHubMondays(now: Date): Date[] {
   return enumerateTodayHubWeekStarts(now, 'monday');
 }
 
+/** Inclusive last calendar day of the week that begins on `weekStart` (local date; seven-day span). */
+export function todayHubWeekEndInclusive(weekStart: Date): Date {
+  return new Date(
+    weekStart.getFullYear(),
+    weekStart.getMonth(),
+    weekStart.getDate() + 6,
+  );
+}
+
 /** `YYYY-MM-DD` for the row filename stem (local calendar); identifies the week's first day. */
 export function formatTodayHubMondayStem(weekStart: Date): string {
   const y = weekStart.getFullYear();
