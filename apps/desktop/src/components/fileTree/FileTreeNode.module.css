@@ -1,0 +1,60 @@
+.row {
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  display: flex;
+  align-items: center;
+  /* Row `gap` is overridden by `.vault-tree-row { gap: 0 }` on the same element; use `.iconCell` margin for icon–label space. */
+  gap: 0;
+  padding-block: 0;
+  /* Horizontal padding comes from inline style on the tree node (`EDGE_INSET` + indent / trailing). */
+  padding-inline: 0;
+  margin: 0;
+  box-sizing: border-box;
+  width: 100%;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: var(--file-tree-node-font-size);
+  line-height: 26px;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
+  text-align: start;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.iconCell {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-inline-end: var(--file-tree-icon-label-gap);
+  color: var(--color-muted);
+}
+
+.iconCell svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.rightSlot {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+}

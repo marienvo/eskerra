@@ -67,7 +67,7 @@ import {
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
 import {
-  enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   parseTodayHubFrontmatter,
   splitTodayRowIntoColumns,
   todayHubRowSectionsAllBlank,
@@ -102,6 +102,7 @@ import {
   createEditorWorkspaceTab,
   ensureActiveTabId,
   findTabById,
+  findTabIdWithCurrentUri,
   firstSurvivorUriFromTabs,
   migrateOpenTabUrisToWorkspaceTabs,
   pickNeighborTabIdAfterRemovingTab,
@@ -320,7 +321,13 @@ export type UseMainWindowWorkspaceResult = {
   hydrateVault: (root: string) => Promise<void>;
   startNewEntry: () => void;
   cancelNewEntry: () => void;
+  /** Open or focus: if a tab already shows `uri`, activate it; else navigate the active tab. */
   selectNote: (uri: string) => void;
+  /**
+   * Prefer activating an existing tab that already shows `uri`; otherwise open a new tab and focus it
+   * (e.g. file tree middle-click).
+   */
+  selectNoteInNewActiveTab: (uri: string) => void;
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
@@ -493,6 +500,7 @@ export function useMainWindowWorkspace(options: {
   const todayHubWikiNavParentRef = useRef<string | null>(null);
   const todayHubCellEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
   const todayHubRowLastPersistedRef = useRef<Map<string, string>>(new Map());
+  const todayHubSettingsRef = useRef<TodayHubSettings | null>(null);
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const backlinksActiveBodyRef = useRef('');
@@ -771,6 +779,10 @@ export function useMainWindowWorkspace(options: {
     );
     return parseTodayHubFrontmatter(full);
   }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry]);
+
+  useLayoutEffect(() => {
+    todayHubSettingsRef.current = todayHubSettings;
+  }, [todayHubSettings]);
 
   const refreshNotes = useCallback(
     async (root: string) => {
@@ -1822,7 +1834,8 @@ export function useMainWindowWorkspace(options: {
         && !composingNewEntryRef.current
       ) {
         const hubDir = vaultUriParentDirectory(normToday);
-        for (const m of enumerateTodayHubMondays(new Date())) {
+        const hubStart = todayHubSettingsRef.current?.start ?? 'monday';
+        for (const m of enumerateTodayHubWeekStarts(new Date(), hubStart)) {
           const rowUri = normalizeEditorDocUri(todayHubRowUri(hubDir, m));
           if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, rowUri, root)) {
             continue;
@@ -2203,9 +2216,26 @@ export function useMainWindowWorkspace(options: {
 
   const selectNote = useCallback(
     (uri: string) => {
+      const existingId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
+      if (existingId != null) {
+        activateOpenTab(existingId);
+        return;
+      }
       void openMarkdownInEditor(uri);
     },
-    [openMarkdownInEditor],
+    [activateOpenTab, openMarkdownInEditor],
+  );
+
+  const selectNoteInNewActiveTab = useCallback(
+    (uri: string) => {
+      const existingId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
+      if (existingId != null) {
+        activateOpenTab(existingId);
+        return;
+      }
+      void openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
+    },
+    [activateOpenTab, openMarkdownInEditor],
   );
 
   const submitNewEntry = useCallback(async () => {
@@ -2613,12 +2643,25 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(
+          const existingTabId = findTabIdWithCurrentUri(
+            editorWorkspaceTabsRef.current,
             result.uri,
-            openInBackgroundTab
-              ? {newTab: true, activateNewTab: false}
-              : undefined,
           );
+          if (openInBackgroundTab) {
+            if (existingTabId != null) {
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: false,
+            });
+            return;
+          }
+          if (existingTabId != null) {
+            activateOpenTab(existingTabId);
+            return;
+          }
+          await openMarkdownInEditor(result.uri);
           return;
         }
         if (result.kind === 'ambiguous') {
@@ -2639,7 +2682,14 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [
+      activateOpenTab,
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+    ],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -2700,12 +2750,25 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          await openMarkdownInEditor(
+          const existingTabId = findTabIdWithCurrentUri(
+            editorWorkspaceTabsRef.current,
             result.uri,
-            openInBackgroundTab
-              ? {newTab: true, activateNewTab: false}
-              : undefined,
           );
+          if (openInBackgroundTab) {
+            if (existingTabId != null) {
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: false,
+            });
+            return;
+          }
+          if (existingTabId != null) {
+            activateOpenTab(existingTabId);
+            return;
+          }
+          await openMarkdownInEditor(result.uri);
           return;
         }
         setErr('This link is not a relative vault markdown note.');
@@ -2713,7 +2776,14 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [
+      activateOpenTab,
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+    ],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
@@ -3431,6 +3501,7 @@ export function useMainWindowWorkspace(options: {
     startNewEntry,
     cancelNewEntry,
     selectNote,
+    selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
     flushInboxSave,

@@ -6,7 +6,7 @@ import {isBrowserOpenableMarkdownHref, wikiLinkInnerBrowserOpenableHref} from '@
 import {isActivatableRelativeMarkdownHref} from '../editor/noteEditor/markdownActivatableRelativeHref';
 import {markdownBareBrowserUrlAtPosition} from '../editor/noteEditor/markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from '../editor/noteEditor/markdownActivatableRelativeMdLinkAtPosition';
-import {wikiLinkActivatableInnerAtDocPosition} from '../editor/noteEditor/wikiLinkInnerAtDocPosition';
+import {wikiLinkPointerActivatableInnerAtDocPosition} from '../editor/noteEditor/wikiLinkInnerAtDocPosition';
 import {
   buildTodayHubCellStaticViewModel,
   clipSegmentsToRange,
@@ -97,7 +97,10 @@ export function TodayHubCellStaticRichText({
           }
           wikiNavParentRef.current = rowUri;
           ensureSyntaxTree(hitState, cellText.length, HIT_TREE_MS);
-          const inner = wikiLinkActivatableInnerAtDocPosition(hitState.doc, pos);
+          const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+            hitState.doc,
+            pos,
+          );
           if (inner != null) {
             if (
               isMiddleVault

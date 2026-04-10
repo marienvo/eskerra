@@ -45,6 +45,7 @@ import {
   todayHubPerfLog,
 } from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import {
   isNoteAttachmentImageFilePath,
   type NoteInboxAttachmentHost,
@@ -64,7 +65,10 @@ import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatable
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
 import {markdownExternalLinkHighlightExtension} from './markdownExternalLinkCodemirror';
 import {markdownRelativeLinkHighlightExtensions} from './markdownRelativeLinkCodemirror';
+import {MarkdownTableCellContextMenu} from './MarkdownTableCellContextMenu';
+import {NoteMarkdownEditorContextMenu} from './NoteMarkdownEditorContextMenu';
 import {
+  markdownFormattingModKeymap,
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
@@ -74,20 +78,33 @@ import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import {eskerraTableCellBundleFacet} from './eskerraTableV1/eskerraTableCellBundleFacet';
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableV1/eskerraTableShellLinkBridgeFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableV1/eskerraTableParentLinkCompartments';
-import {buildNoteMarkdownCellExtensions} from './noteMarkdownCellEditor';
+import {
+  buildNoteMarkdownCellExtensions,
+  sanitizeCellInsert,
+  type TableCellContextMenuOpen,
+} from './noteMarkdownCellEditor';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
-import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import {
+  markdownCaretInOpaquePasteBlock,
+  markdownSmartExpandExtension,
+} from './markdownSmartExpandSelection';
 import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
-  wikiLinkActivatableInnerAtDocPosition,
+  discardStoredPrimaryPointerDownForLinkClick,
+  recordPrimaryPointerDownForLinkClick,
+  resolveDocPositionForLinkPrimaryClick,
+} from './linkClickUseMousedownPosition';
+import {
   wikiLinkMatchAtDocPosition,
+  wikiLinkPointerActivatableInnerAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
+import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -350,6 +367,16 @@ const NoteMarkdownEditorImpl = forwardRef<
   if (relativeMdLinkCompartmentRef.current === null) {
     relativeMdLinkCompartmentRef.current = new Compartment();
   }
+
+  const tableCellMenuViewRef = useRef<EditorView | null>(null);
+  const tableCellContextMenuOpenRef = useRef<TableCellContextMenuOpen | null>(
+    null,
+  );
+  const [tableCellMenuOpen, setTableCellMenuOpen] = useState(false);
+  const [tableCellMenuAnchor, setTableCellMenuAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const readOnlyCompartmentRef = useRef<Compartment | null>(null);
   if (readOnlyCompartmentRef.current === null) {
     readOnlyCompartmentRef.current = new Compartment();
@@ -465,6 +492,36 @@ const NoteMarkdownEditorImpl = forwardRef<
       return true;
     };
 
+    const tryPasteRichHtmlFromDataTransfer = (
+      dt: DataTransfer,
+      e: ClipboardEvent,
+      viewForPaste: EditorView,
+    ): boolean => {
+      const htmlRaw = dt.getData('text/html') ?? '';
+      const plain = dt.getData('text/plain') ?? '';
+      if (markdownCaretInOpaquePasteBlock(
+        viewForPaste.state,
+        viewForPaste.state.selection.main.head,
+      )) {
+        return false;
+      }
+      const md = tryClipboardHtmlToMarkdownInsert(htmlRaw, plain);
+      if (md == null) {
+        return false;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const sel = viewForPaste.state.selection.main;
+      const insertFrom = Math.min(sel.anchor, sel.head);
+      const insertTo = Math.max(sel.anchor, sel.head);
+      viewForPaste.dispatch({
+        changes: {from: insertFrom, to: insertTo, insert: md},
+        selection: EditorSelection.cursor(insertFrom + md.length),
+        scrollIntoView: true,
+      });
+      return true;
+    };
+
     // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
     let middleClickBlockPasteUntil = 0;
 
@@ -499,6 +556,12 @@ const NoteMarkdownEditorImpl = forwardRef<
           );
           return true;
         }
+        if (
+          e.clipboardData
+          && tryPasteRichHtmlFromDataTransfer(e.clipboardData, e, view)
+        ) {
+          return true;
+        }
         return false;
       }
 
@@ -512,9 +575,19 @@ const NoteMarkdownEditorImpl = forwardRef<
           return runVaultImagePasteFromDataTransfer(dt, view);
         }
         if (plainTrimmed === '' && !probablyImage) {
+          const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
+          if (
+            htmlWhenPlainEmpty.trim() !== ''
+            && tryPasteRichHtmlFromDataTransfer(dt, e, view)
+          ) {
+            return true;
+          }
           e.preventDefault();
           e.stopPropagation();
           return runNativeClipboardPasteWhenWebDataEmpty(view);
+        }
+        if (tryPasteRichHtmlFromDataTransfer(dt, e, view)) {
+          return true;
         }
         return false;
       }
@@ -530,13 +603,17 @@ const NoteMarkdownEditorImpl = forwardRef<
         return false;
       }
       if (e.shiftKey) {
+        discardStoredPrimaryPointerDownForLinkClick(view);
         return false;
       }
-      const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+      const pos = resolveDocPositionForLinkPrimaryClick(view, e);
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+        view.state.doc,
+        pos,
+      );
       if (inner) {
         e.preventDefault();
         e.stopPropagation();
@@ -592,7 +669,10 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (pos == null) {
         return false;
       }
-      const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+      const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+        view.state.doc,
+        pos,
+      );
       if (inner) {
         if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
           return false;
@@ -663,6 +743,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
+      markdownFormattingModKeymap(),
       markdownInlineCodeSurroundInputHandler(),
       ...noteMarkdownSearchExtensionBundle,
       keymap.of([
@@ -714,6 +795,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             resolveVaultImagePreviewUrlRef.current(vr, ap, src),
           attachmentHostRef,
           busyRef,
+          tableCellContextMenuOpenRef,
           onWikiLinkActivate: p => onWikiLinkActivateRef.current(p),
           onMarkdownRelativeLinkActivate: p =>
             onMarkdownRelativeLinkActivateRef.current(p),
@@ -740,6 +822,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       }),
       EditorView.domEventHandlers({
         mousedown(event, view) {
+          recordPrimaryPointerDownForLinkClick(view, event);
           if (event.button !== 1) {
             return false;
           }
@@ -789,6 +872,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           borderLeftColor: 'inherit',
         },
       }),
+      wikiEOLCaretPointerFixExtension(),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
@@ -1164,14 +1248,50 @@ const NoteMarkdownEditorImpl = forwardRef<
     ? 'note-markdown-editor-host note-markdown-editor-host--drop-target'
     : 'note-markdown-editor-host';
 
+  tableCellContextMenuOpenRef.current = d => {
+    tableCellMenuViewRef.current = d.view;
+    setTableCellMenuAnchor({x: d.clientX, y: d.clientY});
+    setTableCellMenuOpen(true);
+  };
+
+  const readMarkdownEditorClipboard = useCallback(async () => {
+    const r = await attachmentHost.readNativeClipboardPaste(vaultRoot);
+    return r.kind === 'text' ? r.text : null;
+  }, [attachmentHost, vaultRoot]);
+
   return (
-    <div
-      ref={hostRef}
-      className={hostClassName}
-      data-note-markdown-editor
-    >
-      <div ref={parentRef} className="note-markdown-editor-cm-root" />
-    </div>
+    <>
+      <NoteMarkdownEditorContextMenu
+        getView={() => viewRef.current}
+        readOnly={readOnly}
+        busy={busy}
+        readClipboardText={readMarkdownEditorClipboard}
+      >
+        <div
+          ref={hostRef}
+          className={hostClassName}
+          data-note-markdown-editor
+        >
+          <div ref={parentRef} className="note-markdown-editor-cm-root" />
+        </div>
+      </NoteMarkdownEditorContextMenu>
+      <MarkdownTableCellContextMenu
+        open={tableCellMenuOpen}
+        anchor={tableCellMenuAnchor}
+        getView={() => tableCellMenuViewRef.current}
+        readOnly={readOnly}
+        busy={busy}
+        readClipboardText={readMarkdownEditorClipboard}
+        sanitizePasteText={sanitizeCellInsert}
+        onOpenChange={o => {
+          if (!o) {
+            tableCellMenuViewRef.current = null;
+            setTableCellMenuAnchor(null);
+          }
+          setTableCellMenuOpen(o);
+        }}
+      />
+    </>
   );
 });
 

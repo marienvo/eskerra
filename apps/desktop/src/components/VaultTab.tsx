@@ -92,6 +92,7 @@ type VaultTabProps = {
   backlinkUris: readonly string[];
   selectedUri: string | null;
   onSelectNote: (uri: string) => void;
+  onSelectNoteInNewActiveTab: (uri: string) => void;
   onAddEntry: () => void;
   composingNewEntry: boolean;
   onCancelNewEntry: () => void;
@@ -386,7 +387,7 @@ function EditorPaneBody({
               todayHubSettings &&
               !composingNewEntry ? (
                 <TodayHubCanvas
-                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.columns.join('\0')}`}
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}`}
                   vaultRoot={vaultRoot}
                   todayNoteUri={selectedUri}
                   hubSettings={todayHubSettings}
@@ -441,6 +442,7 @@ export function VaultTab({
   backlinkUris,
   selectedUri,
   onSelectNote,
+  onSelectNoteInNewActiveTab,
   onAddEntry,
   composingNewEntry,
   onCancelNewEntry,
@@ -490,6 +492,21 @@ export function VaultTab({
     () => reopenClosedTabMenuShortcutLabel(),
     [],
   );
+  const [revealTreeNonce, setRevealTreeNonce] = useState(0);
+  const normalizedVaultRootForTree = useMemo(
+    () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+    [vaultRoot],
+  );
+  const revealActiveNoteDisabled =
+    composingNewEntry
+    || selectedUri == null
+    || (
+      selectedUri !== normalizedVaultRootForTree
+      && !selectedUri.startsWith(`${normalizedVaultRootForTree}/`)
+    );
+  const bumpRevealActiveNoteInTree = useCallback(() => {
+    setRevealTreeNonce(n => n + 1);
+  }, []);
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
@@ -1030,10 +1047,14 @@ export function VaultTab({
             fs={fs}
             fsRefreshNonce={fsRefreshNonce}
             vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-            selectedMarkdownUri={composingNewEntry ? null : selectedUri}
+            editorActiveMarkdownUri={composingNewEntry ? null : selectedUri}
+            revealActiveNoteNonce={revealTreeNonce}
+            onRevealActiveNoteInTree={bumpRevealActiveNoteInTree}
+            revealActiveNoteDisabled={revealActiveNoteDisabled}
             busy={busy}
             onAddEntry={onAddEntry}
             onOpenMarkdownNote={onSelectNote}
+            onOpenMarkdownNoteInNewActiveTab={onSelectNoteInNewActiveTab}
             onRenameMarkdownRequest={openRenameDialog}
             onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
             onRenameFolderRequest={openRenameFolderDialog}

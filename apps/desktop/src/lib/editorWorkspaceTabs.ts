@@ -81,6 +81,21 @@ export function findTabById(
   return tabs.find(t => t.id === tabId);
 }
 
+/** Tab id whose {@link tabCurrentUri} equals `uri` after normalization, if any. */
+export function findTabIdWithCurrentUri(
+  tabs: readonly EditorWorkspaceTab[],
+  uri: string,
+): string | null {
+  const targetNorm = normalizeEditorDocUri(uri);
+  for (const t of tabs) {
+    const cur = tabCurrentUri(t);
+    if (cur != null && normalizeEditorDocUri(cur) === targetNorm) {
+      return t.id;
+    }
+  }
+  return null;
+}
+
 export function ensureActiveTabId(
   tabs: readonly EditorWorkspaceTab[],
   activeId: string | null,

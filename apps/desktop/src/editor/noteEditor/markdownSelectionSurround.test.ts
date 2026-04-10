@@ -11,8 +11,10 @@ import {
   computeDelimiterPairSurroundChange,
   computeInlineCodeSurroundChange,
   computeSymmetricSurroundChange,
+  markdownFormattingModKeymap,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
+  runMarkdownClearOneInlineLayerSurround,
   selectionIsMarkdownPlain,
   selectionIsMarkdownPlainForInlineCodeSurround,
   stripBalancedBraces,
@@ -78,8 +80,75 @@ function minimalMarkdownExtensions() {
     }),
     markdownSelectionAllowMultipleRanges(),
     markdownSelectionSurroundKeymap(),
+    markdownFormattingModKeymap(),
     keymap.of(defaultKeymap),
   ];
+}
+
+function modBKeydown(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {
+      key: 'b',
+      code: 'KeyB',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+    'editor',
+  );
+}
+
+function modIKeydown(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {
+      key: 'i',
+      code: 'KeyI',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+    'editor',
+  );
+}
+
+function modShiftXKeydown(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {
+      key: 'x',
+      code: 'KeyX',
+      ctrlKey: true,
+      shiftKey: true,
+      bubbles: true,
+    }),
+    'editor',
+  );
+}
+
+function modEKeydown(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {
+      key: 'e',
+      code: 'KeyE',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+    'editor',
+  );
+}
+
+function modBacktickKeydown(view: EditorView): void {
+  runScopeHandlers(
+    view,
+    new KeyboardEvent('keydown', {
+      key: '`',
+      code: 'Backquote',
+      ctrlKey: true,
+      bubbles: true,
+    }),
+    'editor',
+  );
 }
 
 describe('markdownSelectionSurround', () => {
@@ -559,6 +628,137 @@ describe('markdownSelectionSurround', () => {
         normalizeInner: stripBalancedParens,
       }),
     ).toBeNull();
+  });
+
+  it('Mod-b toggles strong ** around selection', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'hello world',
+      selection: EditorSelection.create([EditorSelection.range(6, 11)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello **world**');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(8, 13)]),
+    });
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello world');
+  });
+
+  it('Mod-i unwraps outer single * without promoting to ** (typing * still upgrades)', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: '*world*',
+      selection: EditorSelection.create([EditorSelection.range(1, 6)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modIKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('world');
+
+    view!.dispatch({
+      changes: {from: 0, to: view!.state.doc.length, insert: '*world*'},
+      selection: EditorSelection.create([EditorSelection.range(1, 6)]),
+    });
+    starKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('**world**');
+  });
+
+  it('Mod-Shift-x toggles strikethrough like tilde surround', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'x',
+      selection: EditorSelection.create([EditorSelection.range(0, 1)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modShiftXKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('~~x~~');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, view!.state.doc.length)]),
+    });
+    modShiftXKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('x');
+  });
+
+  it('Mod-e and Mod-` toggle inline code', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'code',
+      selection: EditorSelection.create([EditorSelection.range(0, 4)]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modEKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('`code`');
+
+    view!.dispatch({
+      selection: EditorSelection.create([EditorSelection.range(0, view!.state.doc.length)]),
+    });
+    modBacktickKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('code');
+  });
+
+  it('Mod-b applies to multiple non-overlapping ranges', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'aa bb',
+      selection: EditorSelection.create([
+        EditorSelection.range(0, 2),
+        EditorSelection.range(3, 5),
+      ]),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('**aa** **bb**');
+  });
+
+  it('clear one layer strips emphasis or inline code (main range)', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const open = (doc: string, from: number, to: number) =>
+      EditorState.create({
+        doc,
+        selection: EditorSelection.create([EditorSelection.range(from, to)]),
+        extensions: minimalMarkdownExtensions(),
+      });
+
+    view = new EditorView({state: open('*z*', 0, 3), parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(true);
+    expect(view!.state.doc.toString()).toBe('z');
+
+    view!.destroy();
+    view = new EditorView({state: open('`a`', 0, 3), parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(true);
+    expect(view!.state.doc.toString()).toBe('a');
+  });
+
+  it('clear one layer is no-op when selection is empty', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'plain',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+    expect(runMarkdownClearOneInlineLayerSurround(view!)).toBe(false);
+    expect(view!.state.doc.toString()).toBe('plain');
   });
 });
 

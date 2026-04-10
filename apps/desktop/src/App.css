@@ -222,7 +222,7 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.06rem;
   transform: translate(-50%, calc(-50% + 2px));
   pointer-events: none;
 }
@@ -242,11 +242,17 @@ a:focus:not(:focus-visible) {
   -webkit-user-select: none;
 }
 
-.window-title-bar-transport__time--duration {
+.window-title-bar-transport__time--position {
   text-align: end;
+  margin-inline-end: 0.24rem;
 }
 
-/* Shared: title-bar playback controls */
+.window-title-bar-transport__time--duration {
+  text-align: start;
+  margin-inline-start: 0.24rem;
+}
+
+/* Shared: title-bar playback controls (only used in TitleBarTransport) */
 .app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
@@ -255,10 +261,22 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  /* Play/pause: 32×32 circle, 28px play/pause icon (seek stays 22px). */
+  width: 2rem;
+  min-width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  border-radius: 50%;
   background: transparent;
   color: var(--color-shell-icon-muted);
   cursor: default;
+}
+
+.app-playback-chrome-btn--seek {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
 }
 
 @keyframes app-playback-chrome-spin {
@@ -283,10 +301,6 @@ a:focus:not(:focus-visible) {
 .app-playback-chrome-btn:not(:disabled):hover {
   background: var(--color-shell-hover-bg);
   color: var(--color-shell-icon);
-}
-
-.app-playback-chrome-btn--play {
-  border-radius: 8px;
 }
 
 .window-title-bar-trailing {
@@ -1100,9 +1114,31 @@ a:focus:not(:focus-visible) {
   align-items: flex-start;
 }
 
+/* Back / Forward (first two buttons) and trailing tab-menu: 2px lower vs wrapped pills. */
+.pane-header--inbox-editor .pane-header-start > button:nth-child(1),
+.pane-header--inbox-editor .pane-header-start > button:nth-child(2) {
+  transform: translateY(2px);
+}
+
+.pane-header--inbox-editor .pane-header-trailing-actions .pane-header-add-btn {
+  transform: translateY(2px);
+}
+
 .pane-title {
   font-weight: 600;
   font-size: 0.85rem;
+}
+
+/* Vault / Episodes / Notifications panel titles: match file tree typography, bold, slightly taller bar. */
+.pane-header--workspace-panel {
+  padding-block: calc(0.32rem + 1px);
+}
+
+.pane-header--workspace-panel .pane-title {
+  font-family: var(--file-tree-node-font-family);
+  font-size: var(--file-tree-node-font-size);
+  font-weight: var(--file-tree-node-font-weight-semibold);
+  font-synthesis: none;
 }
 
 .pane-title--truncate {
@@ -1139,6 +1175,7 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   background: transparent;
   transition: background 0.12s ease;
+  padding-block: 2px;
 }
 
 /* Inactive tabs: no fill until hover/focus-within (active tab keeps chrome). */
@@ -1157,16 +1194,18 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.14rem;
-  padding: 0.06rem 0.02rem 0.06rem 0.22rem;
+  /* Icon–label space matches `FileTreeNode` `.iconCell` (`--file-tree-icon-label-gap`). */
+  gap: 0;
+  padding: 0 0.02rem 0 0.22rem;
   border: none;
   border-radius: 3px 0 0 3px;
   background: transparent;
   cursor: default;
   color: var(--color-text);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
+  font-size: var(--file-tree-node-font-size);
+  line-height: normal;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
   font-synthesis: none;
   text-align: left;
 }
@@ -1179,7 +1218,14 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  opacity: 0.75;
+  justify-content: center;
+  margin-inline-end: var(--file-tree-icon-label-gap);
+  line-height: 0;
+  color: var(--color-muted);
+}
+
+.editor-open-tab-pill__icon svg {
+  display: block;
 }
 
 .editor-open-tab-pill__label {
@@ -1188,35 +1234,52 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .editor-open-tab-pill__close {
   flex-shrink: 0;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.28rem;
-  margin: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  min-width: 1.05rem;
+  /* Extra space between truncated label and the round close control. */
+  margin: 0 0.12rem 0 0.38rem;
   padding: 0;
   border: none;
-  border-radius: 0 3px 3px 0;
-  border-left: 1px solid transparent;
+  border-radius: 50%;
   background: transparent;
   cursor: default;
   color: var(--color-muted);
+  line-height: 0;
 }
 
-.editor-open-tab-pill--active .editor-open-tab-pill__close {
-  border-left-color: color-mix(in srgb, var(--color-text) 10%, transparent);
+/* Radix Cross2: block + no flex shrink; 15×15 comes from props (`FILE_TREE_ICON_SIZE_PX`). */
+.editor-open-tab-pill__close svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.editor-open-tab-pill__close:not(:disabled) svg {
+  opacity: 0.72;
 }
 
 .editor-open-tab-pill__close:disabled {
   opacity: 0.45;
 }
 
-.editor-open-tab-pill__close:not(:disabled):hover {
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+/* Beat `.icon-btn-ghost:hover`; background only — icon stays muted. */
+.editor-open-tab-pill__close.icon-btn-ghost:hover:not(:disabled) {
+  color: var(--color-muted);
+  background: color-mix(
+    in srgb,
+    var(--color-icon-ghost-hover-bg) 82%,
+    var(--color-accent-subtle-bg) 18%
+  );
 }
 
 /* Episodes list: matches mobile PodcastsTabHeader vault-refresh strip (indeterminate). */
@@ -1374,30 +1437,31 @@ a:focus:not(:focus-visible) {
   box-sizing: border-box;
   overflow: hidden;
   width: 100%;
-  /* Crisper text on compositor layer: fractional translateY causes smeared/bold-like labels */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Avoid whole-row font smoothing: it softens sibling Lucide SVG strokes. Row label opts in below. */
 }
 
 .vault-tree-row {
   display: flex;
   align-items: center;
   width: 100%;
-  /* Fixed height must match VaultPaneTree VAULT_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
-  height: 32px;
-  min-height: 32px;
-  max-height: 32px;
+  /* Fixed height must match VaultPaneTree FILE_TREE_ROW_HEIGHT_PX / virtualizer estimateSize */
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
   margin: 0;
   padding-block: 0;
-  padding-inline-end: 4px;
+  /* Horizontal padding: `FileTreeNode` inline style (`fileTreeConstants` EDGE + trailing). */
   box-sizing: border-box;
   border: none;
   background: transparent;
   color: inherit;
-  font-size: 0.8125rem;
-  line-height: 1.2;
+  font-size: var(--file-tree-node-font-size);
+  line-height: 26px;
+  font-weight: var(--file-tree-node-font-weight);
+  font-family: var(--file-tree-node-font-family);
   text-align: start;
   cursor: default;
+  /* Keep gap 0; icon-to-label spacing is `margin-inline-end` on `.iconCell` in FileTreeNode.module.css (module `gap` would lose to this rule otherwise). */
   gap: 0;
   border-radius: 4px;
 }
@@ -1407,18 +1471,20 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row--selected {
-  background: var(--color-accent);
-  color: #fff;
+  background: var(--color-vault-tree-row-selected);
+  color: var(--color-text);
 }
 
 .vault-tree-row--selected:hover {
-  background: color-mix(in srgb, var(--color-accent) 88%, #000);
-  color: #fff;
+  background: var(--color-vault-tree-row-selected);
 }
 
-.vault-tree-row--selected .vault-tree-row__icon,
-.vault-tree-row--selected .vault-tree-row__chevron {
-  color: rgba(255, 255, 255, 0.9);
+.vault-tree-row:focus {
+  outline: none;
+}
+
+.vault-tree-row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--color-focus-ring);
 }
 
 .vault-tree-row--drop-target {
@@ -1428,9 +1494,8 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-row--selected.vault-tree-row--drop-target {
-  background: var(--color-accent);
-  color: #fff;
-  outline: 2px solid rgba(255, 255, 255, 0.85);
+  background: var(--color-row-hover);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
 
@@ -1462,15 +1527,19 @@ a:focus:not(:focus-visible) {
 }
 
 .vault-tree-drag-ghost__icon {
-  font-size: 24px !important;
   width: 24px;
   height: 24px;
-  line-height: 24px !important;
+  flex-shrink: 0;
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   color: var(--color-muted);
+}
+
+.vault-tree-drag-ghost__icon svg {
+  width: 24px;
+  height: 24px;
+  display: block;
 }
 
 .vault-tree-drag-ghost__label {
@@ -1480,49 +1549,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
 }
 
-.vault-tree-row__chevron {
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-}
-
-.vault-tree-row__chevron-spacer {
-  flex: 0 0 28px;
-}
-
-.vault-tree-row__icon {
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-muted);
-}
-
-/* Subtle tints — most weight stays on muted so it stays calm (selected row overrides below). */
-.vault-tree-row__icon--article {
-  color: color-mix(in srgb, var(--color-accent) 34%, var(--color-muted));
-}
-
-/* Soft but unmistakably yellow: yellow leads the mix so it does not read as gray. */
-.vault-tree-row__icon--folder {
-  color: color-mix(in srgb, #ffe994 78%, var(--color-muted));
-}
-
-.vault-tree-row__icon--today {
-  color: color-mix(in srgb, var(--color-accent) 42%, var(--color-muted));
-}
-
-.vault-tree-row__label {
-  flex: 1;
-  min-width: 0;
-  margin-inline-start: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.2;
-}
+/* Row icon and label: `FileTreeNode.module.css` (Radix 15×15 + `.iconCell` margin for label inset). */
 
 .visually-hidden {
   position: absolute;
@@ -1644,7 +1671,7 @@ a:focus:not(:focus-visible) {
   font-size: 0.72rem;
   font-weight: 500;
   color: var(--color-muted);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: 0.02em;
 }
 
@@ -1655,6 +1682,20 @@ a:focus:not(:focus-visible) {
 .note-list-context-menu__item--danger[data-highlighted] {
   background: var(--color-error-banner-bg);
   color: var(--color-error);
+}
+
+.note-markdown-editor-context-menu__sep {
+  height: 1px;
+  margin: 0.2rem 0;
+  background: var(--color-border-soft, var(--color-border));
+}
+
+.note-markdown-editor-context-menu__sub {
+  min-width: 10rem;
+}
+
+.note-markdown-editor-context-menu__subtrigger[data-state="open"] {
+  background: var(--color-row-hover);
 }
 
 .quick-open-overlay {
@@ -1881,6 +1922,9 @@ button.primary.destructive {
   --nb-editor-page-body-max: 1035px;
   /* Space above first line inside the paper card; paired with `.note-markdown-editor-fold-bulk-anchor` height. */
   --nb-editor-paper-pad-block-start: 4rem;
+  /* Prose metrics (capture markdown editor body + matching surfaces); Eskerra row math stays in sync in TS. */
+  --nb-editor-font-size: 15px;
+  --nb-editor-line-height: 1.55;
 
   flex: 1;
   display: flex;
@@ -1948,9 +1992,9 @@ button.primary.destructive {
   z-index: 6;
   align-self: flex-start;
   width: var(--nb-editor-fold-gutter-width);
-  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + 1.6em);
-  font-size: 16px;
-  line-height: 1.6;
+  height: calc(var(--nb-editor-paper-pad-block-start, 0.5rem) + (1em * var(--nb-editor-line-height)));
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2046,6 +2090,7 @@ button.primary.destructive {
   color: var(--nb-editor-text);
   width: 100%;
   box-sizing: border-box;
+  font-size: var(--nb-editor-font-size);
 }
 
 /*
@@ -2085,7 +2130,7 @@ button.primary.destructive {
   min-width: 0;
   box-sizing: border-box;
   padding: 0.4rem 1.75rem 0.4rem 0.5rem;
-  font-size: 0.9375rem;
+  font-size: 0.9375em;
   line-height: 1.35;
   color: inherit;
   background: var(--nb-editor-code-block-bg);
@@ -2137,7 +2182,7 @@ button.primary.destructive {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.8125rem;
+  font-size: 0.8125em;
   line-height: 1.3;
   color: var(--nb-editor-text);
   white-space: nowrap;
@@ -2171,7 +2216,7 @@ button.primary.destructive {
   background: var(--color-button-secondary-bg, color-mix(in srgb, var(--nb-editor-paper) 90%, var(--nb-editor-inline-code-border) 10%));
   color: inherit;
   cursor: default;
-  font-size: 0.8125rem;
+  font-size: 0.8125em;
   line-height: 1.25;
 }
 
@@ -2181,7 +2226,7 @@ button.primary.destructive {
   right: 0.35rem;
   padding: 0.1rem 0.35rem;
   min-width: 0;
-  font-size: 1.15rem;
+  font-size: 1.15em;
   line-height: 1;
   background: transparent;
   border: none;
@@ -2246,11 +2291,11 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-scroller {
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
   /* Fixed size: fluid clamp with vw made text feel like it “zoomed” when resizing the window. */
-  font-size: 16px;
-  line-height: 1.6;
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   text-rendering: auto;
   /* Parity with .note-list button / .episode-row: avoid faux-bold synthesis on WebKitGTK. */
   font-synthesis: none;
@@ -2396,8 +2441,8 @@ button.primary.destructive {
 }
 
 /*
- * Softer underline on lines without marker focus; link colors stay the same as on marker-focus
- * lines (resolved = --color-interactive-text, unresolved = --nb-editor-faint).
+ * Softer underline on lines without marker focus; link colors and weight match marker-focus lines
+ * (resolved = --color-interactive-text, unresolved = --nb-editor-faint; body weight via --file-tree-node-font-weight).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -2406,7 +2451,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -2416,7 +2461,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -2426,7 +2471,13 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link:hover,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-rel-link:hover,
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-link:hover {
+  text-decoration: none;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-vault-image-preview {
@@ -2603,10 +2654,10 @@ button.primary.destructive {
    * Match `.cm-scroller` so cells and `<textarea>` are not monospace (WebKit form defaults)
    * and line box matches row-height math in eskerraTableWrappedRowHeight.ts.
    */
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: var(--nb-editor-font-size);
+  line-height: var(--nb-editor-line-height);
   font-synthesis: none;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
@@ -2892,8 +2943,23 @@ button.primary.destructive {
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
+  /*
+   * Match `--nb-editor-font-size` so `ch` in `--nb-editor-heading-gutter` / body padding matches
+   * CodeMirror (scoped under `.cm-scroller`). Without this, readonly inherits `.today-hub-canvas`
+   * 0.88rem while `.cm-content` sits under 15px prose — same `padding-inline` token resolved to
+   * different px (~5.4px drift in logs).
+   */
+  font-size: var(--nb-editor-font-size);
   /* Shared with hub `.cm-content` and readonly cells (no top/right/bottom inset). */
   --nb-editor-heading-gutter: 9.25ch;
+  /*
+   * Single source of truth for where body text starts vs the cell edge (`ch` must match editor:
+   * see `font-size` above).
+   */
+  --today-hub-body-pad-inline-start: max(
+    2px,
+    calc(0.6rem + var(--nb-editor-heading-gutter) - 19px)
+  );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -2975,12 +3041,9 @@ button.primary.destructive {
   height: 100%;
   min-height: 2.25rem;
   margin: 0;
-  /*
-   * Match hub editor `.cm-content` left inset; add trailing inset so static text does not run
-   * flush against the cell edge (edit cells use the full width).
-   */
+  /* Left inset: `var(--today-hub-body-pad-inline-start)` on `.today-hub-canvas__cell`. */
   padding: 0;
-  padding-inline-start: calc(0.6rem + var(--nb-editor-heading-gutter) - 19px);
+  padding-inline-start: var(--today-hub-body-pad-inline-start);
   border: none;
   border-radius: inherit;
   background: transparent;
@@ -3030,22 +3093,33 @@ button.primary.destructive {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', Inter, system-ui, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
-  font-size: 16px;
-  /* 25px line grid at 16px; matches embedded CodeMirror hub cell line height (static was ~25.6px/line via 1.6 + min-height). */
-  line-height: 1.5625;
+  font-family: Avenir, 'Avenir Next', 'Avenir Next Cyr', 'Inter Variable', Inter, system-ui, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  font-size: var(--nb-editor-font-size);
+  /* Tighter than main editor line-height (historically 1.5625 vs 1.6); keep the same ratio vs `--nb-editor-line-height`. */
+  line-height: calc(var(--nb-editor-line-height) * 1.5625 / 1.6);
   font-synthesis: none;
   text-rendering: auto;
   -webkit-font-smoothing: antialiased;
   color: var(--nb-editor-text, inherit);
 }
 
-/* Match capture `.cm-line`: block rhythm only from heading/hr/fence rules on the same element. */
+/*
+ * Match capture `.cm-line`: block rhythm from inherited hub line-height only (same as
+ * `.today-hub-canvas__cm-host .cm-scroller`). Do not set `min-height` on non-empty lines: it
+ * rounded to a taller `clientHeight` than CodeMirror (23px vs 22px) while computed `line-height`
+ * matched — see specs/architecture/today-hub-editor-parity.md.
+ *
+ * Blank lines are `<div class="cm-line"></div>` (`:empty`); with no in-flow content they collapse
+ * to 0px unless given an explicit min block size.
+ */
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line {
   display: block;
   padding: 0;
-  min-height: 1.5625em;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line:empty {
+  min-height: calc(1em * var(--nb-editor-line-height) * 1.5625 / 1.6);
 }
 
 /*
@@ -3084,21 +3158,21 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-md-external-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-wiki-link {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-editor-stack {
@@ -3158,7 +3232,7 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-scroller {
-  line-height: 1.5625;
+  line-height: calc(var(--nb-editor-line-height) * 1.5625 / 1.6);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host::after {
@@ -3167,7 +3241,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__cm-host .note-markdown-editor-host .cm-content {
   padding-block: 0;
-  padding-inline: max(2px, calc(0.6rem + var(--nb-editor-heading-gutter) - 30px)) 0;
+  padding-inline: var(--today-hub-body-pad-inline-start) 0;
   min-height: min(6rem, 100%);
 }
 
@@ -3564,7 +3638,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -3574,7 +3648,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -3584,7 +3658,7 @@ button.primary.destructive {
   text-underline-offset: 1px;
   text-decoration-thickness: 1px;
   text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
-  font-weight: 500;
+  font-weight: var(--file-tree-node-font-weight);
 }
 
 [data-app-surface='capture']
@@ -4139,7 +4213,8 @@ button.primary.destructive {
   content: '';
   position: absolute;
   inset-inline: 0;
-  bottom: 19px;
+  /* Tuned for ~16px/1.6 body; nudge with compact `--nb-editor-*` so the rule line stays centered in the block. */
+  bottom: 17px;
   height: 2px;
   pointer-events: none;
   background: var(--color-text);

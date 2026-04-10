@@ -33,7 +33,7 @@ export function NotificationsPanel({
       className="panel-surface notifications-panel"
       data-app-surface={appSurface}
     >
-      <div className="pane-header">
+      <div className="pane-header pane-header--workspace-panel">
         <span className="pane-title">Notifications</span>
         <div className="pane-header-trailing-actions">
           <button

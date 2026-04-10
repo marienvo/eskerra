@@ -1,4 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import {Cross2Icon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {
   memo,
   useCallback,
@@ -16,7 +17,20 @@ import {
 } from '../lib/editorOpenTabPillLabel';
 import {tabCurrentUri, type EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
-import {MaterialIcon} from './MaterialIcon';
+import {FILE_TREE_ICON_SIZE_PX} from './fileTree/fileTreeConstants';
+
+const TAB_PILL_ICON_DIM = {
+  width: FILE_TREE_ICON_SIZE_PX,
+  height: FILE_TREE_ICON_SIZE_PX,
+} as const;
+
+function EditorOpenTabPillLeadingIcon({iconName}: {iconName: EditorOpenTabPillIconName}) {
+  return iconName === 'today' ? (
+    <DashboardIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+  ) : (
+    <ReaderIcon {...TAB_PILL_ICON_DIM} aria-hidden />
+  );
+}
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -121,11 +135,12 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             type="button"
             role="tab"
             aria-selected={active}
-            className={
-              labelTruncated
-                ? 'editor-open-tab-pill__main app-tooltip-trigger'
-                : 'editor-open-tab-pill__main'
-            }
+            className={[
+              'editor-open-tab-pill__main',
+              labelTruncated ? 'app-tooltip-trigger' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             disabled={busy}
             {...(labelTruncated
               ? {
@@ -138,7 +153,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             }}
           >
             <span className="editor-open-tab-pill__icon" aria-hidden>
-              <MaterialIcon name={iconName} size={12} />
+              <EditorOpenTabPillLeadingIcon iconName={iconName} />
             </span>
             <span ref={labelRef} className="editor-open-tab-pill__label">
               {label}
@@ -153,7 +168,7 @@ const EditorOpenTabPill = memo(function EditorOpenTabPill({
             disabled={busy}
             onClick={onCloseClick}
           >
-            <MaterialIcon name="close" size={12} />
+            <Cross2Icon {...TAB_PILL_ICON_DIM} aria-hidden />
           </button>
         </div>
       </ContextMenu.Trigger>

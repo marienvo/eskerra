@@ -27,7 +27,7 @@
 }
 
 .desktop-startup-splash__title {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 700;
   font-size: clamp(1.75rem, 2.8vw, 2.125rem);
   letter-spacing: -0.02em;
@@ -48,7 +48,7 @@
   left: 28px;
   z-index: 1;
   color: #fff;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-weight: 700;
   font-size: clamp(0.75rem, 1.2vw, 0.8125rem);
   line-height: 1.2;

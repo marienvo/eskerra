@@ -1,6 +1,34 @@
 export type TodayHubPerpetualType = 'weekly';
 
-export type TodayHubStartDay = 'monday';
+export const TODAY_HUB_START_DAYS = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+] as const;
+
+export type TodayHubStartDay = (typeof TODAY_HUB_START_DAYS)[number];
+
+const START_DAY_TO_JS: Record<TodayHubStartDay, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+export function todayHubStartJsDay(start: TodayHubStartDay): number {
+  return START_DAY_TO_JS[start];
+}
+
+function isTodayHubStartDay(v: string): v is TodayHubStartDay {
+  return (TODAY_HUB_START_DAYS as readonly string[]).includes(v);
+}
 
 export type TodayHubSettings = {
   perpetualType: TodayHubPerpetualType;
@@ -67,8 +95,8 @@ export function parseTodayHubFrontmatter(markdown: string): TodayHubSettings {
     }
     if (key === 'start') {
       const v = scalarAfterColon(raw).toLowerCase();
-      if (v === 'monday') {
-        next.start = 'monday';
+      if (isTodayHubStartDay(v)) {
+        next.start = v;
       }
       continue;
     }

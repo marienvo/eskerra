@@ -2,10 +2,12 @@ import {describe, expect, it} from 'vitest';
 
 import {
   enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
   mergeTodayRowColumns,
   parseTodayHubFrontmatter,
   splitTodayRowIntoColumns,
+  startOfLocalWeek,
   startOfLocalWeekMonday,
   todayHubColumnCount,
   todayHubRowSectionsAllBlank,
@@ -37,6 +39,16 @@ describe('startOfLocalWeekMonday', () => {
   });
 });
 
+describe('startOfLocalWeek', () => {
+  it('returns Saturday for a Tuesday when week starts Saturday', () => {
+    const tue = new Date(2026, 3, 7);
+    const sat = startOfLocalWeek(tue, 6);
+    expect(sat.getFullYear()).toBe(2026);
+    expect(sat.getMonth()).toBe(3);
+    expect(sat.getDate()).toBe(4);
+  });
+});
+
 describe('enumerateTodayHubMondays', () => {
   it('returns 53 Mondays starting at previous week', () => {
     const now = new Date(2026, 3, 7);
@@ -45,6 +57,17 @@ describe('enumerateTodayHubMondays', () => {
     expect(formatTodayHubMondayStem(mondays[0])).toBe('2026-03-30');
     expect(formatTodayHubMondayStem(mondays[1])).toBe('2026-04-06');
     expect(formatTodayHubMondayStem(mondays[52])).toBe('2027-03-29');
+  });
+});
+
+describe('enumerateTodayHubWeekStarts', () => {
+  it('returns 53 week starts when start is saturday', () => {
+    const now = new Date(2026, 3, 7);
+    const starts = enumerateTodayHubWeekStarts(now, 'saturday');
+    expect(starts).toHaveLength(53);
+    expect(formatTodayHubMondayStem(starts[0])).toBe('2026-03-28');
+    expect(formatTodayHubMondayStem(starts[1])).toBe('2026-04-04');
+    expect(formatTodayHubMondayStem(starts[52])).toBe('2027-03-27');
   });
 });
 
@@ -78,6 +101,22 @@ start: monday
     expect(s.columns).toEqual(['Next actions']);
     expect(s.start).toBe('monday');
     expect(todayHubColumnCount(s)).toBe(2);
+  });
+
+  it('reads start: Saturday (case-insensitive)', () => {
+    const md = `---
+start: Saturday
+---
+`;
+    expect(parseTodayHubFrontmatter(md).start).toBe('saturday');
+  });
+
+  it('ignores unknown start value (defaults to monday)', () => {
+    const md = `---
+start: funday
+---
+`;
+    expect(parseTodayHubFrontmatter(md).start).toBe('monday');
   });
 
   it('reads multiple columns', () => {
@@ -116,7 +155,17 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
     const text = 'a\n\n::today-section::\n\nb\n\n::today-section::\n\nc\n\n::today-section::\n\nd';
     const parts = splitTodayRowIntoColumns(text, 2);
     expect(parts[0]).toBe('a');
-    expect(parts[1]).toBe('b\n\n::today-section::\n\nc\n\n::today-section::\n\nd');
+    // Stray delimiter-only lines inside the tail chunk are stripped (never shown in cell editors).
+    expect(parts[1]).toBe('b\n\n\nc\n\n\nd');
+  });
+
+  it('strips spurious marker-only lines when markers repeat without valid newlines between', () => {
+    const text =
+      '123\n\n::today-section::\n\n::today-section::\n\nsdf\n\n::today-section::';
+    const parts = splitTodayRowIntoColumns(text, 2);
+    expect(parts[0]).toBe('123');
+    expect(parts[1]).toBe('\nsdf\n\n\n');
+    expect(parts[1]).not.toContain('::today-section::');
   });
 
   it('splits when section ends at EOF after marker (no trailing blank line)', () => {
@@ -129,6 +178,13 @@ describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
     const raw = '1\n::today-section::\n\n';
     const parts = splitTodayRowIntoColumns(raw, 2);
     expect(parts).toEqual(['1', '']);
+  });
+
+  it('keeps empty middle column slots when merging (does not collapse to fewer chunks)', () => {
+    const sections = ['left', '', 'right'];
+    const merged = mergeTodayRowColumns(sections);
+    expect(splitTodayRowIntoColumns(merged, 3)).toEqual(sections);
+    expect(roundTrip(sections, 3)).toBe(merged);
   });
 
   it('todayHubRowSectionsAllBlank', () => {
@@ -147,5 +203,10 @@ describe('roundTrip', () => {
   it('stable for two columns', () => {
     const sections = ['# T\n\none', 'two\n'];
     expect(roundTrip(sections, 2)).toBe(mergeTodayRowColumns(sections));
+  });
+
+  it('stable for three columns with blank middle', () => {
+    const sections = ['a\n', '  \n', 'c'];
+    expect(roundTrip(sections, 3)).toBe(mergeTodayRowColumns(sections));
   });
 });

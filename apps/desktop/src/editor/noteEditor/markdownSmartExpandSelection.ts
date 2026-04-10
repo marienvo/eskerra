@@ -87,6 +87,14 @@ function inOpaqueBlock(state: EditorState, pos: number): boolean {
   return false;
 }
 
+/** True when the caret sits inside a code / opaque block (fenced code, etc.); skip HTML→Markdown paste there. */
+export function markdownCaretInOpaquePasteBlock(
+  state: EditorState,
+  pos: number,
+): boolean {
+  return inOpaqueBlock(state, pos);
+}
+
 function strictlyWider(outer: SelectionRange, inner: SelectionRange): boolean {
   const ia = Math.min(inner.anchor, inner.head);
   const ib = Math.max(inner.anchor, inner.head);

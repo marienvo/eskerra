@@ -30,7 +30,7 @@ export function editorOpenTabPillLabel(
 
 export type EditorOpenTabPillIconName = 'description' | 'today';
 
-/** Material icon ligature for the open-tab pill (see `EditorPaneOpenNoteTabs`). */
+/** Leading glyph kind for the open-tab pill (Radix icons in `EditorPaneOpenNoteTabs`). */
 export function editorOpenTabPillIconName(uri: string): EditorOpenTabPillIconName {
   return vaultUriIsTodayMarkdownFile(uri.replace(/\\/g, '/')) ? 'today' : 'description';
 }

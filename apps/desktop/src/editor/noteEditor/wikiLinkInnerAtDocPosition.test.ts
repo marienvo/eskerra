@@ -5,6 +5,7 @@ import {
   wikiLinkActivatableInnerAtDocPosition,
   wikiLinkInnerAtDocPosition,
   wikiLinkMatchAtDocPosition,
+  wikiLinkPointerActivatableInnerAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
 
 describe('wikiLinkInnerAtDocPosition', () => {
@@ -62,5 +63,20 @@ describe('wikiLinkActivatableInnerAtDocPosition', () => {
     const line = doc.line(1);
     const innerStart = line.from + line.text.indexOf('y');
     expect(wikiLinkActivatableInnerAtDocPosition(doc, innerStart)).toBe('y');
+  });
+});
+
+describe('wikiLinkPointerActivatableInnerAtDocPosition', () => {
+  it('returns inner only strictly inside styled inner, not on first closing bracket', () => {
+    const doc = Text.of(['Before [[alpha note]] after']);
+    const line = doc.line(1);
+    const firstCloseInner = line.from + line.text.indexOf(']]');
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, firstCloseInner)).toBeNull();
+    expect(
+      wikiLinkPointerActivatableInnerAtDocPosition(doc, firstCloseInner - 1),
+    ).toBe('alpha note');
+    expect(wikiLinkActivatableInnerAtDocPosition(doc, firstCloseInner)).toBe(
+      'alpha note',
+    );
   });
 });

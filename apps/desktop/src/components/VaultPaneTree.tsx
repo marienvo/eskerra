@@ -26,21 +26,46 @@ import {
   planVaultTreeBulkTargets,
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
-import {pickLonelySubfolderWhenNoMarkdown} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
+import {
+  buildSparseLonelyExpandPlan,
+  createVaultSparsePlanLoader,
+  pickLonelySubfolderWhenNoMarkdown,
+} from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {
   loadVaultTreeVisibleChildRows,
-  vaultTreeItemShowsTodaySidebarIcon,
+  VAULT_TREE_TODAY_HUB_NOTE_NAME,
   type VaultTreeItemData,
 } from '../lib/vaultTreeLoadChildren';
 import {vaultTreeRowLabel} from '../lib/vaultTreeRowLabel';
-import {MaterialIcon} from './MaterialIcon';
+import {ChevronRightIcon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {
+  FILE_TREE_ICON_SIZE_PX,
+  FILE_TREE_ROW_HEIGHT_PX,
+} from './fileTree/fileTreeConstants';
+import {FileTreeNode} from './fileTree/FileTreeNode';
+import {vaultTreeItemToFileTreeRowViewModel} from './fileTree/vaultTreeItemToFileTreeRow';
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
-const VAULT_TREE_ROW_HEIGHT_PX = 32;
+const VAULT_TREE_ROW_HEIGHT_PX = FILE_TREE_ROW_HEIGHT_PX;
 
 const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
 
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
+
+function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
+  const p = {
+    width: FILE_TREE_ICON_SIZE_PX,
+    height: FILE_TREE_ICON_SIZE_PX,
+  } as const;
+  if (kind === 'today') {
+    return renderToStaticMarkup(<DashboardIcon {...p} />);
+  }
+  if (kind === 'folder') {
+    return renderToStaticMarkup(<ChevronRightIcon {...p} />);
+  }
+  return renderToStaticMarkup(<ReaderIcon {...p} />);
+}
 
 function vaultTreeRowPrimaryMarkdownUri(data: VaultTreeItemData): string | null {
   if (data.kind === 'todayHub') {
@@ -53,7 +78,10 @@ function vaultTreeRowPrimaryMarkdownUri(data: VaultTreeItemData): string | null 
 }
 
 function vaultTreeDragGhostIconForRow(data: VaultTreeItemData): VaultTreeDragGhostIcon {
-  if (vaultTreeItemShowsTodaySidebarIcon(data)) {
+  if (
+    data.kind === 'todayHub'
+    || (data.kind === 'article' && data.name === VAULT_TREE_TODAY_HUB_NOTE_NAME)
+  ) {
     return 'today';
   }
   if (data.kind === 'folder') {
@@ -102,8 +130,8 @@ function mountVaultTreeDragGhost(options: {
   ghost.setAttribute('aria-hidden', 'true');
 
   const icon = document.createElement('span');
-  icon.className = 'material-icons vault-tree-drag-ghost__icon';
-  icon.textContent = dragIcon;
+  icon.className = 'vault-tree-drag-ghost__icon';
+  icon.innerHTML = vaultTreeDragGhostIconMarkup(dragIcon);
 
   const text = document.createElement('span');
   text.className = 'vault-tree-drag-ghost__label';
@@ -143,9 +171,14 @@ export type VaultPaneTreeProps = {
   fsRefreshNonce: number;
   /** When this changes, multi-selection in the tree is cleared (after bulk mutations). */
   vaultTreeSelectionClearNonce: number;
-  selectedMarkdownUri: string | null;
+  /** Open note URI for manual “reveal in tree” only (does not drive selection or expansion). */
+  editorActiveMarkdownUri: string | null;
+  /** Increment (from parent) to expand ancestors, select the row, and scroll it into view. */
+  revealActiveNoteNonce: number;
   busy: boolean;
   onOpenMarkdownNote: (uri: string) => void;
+  /** Middle-click (or non-primary open): new editor tab, focused. */
+  onOpenMarkdownNoteInNewActiveTab: (uri: string) => void;
   onRenameMarkdownRequest: (uri: string) => void;
   onDeleteMarkdownRequest: (uri: string) => void;
   onRenameFolderRequest: (uri: string) => void;
@@ -187,9 +220,11 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   fs,
   fsRefreshNonce,
   vaultTreeSelectionClearNonce,
-  selectedMarkdownUri,
+  editorActiveMarkdownUri,
+  revealActiveNoteNonce,
   busy,
   onOpenMarkdownNote,
+  onOpenMarkdownNoteInNewActiveTab,
   onRenameMarkdownRequest,
   onDeleteMarkdownRequest,
   onRenameFolderRequest,
@@ -224,12 +259,19 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     rootKidCount: number;
   }> | null>(null);
   const dragGhostHostRef = useRef<HTMLDivElement | null>(null);
-  const lastDirectArticleOpenRef = useRef<{uri: string; startedAt: number} | null>(null);
-  const suppressNextArticleClickRef = useRef<string | null>(null);
   const [dropTargetUri, setDropTargetUri] = useState<string | null>(null);
   const [draggingSourceUri, setDraggingSourceUri] = useState<string | null>(null);
   /** Incremented after async FS reload so React re-runs flatten; headless-tree `rebuildTree` may not change `useState` reference. */
   const [treeViewRevision, setTreeViewRevision] = useState(0);
+  const pendingScrollToTreeIdRef = useRef<string | null>(null);
+  const revealScrollFallbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const vaultTreeInnerRef = useRef<HTMLDivElement | null>(null);
+  const [vaultTreeLayoutNonce, setVaultTreeLayoutNonce] = useState(0);
+  /** Latest open note URI; reveal effect reads this only when `revealActiveNoteNonce` bumps. */
+  const editorActiveUriRef = useRef(editorActiveMarkdownUri);
+  editorActiveUriRef.current = editorActiveMarkdownUri;
+  /** Serialize sparse deep opens so concurrent expansions do not interleave cache writes. */
+  const sparseWalkTailRef = useRef(Promise.resolve());
 
   const clearDropTarget = () => setDropTargetUri(null);
 
@@ -262,14 +304,6 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         return;
       }
       if (data.kind === 'article' || data.kind === 'todayHub') {
-        const recentDirectOpen = lastDirectArticleOpenRef.current;
-        if (
-          recentDirectOpen?.uri === openUri
-          && performance.now() - recentDirectOpen.startedAt < 250
-        ) {
-          lastDirectArticleOpenRef.current = null;
-          return;
-        }
         onOpenMarkdownNote(openUri);
       }
     },
@@ -292,23 +326,67 @@ export const VaultPaneTree = memo(function VaultPaneTree({
           lastModified: null,
         };
       },
-      getChildrenWithData: async parentId =>
-        loadVaultTreeVisibleChildRows({
+      getChildrenWithData: async parentId => {
+        const rows = await loadVaultTreeVisibleChildRows({
           parentUri: parentId,
           fs,
           itemStoreRef,
-        }),
-    },
-    onLoadedChildren: (parentId, childrenIds) => {
-      const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
-        parentUri: parentId,
-      });
-      if (!lonely) {
-        return;
-      }
-      queueMicrotask(() => {
-        treeRef.current?.getItemInstance(lonely)?.expand();
-      });
+        });
+        const childrenIds = rows.map(r => r.id);
+        const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
+          parentUri: parentId,
+        });
+        if (lonely) {
+          await new Promise<void>(resolve => {
+            sparseWalkTailRef.current = sparseWalkTailRef.current
+              .then(async () => {
+                const t = treeRef.current;
+                if (!t) {
+                  resolve();
+                  return;
+                }
+                try {
+                  const loadChildRows = createVaultSparsePlanLoader({fs, itemStoreRef});
+                  const plan = await buildSparseLonelyExpandPlan({
+                    firstLonelyUri: lonely,
+                    itemStoreRef,
+                    loadChildRows,
+                  });
+                  for (const batch of plan.cacheBatches) {
+                    const parentInst = t.getItemInstance(batch.parentUri);
+                    if (!parentInst) {
+                      continue;
+                    }
+                    for (const row of batch.rows) {
+                      t.getItemInstance(row.id).updateCachedData(row.data, true);
+                    }
+                    parentInst.updateCachedChildrenIds(
+                      batch.rows.map(r => r.id),
+                      true,
+                    );
+                  }
+                  if (plan.expandChain.length > 0) {
+                    t.applySubStateUpdate('expandedItems', expandedItems => {
+                      const expanded = new Set(expandedItems);
+                      for (const id of plan.expandChain) {
+                        expanded.add(id);
+                      }
+                      return [...expanded];
+                    });
+                  }
+                } catch {
+                  /* ignore */
+                } finally {
+                  resolve();
+                }
+              })
+              .catch(() => {
+                resolve();
+              });
+          });
+        }
+        return rows;
+      },
     },
     // `hotkeysCoreFeature` dispatches selectionFeature presets (Shift+Arrow range select, Ctrl+A).
     // Keep it: removing it drops those tree shortcuts. `toggleSelectedItem` (Ctrl+Space) stays off
@@ -325,6 +403,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   });
 
   treeRef.current = tree;
+
+  useEffect(() => {
+    sparseWalkTailRef.current = Promise.resolve();
+  }, [rootId]);
 
   useEffect(() => {
     const t = treeRef.current;
@@ -408,7 +490,6 @@ export const VaultPaneTree = memo(function VaultPaneTree({
 
   void treeViewRevision;
   const items = tree.getItems();
-  const selectedItems = tree.getState().selectedItems;
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
@@ -419,35 +500,25 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   const itemIds = useMemo(() => items.map(item => item.getId()), [items]);
 
   useLayoutEffect(() => {
-    if (
-      !selectedMarkdownUri
-      || (!selectedMarkdownUri.startsWith(`${rootId}/`) && selectedMarkdownUri !== rootId)
-    ) {
+    const el = scrollRef.current;
+    if (!el) {
       return;
     }
-    const treeSelectId = itemIds.includes(selectedMarkdownUri)
-      ? selectedMarkdownUri
-      : (
-          Object.values(itemStoreRef.current).find(
-            d => d?.kind === 'todayHub' && d.todayNoteUri === selectedMarkdownUri,
-          )?.uri ?? null
-        );
-    if (!treeSelectId || !itemIds.includes(treeSelectId)) {
-      return;
-    }
-    if (selectedItems.length === 1 && selectedItems[0] === treeSelectId) {
-      return;
-    }
-    tree.setSelectedItems([treeSelectId]);
-  }, [selectedMarkdownUri, rootId, itemIds, selectedItems, tree]);
+    const ro = new ResizeObserver(() => {
+      setVaultTreeLayoutNonce(n => n + 1);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, []);
 
-  // Omit `items.length` from deps: it changes on expand/collapse and would re-run this effect,
-  // re-expanding ancestors the user just collapsed while the open note URI is unchanged.
   useEffect(() => {
-    if (
-      !selectedMarkdownUri
-      || (!selectedMarkdownUri.startsWith(`${rootId}/`) && selectedMarkdownUri !== rootId)
-    ) {
+    if (revealActiveNoteNonce === 0) {
+      return;
+    }
+    const uri = editorActiveUriRef.current;
+    if (!uri || (!uri.startsWith(`${rootId}/`) && uri !== rootId)) {
       return;
     }
     let cancelled = false;
@@ -464,7 +535,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
           /* ignore: warmup failed or vault torn down */
         }
       }
-      const rel = selectedMarkdownUri.slice(rootId.length).replace(/^\//, '');
+      if (cancelled) {
+        return;
+      }
+      const rel = uri.slice(rootId.length).replace(/^\//, '');
       const segments = rel.split('/').filter(Boolean);
       if (segments.length === 0) {
         return;
@@ -488,14 +562,74 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       }
       const treeSelectId =
         Object.values(itemStoreRef.current).find(
-          d => d?.kind === 'todayHub' && d.todayNoteUri === selectedMarkdownUri,
-        )?.uri ?? selectedMarkdownUri;
+          d => d?.kind === 'todayHub' && d.todayNoteUri === uri,
+        )?.uri ?? uri;
+      pendingScrollToTreeIdRef.current = treeSelectId;
       t.setSelectedItems([treeSelectId]);
+      t.getItemInstance(treeSelectId)?.setFocused();
+      const pendingId = treeSelectId;
+      if (revealScrollFallbackTimeoutRef.current != null) {
+        clearTimeout(revealScrollFallbackTimeoutRef.current);
+      }
+      revealScrollFallbackTimeoutRef.current = setTimeout(() => {
+        revealScrollFallbackTimeoutRef.current = null;
+        if (pendingScrollToTreeIdRef.current === pendingId) {
+          pendingScrollToTreeIdRef.current = null;
+        }
+      }, 2500);
     })();
     return () => {
       cancelled = true;
+      if (revealScrollFallbackTimeoutRef.current != null) {
+        clearTimeout(revealScrollFallbackTimeoutRef.current);
+        revealScrollFallbackTimeoutRef.current = null;
+      }
     };
-  }, [selectedMarkdownUri, rootId]);
+  }, [revealActiveNoteNonce, rootId]);
+
+  useLayoutEffect(() => {
+    const id = pendingScrollToTreeIdRef.current;
+    if (!id) {
+      return;
+    }
+    const idx = itemIds.indexOf(id);
+    if (idx < 0) {
+      return;
+    }
+    virtualizer.scrollToIndex(idx, {align: 'center'});
+    pendingScrollToTreeIdRef.current = null;
+  }, [itemIds, virtualizer, treeViewRevision]);
+
+  useLayoutEffect(() => {
+    const inner = vaultTreeInnerRef.current;
+    if (!inner || virtualItems.length === 0) {
+      if (inner) {
+        inner.style.paddingLeft = '';
+        inner.style.paddingTop = '';
+      }
+      return;
+    }
+    const wrap = inner.querySelector(
+      '.vault-tree-row-virtual-wrap',
+    ) as HTMLElement | null;
+    if (!wrap) {
+      inner.style.paddingLeft = '';
+      inner.style.paddingTop = '';
+      return;
+    }
+
+    /**
+     * Subpixel alignment without `translate3d` on this inner (compositor blur on SVG strokes).
+     * Padding nudge avoids margins on a `width: 100%` inner spilling wider than the scrollport.
+     */
+    inner.style.paddingLeft = '0px';
+    inner.style.paddingTop = '0px';
+    const pre = wrap.getBoundingClientRect();
+    const dx = Math.round(pre.left) - pre.left;
+    const dy = Math.round(pre.top) - pre.top;
+    inner.style.paddingLeft = dx !== 0 ? `${dx}px` : '';
+    inner.style.paddingTop = dy !== 0 ? `${dy}px` : '';
+  }, [virtualItems, virtualizer, vaultTreeLayoutNonce, treeViewRevision]);
 
   const containerProps = tree.getContainerProps('Vault');
 
@@ -538,6 +672,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         }}
       >
         <div
+          ref={vaultTreeInnerRef}
           className="vault-tree__inner"
           style={{height: `${virtualizer.getTotalSize()}px`, position: 'relative'}}
         >
@@ -556,70 +691,54 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   className="vault-tree-row-virtual-wrap vault-tree-row-virtual-wrap--placeholder"
                   style={{
                     position: 'absolute',
-                    top: 0,
+                    top: rowOffsetYPx,
                     left: 0,
                     width: '100%',
                     height: VAULT_TREE_ROW_HEIGHT_PX,
-                    transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                   }}
                   aria-hidden
                 />
               );
             }
             const rowProps = item.getProps();
-            const {onClick: rowAriaOnClick, ...rowButtonA11yProps} = rowProps;
+            const {
+              onClick: rowAriaOnClick,
+              className: rowPropClassName,
+              ...rowButtonA11yProps
+            } = rowProps;
             const level = item.getItemMeta().level;
-            const pad = 6 + level * 12;
-            const isFolder = data.kind === 'folder';
             const isDropTargetDir = isVaultTreeRowDirectoryDropTarget(data);
             const primaryMdUri = vaultTreeRowPrimaryMarkdownUri(data);
             const selected = item.isSelected();
             const isVaultRoot = data.uri === rootId;
+            const rowVm = vaultTreeItemToFileTreeRowViewModel({
+              data,
+              level,
+              isExpanded: item.isExpanded(),
+              label: vaultTreeRowLabel(data),
+              primaryOpenUri: primaryMdUri,
+            });
 
             const canDragFromRow = Boolean(data.uri) && data.uri !== rootId && !busy;
             const rowButton = (
-              <button
+              <FileTreeNode
                 {...rowButtonA11yProps}
-                type="button"
+                depth={rowVm.depth}
+                label={rowVm.label}
+                treeType={rowVm.treeType}
+                isFolderExpanded={rowVm.isExpanded}
+                selected={selected}
                 className={[
+                  rowPropClassName,
                   selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
                   isDropTargetDir && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
                   draggingSourceUri === data.uri ? 'vault-tree-row--dragging' : '',
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                style={{paddingInlineStart: pad}}
                 disabled={busy}
                 draggable={canDragFromRow}
-                onMouseDown={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                  if (
-                    busy ||
-                    e.button !== 0 ||
-                    e.shiftKey ||
-                    e.ctrlKey ||
-                    e.metaKey ||
-                    e.altKey
-                  ) {
-                    return;
-                  }
-                  if (primaryMdUri) {
-                    const startedAt = performance.now();
-                    lastDirectArticleOpenRef.current = {
-                      uri: primaryMdUri,
-                      startedAt,
-                    };
-                    suppressNextArticleClickRef.current = primaryMdUri;
-                    onOpenMarkdownNote(primaryMdUri);
-                    e.preventDefault();
-                    return;
-                  }
-                }}
                 onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
-                  if (primaryMdUri && suppressNextArticleClickRef.current === primaryMdUri) {
-                    suppressNextArticleClickRef.current = null;
-                    e.preventDefault();
-                    return;
-                  }
                   if (e.shiftKey || e.ctrlKey || e.metaKey) {
                     if (e.shiftKey) {
                       item.selectUpTo(e.ctrlKey || e.metaKey);
@@ -634,16 +753,44 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     return;
                   }
                   rowAriaOnClick?.(e.nativeEvent);
+                }}
+                onMouseDown={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (e.button !== 1 || busy) {
+                    return;
+                  }
                   if (
-                    isFolder
-                    && selectedMarkdownUri
-                    && (selectedMarkdownUri === rootId
-                      || selectedMarkdownUri.startsWith(`${rootId}/`))
+                    !primaryMdUri
+                    || (data.kind !== 'article' && data.kind !== 'todayHub')
                   ) {
-                    const keepNoteUri = selectedMarkdownUri;
-                    queueMicrotask(() => {
-                      treeRef.current?.setSelectedItems([keepNoteUri]);
-                    });
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onAuxClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (e.button !== 1 || busy) {
+                    return;
+                  }
+                  if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+                    return;
+                  }
+                  if (
+                    !primaryMdUri
+                    || (data.kind !== 'article' && data.kind !== 'todayHub')
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri);
+                }}
+                onDoubleClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
+                  if (busy || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
+                    return;
+                  }
+                  if (primaryMdUri) {
+                    e.preventDefault();
+                    onOpenMarkdownNote(primaryMdUri);
                   }
                 }}
                 onDragStart={e => {
@@ -735,41 +882,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                       }
                     : undefined
                 }
-              >
-                <span className="vault-tree-row__chevron" aria-hidden>
-                  {isFolder ? (
-                    <MaterialIcon
-                      name={item.isExpanded() ? 'expand_more' : 'chevron_right'}
-                      size={12}
-                    />
-                  ) : (
-                    <span className="vault-tree-row__chevron-spacer" />
-                  )}
-                </span>
-                <span
-                  className={[
-                    'vault-tree-row__icon',
-                    vaultTreeItemShowsTodaySidebarIcon(data)
-                      ? 'vault-tree-row__icon--today'
-                      : isFolder
-                        ? 'vault-tree-row__icon--folder'
-                        : 'vault-tree-row__icon--article',
-                  ].join(' ')}
-                  aria-hidden
-                >
-                  <MaterialIcon
-                    name={
-                      vaultTreeItemShowsTodaySidebarIcon(data)
-                        ? 'today'
-                        : isFolder
-                          ? 'folder'
-                          : 'article'
-                    }
-                    size={24}
-                  />
-                </span>
-                <span className="vault-tree-row__label">{vaultTreeRowLabel(data)}</span>
-              </button>
+              />
             );
 
             return (
@@ -778,11 +891,10 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 className="vault-tree-row-virtual-wrap"
                 style={{
                   position: 'absolute',
-                  top: 0,
+                  top: rowOffsetYPx,
                   left: 0,
                   width: '100%',
                   height: VAULT_TREE_ROW_HEIGHT_PX,
-                  transform: `translate3d(0, ${rowOffsetYPx}px, 0)`,
                 }}
               >
                 <ContextMenu.Root>

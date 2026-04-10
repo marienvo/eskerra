@@ -26,7 +26,6 @@ export function TitleBarTransport({
 }: TitleBarTransportProps) {
   const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
-  const playTooltip = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
   const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
 
   return (
@@ -35,15 +34,16 @@ export function TitleBarTransport({
       role="group"
       aria-label="Playback"
     >
-      <span className="window-title-bar-transport__time" aria-hidden>
+      <span
+        className="window-title-bar-transport__time window-title-bar-transport__time--position"
+        aria-hidden
+      >
         {positionLabel}
       </span>
       <button
         type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--seek"
         aria-label="Rewind 10 seconds"
-        data-tooltip="Rewind 10 seconds"
-        data-tooltip-placement="inline-end"
         disabled={seekDisabled}
         onClick={() => void onSeekBack()}
       >
@@ -51,11 +51,9 @@ export function TitleBarTransport({
       </button>
       <button
         type="button"
-        className="app-playback-chrome-btn app-playback-chrome-btn--play app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--play"
         aria-busy={isLoading}
         aria-label={playLabel}
-        data-tooltip={playTooltip}
-        data-tooltip-placement="inline-end"
         disabled={isLoading}
         onClick={() => void onTogglePlay()}
       >
@@ -76,10 +74,8 @@ export function TitleBarTransport({
       </button>
       <button
         type="button"
-        className="app-playback-chrome-btn app-tooltip-trigger"
+        className="app-playback-chrome-btn app-playback-chrome-btn--seek"
         aria-label="Forward 10 seconds"
-        data-tooltip="Forward 10 seconds"
-        data-tooltip-placement="inline-start"
         disabled={seekDisabled}
         onClick={() => void onSeekForward()}
       >

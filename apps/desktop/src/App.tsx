@@ -143,6 +143,7 @@ export default function App() {
     startNewEntry,
     cancelNewEntry,
     selectNote,
+    selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
     flushInboxSave,
@@ -893,6 +894,7 @@ export default function App() {
                       backlinkUris={selectedNoteBacklinkUris}
                       selectedUri={selectedUri}
                       onSelectNote={selectNote}
+                      onSelectNoteInNewActiveTab={selectNoteInNewActiveTab}
                       onAddEntry={startNewEntry}
                       composingNewEntry={composingNewEntry}
                       onCancelNewEntry={cancelNewEntry}

@@ -25,6 +25,7 @@ import {
 import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {
@@ -41,18 +42,28 @@ import {wikiLinkAutocompleteExtension} from './wikiLinkAutocomplete';
 import {wikiLinkResolvedHighlightExtensions} from './wikiLinkCodemirror';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
-import {wikiLinkActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {
+  discardStoredPrimaryPointerDownForLinkClick,
+  recordPrimaryPointerDownForLinkClick,
+  resolveDocPositionForLinkPrimaryClick,
+} from './linkClickUseMousedownPosition';
+import {wikiLinkPointerActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
   buildNoteMarkdownVaultKeymapBindings,
 } from './noteMarkdownCoreKeymap';
 import {
+  markdownFormattingModKeymap,
   markdownInlineCodeSurroundInputHandler,
   markdownSelectionAllowMultipleRanges,
   markdownSelectionSurroundKeymap,
 } from './markdownSelectionSurround';
-import {markdownSmartExpandExtension} from './markdownSmartExpandSelection';
+import {
+  markdownCaretInOpaquePasteBlock,
+  markdownSmartExpandExtension,
+} from './markdownSmartExpandSelection';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -71,9 +82,16 @@ function eskerraCellCharFilter(): Extension {
   });
 }
 
-function sanitizeCellInsert(s: string): string {
+/** Exported for table cell context menu paste (strip pipe / newlines). */
+export function sanitizeCellInsert(s: string): string {
   return s.replace(/[\r\n|]+/g, ' ').trim();
 }
+
+export type TableCellContextMenuOpen = (detail: {
+  clientX: number;
+  clientY: number;
+  view: EditorView;
+}) => void;
 
 export type EskerraTableCellKeyboardCallbacks = {
   onTabFromCell: (shift: boolean) => boolean;
@@ -113,6 +131,8 @@ export type BuildNoteMarkdownCellExtensionsArgs = {
    * instead of a per-cell search panel.
    */
   onOpenNoteWideFind?: () => void;
+  /** When set, right-click opens the shared markdown context menu (bridge to React layer). */
+  tableCellContextMenuOpenRef?: MutableRefObject<TableCellContextMenuOpen | null>;
 };
 
 export type EskerraTableCellBundlePartial = Pick<
@@ -156,18 +176,26 @@ export function buildNoteMarkdownCellExtensions(
     onReportError,
     onDocChanged,
     onOpenNoteWideFind,
+    tableCellContextMenuOpenRef,
     tableCallbacks: tc,
   } = args;
 
   const onEditorClick = (e: MouseEvent, view: EditorView): boolean => {
-    if (e.button !== 0 || e.shiftKey) {
+    if (e.button !== 0) {
       return false;
     }
-    const pos = view.posAtCoords({x: e.clientX, y: e.clientY});
+    if (e.shiftKey) {
+      discardStoredPrimaryPointerDownForLinkClick(view);
+      return false;
+    }
+    const pos = resolveDocPositionForLinkPrimaryClick(view, e);
     if (pos == null) {
       return false;
     }
-    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+      view.state.doc,
+      pos,
+    );
     if (inner) {
       e.preventDefault();
       e.stopPropagation();
@@ -214,7 +242,10 @@ export function buildNoteMarkdownCellExtensions(
     if (pos == null) {
       return false;
     }
-    const inner = wikiLinkActivatableInnerAtDocPosition(view.state.doc, pos);
+    const inner = wikiLinkPointerActivatableInnerAtDocPosition(
+      view.state.doc,
+      pos,
+    );
     if (inner) {
       if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
         return false;
@@ -330,6 +361,7 @@ export function buildNoteMarkdownCellExtensions(
 
   const pasteHandlers = EditorView.domEventHandlers({
     mousedown(event, view) {
+      recordPrimaryPointerDownForLinkClick(view, event);
       if (event.button !== 1) {
         return false;
       }
@@ -382,9 +414,61 @@ export function buildNoteMarkdownCellExtensions(
         }
         const plainTrimmed = (dt.getData('text/plain') ?? '').trim();
         if (plainTrimmed === '' && !probablyImage) {
+          const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
+          if (
+            htmlWhenPlainEmpty.trim() !== ''
+            && !markdownCaretInOpaquePasteBlock(
+              view.state,
+              view.state.selection.main.head,
+            )
+          ) {
+            const mdEmptyPlain = tryClipboardHtmlToMarkdownInsert(
+              htmlWhenPlainEmpty,
+              '',
+            );
+            if (mdEmptyPlain != null) {
+              const cleaned = sanitizeCellInsert(mdEmptyPlain);
+              if (cleaned.length > 0) {
+                event.preventDefault();
+                const sel = view.state.selection.main;
+                const f = Math.min(sel.anchor, sel.head);
+                const t = Math.max(sel.anchor, sel.head);
+                view.dispatch({
+                  changes: {from: f, to: t, insert: cleaned},
+                  selection: {anchor: f + cleaned.length},
+                });
+                return true;
+              }
+            }
+          }
           event.preventDefault();
           event.stopPropagation();
           return runNativeClipboardPasteWhenWebDataEmpty(view);
+        }
+        const htmlRaw = dt.getData('text/html') ?? '';
+        if (
+          htmlRaw.trim() !== ''
+          && !markdownCaretInOpaquePasteBlock(
+            view.state,
+            view.state.selection.main.head,
+          )
+        ) {
+          const plainForHtml = dt.getData('text/plain') ?? '';
+          const md = tryClipboardHtmlToMarkdownInsert(htmlRaw, plainForHtml);
+          if (md != null) {
+            const cleaned = sanitizeCellInsert(md);
+            if (cleaned.length > 0) {
+              event.preventDefault();
+              const sel = view.state.selection.main;
+              const f = Math.min(sel.anchor, sel.head);
+              const t = Math.max(sel.anchor, sel.head);
+              view.dispatch({
+                changes: {from: f, to: t, insert: cleaned},
+                selection: {anchor: f + cleaned.length},
+              });
+              return true;
+            }
+          }
         }
       }
       const plain = event.clipboardData?.getData('text/plain') ?? '';
@@ -409,6 +493,23 @@ export function buildNoteMarkdownCellExtensions(
       return false;
     },
     click: onEditorClick,
+    contextmenu(event, view) {
+      if (event.button !== 2) {
+        return false;
+      }
+      const openMenu = tableCellContextMenuOpenRef?.current;
+      if (!openMenu) {
+        return false;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      openMenu({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        view,
+      });
+      return true;
+    },
   });
 
   const tableNavKeymap = keymap.of([
@@ -467,6 +568,7 @@ export function buildNoteMarkdownCellExtensions(
     markdownSelectionAllowMultipleRanges(),
     ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),
+    markdownFormattingModKeymap(),
     markdownInlineCodeSurroundInputHandler(),
     ...(onOpenNoteWideFind ? [] : [search()]),
     eskerraCellCharFilter(),
@@ -522,6 +624,7 @@ export function buildNoteMarkdownCellExtensions(
         borderLeftColor: 'inherit',
       },
     }),
+    wikiEOLCaretPointerFixExtension(),
     EditorView.updateListener.of(update => {
       if (update.docChanged) {
         onDocChanged();

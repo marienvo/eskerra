@@ -3,13 +3,17 @@ export {
 } from './todayHubSectionDelimiter';
 export {
   enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
+  startOfLocalWeek,
   startOfLocalWeekMonday,
   todayHubRowUri,
 } from './todayHubMondays';
 export {
+  TODAY_HUB_START_DAYS,
   parseTodayHubFrontmatter,
   todayHubColumnCount,
+  todayHubStartJsDay,
   type TodayHubPerpetualType,
   type TodayHubSettings,
   type TodayHubStartDay,

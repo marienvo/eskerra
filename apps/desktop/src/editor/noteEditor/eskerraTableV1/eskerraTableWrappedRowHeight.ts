@@ -3,9 +3,9 @@ export const ESKERRA_RDG_CELL_PADDING_INLINE_PX = 8;
 
 export const ESKERRA_TABLE_MIN_ROW_HEIGHT_PX = 34;
 
-/** Capture editor `.cm-scroller` uses 16px and line-height 1.6 (see App.css). */
-export const ESKERRA_TABLE_CAPTURE_FONT_SIZE_PX = 16;
-export const ESKERRA_TABLE_CAPTURE_LINE_HEIGHT_RATIO = 1.6;
+/** Capture editor `.cm-scroller` uses `--nb-editor-font-size` / `--nb-editor-line-height` (see App.css). */
+export const ESKERRA_TABLE_CAPTURE_FONT_SIZE_PX = 15;
+export const ESKERRA_TABLE_CAPTURE_LINE_HEIGHT_RATIO = 1.55;
 
 /**
  * Line box height for row sizing: must match wrapped cell text, not a smaller guess

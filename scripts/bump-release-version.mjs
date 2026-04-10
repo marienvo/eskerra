@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Before release APK: bump semver from package.json based on git branch/commit history
- * stored in .local/build-version-state.json (gitignored).
+ * Before release APK: bump semver from apps/mobile/package.json based on git branch/commit
+ * history stored in .local/build-version-state.json (gitignored). Also syncs Android
+ * Gradle, then desktop package.json, Cargo.toml, metainfo, and canonical mobile semver.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -14,12 +15,41 @@ import {
   mergeState,
   parseSemver,
 } from './bump-release-version-lib.mjs';
+import {
+  applySemverToCargoLockPackageVersion,
+  applySemverToCargoTomlPackageVersion,
+  applySemverToDesktopPackageJson,
+  prependMetainfoReleaseIfNew,
+} from './sync-app-version-artifacts-lib.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const STATE_DIR = join(ROOT, '.local');
 const STATE_FILE = join(STATE_DIR, 'build-version-state.json');
 const PACKAGE_JSON = join(ROOT, 'apps', 'mobile', 'package.json');
+const DESKTOP_PACKAGE_JSON = join(ROOT, 'apps', 'desktop', 'package.json');
+const DESKTOP_CARGO_TOML = join(
+  ROOT,
+  'apps',
+  'desktop',
+  'src-tauri',
+  'Cargo.toml',
+);
+const DESKTOP_CARGO_LOCK = join(
+  ROOT,
+  'apps',
+  'desktop',
+  'src-tauri',
+  'Cargo.lock',
+);
+const DESKTOP_METAINFO = join(
+  ROOT,
+  'apps',
+  'desktop',
+  'src-tauri',
+  'metainfo',
+  'eskerra.metainfo.xml',
+);
 const BUILD_GRADLE = join(
   ROOT,
   'apps',
@@ -132,6 +162,35 @@ function writeGradleVersions(versionCode, versionName) {
   writeFileSync(BUILD_GRADLE, gradle, 'utf8');
 }
 
+/** @param {string} version */
+function syncDesktopReleaseArtifacts(version) {
+  const dateUtc = new Date().toISOString().slice(0, 10);
+  const deskPkg = readFileSync(DESKTOP_PACKAGE_JSON, 'utf8');
+  writeFileSync(
+    DESKTOP_PACKAGE_JSON,
+    applySemverToDesktopPackageJson(deskPkg, version),
+    'utf8',
+  );
+  const cargo = readFileSync(DESKTOP_CARGO_TOML, 'utf8');
+  writeFileSync(
+    DESKTOP_CARGO_TOML,
+    applySemverToCargoTomlPackageVersion(cargo, version),
+    'utf8',
+  );
+  const cargoLock = readFileSync(DESKTOP_CARGO_LOCK, 'utf8');
+  writeFileSync(
+    DESKTOP_CARGO_LOCK,
+    applySemverToCargoLockPackageVersion(cargoLock, 'app', version),
+    'utf8',
+  );
+  const meta = readFileSync(DESKTOP_METAINFO, 'utf8');
+  writeFileSync(
+    DESKTOP_METAINFO,
+    prependMetainfoReleaseIfNew(meta, version, dateUtc),
+    'utf8',
+  );
+}
+
 function main() {
   const branchId = resolveBranchId();
   const commitSha = git('rev-parse', 'HEAD');
@@ -177,6 +236,7 @@ function main() {
 
   writePackageVersion(pkg, decision.newVersion);
   writeGradleVersions(nextCode, decision.newVersion);
+  syncDesktopReleaseArtifacts(decision.newVersion);
   writeState(nextState);
 
   console.log(

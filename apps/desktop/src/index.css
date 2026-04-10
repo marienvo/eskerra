@@ -6,7 +6,9 @@ html {
 }
 
 :root {
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  /* Inter Variable (100–900) via @fontsource-variable/inter; matches weights used in App.css (200–700). */
+  --font-sans: 'Inter Variable', Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.45;
 
   /* Deepest tone of the main-window chrome gradient; HTML backdrop + preload flash (see AppChromeBackground). */
@@ -107,6 +109,17 @@ html {
 
   /* Capture: list/button hover */
   --color-row-hover: #e8e8e8;
+  /* IDE-style tree selection (subtle; works on light surfaces). */
+  --color-vault-tree-row-selected: color-mix(in srgb, var(--color-text) 8%, var(--color-surface));
+
+  /* Vault tree rows + editor open-tab pills + workspace pane titles: shared type typography (kept in sync). */
+  --file-tree-node-font-size: 13px;
+  --file-tree-node-font-weight: 400;
+  --file-tree-node-font-weight-emphasis: 500;
+  /* Semibold: pane titles (Vault / Episodes / Notifications); use when 500 is too light. */
+  --file-tree-node-font-weight-semibold: 600;
+  --file-tree-node-font-family: var(--font-sans);
+  --file-tree-icon-label-gap: 6px;
   --color-button-secondary-bg: #eef0f2;
 
   /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
