@@ -2890,6 +2890,12 @@ button.primary.destructive {
   width: 100%;
   box-sizing: border-box;
   background: transparent;
+  /* Lighter gray for date strip + column titles (inherits into rows). */
+  --today-hub-chrome-label-color: color-mix(
+    in srgb,
+    var(--nb-editor-faint) 72%,
+    var(--nb-editor-text) 28%
+  );
   /* Integer px (rem-derived at 16px root) avoids fuzzy sub-pixel layout in the grid chrome. */
   padding: 0 56px 16px 0;
   font-size: 0.88rem;
@@ -2925,7 +2931,7 @@ button.primary.destructive {
 
 /*
  * Previous calendar week: opacity + grayscale only on `.row-cells` (not the row wrapper) so the date
- * label is not under a group opacity layer (subpixel AA). Date luminance is approximated with `color-mix`.
+ * strip is not under a group opacity layer (subpixel AA) and keeps normal chrome label color.
  */
 [data-app-surface='capture']
   .today-hub-canvas__row.today-hub-canvas__row--previous-week
@@ -2934,21 +2940,10 @@ button.primary.destructive {
   filter: grayscale(1);
 }
 
-[data-app-surface='capture']
-  .today-hub-canvas__row--previous-week
-  .today-hub-canvas__row-date,
-[data-app-surface='capture']
-  .today-hub-canvas__row--previous-week
-  .today-hub-canvas__row-date-end,
-[data-app-surface='capture']
-  .today-hub-canvas__row--previous-week
-  .today-hub-canvas__col-head {
-  color: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--color-text-primary) 72%, var(--color-muted) 28%) 72%,
-    var(--nb-editor-margin-bg) 28%
-  );
-}
+/*
+ * Week strip chrome (`.row-date`, `.col-head`, footer `.row-date-end`) keeps the same label color as
+ * other rows; only `.row-cells` uses opacity + grayscale for the previous calendar week.
+ */
 
 /* Zebra only behind the cell grid (grid gaps), not behind the week date strip. */
 [data-app-surface='capture']
@@ -3013,12 +3008,24 @@ button.primary.destructive {
   display: block;
   min-width: 112px;
   padding-inline-start: var(--today-hub-header-pad-inline-start);
-  color: var(--color-text-muted);
+  color: var(--today-hub-chrome-label-color);
   font-size: 0.78rem;
   font-weight: 620;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
   line-height: 1.35;
+}
+
+/*
+ * WebKitGTK: hub week strip labels used computed font-smoothing `auto` (uneven LCD AA on small type);
+ * match capture `.cm-scroller` / `.section-heading` — grayscale AA + no faux bold on small labels.
+ */
+[data-app-surface='capture'] .today-hub-canvas__row-date,
+[data-app-surface='capture'] .today-hub-canvas__row-date-end,
+[data-app-surface='capture'] .today-hub-canvas__row-date-bar .today-hub-canvas__col-head {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  text-rendering: auto;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-cells {
@@ -3035,7 +3042,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date,
 [data-app-surface='capture'] .today-hub-canvas__row-date-end {
-  color: var(--color-text-primary);
+  color: var(--today-hub-chrome-label-color);
   font-weight: 600;
   font-size: 0.82rem;
   text-transform: none;
