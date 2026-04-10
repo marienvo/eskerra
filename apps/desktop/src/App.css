@@ -2950,7 +2950,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar {
   padding-top: 2px;
-  padding-inline-start: 90px; /* left indentation to align with markdown content */
+  padding-inline-start: 98px; /* +8px vs cells: full week labels need a bit more inset */
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-cells {
