@@ -33,7 +33,6 @@ import {
 } from './components/AppStatusBar';
 import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
 import {NotificationsPanel} from './components/NotificationsPanel';
-import {NotificationsRail} from './components/NotificationsRail';
 import {RailNav} from './components/RailNav';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
@@ -176,7 +175,6 @@ export default function App() {
     closeEditorTab,
     reorderEditorWorkspaceTabs,
     closeOtherEditorTabs,
-    closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
     showTodayHubCanvas,
@@ -1028,9 +1026,10 @@ export default function App() {
                       onCloseEditorTab={closeEditorTab}
                       onReorderEditorWorkspaceTabs={reorderEditorWorkspaceTabs}
                       onCloseOtherEditorTabs={closeOtherEditorTabs}
-                      onCloseAllEditorTabs={closeAllEditorTabs}
-                      onReopenClosedEditorTab={reopenLastClosedEditorTab}
-                      canReopenClosedEditorTab={canReopenClosedEditorTab}
+                      notificationsPanelVisible={notificationsPanelVisible}
+                      onToggleNotificationsPanel={() =>
+                        setNotificationsPanelVisible(v => !v)
+                      }
                       showTodayHubCanvas={showTodayHubCanvas}
                       todayHubSettings={todayHubSettings}
                       todayHubBridgeRef={todayHubBridgeRef}
@@ -1054,10 +1053,6 @@ export default function App() {
                 }
               />
             </div>
-            <NotificationsRail
-              panelVisible={notificationsPanelVisible}
-              onToggle={() => setNotificationsPanelVisible(v => !v)}
-            />
           </div>
 
           {!err && diskConflict ? (

@@ -12,6 +12,10 @@ Authoritative detail: `specs/design/desktop-shell-patterns.md`.
 
 - Main **Vault** / **Episodes** / **editor** workspace (**`MainWorkspaceSplit`**): uses **`DesktopHorizontalSplit`** for width; when **both** Vault and Episodes are open, **`DesktopVerticalSplit`** stacks them in the left column (**`vaultEpisodesStack.topHeightPx`** in **`layoutPanelsV4`**). **One** main **left column width** (persisted as **`inbox.leftWidthPx`**, mirrored to **`podcastsMain.leftWidthPx`**); **editor** is **`flex: 1`**. Do **not** reintroduce **`react-resizable-panels`** for this main split without a spec update (it used percentage remapping and caused visible **1px jitter** on window resize). Persist widths and stack height via **`layoutStore`** (`layoutPanelsV4`).
 
+## Editor Toolbar
+
+- The editor column’s top chrome (**Back / Forward**, compose title + **Cancel** when composing, **notifications** toggle) is the **Editor Toolbar**. Markup: **`pane-header pane-header--editor-toolbar`** in **`VaultTab`**; styles: **`.pane-header--editor-toolbar`** in **`App.css`**. Open-note tabs render in **`WindowTitleBar`**, not in this row.
+
 ## Cursors
 
 - Treat the desktop UI as a **desktop app**: **`cursor: default`** on **buttons**, **rail tabs**, **list rows**, and similar chrome. **Do not** use **`cursor: pointer`** for those.

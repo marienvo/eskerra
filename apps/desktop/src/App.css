@@ -1202,14 +1202,14 @@ a:focus:not(:focus-visible) {
   gap: 0.15rem;
 }
 
-/* Vault editor column: tighter chrome; open-note tabs live in the window title bar. */
-.pane-header--inbox-editor {
+/* Editor Toolbar (VaultTab): tighter chrome; open-note tabs live in the window title bar. */
+.pane-header--editor-toolbar {
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
   align-items: center;
 }
 
-.pane-header--inbox-editor .pane-header-start {
+.pane-header--editor-toolbar .pane-header-start {
   gap: 0.12rem;
   align-items: center;
 }
@@ -4935,6 +4935,10 @@ button:disabled {
 .pane-header-add-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.pane-header-add-btn--notifications-on:not(:disabled) {
+  color: var(--color-accent);
 }
 
 [data-app-surface='capture'] .pane-footer {

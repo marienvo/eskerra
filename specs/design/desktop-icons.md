@@ -13,7 +13,7 @@ Some names exist only in **Material Symbols** and are missing from the bundled *
 
 ## 12px grid (required)
 
-All Material Icons in the desktop app **must be rendered on a square whose width and height are a positive integer multiple of 12 CSS pixels** (12×12, 24×24, 36×36, …, up to 192). **24×24** is the default for rail tabs, vault tree rows, and title-bar transport. **12×12** stays the norm for compact chrome: pane header icon-only actions (Vault / editor header plus, rename, clear) and the status bar **Settings** control (`AppStatusBar`).
+All Material Icons in the desktop app **must be rendered on a square whose width and height are a positive integer multiple of 12 CSS pixels** (12×12, 24×24, 36×36, …, up to 192). **24×24** is the default for rail tabs, vault tree rows, and title-bar transport. **12×12** stays the norm for compact chrome: pane header icon-only actions (Vault / **Editor Toolbar** plus, rename, clear) and the status bar **Settings** control (`AppStatusBar`).
 
 - Set **`font-size`** (and the icon box **`width` / `height`** when using `MaterialIcon`) to that multiple of 12.
 - Do not use odd sizes such as 22px or 28px for Material Icons unless you have an exceptional case and document the exception in code review.

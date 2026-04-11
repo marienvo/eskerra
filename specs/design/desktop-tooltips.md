@@ -10,7 +10,7 @@ Icon-only controls and compact actions in the desktop shell **must** use:
 - Attribute `data-tooltip` with the same short label shown on hover (US English, sentence case unless a proper noun).
 - Attribute `data-tooltip-placement` with one of:
   - `inline-end` — tooltip opens toward the **inline end** (to the right in LTR), for controls on the **leading** side of the shell (for example, rail tabs).
-  - `inline-start` — tooltip opens toward the **inline start** (to the left in LTR), for controls on the **trailing** edge of a bar (for example, window controls, pane header actions) so the bubble stays inside the window.
+  - `inline-start` — tooltip opens toward the **inline start** (to the left in LTR), for controls on the **trailing** edge of a bar (for example, window controls, Vault pane header actions, **Editor Toolbar** actions) so the bubble stays inside the window.
 
 **Do not** use the native HTML `title` attribute for these action tooltips; it produces inconsistent OS/browser chrome and conflicts with the shell design.
 

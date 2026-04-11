@@ -1,6 +1,5 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {MutableRefObject, ReactNode, RefObject} from 'react';
 import {
   Fragment,
@@ -36,7 +35,6 @@ import {
   type NoteMarkdownEditorHandle,
 } from '../editor/noteEditor/NoteMarkdownEditor';
 
-import {reopenClosedTabMenuShortcutLabel} from '../lib/desktopShortcutLabels';
 import {renameDraftStemForMarkdownUri} from '../lib/renameDialogDraft';
 import {
   planVaultTreeBulkTargets,
@@ -141,9 +139,8 @@ type VaultTabProps = {
   onCloseEditorTab: (tabId: string) => void;
   onReorderEditorWorkspaceTabs?: (fromIndex: number, insertBeforeIndex: number) => void;
   onCloseOtherEditorTabs: (keepTabId: string) => void;
-  onCloseAllEditorTabs: () => void;
-  onReopenClosedEditorTab: () => void;
-  canReopenClosedEditorTab: boolean;
+  notificationsPanelVisible: boolean;
+  onToggleNotificationsPanel: () => void;
   showTodayHubCanvas: boolean;
   todayHubSettings: TodayHubSettings | null;
   todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
@@ -537,9 +534,8 @@ export function VaultTab({
   onCloseEditorTab,
   onReorderEditorWorkspaceTabs,
   onCloseOtherEditorTabs,
-  onCloseAllEditorTabs,
-  onReopenClosedEditorTab,
-  canReopenClosedEditorTab,
+  notificationsPanelVisible,
+  onToggleNotificationsPanel,
   showTodayHubCanvas,
   todayHubSettings,
   todayHubBridgeRef,
@@ -549,10 +545,6 @@ export function VaultTab({
   persistTodayHubRow,
   titleBarEditorTabsHost = null,
 }: VaultTabProps) {
-  const reopenClosedTabKbdLabel = useMemo(
-    () => reopenClosedTabMenuShortcutLabel(),
-    [],
-  );
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
@@ -1151,7 +1143,8 @@ export function VaultTab({
         episodesPane={episodesPane}
         editorPane={
           <div className="panel-surface">
-            <div className="pane-header pane-header--inbox-editor">
+            {/* Editor Toolbar: history, compose title, notifications (tabs live in WindowTitleBar). */}
+            <div className="pane-header pane-header--editor-toolbar">
               <div className="pane-header-start">
                 <button
                   type="button"
@@ -1189,56 +1182,6 @@ export function VaultTab({
                 ) : null}
               </div>
               <div className="pane-header-trailing-actions">
-                {!composingNewEntry
-                && (editorWorkspaceTabs.length > 0 || canReopenClosedEditorTab) ? (
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button
-                        type="button"
-                        className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                        disabled={busy}
-                        aria-label="Editor tab actions"
-                        data-tooltip="Editor tab actions"
-                        data-tooltip-placement="inline-start"
-                      >
-                        <span className="pane-header-add-btn__glyph" aria-hidden>
-                          <MaterialIcon name="more_vert" size={12} />
-                        </span>
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        className="note-list-context-menu"
-                        side="bottom"
-                        align="end"
-                        sideOffset={4}
-                        collisionPadding={8}
-                      >
-                        <DropdownMenu.Item
-                          className="note-list-context-menu__item"
-                          disabled={busy || editorWorkspaceTabs.length === 0}
-                          onSelect={() => {
-                            onCloseAllEditorTabs();
-                          }}
-                        >
-                          Close all
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className="note-list-context-menu__item note-list-context-menu__item--with-kbd"
-                          disabled={busy || !canReopenClosedEditorTab}
-                          onSelect={() => {
-                            onReopenClosedEditorTab();
-                          }}
-                        >
-                          <span>Reopen closed tab</span>
-                          <span className="note-list-context-menu__kbd">
-                            {reopenClosedTabKbdLabel}
-                          </span>
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                ) : null}
                 {composingNewEntry ? (
                   <button
                     type="button"
@@ -1254,6 +1197,24 @@ export function VaultTab({
                     </span>
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  className={[
+                    'pane-header-add-btn icon-btn-ghost app-tooltip-trigger',
+                    notificationsPanelVisible ? 'pane-header-add-btn--notifications-on' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={onToggleNotificationsPanel}
+                  aria-label="Notifications"
+                  aria-pressed={notificationsPanelVisible}
+                  data-tooltip="Notifications"
+                  data-tooltip-placement="inline-start"
+                >
+                  <span className="pane-header-add-btn__glyph" aria-hidden>
+                    <MaterialIcon name="notifications" size={12} />
+                  </span>
+                </button>
               </div>
             </div>
             {editorOpen ? (
