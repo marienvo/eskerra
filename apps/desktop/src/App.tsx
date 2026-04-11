@@ -67,6 +67,7 @@ import {
   DEFAULT_MAIN_WINDOW_PANE_VISIBILITY,
   loadMainWindowUi,
   saveMainWindowUi,
+  type TodayHubWorkspaceSnapshot,
 } from './lib/mainWindowUiStore';
 import {
   initialDoubleShiftState,
@@ -110,6 +111,8 @@ export default function App() {
       index: number;
     }>;
     activeEditorTabId?: string | null;
+    activeTodayHubUri?: string | null;
+    todayHubWorkspaces?: Record<string, TodayHubWorkspaceSnapshot> | null;
   } | null>(null);
   const {
     vaultRoot,
@@ -182,6 +185,11 @@ export default function App() {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
+    switchTodayHubWorkspace,
+    focusActiveTodayHubNote,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -214,6 +222,36 @@ export default function App() {
   }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
 
   const mainShellReady = Boolean(vaultRoot && layoutsReady);
+
+  const titleBarTodayHubSelect = useMemo(() => {
+    if (
+      !vaultRoot
+      || todayHubSelectorItems.length === 0
+      || activeTodayHubUri == null
+    ) {
+      return null;
+    }
+    const activeLabel =
+      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
+        ?.label ?? 'Today';
+    return {
+      items: todayHubSelectorItems,
+      activeTodayNoteUri: activeTodayHubUri,
+      activeLabel,
+      onMainActivate: focusActiveTodayHubNote,
+      onPickHub: (uri: string) => {
+        void switchTodayHubWorkspace(uri);
+      },
+      onOpenHubInNewTab: selectNoteInNewActiveTab,
+    };
+  }, [
+    vaultRoot,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    focusActiveTodayHubNote,
+    switchTodayHubWorkspace,
+    selectNoteInNewActiveTab,
+  ]);
 
   const [vaultPaneVisible, setVaultPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
@@ -506,6 +544,8 @@ export default function App() {
             openTabUris: ui.inbox.openTabUris,
             editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
             activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
+            activeTodayHubUri: ui.inbox.activeTodayHubUri ?? null,
+            todayHubWorkspaces: ui.inbox.todayHubWorkspaces ?? null,
           });
         }
         setLayoutsReady(true);
@@ -561,6 +601,8 @@ export default function App() {
           .filter((u): u is string => u != null),
         editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
         activeEditorTabId,
+        activeTodayHubUri,
+        todayHubWorkspaces: todayHubWorkspacesForSave,
       },
     };
     const t = window.setTimeout(() => {
@@ -578,6 +620,8 @@ export default function App() {
     composingNewEntry,
     editorWorkspaceTabs,
     activeEditorTabId,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
     inboxShellRestored,
   ]);
 
@@ -870,6 +914,7 @@ export default function App() {
             tiling={tiling}
             vaultPaneVisible={vaultPaneVisible}
             onToggleVault={() => setVaultPaneVisible(v => !v)}
+            todayHubSelect={titleBarTodayHubSelect}
           />
 
           <div className="app-body">

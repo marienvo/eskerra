@@ -4,17 +4,30 @@ import {getCurrentWindow} from '@tauri-apps/api/window';
 import {TabButton} from '../ds';
 
 import type {WindowTilingState} from '../lib/windowTiling';
+import {
+  TodayHubWorkspaceSelect,
+  type TodayHubWorkspaceSelectItem,
+} from './TodayHubWorkspaceSelect';
 
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
   vaultPaneVisible: boolean;
   onToggleVault: () => void;
+  todayHubSelect?: {
+    items: readonly TodayHubWorkspaceSelectItem[];
+    activeTodayNoteUri: string | null;
+    activeLabel: string;
+    onMainActivate: () => void;
+    onPickHub: (todayNoteUri: string) => void;
+    onOpenHubInNewTab: (todayNoteUri: string) => void;
+  } | null;
 };
 
 export function WindowTitleBar({
   tiling = 'none',
   vaultPaneVisible,
   onToggleVault,
+  todayHubSelect = null,
 }: WindowTitleBarProps) {
   const tauri = isTauri();
 
@@ -46,6 +59,16 @@ export function WindowTitleBar({
           tooltip="Vault"
           onClick={onToggleVault}
         />
+        {todayHubSelect != null && todayHubSelect.items.length > 0 ? (
+          <TodayHubWorkspaceSelect
+            items={todayHubSelect.items}
+            activeTodayNoteUri={todayHubSelect.activeTodayNoteUri}
+            activeLabel={todayHubSelect.activeLabel}
+            onMainActivate={todayHubSelect.onMainActivate}
+            onPickHub={todayHubSelect.onPickHub}
+            onOpenHubInNewTab={todayHubSelect.onOpenHubInNewTab}
+          />
+        ) : null}
       </div>
       <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
       <div className="window-title-bar-trailing">

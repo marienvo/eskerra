@@ -192,6 +192,72 @@ a:focus:not(:focus-visible) {
   gap: 0.28rem;
 }
 
+.today-hub-workspace-select {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 1;
+  min-width: 16rem;
+  max-width: 26rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.today-hub-workspace-select__main,
+.today-hub-workspace-select__chevron {
+  margin: 0;
+  padding: 0 0.35rem;
+  border: none;
+  background: transparent;
+  color: var(--color-shell-icon-muted);
+  cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 100%;
+  font: inherit;
+  box-shadow: none;
+}
+
+.today-hub-workspace-select__main:hover,
+.today-hub-workspace-select__chevron:hover {
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
+}
+
+.today-hub-workspace-select__main {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  border-inline-end: none;
+}
+
+.today-hub-workspace-select__chevron {
+  flex-shrink: 0;
+  width: 2rem;
+  min-width: 2rem;
+  max-width: 2rem;
+  padding-inline: 0;
+  justify-content: center;
+}
+
+.today-hub-workspace-select__label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-hub-workspace-select__menu-item-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .window-title-bar-drag {
   flex: 1;
   min-width: 2rem;

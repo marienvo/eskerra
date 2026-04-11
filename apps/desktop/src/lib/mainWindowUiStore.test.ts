@@ -164,4 +164,42 @@ describe('normalizeMainWindowUiPayload', () => {
     });
     expect(invalid?.notificationsPanelVisible).toBe(true);
   });
+
+  it('parses activeTodayHubUri and todayHubWorkspaces', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/vault',
+      inbox: {
+        activeTodayHubUri: '  /vault/Work\\\\Today.md  ',
+        todayHubWorkspaces: {
+          '': {editorWorkspaceTabs: [{id: 'x', entries: ['/vault/a.md'], index: 0}]},
+          '/vault/Work/Today.md': {
+            editorWorkspaceTabs: [
+              {id: 't1', entries: ['/vault/Work/Today.md', '/vault/x.md'], index: 0},
+            ],
+            activeEditorTabId: 't1',
+          },
+          notAnObject: 1,
+          bad: null,
+          emptyTabs: {editorWorkspaceTabs: [{id: 'z', entries: [], index: 0}]},
+        },
+      },
+    });
+    expect(out?.inbox.activeTodayHubUri).toBe('/vault/Work/Today.md');
+    expect(out?.inbox.todayHubWorkspaces).toEqual({
+      '/vault/Work/Today.md': {
+        editorWorkspaceTabs: [
+          {id: 't1', entries: ['/vault/Work/Today.md', '/vault/x.md'], index: 0},
+        ],
+        activeEditorTabId: 't1',
+      },
+    });
+  });
+
+  it('treats blank activeTodayHubUri as null', () => {
+    const out = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      inbox: {activeTodayHubUri: '  '},
+    });
+    expect(out?.inbox.activeTodayHubUri).toBeNull();
+  });
 });
