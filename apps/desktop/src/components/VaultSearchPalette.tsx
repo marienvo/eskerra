@@ -211,8 +211,23 @@ export function VaultSearchPalette({
                       <span className="quick-open-command__item-path vault-search-hit__snippet-block">
                         {preview.map(s => (
                           <span key={`${s.lineNumber}:${s.text.slice(0, 24)}`} className="vault-search-hit__snippet">
-                            {s.lineNumber > 0 ? `L${s.lineNumber}: ` : ''}
-                            <VaultSearchHighlighted text={s.text} queryTrimmed={trimmedQuery} />
+                            {s.lineNumber > 0 ? (
+                              <>
+                                <span
+                                  className="vault-search-hit__snippet-lineno"
+                                  title={`Line ${s.lineNumber}`}
+                                >
+                                  {s.lineNumber}
+                                </span>
+                                <span className="vault-search-hit__snippet-text">
+                                  <VaultSearchHighlighted text={s.text} queryTrimmed={trimmedQuery} />
+                                </span>
+                              </>
+                            ) : (
+                              <span className="vault-search-hit__snippet-text">
+                                <VaultSearchHighlighted text={s.text} queryTrimmed={trimmedQuery} />
+                              </span>
+                            )}
                           </span>
                         ))}
                       </span>
