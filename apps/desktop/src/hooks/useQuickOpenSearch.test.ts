@@ -64,7 +64,7 @@ describe('useQuickOpenSearch', () => {
     expect(result.current.displayed).toEqual([]);
   });
 
-  it('clears results when search is cleared', () => {
+  it('clears results when search is cleared', async () => {
     const {result, rerender} = renderHook(
       ({search}) => useQuickOpenSearch(search, VAULT, REFS),
       {initialProps: {search: 'alp'}},
@@ -76,6 +76,9 @@ describe('useQuickOpenSearch', () => {
 
     rerender({search: ''});
     expect(result.current.searchTrimmed).toBe('');
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(result.current.displayed).toEqual([]);
   });
 });

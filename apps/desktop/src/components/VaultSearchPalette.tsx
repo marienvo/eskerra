@@ -4,6 +4,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
+import {vaultSearchHighlightSegments} from '../lib/vaultSearchHighlight';
 import {compareVaultSearchNotes} from '../lib/vaultSearchTypes';
 
 /** Max notes rendered as rows; full list is still sorted for ranking before slicing. */
@@ -16,15 +17,27 @@ export type VaultSearchPaletteProps = {
   onPickNote: (uri: string) => void;
 };
 
-function bestFieldLabel(field: 'title' | 'path' | 'body'): string {
-  switch (field) {
-    case 'title':
-      return 'Title';
-    case 'path':
-      return 'Path';
-    case 'body':
-      return 'Body';
-  }
+function VaultSearchHighlighted({
+  text,
+  queryTrimmed,
+}: {
+  text: string;
+  queryTrimmed: string;
+}) {
+  const segments = vaultSearchHighlightSegments(text, queryTrimmed);
+  return (
+    <>
+      {segments.map((seg, i) =>
+        seg.highlighted ? (
+          <mark key={i} className="vault-search-hit__query-mark">
+            {seg.text}
+          </mark>
+        ) : (
+          <span key={i}>{seg.text}</span>
+        ),
+      )}
+    </>
+  );
 }
 
 export function VaultSearchPalette({
@@ -186,21 +199,20 @@ export function VaultSearchPalette({
                     }}
                   >
                     <span className="quick-open-command__item-title">
-                      {n.title || rel}{' '}
-                      <span className="vault-search-hit__line">
-                        {bestFieldLabel(n.bestField)}
-                        {n.matchCount > 1 ? ` · ${n.matchCount} matches` : ''}
-                      </span>
+                      <VaultSearchHighlighted text={n.title || rel} queryTrimmed={trimmedQuery} />
+                      {n.matchCount > 1 ? (
+                        <span className="vault-search-hit__line">{` · ${n.matchCount} matches`}</span>
+                      ) : null}
                     </span>
                     <span className="quick-open-command__item-path vault-search-hit__path-muted">
-                      {rel}
+                      <VaultSearchHighlighted text={rel} queryTrimmed={trimmedQuery} />
                     </span>
                     {preview.length > 0 ? (
                       <span className="quick-open-command__item-path vault-search-hit__snippet-block">
                         {preview.map(s => (
                           <span key={`${s.lineNumber}:${s.text.slice(0, 24)}`} className="vault-search-hit__snippet">
                             {s.lineNumber > 0 ? `L${s.lineNumber}: ` : ''}
-                            {s.text}
+                            <VaultSearchHighlighted text={s.text} queryTrimmed={trimmedQuery} />
                           </span>
                         ))}
                       </span>

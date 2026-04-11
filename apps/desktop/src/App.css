@@ -1837,6 +1837,13 @@ html.tauri-main-chrome .quick-open-overlay {
   font-size: 0.82em;
 }
 
+.vault-search-hit__query-mark {
+  background: var(--color-markdown-highlight-bg);
+  color: inherit;
+  padding: 0 0.04em;
+  border-radius: 2px;
+}
+
 .vault-search-hit__path-muted {
   opacity: 0.88;
   font-size: 0.9em;
@@ -1960,7 +1967,7 @@ button.primary.destructive {
   /* `%%…%%` delimiters: lighter than other syntax marks (`--nb-editor-hash-tone`). */
   --nb-editor-percent-mark-tone: color-mix(in srgb, var(--nb-editor-hash-tone) 44%, var(--nb-editor-paper) 56%);
   /* `==…==` highlight background (highlighter yellow). */
-  --nb-editor-equal-highlight-bg: #fff59d;
+  --nb-editor-equal-highlight-bg: var(--color-markdown-highlight-bg);
   --nb-editor-accent: rgb(203, 77, 73);
   --nb-editor-inline-code-bg: rgb(240, 240, 240);
   --nb-editor-inline-code-border: rgb(215, 215, 215);
