@@ -210,6 +210,7 @@ a:focus:not(:focus-visible) {
   background: transparent;
   box-shadow: none;
   outline: none;
+  margin-inline-start: 6px;
   transition:
     border-color 0.12s ease,
     background 0.12s ease;
