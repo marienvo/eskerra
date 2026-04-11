@@ -107,22 +107,24 @@ export function VaultSearchPalette({
     progress != null && progress.skippedLargeFiles > 0
       ? ` · ${progress.skippedLargeFiles} skipped (>512 KiB)`
       : '';
-  const progressCounts =
-    progress != null ? `${progress.totalHits} notes${indexHint}${skipPart}` : null;
+  const noteCount =
+    progress != null
+      ? `${progress.totalHits} note${progress.totalHits === 1 ? '' : 's'}${indexHint}${skipPart}`
+      : null;
 
   const statusLine =
     trimmedQuery.length === 0
       ? null
       : !scanDone && searchingStatusVisible
-        ? progressCounts != null
-          ? `Searching… ${progressCounts}`
+        ? noteCount != null
+          ? `Searching… · ${noteCount}`
           : 'Searching…'
         : awaitingDebouncedRun
-          ? progressCounts != null
-            ? `Searched ${progressCounts}`
+          ? noteCount != null
+            ? `${noteCount} found`
             : null
-          : progressCounts != null
-            ? `Searched ${progressCounts}`
+          : noteCount != null
+            ? `${noteCount} found`
             : null;
 
   return (

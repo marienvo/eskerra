@@ -1,6 +1,10 @@
 export type VaultSearchProgress = {
-  /** In indexed search, mirrors backend: currently the number of matching notes in the result set. */
+  /**
+   * Indexed search: backend sets this to the note-level result count (same as returned `notes` length,
+   * capped by the search limit). UI labels this "hits", not "files scanned".
+   */
   scannedFiles: number;
+  /** Number of matching notes in the current result batch (note-level hits, not raw match occurrences). */
   totalHits: number;
   skippedLargeFiles: number;
   /** Backend index lifecycle: `ready` | `building` | `failed` | `idle` | `unavailable`. */
