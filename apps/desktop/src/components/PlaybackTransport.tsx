@@ -1,4 +1,10 @@
-import {MaterialIcon} from './MaterialIcon';
+import {
+  DoubleArrowLeftIcon,
+  DoubleArrowRightIcon,
+  PauseIcon,
+  PlayIcon,
+  ReloadIcon,
+} from '@radix-ui/react-icons';
 
 export type PlaybackTransportPlayControl = 'loading' | 'paused' | 'playing';
 
@@ -10,10 +16,15 @@ export type PlaybackTransportProps = {
   onSeekBack: () => void;
   onSeekForward: () => void;
   onTogglePlay: () => void;
+  /** Compact row for {@link EditorWorkspaceToolbar}; fixed-width time slots. */
+  variant?: 'default' | 'toolbar';
 };
 
+/** Radix icons in the playback row (15×15 viewBox, matches editor toolbar chrome). */
+const PLAYBACK_ICON_DIM = {width: 15, height: 15} as const;
+
 /**
- * Centered playback row: elapsed, skip back, play/pause or loading, skip forward, duration.
+ * Playback row: elapsed, skip back, play/pause or loading, skip forward, duration.
  */
 export function PlaybackTransport({
   positionLabel,
@@ -23,13 +34,24 @@ export function PlaybackTransport({
   onSeekBack,
   onSeekForward,
   onTogglePlay,
+  variant = 'default',
 }: PlaybackTransportProps) {
   const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
   const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
+  const isToolbar = variant === 'toolbar';
 
   return (
-    <div className="app-playback-transport" role="group" aria-label="Playback">
+    <div
+      className={[
+        'app-playback-transport',
+        isToolbar ? 'app-playback-transport--toolbar' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      role="group"
+      aria-label="Playback"
+    >
       <span
         className="app-playback-transport__time app-playback-transport__time--position"
         aria-hidden
@@ -43,7 +65,7 @@ export function PlaybackTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekBack()}
       >
-        <MaterialIcon name="replay_10" size={24} aria-hidden />
+        <DoubleArrowLeftIcon {...PLAYBACK_ICON_DIM} aria-hidden />
       </button>
       <button
         type="button"
@@ -54,18 +76,15 @@ export function PlaybackTransport({
         onClick={() => void onTogglePlay()}
       >
         {isLoading ? (
-          <MaterialIcon
+          <ReloadIcon
             aria-hidden
             className="app-playback-chrome-btn__spin"
-            name="autorenew"
-            size={24}
+            {...PLAYBACK_ICON_DIM}
           />
+        ) : isPlaying ? (
+          <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
         ) : (
-          <MaterialIcon
-            name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-            size={24}
-            aria-hidden
-          />
+          <PlayIcon {...PLAYBACK_ICON_DIM} aria-hidden />
         )}
       </button>
       <button
@@ -75,7 +94,7 @@ export function PlaybackTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekForward()}
       >
-        <MaterialIcon name="forward_10" size={24} aria-hidden />
+        <DoubleArrowRightIcon {...PLAYBACK_ICON_DIM} aria-hidden />
       </button>
       <span className="app-playback-transport__time app-playback-transport__time--duration" aria-hidden>
         {durationLabel}

@@ -136,10 +136,9 @@ html {
   --window-title-bar-chrome-height: 22px;
   /* Space between items in the title bar leading strip (e.g. multiple controls beside workspace select). */
   --window-title-bar-vault-workspace-gap: 4px;
-  /* Status bar icon tiles (Settings / Episodes). */
+  /* Status bar icon tiles (Settings). */
   --app-shell-icon-tile-size: 1.65rem;
-  /* Status bar leading column: align Episodes under title bar workspace strip + gutter. */
-  /* Episodes column: align with title bar inset + ~one icon column (reference width; Vault toggles in editor toolbar). */
+  /* Legacy width token (shell layout); editor toolbar holds Vault / Episodes toggles. */
   --desktop-leading-track-width: calc(
     var(--panel-grid-padding) + var(--app-shell-icon-tile-size) + 0.34rem + 0.2rem
   );

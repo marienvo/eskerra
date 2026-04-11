@@ -392,7 +392,52 @@ a:focus:not(:focus-visible) {
   margin-inline-start: 0.24rem;
 }
 
+.app-playback-transport--toolbar {
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time {
+  width: 3.45rem;
+  min-width: 3.45rem;
+  max-width: 3.45rem;
+  flex: 0 0 3.45rem;
+  box-sizing: border-box;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time--position {
+  margin-inline-end: 6px;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time--duration {
+  margin-inline-start: 6px;
+}
+
+/* Editor toolbar sits on --color-editor-bg (light); use panel ink, not shell (gradient) tokens. */
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-transport__time {
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn {
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn:disabled {
+  opacity: 0.45;
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn:not(:disabled):hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
 /* Shared: shell playback controls (PlaybackTransport) */
+.app-playback-chrome-btn > svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
@@ -401,7 +446,7 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border: none;
-  /* Play/pause: 32×32 circle, 28px play/pause icon (seek stays 22px). */
+  /* Play/pause: 32×32 hit target; Radix icons 15×15 (see PlaybackTransport). */
   width: 2rem;
   min-width: 2rem;
   height: 2rem;
@@ -417,6 +462,18 @@ a:focus:not(:focus-visible) {
   min-width: 1.75rem;
   height: 1.75rem;
   min-height: 1.75rem;
+}
+
+/* After .app-playback-chrome-btn--seek so toolbar seek + play share one tight size (icons stay 15px). */
+.app-playback-transport--toolbar .app-playback-chrome-btn {
+  width: 1.125rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  min-height: 1.125rem;
+}
+
+.app-playback-transport--toolbar .app-playback-chrome-btn ~ .app-playback-chrome-btn {
+  margin-inline-start: 3px;
 }
 
 @keyframes app-playback-chrome-spin {
@@ -483,20 +540,12 @@ a:focus:not(:focus-visible) {
 .app-status-bar {
   flex-shrink: 0;
   display: grid;
-  /* Leading track matches --desktop-leading-track-width (Vault title bar / main-shell inset). */
-  grid-template-columns: var(--desktop-leading-track-width) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.35rem;
   box-sizing: border-box;
   padding: 0.28rem var(--panel-grid-padding) 0.32rem 0;
   background: transparent;
-}
-
-.app-status-bar-leading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
 }
 
 .app-status-bar-center-stack {
@@ -528,19 +577,6 @@ a:focus:not(:focus-visible) {
 
 .app-status-bar-center--tagline {
   color: var(--color-shell-tagline);
-}
-
-/* Same chrome as tagline / title bar: light foreground on AppChromeBackground — not panel --color-text. */
-.app-status-bar-center--player {
-  color: var(--color-shell-icon);
-}
-
-.app-status-bar-center--player strong {
-  font-weight: 600;
-}
-
-.app-status-bar-center--player .muted {
-  color: var(--color-shell-icon-muted);
 }
 
 /* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
@@ -1228,14 +1264,58 @@ a:focus:not(:focus-visible) {
 
 /* Editor Toolbar (VaultTab): tighter chrome; open-note tabs live in the window title bar. */
 .pane-header--editor-toolbar {
+  position: relative;
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
   align-items: center;
 }
 
+.pane-header--editor-toolbar .pane-header-start,
+.pane-header--editor-toolbar .pane-header-trailing-actions {
+  position: relative;
+  z-index: 2;
+}
+
 .pane-header--editor-toolbar .pane-header-start {
   gap: 0.12rem;
   align-items: center;
+}
+
+.editor-workspace-toolbar__playback-gap {
+  flex: 0 0 0.55rem;
+  width: 0.55rem;
+  min-width: 0.55rem;
+  align-self: stretch;
+}
+
+/* Centered on full toolbar row (not remaining flex); pointer-events off so clicks hit pane-header-start. */
+.pane-header--editor-toolbar > .editor-workspace-toolbar__now-playing.pane-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  box-sizing: border-box;
+  margin: 0;
+  flex: none;
+  max-width: min(62vw, 28rem);
+  width: max-content;
+  min-width: 0;
+  padding-inline: 0.35rem;
+  font-size: 0.72rem;
+  line-height: 1.22;
+  font-weight: 400;
+  text-align: center;
+  pointer-events: none;
+}
+
+.editor-workspace-toolbar__now-playing strong {
+  font-weight: 600;
+}
+
+.editor-workspace-toolbar__now-playing-series {
+  font-size: inherit;
+  font-weight: 400;
 }
 
 .pane-title {
@@ -5002,7 +5082,8 @@ button:disabled {
 }
 
 .pane-header-add-btn--notifications-on:not(:disabled),
-.pane-header-add-btn--vault-on:not(:disabled) {
+.pane-header-add-btn--vault-on:not(:disabled),
+.pane-header-add-btn--episodes-on:not(:disabled) {
   color: var(--color-accent);
 }
 

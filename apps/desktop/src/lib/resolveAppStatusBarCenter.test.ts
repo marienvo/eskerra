@@ -21,7 +21,7 @@ describe('resolveAppStatusBarCenter', () => {
     });
   });
 
-  it('prefers err over player and tagline', () => {
+  it('prefers err over tagline when playback is active', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       err: 'Save failed',
@@ -31,7 +31,7 @@ describe('resolveAppStatusBarCenter', () => {
     expect(r).toEqual({kind: 'message', tone: 'error', text: 'Save failed'});
   });
 
-  it('prefers rename progress over wiki notice and player', () => {
+  it('prefers rename progress over wiki notice when playback is active', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       renameLinkProgress: {done: 1, total: 5},
@@ -46,7 +46,7 @@ describe('resolveAppStatusBarCenter', () => {
     });
   });
 
-  it('prefers wiki notice over player when no rename progress', () => {
+  it('prefers wiki notice when no rename progress (playback ignored)', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       wikiRenameNotice: 'Renamed X → Y',
@@ -60,46 +60,34 @@ describe('resolveAppStatusBarCenter', () => {
     });
   });
 
-  it('shows player when playing and no simple message', () => {
+  it('uses tagline when playing and no simple message (episode line is on toolbar)', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       playerLabel: 'playing',
       activeEpisode: {title: 'Episode A', seriesName: 'Podcast B'},
     });
-    expect(r).toEqual({
-      kind: 'player',
-      episodeTitle: 'Episode A',
-      seriesName: 'Podcast B',
-    });
+    expect(r).toEqual({kind: 'tagline', text: base.tagline});
   });
 
-  it('shows player when paused', () => {
+  it('uses tagline when paused with episode', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       playerLabel: 'paused',
       activeEpisode: {title: 'E', seriesName: 'S'},
     });
-    expect(r).toEqual({
-      kind: 'player',
-      episodeTitle: 'E',
-      seriesName: 'S',
-    });
+    expect(r).toEqual({kind: 'tagline', text: base.tagline});
   });
 
-  it('shows player when loading with active episode', () => {
+  it('uses tagline when loading with active episode', () => {
     const r = resolveAppStatusBarCenter({
       ...base,
       playerLabel: 'loading',
       activeEpisode: {title: 'E', seriesName: 'S'},
     });
-    expect(r).toEqual({
-      kind: 'player',
-      episodeTitle: 'E',
-      seriesName: 'S',
-    });
+    expect(r).toEqual({kind: 'tagline', text: base.tagline});
   });
 
-  it('does not show player for idle/ended/error when no message', () => {
+  it('uses tagline for idle/ended/error when no message', () => {
     for (const playerLabel of ['idle', 'ended', 'error'] as const) {
       const r = resolveAppStatusBarCenter({
         ...base,

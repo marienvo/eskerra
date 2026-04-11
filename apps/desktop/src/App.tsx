@@ -412,6 +412,16 @@ export default function App() {
     vaultRoot,
   });
 
+  const toolbarNowPlaying = useMemo(() => {
+    if (desktopPlayback.activeEpisode == null) {
+      return null;
+    }
+    return {
+      episodeTitle: desktopPlayback.activeEpisode.title,
+      seriesName: desktopPlayback.activeEpisode.seriesName,
+    };
+  }, [desktopPlayback.activeEpisode]);
+
   const playbackTransport = useMemo((): PlaybackTransportProps | undefined => {
     if (desktopPlayback.activeEpisode == null) {
       return undefined;
@@ -930,6 +940,9 @@ export default function App() {
                       vaultPaneVisible={vaultPaneVisible}
                       onToggleVault={() => setVaultPaneVisible(v => !v)}
                       episodesPaneVisible={episodesPaneVisible}
+                      onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
+                      playbackTransport={playbackTransport}
+                      toolbarNowPlaying={toolbarNowPlaying}
                       vaultWidthPx={layouts.inbox.leftWidthPx}
                       episodesWidthPx={layouts.inbox.leftWidthPx}
                       onVaultWidthPxChanged={persistMainLeftWidthPx}
@@ -1082,9 +1095,6 @@ export default function App() {
 
           <AppStatusBar
             center={statusBarCenter}
-            episodesPaneVisible={episodesPaneVisible}
-            onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
-            playbackTransport={playbackTransport}
             onOpenSettings={() => void openSettingsWindow()}
             onReadMoreStatusMessage={onReadMoreStatusMessage}
           />

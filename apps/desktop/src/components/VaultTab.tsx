@@ -62,7 +62,11 @@ import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
-import {EditorWorkspaceToolbar} from './EditorWorkspaceToolbar';
+import {
+  EditorWorkspaceToolbar,
+  type EditorWorkspaceToolbarNowPlaying,
+} from './EditorWorkspaceToolbar';
+import type {PlaybackTransportProps} from './PlaybackTransport';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {NotificationsPanel} from './NotificationsPanel';
 import {MaterialIcon} from './MaterialIcon';
@@ -89,6 +93,10 @@ type VaultTabProps = {
   vaultPaneVisible: boolean;
   onToggleVault: () => void;
   episodesPaneVisible: boolean;
+  onToggleEpisodes: () => void;
+  /** Shown in {@link EditorWorkspaceToolbar} when an episode is active. */
+  playbackTransport?: PlaybackTransportProps;
+  toolbarNowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
   vaultWidthPx: number;
   episodesWidthPx: number;
   onVaultWidthPxChanged: (px: number) => void;
@@ -503,6 +511,9 @@ export function VaultTab({
   vaultPaneVisible,
   onToggleVault,
   episodesPaneVisible,
+  onToggleEpisodes,
+  playbackTransport,
+  toolbarNowPlaying,
   vaultWidthPx,
   episodesWidthPx,
   onVaultWidthPxChanged,
@@ -1136,6 +1147,8 @@ export function VaultTab({
       <EditorWorkspaceToolbar
         vaultPaneVisible={vaultPaneVisible}
         onToggleVault={onToggleVault}
+        episodesPaneVisible={episodesPaneVisible}
+        onToggleEpisodes={onToggleEpisodes}
         busy={busy}
         editorHistoryCanGoBack={editorHistoryCanGoBack}
         editorHistoryCanGoForward={editorHistoryCanGoForward}
@@ -1146,6 +1159,8 @@ export function VaultTab({
         onCancelNewEntry={onCancelNewEntry}
         notificationsPanelVisible={notificationsPanelVisible}
         onToggleNotificationsPanel={onToggleNotificationsPanel}
+        playbackTransport={playbackTransport}
+        nowPlaying={toolbarNowPlaying ?? null}
       />
       <DesktopHorizontalSplitEnd
         endVisible={notificationsPanelVisible}

@@ -3,9 +3,6 @@ import {useLayoutEffect, useRef, useState} from 'react';
 import type {AppStatusBarCenter} from '../lib/resolveAppStatusBarCenter';
 
 import {MaterialIcon} from './MaterialIcon';
-import type {PlaybackTransportProps} from './PlaybackTransport';
-import {PlaybackTransport} from './PlaybackTransport';
-
 /** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
 export const APP_SHELL_TAGLINE = 'Think. Compose. Nothing else.';
 
@@ -20,9 +17,6 @@ export function AppSetupTagline() {
 
 type AppStatusBarProps = {
   center: AppStatusBarCenter;
-  episodesPaneVisible: boolean;
-  onToggleEpisodes: () => void;
-  playbackTransport?: PlaybackTransportProps;
   onOpenSettings: () => void;
   /** When the status message overflows, user can open the notifications panel. */
   onReadMoreStatusMessage?: () => void;
@@ -109,50 +103,24 @@ function AppStatusBarCenterRegion({
     );
   }
 
-  if (center.kind === 'message') {
-    return (
-      <AppStatusBarMessageCenter
-        key={`${center.tone}:${center.text}`}
-        tone={center.tone}
-        text={center.text}
-        onReadMore={onReadMoreStatusMessage ?? (() => undefined)}
-      />
-    );
-  }
-
   return (
-    <p className="app-status-bar-center-line app-status-bar-center--player" aria-live="polite">
-      <strong>{center.episodeTitle}</strong>
-      <span className="muted small"> — {center.seriesName}</span>
-    </p>
+    <AppStatusBarMessageCenter
+      key={`${center.tone}:${center.text}`}
+      tone={center.tone}
+      text={center.text}
+      onReadMore={onReadMoreStatusMessage ?? (() => undefined)}
+    />
   );
 }
 
 export function AppStatusBar({
   center,
-  episodesPaneVisible,
-  onToggleEpisodes,
-  playbackTransport,
   onOpenSettings,
   onReadMoreStatusMessage,
 }: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
-      <div className="app-status-bar-leading">
-        <button
-          type="button"
-          className="app-status-bar-icon-tile app-tooltip-trigger icon-btn-ghost"
-          aria-label="Episodes pane"
-          aria-pressed={episodesPaneVisible}
-          data-tooltip="Episodes"
-          data-tooltip-placement="inline-end"
-          onClick={onToggleEpisodes}
-        >
-          <MaterialIcon name="radio" size={12} aria-hidden />
-        </button>
-      </div>
       <div className="app-status-bar-center-stack">
-        {playbackTransport ? <PlaybackTransport {...playbackTransport} /> : null}
         <AppStatusBarCenterRegion
           center={center}
           onReadMoreStatusMessage={onReadMoreStatusMessage}

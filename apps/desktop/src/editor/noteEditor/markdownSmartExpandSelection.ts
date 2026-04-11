@@ -208,6 +208,104 @@ function trimSentenceSliceForListMarker(
   return {from: Math.max(slice.from, trim), to: slice.to};
 }
 
+let graphemeSegmenterMemo: Intl.Segmenter | null | undefined;
+
+function getGraphemeSegmenter(): Intl.Segmenter | undefined {
+  if (graphemeSegmenterMemo === null) {
+    return undefined;
+  }
+  if (graphemeSegmenterMemo) {
+    return graphemeSegmenterMemo;
+  }
+  try {
+    graphemeSegmenterMemo = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
+  } catch {
+    graphemeSegmenterMemo = null;
+  }
+  return graphemeSegmenterMemo ?? undefined;
+}
+
+/** True when a grapheme cluster is treated as an emoji for smart-expand (flags, pictographics). */
+function graphemeLooksLikeEmoji(segment: string): boolean {
+  if (!segment) {
+    return false;
+  }
+  if (/\p{Extended_Pictographic}/u.test(segment)) {
+    return true;
+  }
+  const ri = segment.match(/\p{Regional_Indicator}/gu);
+  return !!ri && ri.length >= 2;
+}
+
+/**
+ * When the caret is collapsed and touches an emoji grapheme (immediately before or after it),
+ * first expand selects exactly that emoji (before word / bracket / … expansion).
+ *
+ * If the caret sits between two emojis with no separator, the emoji **to the right** wins.
+ */
+function candidateEmojiAdjacentToCursor(
+  state: EditorState,
+  main: SelectionRange,
+): SelectionRange | null {
+  if (!main.empty) {
+    return null;
+  }
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const pos = main.head;
+  const segIntl = getGraphemeSegmenter();
+  if (!segIntl) {
+    return null;
+  }
+  const docLen = state.doc.length;
+
+  // Caret immediately *before* an emoji: select the grapheme starting at `pos`.
+  if (pos < docLen) {
+    const winEnd = Math.min(docLen, pos + 256);
+    const forward = state.sliceDoc(pos, winEnd);
+    if (forward.length > 0) {
+      for (const {segment, index} of segIntl.segment(forward)) {
+        if (index !== 0) {
+          break;
+        }
+        if (graphemeLooksLikeEmoji(segment)) {
+          const r = asRange(pos, pos + segment.length);
+          if (strictlyWider(r, main)) {
+            return r;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Caret immediately *after* an emoji: select the grapheme ending at `pos`.
+  if (pos <= 0) {
+    return null;
+  }
+  const winStart = Math.max(0, pos - 256);
+  const backward = state.sliceDoc(winStart, pos);
+  if (backward.length === 0) {
+    return null;
+  }
+  let lastFromRel = -1;
+  let lastSeg = '';
+  for (const {segment, index} of segIntl.segment(backward)) {
+    if (index + segment.length === backward.length) {
+      lastFromRel = index;
+      lastSeg = segment;
+      break;
+    }
+  }
+  if (lastFromRel < 0 || !graphemeLooksLikeEmoji(lastSeg)) {
+    return null;
+  }
+  const from = winStart + lastFromRel;
+  const r = asRange(from, pos);
+  return strictlyWider(r, main) ? r : null;
+}
+
 function candidateWord(state: EditorState, main: SelectionRange): SelectionRange | null {
   const w = state.wordAt(main.head);
   if (!w || w.from >= w.to) {
@@ -1142,6 +1240,7 @@ function computeNextExpandRange(
 ): SelectionRange | null {
   ensureSyntaxTree(state, state.doc.length);
   const steps: ((s: EditorState, m: SelectionRange) => SelectionRange | null)[] = [
+    candidateEmojiAdjacentToCursor,
     candidateWord,
     candidateBracketInner,
     candidateBracketOuter,
