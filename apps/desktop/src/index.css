@@ -132,12 +132,17 @@ html {
   --panel-grid-padding: 5px;
   /* Title bar row height (fits 29px window controls with small vertical margin). */
   --window-title-bar-height: 32px;
-  /* Vault tile + Today hub workspace strip: match editor tab pill vertical chrome (~15px icon + padding + border). */
+  /* Today hub workspace strip height: match editor tab pill vertical chrome (~15px icon + padding + border). */
   --window-title-bar-chrome-height: 22px;
+  /* Space between items in the title bar leading strip (e.g. multiple controls beside workspace select). */
+  --window-title-bar-vault-workspace-gap: 4px;
   /* Status bar icon tiles (Settings / Episodes). */
   --app-shell-icon-tile-size: 1.65rem;
-  /* Status bar leading column: align Episodes under title bar Vault tile + gutter. */
-  --desktop-leading-track-width: calc(var(--window-title-bar-chrome-height) + 0.34rem + 0.2rem);
+  /* Status bar leading column: align Episodes under title bar workspace strip + gutter. */
+  /* Episodes column: align with title bar inset + ~one icon column (reference width; Vault toggles in editor toolbar). */
+  --desktop-leading-track-width: calc(
+    var(--panel-grid-padding) + var(--app-shell-icon-tile-size) + 0.34rem + 0.2rem
+  );
 
   color: var(--color-text);
   background: var(--color-app-chrome-backdrop);

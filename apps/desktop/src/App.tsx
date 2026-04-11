@@ -913,8 +913,6 @@ export default function App() {
         <div className="app-root-chrome">
           <WindowTitleBar
             tiling={tiling}
-            vaultPaneVisible={vaultPaneVisible}
-            onToggleVault={() => setVaultPaneVisible(v => !v)}
             onEditorTabsHostRef={setTitleBarEditorTabsHost}
             todayHubSelect={titleBarTodayHubSelect}
           />
@@ -942,6 +940,7 @@ export default function App() {
                         inboxEditorShellScrollDirectiveRef
                       }
                       vaultPaneVisible={vaultPaneVisible}
+                      onToggleVault={() => setVaultPaneVisible(v => !v)}
                       episodesPaneVisible={episodesPaneVisible}
                       vaultWidthPx={layouts.inbox.leftWidthPx}
                       episodesWidthPx={layouts.inbox.leftWidthPx}

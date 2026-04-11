@@ -1,5 +1,12 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
+import {
+  BellIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  Cross2Icon,
+  ListBulletIcon,
+} from '@radix-ui/react-icons';
 import type {MutableRefObject, ReactNode, RefObject} from 'react';
 import {
   Fragment,
@@ -53,11 +60,14 @@ import type {
   VaultWikiLinkActivatePayload,
 } from '../editor/noteEditor/vaultLinkActivatePayload';
 import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
+
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {MaterialIcon} from './MaterialIcon';
 import {TodayHubCanvas} from './TodayHubCanvas';
 import {VaultTreePane} from './VaultTreePane';
+
+const EDITOR_TOOLBAR_ICON_DIM = {width: 15, height: 15} as const;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -77,6 +87,7 @@ type VaultTabProps = {
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
   vaultPaneVisible: boolean;
+  onToggleVault: () => void;
   episodesPaneVisible: boolean;
   vaultWidthPx: number;
   episodesWidthPx: number;
@@ -484,6 +495,7 @@ export function VaultTab({
   inboxEditorShellScrollRef,
   inboxEditorShellScrollDirectiveRef,
   vaultPaneVisible,
+  onToggleVault,
   episodesPaneVisible,
   vaultWidthPx,
   episodesWidthPx,
@@ -1143,9 +1155,27 @@ export function VaultTab({
         episodesPane={episodesPane}
         editorPane={
           <div className="panel-surface">
-            {/* Editor Toolbar: history, compose title, notifications (tabs live in WindowTitleBar). */}
+            {/* Editor Toolbar: Vault, history, compose title, notifications (tabs live in WindowTitleBar). */}
             <div className="pane-header pane-header--editor-toolbar">
               <div className="pane-header-start">
+                <button
+                  type="button"
+                  className={[
+                    'pane-header-add-btn icon-btn-ghost app-tooltip-trigger',
+                    vaultPaneVisible ? 'pane-header-add-btn--vault-on' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={onToggleVault}
+                  aria-label="Vault"
+                  aria-pressed={vaultPaneVisible}
+                  data-tooltip="Vault"
+                  data-tooltip-placement="inline-end"
+                >
+                  <span className="pane-header-add-btn__glyph" aria-hidden>
+                    <ListBulletIcon {...EDITOR_TOOLBAR_ICON_DIM} />
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
@@ -1156,7 +1186,7 @@ export function VaultTab({
                   data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="chevron_left" size={12} />
+                    <ChevronLeftIcon {...EDITOR_TOOLBAR_ICON_DIM} />
                   </span>
                 </button>
                 <button
@@ -1169,7 +1199,7 @@ export function VaultTab({
                   data-tooltip-placement="inline-end"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="chevron_right" size={12} />
+                    <ChevronRightIcon {...EDITOR_TOOLBAR_ICON_DIM} />
                   </span>
                 </button>
                 {composingNewEntry ? (
@@ -1193,7 +1223,7 @@ export function VaultTab({
                     data-tooltip-placement="inline-start"
                   >
                     <span className="pane-header-add-btn__glyph" aria-hidden>
-                      <MaterialIcon name="clear" size={12} />
+                      <Cross2Icon {...EDITOR_TOOLBAR_ICON_DIM} />
                     </span>
                   </button>
                 ) : null}
@@ -1212,7 +1242,7 @@ export function VaultTab({
                   data-tooltip-placement="inline-start"
                 >
                   <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <MaterialIcon name="notifications" size={12} />
+                    <BellIcon {...EDITOR_TOOLBAR_ICON_DIM} />
                   </span>
                 </button>
               </div>

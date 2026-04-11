@@ -19,3 +19,7 @@ All Material Icons in the desktop app **must be rendered on a square whose width
 - Do not use odd sizes such as 22px or 28px for Material Icons unless you have an exceptional case and document the exception in code review.
 
 The `MaterialIcon` component only accepts sizes typed as `DesktopMaterialIconSizePx` and logs a **development** error if the value is outside 12–192 or not a multiple of 12.
+
+## Radix Icons (`@radix-ui/react-icons`)
+
+The **Editor Toolbar** in **`VaultTab`** (**`pane-header--editor-toolbar`**) uses **Radix** icons at **15×15** CSS pixels (**`width` / `height`** on the SVG): **Vault** (**`ListBulletIcon`**), history (**`ChevronLeftIcon` / `ChevronRightIcon`**), compose cancel (**`Cross2Icon`**), notifications (**`BellIcon`**). Render them inside **`pane-header-add-btn__glyph`** so **`App.css`** can keep the glyph box fixed at **15×15**.

@@ -14,7 +14,7 @@ Authoritative detail: `specs/design/desktop-shell-patterns.md`.
 
 ## Editor Toolbar
 
-- The editor column’s top chrome (**Back / Forward**, compose title + **Cancel** when composing, **notifications** toggle) is the **Editor Toolbar**. Markup: **`pane-header pane-header--editor-toolbar`** in **`VaultTab`**; styles: **`.pane-header--editor-toolbar`** in **`App.css`**. Open-note tabs render in **`WindowTitleBar`**, not in this row.
+- The editor column’s top chrome (**Vault** toggle, **Back / Forward**, compose title + **Cancel** when composing, **notifications** toggle) is the **Editor Toolbar**. Icons on this row use **`@radix-ui/react-icons`** at **15×15** inside **`pane-header-add-btn__glyph`**. Markup: **`pane-header pane-header--editor-toolbar`** in **`VaultTab`**; styles: **`.pane-header--editor-toolbar`**, **`.pane-header-add-btn`**, and pressed accents in **`App.css`**. Open-note tabs render in **`WindowTitleBar`**, not in this row.
 
 ## Cursors
 
