@@ -293,8 +293,9 @@ function EditorPaneBody({
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const editorHasFoldedRangesRef = useRef(editorHasFoldedRanges);
   const editorHasFoldableRangesRef = useRef(editorHasFoldableRanges);
-  const isInitialHeavySidecarLayoutRef = useRef(true);
-  const [heavySidecarsVisible, setHeavySidecarsVisible] = useState(true);
+  const backlinksSidecarRef = useRef<HTMLDivElement | null>(null);
+  const todayHubSidecarRef = useRef<HTMLDivElement | null>(null);
+  const isInitialSidecarDeferRef = useRef(true);
 
   useLayoutEffect(() => {
     editorHasFoldedRangesRef.current = editorHasFoldedRanges;
@@ -302,18 +303,33 @@ function EditorPaneBody({
   }, [editorHasFoldedRanges, editorHasFoldableRanges]);
 
   useLayoutEffect(() => {
-    if (isInitialHeavySidecarLayoutRef.current) {
-      isInitialHeavySidecarLayoutRef.current = false;
+    if (isInitialSidecarDeferRef.current) {
+      isInitialSidecarDeferRef.current = false;
       return;
     }
-    // Drop backlinks / Today hub before the first paint for the new `selectedUri` so the editor
-    // surface commits first; remount them on the next frame.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional layout-phase flush before paint
-    setHeavySidecarsVisible(false);
+    const els: HTMLElement[] = [];
+    const b = backlinksSidecarRef.current;
+    const t = todayHubSidecarRef.current;
+    if (b) {
+      els.push(b);
+    }
+    if (t) {
+      els.push(t);
+    }
+    for (const el of els) {
+      el.classList.add('note-sidecar-group--deferred');
+    }
     const id = window.requestAnimationFrame(() => {
-      setHeavySidecarsVisible(true);
+      for (const el of els) {
+        el.classList.remove('note-sidecar-group--deferred');
+      }
     });
-    return () => window.cancelAnimationFrame(id);
+    return () => {
+      window.cancelAnimationFrame(id);
+      for (const el of els) {
+        el.classList.remove('note-sidecar-group--deferred');
+      }
+    };
   }, [selectedUri]);
 
   const onFoldedRangesPresentChange = useCallback((next: boolean) => {
@@ -409,25 +425,26 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
-              {heavySidecarsVisible &&
-              !composingNewEntry &&
-              selectedUri &&
-              !showTodayHubCanvas ? (
-                <InboxBacklinksSection
-                  selectedUri={selectedUri}
-                  backlinkRows={backlinkRows}
-                  onSelectNote={onSelectNote}
-                  deferNonce={inboxBacklinksDeferNonce}
-                />
+              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
+                <div ref={backlinksSidecarRef} className="note-sidecar-group">
+                  <InboxBacklinksSection
+                    selectedUri={selectedUri}
+                    backlinkRows={backlinkRows}
+                    onSelectNote={onSelectNote}
+                    deferNonce={inboxBacklinksDeferNonce}
+                  />
+                </div>
               ) : null}
             </div>
           </div>
-          {heavySidecarsVisible &&
-          showTodayHubCanvas &&
+          {showTodayHubCanvas &&
           selectedUri &&
           todayHubSettings &&
           !composingNewEntry ? (
-            <div className="note-markdown-editor-page note-markdown-editor-page--today-hub">
+            <div
+              ref={todayHubSidecarRef}
+              className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
+            >
               <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
               <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
                 <TodayHubCanvas

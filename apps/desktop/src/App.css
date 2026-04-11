@@ -1568,6 +1568,15 @@ a:focus:not(:focus-visible) {
   visibility: hidden;
 }
 
+/* One-frame visibility defer on note switch: keep sidecars in the layout (no unmount jump). */
+.note-markdown-editor-paper > .note-sidecar-group {
+  flex: none;
+}
+
+.note-sidecar-group.note-sidecar-group--deferred {
+  visibility: hidden;
+}
+
 .inbox-backlinks {
   flex: none;
   padding-block: 0.85rem 0.6rem;
