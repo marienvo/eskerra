@@ -331,6 +331,8 @@ a:focus:not(:focus-visible) {
   align-items: center;
   overflow: hidden;
   cursor: default;
+  /* Breathing room between Vault + workspace select and open-note tabs. */
+  margin-inline-start: 2px;
 }
 
 /* Predictable window-drag strip when the tab row is full (no buttons). */
