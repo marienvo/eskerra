@@ -175,6 +175,29 @@ fn fuzzy_dist_for_token_len(len: usize) -> u8 {
     }
 }
 
+/// Stricter fuzzy distance for title / filename / `rel_path` in Tantivy (vs body), so weak matches
+/// like `lisa` or `line` vs `lisane` do not score as strongly as `lisanne`.
+fn fuzzy_dist_for_title_path_token(token_char_len: usize) -> u8 {
+    let d = fuzzy_dist_for_token_len(token_char_len);
+    if d == 0 {
+        return 0;
+    }
+    if token_char_len >= 9 {
+        d
+    } else {
+        1
+    }
+}
+
+/// Max edit distance when classifying a note as title/path hit (stricter than body for short queries).
+fn max_fuzzy_distance_title_path_classify(token_char_len: usize) -> u32 {
+    if token_char_len >= 9 {
+        max_edit_distance_for_query(token_char_len)
+    } else {
+        max_edit_distance_for_query(token_char_len).min(1)
+    }
+}
+
 fn query_tokens(query: &str) -> Vec<String> {
     query
         .split_whitespace()
@@ -237,6 +260,23 @@ fn collect_snippets(body: &str, tokens: &[String], full_query_lower: &str) -> (V
     (snippets, mc)
 }
 
+fn fuzzy_token_in_text_max(hay_lower: &str, token: &str, max_d: u32) -> bool {
+    let tlen = token.chars().count();
+    for raw in hay_lower.split_whitespace() {
+        let w = trim_non_alphanumeric_edges(raw);
+        if w.is_empty() {
+            continue;
+        }
+        if w.chars().count().abs_diff(tlen) > max_d as usize {
+            continue;
+        }
+        if bounded_levenshtein(w, token, max_d).is_some() {
+            return true;
+        }
+    }
+    false
+}
+
 fn classify_best_field(
     title_lower: &str,
     filename_lower: &str,
@@ -248,7 +288,11 @@ fn classify_best_field(
     let title_hit = !full_query_lower.is_empty()
         && (title_lower.contains(full_query_lower)
             || tokens.iter().any(|t| {
-                t.len() >= FUZZY_MIN_QUERY_CHARS && fuzzy_token_in_text(title_lower, t)
+                if t.len() < FUZZY_MIN_QUERY_CHARS {
+                    return false;
+                }
+                let cap = max_fuzzy_distance_title_path_classify(t.chars().count());
+                fuzzy_token_in_text_max(title_lower, t, cap)
             }));
     if title_hit {
         return VaultSearchBestFieldDto::Title;
@@ -256,8 +300,11 @@ fn classify_best_field(
     let path_hit = filename_lower.contains(full_query_lower)
         || rel_lower.contains(full_query_lower)
         || tokens.iter().any(|t| {
-            t.len() >= FUZZY_MIN_QUERY_CHARS
-                && (fuzzy_token_in_text(filename_lower, t) || fuzzy_token_in_text(rel_lower, t))
+            if t.len() < FUZZY_MIN_QUERY_CHARS {
+                return false;
+            }
+            let cap = max_fuzzy_distance_title_path_classify(t.chars().count());
+            fuzzy_token_in_text_max(filename_lower, t, cap) || fuzzy_token_in_text_max(rel_lower, t, cap)
         });
     if path_hit {
         return VaultSearchBestFieldDto::Path;
@@ -303,20 +350,25 @@ fn build_index_query(
     let main_q = parser.parse_query(query_trim)?;
     let mut clauses: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Should, main_q)];
 
-    for token in query_tokens(query_trim) {
+       for token in query_tokens(query_trim) {
         if token.len() < FUZZY_MIN_QUERY_CHARS {
             continue;
         }
-        let d = fuzzy_dist_for_token_len(token.chars().count());
-        if d == 0 {
+        let tlen = token.chars().count();
+        let d_body = fuzzy_dist_for_token_len(tlen);
+        let d_title_path = fuzzy_dist_for_title_path_token(tlen);
+        if d_body == 0 && d_title_path == 0 {
             continue;
         }
-        for (field, boost) in [
-            (f_title, 5.0f32),
-            (f_filename, 4.0f32),
-            (f_rel_path, 3.5f32),
-            (f_body, 1.2f32),
+        for (field, boost, d) in [
+            (f_title, 5.0f32, d_title_path),
+            (f_filename, 4.0f32, d_title_path),
+            (f_rel_path, 3.5f32, d_title_path),
+            (f_body, 1.2f32, d_body),
         ] {
+            if d == 0 {
+                continue;
+            }
             let term = Term::from_field_text(field, &token);
             let fq: Box<dyn Query> = Box::new(FuzzyTermQuery::new(term, d, true));
             clauses.push((Occur::Should, Box::new(BoostQuery::new(fq, boost))));
@@ -324,6 +376,72 @@ fn build_index_query(
     }
 
     Ok(Box::new(BooleanQuery::from(clauses)))
+}
+
+/// Minimum Levenshtein distance from any query token to any whitespace word in `hay_lower`
+/// (used for ranking). Uses standard per-query `max_edit_distance_for_query` caps.
+fn min_edit_distance_to_query_tokens(hay_lower: &str, tokens: &[String]) -> Option<u32> {
+    let mut best: Option<u32> = None;
+    for t in tokens {
+        if t.len() < FUZZY_MIN_QUERY_CHARS {
+            continue;
+        }
+        let max_d = max_edit_distance_for_query(t.chars().count());
+        let tlen = t.chars().count();
+        for raw in hay_lower.split_whitespace() {
+            let w = trim_non_alphanumeric_edges(raw);
+            if w.is_empty() {
+                continue;
+            }
+            if w.chars().count().abs_diff(tlen) > max_d as usize {
+                continue;
+            }
+            if let Some(d) = bounded_levenshtein(w, t.as_str(), max_d) {
+                best = Some(best.map_or(d, |b| b.min(d)));
+            }
+        }
+    }
+    best
+}
+
+fn min_edit_distance_to_query_tokens_prefix(hay_lower: &str, tokens: &[String], max_hay_chars: usize) -> Option<u32> {
+    let prefix: String = hay_lower.chars().take(max_hay_chars).collect();
+    min_edit_distance_to_query_tokens(&prefix, tokens)
+}
+
+fn rank_quality_boost(min_d: Option<u32>) -> f32 {
+    match min_d {
+        Some(0) => 5_000.0,
+        Some(1) => 3_200.0,
+        Some(2) => 1_400.0,
+        Some(3) => 400.0,
+        Some(_) => 100.0,
+        None => 0.0,
+    }
+}
+
+fn ranking_min_distance_for_field(
+    best_field: VaultSearchBestFieldDto,
+    title_lower: &str,
+    filename_lower: &str,
+    rel_lower: &str,
+    body_lower: &str,
+    tokens: &[String],
+) -> Option<u32> {
+    match best_field {
+        VaultSearchBestFieldDto::Title => min_edit_distance_to_query_tokens(title_lower, tokens),
+        VaultSearchBestFieldDto::Path => [
+            min_edit_distance_to_query_tokens(filename_lower, tokens),
+            min_edit_distance_to_query_tokens(rel_lower, tokens),
+            min_edit_distance_to_query_tokens(title_lower, tokens),
+        ]
+        .into_iter()
+        .flatten()
+        .min(),
+        VaultSearchBestFieldDto::Body => {
+            min_edit_distance_to_query_tokens_prefix(body_lower, tokens, 12_000)
+        }
+    }
 }
 
 fn add_note_document(
@@ -703,7 +821,16 @@ pub fn run_indexed_search(
             VaultSearchBestFieldDto::Path => 5_000.0f32,
             VaultSearchBestFieldDto::Body => 0.0f32,
         };
-        let combined_score = tier_boost + tantivy_score;
+        let min_d = ranking_min_distance_for_field(
+            best_field,
+            &title_lower,
+            &filename_lower,
+            &rel_lower,
+            &body_lower,
+            &tokens,
+        );
+        let combined_score =
+            tier_boost + rank_quality_boost(min_d) + tantivy_score * 0.02;
 
         out.push(VaultSearchNoteResultDto {
             uri,
@@ -862,5 +989,89 @@ mod ranking_tests {
                 "prose false positive should not outrank real matches: {uris:?}"
             );
         }
+    }
+
+    /// Mirrors weak title matches vs strong `Lisanne` typo match (desktop screenshot case).
+    #[test]
+    fn lisane_ranks_lisanne_notes_before_call_lisa_and_cart_line() {
+        let (schema, f_uri, f_title, f_filename, f_rel_path, f_body) = build_schema();
+        let index = Index::create_in_ram(schema);
+        let mut writer = index
+            .writer(INDEX_WRITER_HEAP_MB * 1024 * 1024)
+            .expect("writer");
+
+        let add = |uri: &str, stem: &str, fname: &str, rel: &str, body: &str| {
+            writer
+                .add_document(doc!(
+                    f_uri => uri,
+                    f_title => stem,
+                    f_filename => fname,
+                    f_rel_path => rel,
+                    f_body => body,
+                ))
+                .expect("add");
+        };
+
+        add(
+            "/v/Call Lisa.md",
+            "Call Lisa",
+            "Call Lisa.md",
+            "General/Call Lisa.md",
+            "# Call Lisa\n\n- Lisa, 31 org psychologie\n",
+        );
+        add(
+            "/v/Cart line update.md",
+            "Cart line update",
+            "Cart line update.md",
+            "General/Cart line update.md",
+            "# Cart line update\n\nDetails here.\n",
+        );
+        add(
+            "/v/Familie Lisanne.md",
+            "Familie Lisanne",
+            "Familie Lisanne.md",
+            "General/Familie Lisanne.md",
+            "# Familie Lisanne\n\nNotes.\n",
+        );
+        add(
+            "/v/Lisanne.md",
+            "Lisanne",
+            "Lisanne.md",
+            "General/Lisanne.md",
+            "# Lisanne letswaart\n\n- [[Familie Lisanne]]\n",
+        );
+
+        writer.commit().expect("commit");
+        let reader = index.reader().expect("reader");
+        let state = VaultSearchIndexState::test_ready(index, reader);
+
+        let out = run_indexed_search(&state, "lisane", 20).expect("search");
+        let uris: Vec<&str> = out.iter().map(|n| n.uri.as_str()).collect();
+
+        let pos_lisanne = uris
+            .iter()
+            .position(|u| *u == "/v/Lisanne.md")
+            .expect("Lisanne.md in results");
+        let pos_familie = uris
+            .iter()
+            .position(|u| *u == "/v/Familie Lisanne.md")
+            .expect("Familie Lisanne in results");
+        let pos_call = uris
+            .iter()
+            .position(|u| *u == "/v/Call Lisa.md")
+            .expect("Call Lisa in results");
+        let pos_cart = uris
+            .iter()
+            .position(|u| *u == "/v/Cart line update.md")
+            .expect("Cart line in results");
+
+        assert!(
+            pos_lisanne < pos_call && pos_familie < pos_call,
+            "Lisanne title matches should rank above Call Lisa: {uris:?}"
+        );
+        assert!(
+            pos_lisanne < pos_cart && pos_familie < pos_cart,
+            "Lisanne title matches should rank above Cart line update: {uris:?}"
+        );
     }
 }
