@@ -51,6 +51,28 @@ import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
 /** Cap simultaneous warm (read-only underlay) hub cells. Conservative first default. */
 const MAX_HUB_WARM_CELLS = 2;
 
+/** First paint: only this many week rows mount; the rest expand via idle/rAF (see progressive reveal). */
+const INITIAL_VISIBLE_TODAY_HUB_ROWS = 4;
+
+/** How many additional week rows to mount per idle slice after first paint. */
+const TODAY_HUB_ROW_REVEAL_BATCH = 8;
+
+function scheduleHubRowRevealStep(cb: () => void): number {
+  const ric = window.requestIdleCallback;
+  if (typeof ric === 'function') {
+    return ric(cb, {timeout: 120});
+  }
+  return window.requestAnimationFrame(cb);
+}
+
+function cancelHubRowRevealStep(handle: number): void {
+  if (typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(handle);
+  } else {
+    window.cancelAnimationFrame(handle);
+  }
+}
+
 type TodayHubCanvasProps = {
   vaultRoot: string;
   /** Currently open hub note `…/Today.md` (canonical vault URI). */
@@ -130,6 +152,52 @@ export function TodayHubCanvas({
     () => weekStarts.map(d => todayHubRowUri(hubDirectoryUri, d)),
     [weekStarts, hubDirectoryUri],
   );
+
+  const [visibleRowCount, setVisibleRowCount] = useState(
+    INITIAL_VISIBLE_TODAY_HUB_ROWS,
+  );
+  const visibleRowCountRef = useRef(visibleRowCount);
+  useLayoutEffect(() => {
+    visibleRowCountRef.current = visibleRowCount;
+  }, [visibleRowCount]);
+
+  const visibleWeekStarts = useMemo(
+    () => weekStarts.slice(0, Math.min(visibleRowCount, weekStarts.length)),
+    [weekStarts, visibleRowCount],
+  );
+
+  useEffect(() => {
+    const total = weekStarts.length;
+    let cancelled = false;
+    let idleHandle = 0;
+
+    const step = (): void => {
+      if (cancelled) {
+        return;
+      }
+      const c = visibleRowCountRef.current;
+      if (c >= total) {
+        return;
+      }
+      const next = Math.min(c + TODAY_HUB_ROW_REVEAL_BATCH, total);
+      visibleRowCountRef.current = next;
+      setVisibleRowCount(next);
+      if (next < total) {
+        idleHandle = scheduleHubRowRevealStep(step);
+      }
+    };
+
+    if (visibleRowCountRef.current < total) {
+      idleHandle = scheduleHubRowRevealStep(step);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle !== 0) {
+        cancelHubRowRevealStep(idleHandle);
+      }
+    };
+  }, [weekStarts.length]);
 
   const noteRefs = useMemo(
     () => vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
@@ -526,11 +594,12 @@ export function TodayHubCanvas({
       style={
         {
           ['--today-hub-col-count' as string]: String(columnCount),
+          ['--today-hub-total-rows' as string]: String(weekStarts.length),
         } as CSSProperties
       }
     >
       <div className="today-hub-canvas__rows">
-        {weekStarts.map((weekStart, ri) => {
+        {visibleWeekStarts.map((weekStart, ri) => {
           const uri = normUri(rowUris[ri]!);
           const sections = getSections(uri);
           const isActiveRow = active?.uri === uri;

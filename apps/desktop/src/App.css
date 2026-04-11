@@ -3000,6 +3000,13 @@ button.primary.destructive {
 [data-app-surface='capture'] .today-hub-canvas__rows {
   display: flex;
   flex-direction: column;
+  /*
+   * Progressive mount: week rows appear in batches after first paint. Approximate full height so the
+   * scroll thumb does not collapse to the small initial slice (`.today-hub-canvas` sets row count).
+   */
+  min-height: calc(
+    var(--today-hub-total-rows, 53) * var(--today-hub-row-reveal-unit, 7.5rem)
+  );
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row {

@@ -448,7 +448,7 @@ function EditorPaneBody({
               <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
               <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
                 <TodayHubCanvas
-                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}`}
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}-${selectedUri}`}
                   vaultRoot={vaultRoot}
                   todayNoteUri={selectedUri}
                   hubSettings={todayHubSettings}
