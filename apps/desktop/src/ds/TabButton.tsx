@@ -8,7 +8,7 @@ export type TabButtonProps = Omit<
   'aria-label' | 'aria-pressed' | 'children' | 'className'
 > & {
   'aria-label': string;
-  /** Selected state: translucent pill with knockout icon (`.rail-tab.active`). */
+  /** Selected state: white icon, no pill background (`.rail-tab.active`). */
   active: boolean;
   icon: string;
   iconSize?: DesktopMaterialIconSizePx;

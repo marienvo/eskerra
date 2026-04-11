@@ -109,6 +109,8 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Strip above title bar / setup shell; background shows through (transparent). */
+  padding-block-start: var(--panel-grid-padding);
 }
 
 /* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
@@ -176,8 +178,8 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   min-height: 40px;
   height: 40px;
-  /* inline-start matches --desktop-leading-track-width so the Vault tab aligns with the main column. */
-  padding: 0 0.3rem 0 0.34rem;
+  /* Match main-shell horizontal inset and panel-group block padding (vault/select ↔ window = gap under row ↔ panes). */
+  padding: 0 var(--panel-grid-padding);
   box-sizing: border-box;
   border-bottom: none;
   background: transparent;
@@ -198,6 +200,10 @@ a:focus:not(:focus-visible) {
   flex-shrink: 1;
   min-width: 16rem;
   max-width: 26rem;
+  /* Match `.rail-tab` / Vault control height (40px title bar row). */
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
   border-radius: 8px;
   overflow: hidden;
   border: none;
@@ -790,10 +796,10 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-.rail-tab:hover:not(.active),
-.rail-tab:focus-visible:not(.active) {
+/* Same hover wash for Vault and Episodes; icon color stays muted vs white (no brighten on hover). */
+.rail-tab:hover:not(:disabled),
+.rail-tab:focus-visible:not(:disabled) {
   background: var(--color-shell-hover-bg);
-  color: var(--color-shell-icon);
 }
 
 .rail-tab:focus-visible {
@@ -806,32 +812,11 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-/* Translucent light pill; icon knocks out via destination-out so shell shows through glyphs. */
-.rail-tab.active::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: 0;
-  pointer-events: none;
-  background: rgba(255, 255, 255, 0.16);
-}
-
 .rail-tab.active .material-icons {
   position: relative;
   z-index: 1;
   color: #ffffff;
-  mix-blend-mode: destination-out;
-}
-
-.rail-tab.active:hover::before,
-.rail-tab.active:focus-visible::before {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.rail-tab.active:hover,
-.rail-tab.active:focus-visible {
-  color: #ffffff;
+  mix-blend-mode: normal;
 }
 
 .rail-tab:disabled,
@@ -841,10 +826,6 @@ a:focus:not(:focus-visible) {
   background: transparent;
   color: var(--color-shell-icon-disabled);
   box-shadow: none;
-}
-
-.rail-tab.active:disabled::before {
-  display: none;
 }
 
 .rail-tab.active:disabled .material-icons {
