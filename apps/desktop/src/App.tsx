@@ -31,8 +31,6 @@ import {
   AppSetupTagline,
   AppStatusBar,
 } from './components/AppStatusBar';
-import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
-import {NotificationsPanel} from './components/NotificationsPanel';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
@@ -54,8 +52,6 @@ import {
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
-  MIN_RESIZABLE_PANE_PX,
-  NOTIFICATIONS_PANEL,
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
@@ -919,16 +915,8 @@ export default function App() {
 
           <div className="app-body">
             <div className="main-shell-stage panel-group fill">
-              <DesktopHorizontalSplitEnd
-                endVisible={notificationsPanelVisible}
-                endWidthPx={layouts.notifications.widthPx}
-                minEndPx={NOTIFICATIONS_PANEL.minPx}
-                maxEndPx={NOTIFICATIONS_PANEL.maxPx}
-                minMainPx={MIN_RESIZABLE_PANE_PX}
-                onEndWidthPxChanged={persistNotificationsWidthPx}
-                main={
-                  <div className="main-column">
-              <main className="main-stage">
+              <div className="main-column">
+                <main className="main-stage">
                   <VaultTab
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
@@ -1027,6 +1015,12 @@ export default function App() {
                       onToggleNotificationsPanel={() =>
                         setNotificationsPanelVisible(v => !v)
                       }
+                      notificationsWidthPx={layouts.notifications.widthPx}
+                      onNotificationsWidthPxChanged={persistNotificationsWidthPx}
+                      notificationItems={notificationItems}
+                      notificationHighlightId={notificationHighlightId}
+                      onDismissNotification={dismissNotification}
+                      onClearAllNotifications={clearAllNotifications}
                       showTodayHubCanvas={showTodayHubCanvas}
                       todayHubSettings={todayHubSettings}
                       todayHubBridgeRef={todayHubBridgeRef}
@@ -1036,19 +1030,8 @@ export default function App() {
                       persistTodayHubRow={persistTodayHubRow}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
-              </main>
-            </div>
-                }
-                end={
-                  <NotificationsPanel
-                    appSurface={vaultPaneVisible ? 'capture' : 'consume'}
-                    items={notificationItems}
-                    highlightId={notificationHighlightId}
-                    onDismiss={dismissNotification}
-                    onClearAll={clearAllNotifications}
-                  />
-                }
-              />
+                </main>
+              </div>
             </div>
           </div>
 

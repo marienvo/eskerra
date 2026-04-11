@@ -1,12 +1,5 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import {
-  BellIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  Cross2Icon,
-  ListBulletIcon,
-} from '@radix-ui/react-icons';
 import type {MutableRefObject, ReactNode, RefObject} from 'react';
 import {
   Fragment,
@@ -38,6 +31,12 @@ import {
 } from '@eskerra/core';
 
 import {
+  MIN_RESIZABLE_PANE_PX,
+  NOTIFICATIONS_PANEL,
+} from '../lib/layoutStore';
+import type {SessionNotification} from '../lib/sessionNotifications';
+
+import {
   NoteMarkdownEditor,
   type NoteMarkdownEditorHandle,
 } from '../editor/noteEditor/NoteMarkdownEditor';
@@ -61,13 +60,14 @@ import type {
 } from '../editor/noteEditor/vaultLinkActivatePayload';
 import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
+import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
+import {EditorWorkspaceToolbar} from './EditorWorkspaceToolbar';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
+import {NotificationsPanel} from './NotificationsPanel';
 import {MaterialIcon} from './MaterialIcon';
 import {TodayHubCanvas} from './TodayHubCanvas';
 import {VaultTreePane} from './VaultTreePane';
-
-const EDITOR_TOOLBAR_ICON_DIM = {width: 15, height: 15} as const;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -152,6 +152,12 @@ type VaultTabProps = {
   onCloseOtherEditorTabs: (keepTabId: string) => void;
   notificationsPanelVisible: boolean;
   onToggleNotificationsPanel: () => void;
+  notificationsWidthPx: number;
+  onNotificationsWidthPxChanged: (px: number) => void;
+  notificationItems: readonly SessionNotification[];
+  notificationHighlightId: string | null;
+  onDismissNotification: (id: string) => void;
+  onClearAllNotifications: () => void;
   showTodayHubCanvas: boolean;
   todayHubSettings: TodayHubSettings | null;
   todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
@@ -548,6 +554,12 @@ export function VaultTab({
   onCloseOtherEditorTabs,
   notificationsPanelVisible,
   onToggleNotificationsPanel,
+  notificationsWidthPx,
+  onNotificationsWidthPxChanged,
+  notificationItems,
+  notificationHighlightId,
+  onDismissNotification,
+  onClearAllNotifications,
   showTodayHubCanvas,
   todayHubSettings,
   todayHubBridgeRef,
@@ -1120,185 +1132,128 @@ export function VaultTab({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <MainWorkspaceSplit
-        vaultVisible={vaultPaneVisible}
-        episodesVisible={episodesPaneVisible}
-        vaultWidthPx={vaultWidthPx}
-        episodesWidthPx={episodesWidthPx}
-        onVaultWidthPxChanged={onVaultWidthPxChanged}
-        onEpisodesWidthPxChanged={onEpisodesWidthPxChanged}
-        stackTopHeightPx={stackTopHeightPx}
-        onStackTopHeightPxChanged={onStackTopHeightPxChanged}
-        vaultPane={
-          <VaultTreePane
-            vaultRoot={vaultRoot}
-            fs={fs}
-            fsRefreshNonce={fsRefreshNonce}
-            vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
-            editorActiveMarkdownUri={composingNewEntry ? null : selectedUri}
-            revealActiveNoteNonce={revealTreeNonce}
-            onRevealActiveNoteInTree={bumpRevealActiveNoteInTree}
-            revealActiveNoteDisabled={revealActiveNoteDisabled}
-            busy={busy}
-            onAddEntry={onAddEntry}
-            onOpenMarkdownNote={onSelectNote}
-            onOpenMarkdownNoteInNewActiveTab={onSelectNoteInNewActiveTab}
-            onRenameMarkdownRequest={openRenameDialog}
-            onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
-            onRenameFolderRequest={openRenameFolderDialog}
-            onDeleteFolderRequest={openTreeDeleteFolderDialog}
-            onBulkDeleteRequest={openBulkDeleteDialog}
-            onMoveVaultTreeItem={moveVaultTreeItemStable}
-            onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
+      <EditorWorkspaceToolbar
+        vaultPaneVisible={vaultPaneVisible}
+        onToggleVault={onToggleVault}
+        busy={busy}
+        editorHistoryCanGoBack={editorHistoryCanGoBack}
+        editorHistoryCanGoForward={editorHistoryCanGoForward}
+        onEditorHistoryGoBack={onEditorHistoryGoBack}
+        onEditorHistoryGoForward={onEditorHistoryGoForward}
+        composingNewEntry={composingNewEntry}
+        editorPaneTitle={editorPaneTitle}
+        onCancelNewEntry={onCancelNewEntry}
+        notificationsPanelVisible={notificationsPanelVisible}
+        onToggleNotificationsPanel={onToggleNotificationsPanel}
+      />
+      <DesktopHorizontalSplitEnd
+        endVisible={notificationsPanelVisible}
+        endWidthPx={notificationsWidthPx}
+        minEndPx={NOTIFICATIONS_PANEL.minPx}
+        maxEndPx={NOTIFICATIONS_PANEL.maxPx}
+        minMainPx={MIN_RESIZABLE_PANE_PX}
+        onEndWidthPxChanged={onNotificationsWidthPxChanged}
+        main={
+          <MainWorkspaceSplit
+            vaultVisible={vaultPaneVisible}
+            episodesVisible={episodesPaneVisible}
+            vaultWidthPx={vaultWidthPx}
+            episodesWidthPx={episodesWidthPx}
+            onVaultWidthPxChanged={onVaultWidthPxChanged}
+            onEpisodesWidthPxChanged={onEpisodesWidthPxChanged}
+            stackTopHeightPx={stackTopHeightPx}
+            onStackTopHeightPxChanged={onStackTopHeightPxChanged}
+            vaultPane={
+              <VaultTreePane
+                vaultRoot={vaultRoot}
+                fs={fs}
+                fsRefreshNonce={fsRefreshNonce}
+                vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
+                editorActiveMarkdownUri={composingNewEntry ? null : selectedUri}
+                revealActiveNoteNonce={revealTreeNonce}
+                onRevealActiveNoteInTree={bumpRevealActiveNoteInTree}
+                revealActiveNoteDisabled={revealActiveNoteDisabled}
+                busy={busy}
+                onAddEntry={onAddEntry}
+                onOpenMarkdownNote={onSelectNote}
+                onOpenMarkdownNoteInNewActiveTab={onSelectNoteInNewActiveTab}
+                onRenameMarkdownRequest={openRenameDialog}
+                onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
+                onRenameFolderRequest={openRenameFolderDialog}
+                onDeleteFolderRequest={openTreeDeleteFolderDialog}
+                onBulkDeleteRequest={openBulkDeleteDialog}
+                onMoveVaultTreeItem={moveVaultTreeItemStable}
+                onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
+              />
+            }
+            episodesPane={episodesPane}
+            editorPane={
+              <div className="panel-surface">
+                {editorOpen ? (
+                  <>
+                    <EditorPaneBody
+                      inboxEditorRef={inboxEditorRef}
+                      inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+                      inboxAttachmentHost={inboxAttachmentHost}
+                      vaultRoot={vaultRoot}
+                      vaultMarkdownRefs={vaultMarkdownRefs}
+                      inboxContentByUri={inboxContentByUri}
+                      composingNewEntry={composingNewEntry}
+                      selectedUri={selectedUri}
+                      editorBody={editorBody}
+                      inboxEditorResetNonce={inboxEditorResetNonce}
+                      onEditorChange={onEditorChange}
+                      onEditorError={onEditorError}
+                      onWikiLinkActivate={onWikiLinkActivate}
+                      onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                      relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+                      wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                      wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                      onSaveShortcut={onSaveShortcut}
+                      onDeleteNoteShortcut={onDeleteNoteShortcut}
+                      busy={busy}
+                      backlinkRows={backlinkRows}
+                      onSelectNote={onSelectNote}
+                      inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+                      showTodayHubCanvas={showTodayHubCanvas}
+                      todayHubSettings={todayHubSettings}
+                      todayHubBridgeRef={todayHubBridgeRef}
+                      todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+                      todayHubCellEditorRef={todayHubCellEditorRef}
+                      prehydrateTodayHubRows={prehydrateTodayHubRows}
+                      persistTodayHubRow={persistTodayHubRow}
+                    />
+                    {composingNewEntry ? (
+                      <div className="pane-footer">
+                        <button
+                          type="button"
+                          className="primary"
+                          onClick={() => void onCreateNewEntry()}
+                          disabled={busy}
+                        >
+                          Create note
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="muted empty-hint">
+                    Select a note from the vault or use Add entry.
+                  </p>
+                )}
+              </div>
+            }
           />
         }
-        episodesPane={episodesPane}
-        editorPane={
-          <div className="panel-surface">
-            {/* Editor Toolbar: Vault, history, compose title, notifications (tabs live in WindowTitleBar). */}
-            <div className="pane-header pane-header--editor-toolbar">
-              <div className="pane-header-start">
-                <button
-                  type="button"
-                  className={[
-                    'pane-header-add-btn icon-btn-ghost app-tooltip-trigger',
-                    vaultPaneVisible ? 'pane-header-add-btn--vault-on' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={onToggleVault}
-                  aria-label="Vault"
-                  aria-pressed={vaultPaneVisible}
-                  data-tooltip="Vault"
-                  data-tooltip-placement="inline-end"
-                >
-                  <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <ListBulletIcon {...EDITOR_TOOLBAR_ICON_DIM} />
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={onEditorHistoryGoBack}
-                  disabled={busy || !editorHistoryCanGoBack}
-                  aria-label="Back"
-                  data-tooltip="Back"
-                  data-tooltip-placement="inline-end"
-                >
-                  <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <ChevronLeftIcon {...EDITOR_TOOLBAR_ICON_DIM} />
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                  onClick={onEditorHistoryGoForward}
-                  disabled={busy || !editorHistoryCanGoForward}
-                  aria-label="Forward"
-                  data-tooltip="Forward"
-                  data-tooltip-placement="inline-end"
-                >
-                  <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <ChevronRightIcon {...EDITOR_TOOLBAR_ICON_DIM} />
-                  </span>
-                </button>
-                {composingNewEntry ? (
-                  <span
-                    className="pane-title pane-title--truncate"
-                    title={editorPaneTitle}
-                  >
-                    {editorPaneTitle}
-                  </span>
-                ) : null}
-              </div>
-              <div className="pane-header-trailing-actions">
-                {composingNewEntry ? (
-                  <button
-                    type="button"
-                    className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
-                    onClick={onCancelNewEntry}
-                    disabled={busy}
-                    aria-label="Cancel new entry"
-                    data-tooltip="Cancel"
-                    data-tooltip-placement="inline-start"
-                  >
-                    <span className="pane-header-add-btn__glyph" aria-hidden>
-                      <Cross2Icon {...EDITOR_TOOLBAR_ICON_DIM} />
-                    </span>
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={[
-                    'pane-header-add-btn icon-btn-ghost app-tooltip-trigger',
-                    notificationsPanelVisible ? 'pane-header-add-btn--notifications-on' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={onToggleNotificationsPanel}
-                  aria-label="Notifications"
-                  aria-pressed={notificationsPanelVisible}
-                  data-tooltip="Notifications"
-                  data-tooltip-placement="inline-start"
-                >
-                  <span className="pane-header-add-btn__glyph" aria-hidden>
-                    <BellIcon {...EDITOR_TOOLBAR_ICON_DIM} />
-                  </span>
-                </button>
-              </div>
-            </div>
-            {editorOpen ? (
-              <>
-                <EditorPaneBody
-                  inboxEditorRef={inboxEditorRef}
-                  inboxEditorShellScrollRef={inboxEditorShellScrollRef}
-                  inboxAttachmentHost={inboxAttachmentHost}
-                  vaultRoot={vaultRoot}
-                  vaultMarkdownRefs={vaultMarkdownRefs}
-                  inboxContentByUri={inboxContentByUri}
-                  composingNewEntry={composingNewEntry}
-                  selectedUri={selectedUri}
-                  editorBody={editorBody}
-                  inboxEditorResetNonce={inboxEditorResetNonce}
-                  onEditorChange={onEditorChange}
-                  onEditorError={onEditorError}
-                  onWikiLinkActivate={onWikiLinkActivate}
-                  onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                  onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                  relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
-                  wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                  wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                  onSaveShortcut={onSaveShortcut}
-                  onDeleteNoteShortcut={onDeleteNoteShortcut}
-                  busy={busy}
-                  backlinkRows={backlinkRows}
-                  onSelectNote={onSelectNote}
-                  inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                  showTodayHubCanvas={showTodayHubCanvas}
-                  todayHubSettings={todayHubSettings}
-                  todayHubBridgeRef={todayHubBridgeRef}
-                  todayHubWikiNavParentRef={todayHubWikiNavParentRef}
-                  todayHubCellEditorRef={todayHubCellEditorRef}
-                  prehydrateTodayHubRows={prehydrateTodayHubRows}
-                  persistTodayHubRow={persistTodayHubRow}
-                />
-                {composingNewEntry ? (
-                  <div className="pane-footer">
-                    <button
-                      type="button"
-                      className="primary"
-                      onClick={() => void onCreateNewEntry()}
-                      disabled={busy}
-                    >
-                      Create note
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <p className="muted empty-hint">Select a note from the vault or use Add entry.</p>
-            )}
-          </div>
+        end={
+          <NotificationsPanel
+            appSurface={vaultPaneVisible ? 'capture' : 'consume'}
+            items={notificationItems}
+            highlightId={notificationHighlightId}
+            onDismiss={onDismissNotification}
+            onClearAll={onClearAllNotifications}
+          />
         }
       />
     </div>

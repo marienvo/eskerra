@@ -197,7 +197,7 @@ export function DesktopHorizontalSplit({
       </div>
       <div
         ref={separatorRef}
-        className="resize-sep"
+        className="resize-sep resize-sep--canvas"
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize panels"
