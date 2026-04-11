@@ -1166,11 +1166,11 @@ export function useMainWindowWorkspace(options: {
         return;
       }
 
-      let prefetchBody: string | undefined;
-      if (
+      const cacheMissPrefetch =
         root != null &&
-        inboxContentByUriRef.current[targetNorm] === undefined
-      ) {
+        inboxContentByUriRef.current[targetNorm] === undefined;
+      let prefetchBody: string | undefined;
+      if (cacheMissPrefetch) {
         try {
           const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
           if (openGen !== openMarkdownGenerationRef.current) {
@@ -1278,6 +1278,20 @@ export function useMainWindowWorkspace(options: {
         setBacklinksActiveBody(resolvedEditorBody);
       }
       setComposingNewEntry(false);
+      {
+        const vr = vaultRootRef.current;
+        let nextShowTodayHub = false;
+        if (vr && targetNorm) {
+          const normRoot = normalizeVaultBaseUri(vr)
+            .replace(/\\/g, '/')
+            .replace(/\/+$/, '');
+          const normSel = targetNorm.replace(/\\/g, '/');
+          if (normSel.startsWith(`${normRoot}/`)) {
+            nextShowTodayHub = vaultUriIsTodayMarkdownFile(normSel);
+          }
+        }
+        setShowTodayHubCanvas(nextShowTodayHub);
+      }
       setSelectedUri(targetNorm);
     },
     [

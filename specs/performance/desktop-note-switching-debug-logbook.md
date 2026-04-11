@@ -284,3 +284,24 @@ Those runs still had later work, but the largest remaining user-facing question 
 - Re-test a `Significant` item after regressions in the same subsystem, especially tree interaction, workspace-level note switching, or backlinks rendering.
 - Keep the debug log file for this session unless there is an intentional reason to clear it during a new measurement run.
 - If this investigation resumes later, prefer starting from pending `H56` (what consumes the long `H42`→`H55` window on slow cache-miss runs) before reopening bigger architectural ideas.
+
+## H02 (2026-04-11): post-publish React / main-thread timing (debug ingest)
+
+- **Hypotheses:** (1) **`H02-macrotask`:** Most delay is **after** `setSelectedUri` until the next macrotask (same class as historical `H42`→`H55`). (2) **`H02-vaultTabLayout`:** `VaultTab` **useLayoutEffect** runs late relative to `tPublish`. (3) **`H02-rAF`:** First **rAF** after that layout is still far from `tPublish` (style/layout/paint cost). (4) **`awaitPhaseMs`** (in macrotask payload): time from start of `openMarkdownInEditor` to `tPublish` still dominated by pre-publish awaits (`flushPendingEdits`, `saveChain`, `enqueueInboxPersist`, `readFile`).
+- **Change (historical, removed after 2026-04-11 verification):** Dev-only ingest POSTed NDJSON from `useMainWindowWorkspace` / `VaultTab` / `VaultTreePane` (session **`a19ab3`**, log **`.cursor/debug-a19ab3.log`**). The module and hooks were deleted once **`H05`** / double-layout root cause was fixed.
+- **How to measure:** Run **desktop dev** (`npm run desktop:dev` or `vite` + Tauri), ensure the debug ingest server is running, delete the session log file before a run, switch tabs a few times (warm + cold), read NDJSON lines from `.cursor/debug-a19ab3.log`.
+- **Before / after timings (2026-04-11, session `a19ab3`, `.cursor/debug-a19ab3.log`):**
+  - **Cold / cache-miss style (`openGen` 1, `cacheMissPrefetch: true`):** `awaitPhaseMs` **19**, `elapsedSincePublishMs` at VaultTab layout **84**, at rAF **319**, `scheduleToMacrotaskMs` **408** — post-publish work dominates; pre-publish path is tiny on this run.
+  - **Second heavy macrotask (`openGen` 2):** `scheduleToMacrotaskMs` **275**, `awaitPhaseMs` **54** — same pattern (macrotask ≫ await); no paired `H02-vaultTabLayout` line in this capture (possible same-URI no-op render or very fast superseding open; treat as supporting macrotask cost only).
+  - **Warm / cached (`openGen` 3, 6, 7):** layout **10–19 ms**, rAF **62–67 ms**, macrotask **42–53 ms**, `awaitPhaseMs` **14–42 ms** — healthier band, macrotask still a visible slice.
+  - **Mixed (`openGen` 5):** layout **34 ms**, rAF **92 ms**, macrotask **71 ms**, `awaitPhaseMs` **68 ms**.
+- **Classification:** **H02 post-publish backlog** confirmed as the main lever on slow switches; **H01-style pre-await** rejected as primary on the worst captured run (`awaitPhaseMs` 19 vs `scheduleToMacrotaskMs` 408).
+- **Conclusion:** Intermittent slowness aligns with **main-thread work after `tPublish`** (React commit / layout / frame pipeline), not with `flush`/`persist`/`readFile` on the worst line. Next optimization pass should use React Profiler or finer-grained marks (for example per major subtree) before changing state batching — avoid `flushSync`-style shortcuts that previously broke cache integrity (`H47`).
+
+### H02 subtree evidence → root cause and fix (2026-04-11)
+
+- **Runtime (session `a19ab3`):** Cold `openGen` 1 showed **two** `H02-editorPaneLayout` lines on the same switch (~78 ms and ~238 ms) with **one** `H04-setSelectedUri` — not a double publish. **`H05-todayHubSync`** showed `nextShowTodayHub: true` for `Today.md`. Warm switches showed **one** layout per `openGen`.
+- **Rejected:** CodeMirror **fold** callback batching and **`startTransition`** on fold UI did **not** remove the cold-path double layout (ingest proved fold theory wrong).
+- **Root cause:** **`showTodayHubCanvas`** was updated only from a **`useEffect`** on `selectedUri`, so opening **`Today.md`** committed **selectedUri + body**, then a **second** commit toggled the Today hub subtree.
+- **Fix:** In [`useMainWindowWorkspace.ts`](../../apps/desktop/src/hooks/useMainWindowWorkspace.ts) **`openMarkdownInEditor`**, call **`setShowTodayHubCanvas`** in the **same synchronous batch** as **`setSelectedUri`**, using the same path-prefix and **`vaultUriIsTodayMarkdownFile`** rules as the effect. Post-fix ingest: **only `layoutIndexInOpenGen: 1`** per switch; double editor layout gone.
+- **Instrumentation:** Temporary H02/H04/H05 NDJSON ingest and **`debugTabSwitchIngest.ts`** were **removed** after verification; reintroduce targeted timing only if this area regresses.
