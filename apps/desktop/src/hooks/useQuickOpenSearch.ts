@@ -20,7 +20,9 @@ export function useQuickOpenSearch(
 
   useEffect(() => {
     if (!searchTrimmed) {
-      setAppliedQuery('');
+      queueMicrotask(() => {
+        setAppliedQuery('');
+      });
       return;
     }
     const t = window.setTimeout(() => {

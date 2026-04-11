@@ -1,7 +1,7 @@
 import type {VaultMarkdownRef} from '@eskerra/core';
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useQuickOpenSearch} from '../hooks/useQuickOpenSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
@@ -44,6 +44,21 @@ export function QuickOpenNotePalette({
     refs,
   );
 
+  const listOrderSignature = useMemo(
+    () => displayed.map(r => r.uri).join('\0'),
+    [displayed],
+  );
+
+  const firstDisplayedItemValue = useMemo(() => displayed[0]?.uri ?? '', [displayed]);
+
+  const [commandValue, setCommandValue] = useState(firstDisplayedItemValue);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCommandValue(firstDisplayedItemValue);
+    });
+  }, [listOrderSignature, firstDisplayedItemValue]);
+
   const handlePick = useCallback(
     (uri: string) => {
       onPickNote(uri);
@@ -73,6 +88,8 @@ export function QuickOpenNotePalette({
             shouldFilter={false}
             className="quick-open-command"
             loop={false}
+            value={commandValue}
+            onValueChange={setCommandValue}
           >
             <CommandInput
               ref={inputRef}
