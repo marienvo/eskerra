@@ -144,6 +144,8 @@ enum PopResult {
 }
 
 impl PathDeque {
+    /// Workers block on an empty deque until paths arrive, `walk_finished`, or **cancel**.
+    /// Cancel or finished walk returns `Shutdown` so `worker_loop` exits and drops its match sender—no infinite wait.
     fn pop(&self, cancel: &AtomicBool) -> PopResult {
         let (lock, cv) = &*self.inner;
         let mut g = lock.lock().unwrap();
@@ -232,6 +234,9 @@ fn trim_snippet(line: &str) -> String {
     line.trim().chars().take(SNIPPET_MAX_CHARS).collect()
 }
 
+/// Absolute filesystem path for a note, same string class as `VaultDirEntryDto.uri` / `vault_list_dir`
+/// and what `openMarkdownInEditor` / `selectNote` expect (same contract as `normalizeEditorDocUri` in TS).
+/// Use `to_string_lossy` like listing; do not add `file://` or a trailing slash.
 fn path_to_note_uri(path: &Path) -> String {
     path.to_string_lossy().to_string()
 }
@@ -302,6 +307,8 @@ fn process_one_file(path: PathBuf, query_lower: &str, cancel: &AtomicBool, tx: &
     });
 }
 
+/// Each iteration pops one path or stops: `PathDeque::pop` returns `Shutdown` when the walk ended,
+/// the deque is drained, or **cancel** is set—workers never wait forever after cancellation.
 fn worker_loop(
     path_deque: Arc<PathDeque>,
     match_tx: SyncSender<WorkerMsg>,
@@ -336,7 +343,11 @@ fn run_aggregator(
                           th: u32,
                           sl: u32,
                           app: &AppHandle,
-                          sid: &str| {
+                          sid: &str,
+                          cancel: &AtomicBool| {
+        if cancel.load(Ordering::Relaxed) {
+            return;
+        }
         let elapsed = last.elapsed() >= Duration::from_millis(FLUSH_INTERVAL_MS);
         let hit_burst = *hits_since >= FLUSH_HIT_THRESHOLD;
         if !pending.is_empty() && (elapsed || hit_burst) {
@@ -399,6 +410,7 @@ fn run_aggregator(
                     skipped_large_files,
                     &app,
                     &search_id,
+                    cancel_flag.as_ref(),
                 );
             }
             Err(RecvTimeoutError::Disconnected) => break,
@@ -412,6 +424,7 @@ fn run_aggregator(
             skipped_large_files,
             &app,
             &search_id,
+            cancel_flag.as_ref(),
         );
     }
 
@@ -430,7 +443,7 @@ fn run_aggregator(
         }
     }
 
-    if !pending_hits.is_empty() {
+    if !cancel_flag.load(Ordering::Relaxed) && !pending_hits.is_empty() {
         let _ = app.emit(
             "vault-search:update",
             VaultSearchUpdatePayload {

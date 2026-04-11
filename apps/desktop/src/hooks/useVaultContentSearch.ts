@@ -108,6 +108,16 @@ export function useVaultContentSearch({
       void vaultSearchCancel().catch(() => undefined);
       return;
     }
+
+    // Invalidate on new query intent so stale hits/progress never linger during debounce.
+    searchIdRef.current = null;
+    void vaultSearchCancel().catch(() => undefined);
+    queueMicrotask(() => {
+      setHits([]);
+      setProgress(null);
+      setScanDone(true);
+    });
+
     debounceTimerRef.current = window.setTimeout(() => {
       debounceTimerRef.current = null;
       const id = crypto.randomUUID();

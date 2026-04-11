@@ -42,12 +42,17 @@ export function VaultSearchPalette({
     [handleOpenChange, onPickNote],
   );
 
+  const trimmedQuery = query.trim();
   const statusLine =
-    progress != null
-      ? `Scanning… ${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
-      : scanDone
-        ? null
-        : 'Scanning…';
+    trimmedQuery.length === 0
+      ? null
+      : scanDone && progress != null
+        ? `Scanned ${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
+        : scanDone
+          ? null
+          : progress != null
+            ? `Scanning… ${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
+            : 'Scanning…';
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -78,18 +83,18 @@ export function VaultSearchPalette({
               value={query}
               onValueChange={setQuery}
             />
-            {statusLine != null && query.trim().length > 0 ? (
+            {statusLine != null ? (
               <div className="vault-search-status">{statusLine}</div>
             ) : null}
             <CommandList className="quick-open-command__list">
               <CommandEmpty className="quick-open-command__empty">
-                {query.trim().length === 0
+                {trimmedQuery.length === 0
                   ? 'Type to search markdown in the vault.'
                   : !scanDone && hits.length === 0
                     ? 'Scanning…'
                     : scanDone && hits.length === 0
                       ? 'No matches.'
-                      : '\u00a0'}
+                      : null}
               </CommandEmpty>
               {hits.map((h, i) => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, h.uri);
