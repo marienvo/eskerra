@@ -366,12 +366,12 @@ impl<TSSTable: SSTable> Dictionary<TSSTable> {
 
     /// Returns a range builder, to stream all of the terms
     /// within an interval.
-    pub fn range(&self) -> StreamerBuilder<TSSTable> {
+    pub fn range(&self) -> StreamerBuilder<'_, TSSTable> {
         StreamerBuilder::new(self, AlwaysMatch)
     }
 
     /// A stream of all the sorted terms.
-    pub fn stream(&self) -> io::Result<Streamer<TSSTable>> {
+    pub fn stream(&self) -> io::Result<Streamer<'_, TSSTable>> {
         self.range().into_stream()
     }
 
