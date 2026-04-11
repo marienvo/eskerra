@@ -21,6 +21,7 @@ import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
+  getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getNoteTitle,
   normalizeVaultBaseUri,
@@ -293,11 +294,44 @@ function EditorPaneBody({
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const editorHasFoldedRangesRef = useRef(editorHasFoldedRanges);
   const editorHasFoldableRangesRef = useRef(editorHasFoldableRanges);
+  const backlinksSidecarRef = useRef<HTMLDivElement | null>(null);
+  const todayHubSidecarRef = useRef<HTMLDivElement | null>(null);
+  const isInitialSidecarDeferRef = useRef(true);
 
   useLayoutEffect(() => {
     editorHasFoldedRangesRef.current = editorHasFoldedRanges;
     editorHasFoldableRangesRef.current = editorHasFoldableRanges;
   }, [editorHasFoldedRanges, editorHasFoldableRanges]);
+
+  useLayoutEffect(() => {
+    if (isInitialSidecarDeferRef.current) {
+      isInitialSidecarDeferRef.current = false;
+      return;
+    }
+    const els: HTMLElement[] = [];
+    const b = backlinksSidecarRef.current;
+    const t = todayHubSidecarRef.current;
+    if (b) {
+      els.push(b);
+    }
+    if (t) {
+      els.push(t);
+    }
+    for (const el of els) {
+      el.classList.add('note-sidecar-group--deferred');
+    }
+    const id = window.requestAnimationFrame(() => {
+      for (const el of els) {
+        el.classList.remove('note-sidecar-group--deferred');
+      }
+    });
+    return () => {
+      window.cancelAnimationFrame(id);
+      for (const el of els) {
+        el.classList.remove('note-sidecar-group--deferred');
+      }
+    };
+  }, [selectedUri]);
 
   const onFoldedRangesPresentChange = useCallback((next: boolean) => {
     setEditorHasFoldedRanges(next);
@@ -393,12 +427,14 @@ function EditorPaneBody({
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
               {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
-                <InboxBacklinksSection
-                  selectedUri={selectedUri}
-                  backlinkRows={backlinkRows}
-                  onSelectNote={onSelectNote}
-                  deferNonce={inboxBacklinksDeferNonce}
-                />
+                <div ref={backlinksSidecarRef} className="note-sidecar-group">
+                  <InboxBacklinksSection
+                    selectedUri={selectedUri}
+                    backlinkRows={backlinkRows}
+                    onSelectNote={onSelectNote}
+                    deferNonce={inboxBacklinksDeferNonce}
+                  />
+                </div>
               ) : null}
             </div>
           </div>
@@ -406,11 +442,14 @@ function EditorPaneBody({
           selectedUri &&
           todayHubSettings &&
           !composingNewEntry ? (
-            <div className="note-markdown-editor-page note-markdown-editor-page--today-hub">
+            <div
+              ref={todayHubSidecarRef}
+              className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
+            >
               <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
               <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
                 <TodayHubCanvas
-                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}`}
+                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}-${selectedUri}`}
                   vaultRoot={vaultRoot}
                   todayNoteUri={selectedUri}
                   hubSettings={todayHubSettings}
@@ -652,13 +691,15 @@ export function VaultTab({
   );
 
   const relativeMarkdownSourceUriOrDir = useMemo(() => {
+    const base = normalizeVaultBaseUri(vaultRoot);
     if (composingNewEntry) {
-      return getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot));
+      return getInboxDirectoryUri(base);
     }
-    return (
-      selectedUri ?? getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot))
-    );
-  }, [composingNewEntry, selectedUri, vaultRoot]);
+    if (showTodayHubCanvas) {
+      return getGeneralDirectoryUri(base);
+    }
+    return selectedUri ?? getInboxDirectoryUri(base);
+  }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
 
   const relativeMarkdownLinkHrefIsResolved = useMemo(
     () => (href: string) =>

@@ -15,6 +15,7 @@ import {
   buildInboxMarkdownFromCompose,
   collectVaultMarkdownRefs,
   ensureDeviceInstanceId,
+  getGeneralDirectoryUri,
   getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
   normalizeVaultBaseUri,
@@ -130,6 +131,9 @@ import {
   fsChangePathsMayAffectUri,
   normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
+  shouldMergeCacheAfterOutgoingPersist,
+  shouldSkipOutgoingPersistAfterNoteLeave,
+  shouldSkipOutgoingPersistBeforeWrite,
 } from './inboxNoteBodyCache';
 
 /** Skip showing an immediate blocking disk conflict if the user just edited; one deferred re-check follows. */
@@ -484,6 +488,7 @@ export function useMainWindowWorkspace(options: {
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
+  const showTodayHubCanvasRef = useRef(false);
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -532,6 +537,7 @@ export function useMainWindowWorkspace(options: {
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
   composingNewEntryRef.current = composingNewEntry;
+  showTodayHubCanvasRef.current = showTodayHubCanvas;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
   backlinksActiveBodyRef.current = backlinksActiveBody;
@@ -796,6 +802,109 @@ export function useMainWindowWorkspace(options: {
       setNotes(list);
     },
     [fs],
+  );
+
+  /**
+   * Persists a fixed URI + markdown captured when leaving a dirty note, chained like
+   * `enqueueInboxPersist` but **not** awaited by `openMarkdownInEditor`. Uses stale-cache guards so
+   * a slow save cannot overwrite newer in-memory edits if the user re-opened the note before the
+   * write ran.
+   */
+  const enqueuePersistOutgoingNoteMarkdown = useCallback(
+    (uri: string, leaveSnapshotMarkdown: string): void => {
+      const norm = normalizeEditorDocUri(uri);
+      const run = async (): Promise<void> => {
+        const root = vaultRootRef.current;
+        if (!root) {
+          return;
+        }
+        const dc = diskConflictRef.current;
+        if (dc && normalizeEditorDocUri(dc.uri) === norm) {
+          return;
+        }
+        const memStart = inboxContentByUriRef.current[norm];
+        if (shouldSkipOutgoingPersistAfterNoteLeave(memStart, leaveSnapshotMarkdown)) {
+          return;
+        }
+        try {
+          setErr(null);
+          const md = await persistTransientMarkdownImages(
+            leaveSnapshotMarkdown,
+            root,
+          );
+          if (markdownContainsTransientImageUrls(md)) {
+            setErr(
+              'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+            );
+            return;
+          }
+          if (md !== leaveSnapshotMarkdown) {
+            const nextCache = mergeInboxNoteBodyIntoCache(
+              inboxContentByUriRef.current,
+              norm,
+              md,
+            );
+            if (nextCache) {
+              inboxContentByUriRef.current = nextCache;
+              setInboxContentByUri(prev =>
+                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
+              );
+            }
+            const active = selectedUriRef.current;
+            if (active && normalizeEditorDocUri(active) === norm) {
+              loadFullMarkdownIntoInboxEditor(md, norm, 'start');
+              scheduleBacklinksDeferOneFrameAfterLoad();
+            }
+          }
+          const memBeforeSave = inboxContentByUriRef.current[norm];
+          if (
+            shouldSkipOutgoingPersistBeforeWrite(
+              memBeforeSave,
+              leaveSnapshotMarkdown,
+              md,
+            )
+          ) {
+            return;
+          }
+          await saveNoteMarkdown(norm, fs, md);
+          void refreshNotes(root).catch(() => undefined);
+
+          const activeSel = selectedUriRef.current;
+          if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
+            lastPersistedRef.current = {uri: norm, markdown: md};
+          }
+
+          const memAfter = inboxContentByUriRef.current[norm];
+          if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
+            const nextCache2 = mergeInboxNoteBodyIntoCache(
+              inboxContentByUriRef.current,
+              norm,
+              md,
+            );
+            if (nextCache2) {
+              inboxContentByUriRef.current = nextCache2;
+              setInboxContentByUri(prev =>
+                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
+              );
+            }
+          }
+        } catch (e) {
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      };
+
+      saveActiveRef.current = true;
+      const next = saveChainRef.current.then(run).finally(() => {
+        saveActiveRef.current = false;
+      });
+      saveChainRef.current = next.catch(() => undefined);
+    },
+    [
+      fs,
+      refreshNotes,
+      loadFullMarkdownIntoInboxEditor,
+      scheduleBacklinksDeferOneFrameAfterLoad,
+    ],
   );
 
   const enqueueInboxPersist = useCallback(async (): Promise<void> => {
@@ -1076,9 +1185,11 @@ export function useMainWindowWorkspace(options: {
       const openGen = ++openMarkdownGenerationRef.current;
       const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
-      await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
-      if (saveActiveRef.current) {
-        await saveChainRef.current.catch(() => undefined);
+      const hubBridge = todayHubBridgeRef.current;
+      const needHubFlush =
+        hubBridge.getLiveRowUri() != null || hubBridge.hasPendingHubFlush();
+      if (needHubFlush) {
+        await hubBridge.flushPendingEdits().catch(() => undefined);
       }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
@@ -1128,10 +1239,14 @@ export function useMainWindowWorkspace(options: {
 
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
-      const snapshot =
+      const snapMdForSlice =
         curUri != null && !composingNewEntryRef.current
+          ? inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current
+          : undefined;
+      const snapshot =
+        curUri != null && !composingNewEntryRef.current && snapMdForSlice !== undefined
           ? inboxEditorSliceToFullMarkdown(
-              inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
+              snapMdForSlice,
               curUri,
               false,
               inboxEditorYamlFrontmatterBlockRef.current,
@@ -1159,18 +1274,18 @@ export function useMainWindowWorkspace(options: {
           const prev = lastPersistedRef.current;
           return !(prev && prev.uri === curUri && prev.markdown === snapshot);
         })();
-      if (needsPersist) {
-        await enqueueInboxPersist();
+      if (needsPersist && curUri != null && snapshot !== undefined) {
+        enqueuePersistOutgoingNoteMarkdown(curUri, snapshot);
       }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
       }
 
-      let prefetchBody: string | undefined;
-      if (
+      const cacheMissPrefetch =
         root != null &&
-        inboxContentByUriRef.current[targetNorm] === undefined
-      ) {
+        inboxContentByUriRef.current[targetNorm] === undefined;
+      let prefetchBody: string | undefined;
+      if (cacheMissPrefetch) {
         try {
           const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
           if (openGen !== openMarkdownGenerationRef.current) {
@@ -1278,10 +1393,24 @@ export function useMainWindowWorkspace(options: {
         setBacklinksActiveBody(resolvedEditorBody);
       }
       setComposingNewEntry(false);
+      {
+        const vr = vaultRootRef.current;
+        let nextShowTodayHub = false;
+        if (vr && targetNorm) {
+          const normRoot = normalizeVaultBaseUri(vr)
+            .replace(/\\/g, '/')
+            .replace(/\/+$/, '');
+          const normSel = targetNorm.replace(/\\/g, '/');
+          if (normSel.startsWith(`${normRoot}/`)) {
+            nextShowTodayHub = vaultUriIsTodayMarkdownFile(normSel);
+          }
+        }
+        setShowTodayHubCanvas(nextShowTodayHub);
+      }
       setSelectedUri(targetNorm);
     },
     [
-      enqueueInboxPersist,
+      enqueuePersistOutgoingNoteMarkdown,
       fs,
       inboxEditorRef,
       inboxEditorShellScrollRef,
@@ -2620,12 +2749,17 @@ export function useMainWindowWorkspace(options: {
       try {
         const wikiParent =
           todayHubWikiNavParentRef.current ?? selectedUriRef.current;
+        const todayHubNewNoteParent =
+          showTodayHubCanvasRef.current && !composingNewEntryRef.current
+            ? getGeneralDirectoryUri(normalizeVaultBaseUri(vaultRoot))
+            : null;
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
           notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
           vaultRoot,
           fs,
           activeMarkdownUri: composingNewEntryRef.current ? null : wikiParent,
+          newNoteParentDirectory: todayHubNewNoteParent,
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
@@ -2722,7 +2856,9 @@ export function useMainWindowWorkspace(options: {
       const relParent = todayHubWikiNavParentRef.current;
       const sourceMarkdownUriOrDir = composingNewEntryRef.current
         ? getInboxDirectoryUri(base)
-        : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+        : showTodayHubCanvasRef.current && !composingNewEntryRef.current
+          ? getGeneralDirectoryUri(base)
+          : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
       try {
         const result = await openOrCreateVaultRelativeMarkdownLink({
           href,

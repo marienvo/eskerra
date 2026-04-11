@@ -34,7 +34,7 @@ describe('mergeStyledIntervals', () => {
 
 describe('buildCellStaticSegments', () => {
   it('styles strong emphasis', () => {
-    const segs = buildCellStaticSegments('**b**', {
+    const {segments: segs} = buildCellStaticSegments('**b**', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -44,7 +44,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles italic emphasis', () => {
-    const segs = buildCellStaticSegments('*i*', {
+    const {segments: segs} = buildCellStaticSegments('*i*', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -52,7 +52,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles inline code', () => {
-    const segs = buildCellStaticSegments('`x`', {
+    const {segments: segs} = buildCellStaticSegments('`x`', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -60,7 +60,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles strikethrough', () => {
-    const segs = buildCellStaticSegments('~~s~~', {
+    const {segments: segs} = buildCellStaticSegments('~~s~~', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -68,7 +68,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles percent muted', () => {
-    const segs = buildCellStaticSegments('%%m%%', {
+    const {segments: segs} = buildCellStaticSegments('%%m%%', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -76,7 +76,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles equal highlight', () => {
-    const segs = buildCellStaticSegments('==h==', {
+    const {segments: segs} = buildCellStaticSegments('==h==', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -84,7 +84,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles wiki inner and brackets', () => {
-    const segs = buildCellStaticSegments('[[page]]', {
+    const {segments: segs} = buildCellStaticSegments('[[page]]', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -93,7 +93,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('marks resolved wiki when predicate is true', () => {
-    const segs = buildCellStaticSegments('[[here]]', {
+    const {segments: segs} = buildCellStaticSegments('[[here]]', {
       wikiTargetIsResolved: inner => inner === 'here',
       relativeMarkdownLinkHrefIsResolved: alwaysFalse,
     });
@@ -101,7 +101,7 @@ describe('buildCellStaticSegments', () => {
   });
 
   it('styles activatable relative markdown link label and href', () => {
-    const segs = buildCellStaticSegments('[n](other.md)', {
+    const {segments: segs} = buildCellStaticSegments('[n](other.md)', {
       wikiTargetIsResolved: alwaysFalse,
       relativeMarkdownLinkHrefIsResolved: alwaysTrue,
     });

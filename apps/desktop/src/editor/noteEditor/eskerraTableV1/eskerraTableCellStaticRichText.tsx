@@ -1,6 +1,4 @@
-import {commonmarkLanguage} from '@codemirror/lang-markdown';
 import {ensureSyntaxTree} from '@codemirror/language';
-import {EditorState} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 import {useMemo, type ReactElement} from 'react';
 
@@ -9,11 +7,10 @@ import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 import {isActivatableRelativeMarkdownHref} from '../markdownActivatableRelativeHref';
 import {markdownBareBrowserUrlAtPosition} from '../markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from '../markdownActivatableRelativeMdLinkAtPosition';
-import {markdownEskerra} from '../markdownEskerraLanguage';
-import {noteMarkdownParserExtensions} from '../markdownEditorStyling';
 import {relativeMdLinkHrefIsResolvedFacet} from '../markdownRelativeLinkCodemirror';
 import {wikiLinkPointerActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDocPosition';
 import {wikiLinkIsResolvedFacet} from '../wikiLinkCodemirror';
+import {useEskerraCellStaticCache} from './eskerraTableCellStaticCacheContext';
 import {buildCellStaticSegments} from './eskerraTableCellStaticSegments';
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableShellLinkBridgeFacet';
 
@@ -72,32 +69,24 @@ export function EskerraTableCellStaticRichText(
   props: EskerraTableCellStaticRichTextProps,
 ): ReactElement | null {
   const {parentView, cellText, staticRichPaintKey} = props;
+  const cellStaticCache = useEskerraCellStaticCache();
 
-  const segments = useMemo(() => {
+  const {segments, hitState} = useMemo(() => {
+    if (cellStaticCache) {
+      const built = cellStaticCache.getCellStatic(cellText);
+      return {segments: built.segments, hitState: built.state};
+    }
     const wikiTargetIsResolved = parentView.state.facet(wikiLinkIsResolvedFacet);
     const relativeMarkdownLinkHrefIsResolved = parentView.state.facet(
       relativeMdLinkHrefIsResolvedFacet,
     );
-    return buildCellStaticSegments(cellText, {
+    const {state, segments: segs} = buildCellStaticSegments(cellText, {
       wikiTargetIsResolved,
       relativeMarkdownLinkHrefIsResolved,
     });
+    return {segments: segs, hitState: state};
   // eslint-disable-next-line react-hooks/exhaustive-deps -- staticRichPaintKey bumps when link facets refresh (stable EditorView)
-  }, [cellText, parentView, staticRichPaintKey]);
-
-  const hitState = useMemo(
-    () =>
-      EditorState.create({
-        doc: cellText,
-        extensions: [
-          markdownEskerra({
-            base: commonmarkLanguage,
-            extensions: noteMarkdownParserExtensions,
-          }),
-        ],
-      }),
-    [cellText],
-  );
+  }, [cellStaticCache, cellText, parentView, staticRichPaintKey]);
 
   if (cellText.length === 0) {
     return null;

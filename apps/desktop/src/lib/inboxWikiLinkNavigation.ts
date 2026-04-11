@@ -1,5 +1,6 @@
 import {
   assertVaultMarkdownNoteUriForCrud,
+  assertVaultTreeDirectoryUriForCrud,
   buildInboxMarkdownFromCompose,
   getInboxDirectoryUri,
   normalizeVaultBaseUri,
@@ -29,6 +30,7 @@ export type InboxWikiLinkNavigationResult =
 /**
  * Shell-owned wiki-link flow: resolve against the vault markdown ref index, or create a new note
  * beside the active note’s folder (else Inbox) using the shared title→filename policy.
+ * When {@link newNoteParentDirectory} is set, it overrides the create parent (e.g. Today hub → General).
  */
 export async function openOrCreateInboxWikiLinkTarget(options: {
   inner: string;
@@ -37,8 +39,10 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   fs: VaultFilesystem;
   /** Open `.md` URI whose parent directory receives new notes; omit or null → Inbox. */
   activeMarkdownUri?: string | null;
+  /** Vault directory URI for new notes; wins over Inbox / active note parent when creating. */
+  newNoteParentDirectory?: string | null;
 }): Promise<InboxWikiLinkNavigationResult> {
-  const {inner, notes, vaultRoot, fs, activeMarkdownUri} = options;
+  const {inner, notes, vaultRoot, fs, activeMarkdownUri, newNoteParentDirectory} = options;
   const resolved: InboxWikiLinkResolveResult = resolveInboxWikiLinkTarget(
     notes,
     inner,
@@ -66,7 +70,11 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   const base = normalizeVaultBaseUri(vaultRoot);
   const inbox = getInboxDirectoryUri(base);
   let parentDir = inbox;
-  if (activeMarkdownUri) {
+  if (newNoteParentDirectory) {
+    parentDir = assertVaultTreeDirectoryUriForCrud(vaultRoot, newNoteParentDirectory)
+      .replace(/\\/g, '/')
+      .replace(/\/+$/, '');
+  } else if (activeMarkdownUri) {
     const noteUri = assertVaultMarkdownNoteUriForCrud(vaultRoot, activeMarkdownUri);
     parentDir = vaultPathDirname(noteUri);
   }

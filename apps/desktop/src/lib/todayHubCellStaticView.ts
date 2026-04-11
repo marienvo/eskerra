@@ -1,19 +1,14 @@
-import {commonmarkLanguage} from '@codemirror/lang-markdown';
-import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
+import {syntaxTree} from '@codemirror/language';
 import {EditorState} from '@codemirror/state';
 
-import {markdownEskerra} from '../editor/noteEditor/markdownEskerraLanguage';
 import {
   markdownEditorBlockLineClasses,
-  noteMarkdownParserExtensions,
 } from '../editor/noteEditor/markdownEditorStyling';
 import {
   buildCellStaticSegments,
   type CellStaticResolvePredicates,
   type CellStaticSegment,
 } from '../editor/noteEditor/eskerraTableV1/eskerraTableCellStaticSegments';
-
-const TREE_ENSURE_MS = 200;
 
 export type TodayHubStaticLine = {
   from: number;
@@ -38,16 +33,7 @@ export function buildTodayHubCellStaticViewModel(
   cellText: string,
   resolve: CellStaticResolvePredicates,
 ): TodayHubCellStaticViewModel {
-  const hitState = EditorState.create({
-    doc: cellText,
-    extensions: [
-      markdownEskerra({
-        base: commonmarkLanguage,
-        extensions: noteMarkdownParserExtensions,
-      }),
-    ],
-  });
-  ensureSyntaxTree(hitState, cellText.length, TREE_ENSURE_MS);
+  const {state: hitState, segments} = buildCellStaticSegments(cellText, resolve);
   const tree = syntaxTree(hitState);
   const lineClassMap = markdownEditorBlockLineClasses(hitState.doc, tree);
   const doc = hitState.doc;
@@ -64,7 +50,6 @@ export function buildTodayHubCellStaticViewModel(
       lineClassName,
     });
   }
-  const segments = buildCellStaticSegments(cellText, resolve);
   return {hitState, lines, segments};
 }
 

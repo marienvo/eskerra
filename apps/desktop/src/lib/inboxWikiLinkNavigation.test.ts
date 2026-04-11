@@ -212,6 +212,32 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
     expect(writes.some(w => w.uri === result.uri)).toBe(true);
   });
 
+  it('creates under newNoteParentDirectory when set, overriding active note parent', async () => {
+    const activeUri = `${vaultRoot}/Daily/2026-04-06.md`;
+    const generalDir = `${vaultRoot}/General`;
+    const {fs, writes} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [generalDir, 'dir'],
+      [`${vaultRoot}/Daily`, 'dir'],
+      [activeUri, '# Week\n'],
+    ]);
+    const result = await openOrCreateInboxWikiLinkTarget({
+      inner: 'linked from hub',
+      notes: [{name: '2026-04-06.md', uri: activeUri}],
+      vaultRoot,
+      fs,
+      activeMarkdownUri: activeUri,
+      newNoteParentDirectory: generalDir,
+    });
+    expect(result.kind).toBe('created');
+    if (result.kind !== 'created') {
+      return;
+    }
+    expect(result.uri).toBe(`${generalDir}/linked from hub.md`);
+    expect(writes.some(w => w.uri === result.uri)).toBe(true);
+  });
+
   it('creates a new inbox note when target does not exist', async () => {
     const {fs, writes} = createMemoryVaultFs([
       [vaultRoot, 'dir'],
@@ -324,6 +350,31 @@ describe('openOrCreateVaultRelativeMarkdownLink', () => {
       sourceMarkdownUriOrDir: `${vaultRoot}/Inbox/a.md`,
     });
     expect(result).toEqual({kind: 'open', uri: `${vaultRoot}/Inbox/b.md`});
+  });
+
+  it('creates a missing relative target under a General directory source', async () => {
+    const generalDir = `${vaultRoot}/General`;
+    const {fs, writes} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [generalDir, 'dir'],
+      [`${vaultRoot}/Daily`, 'dir'],
+      [`${vaultRoot}/Daily/Today.md`, '# Hub\n'],
+    ]);
+    const notes = [{name: 'Today.md', uri: `${vaultRoot}/Daily/Today.md`}];
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: './from hub context.md',
+      notes,
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: generalDir,
+    });
+    expect(result.kind).toBe('created');
+    if (result.kind !== 'created') {
+      return;
+    }
+    expect(result.uri).toBe(`${generalDir}/from hub context.md`);
+    expect(writes.some(w => w.uri === result.uri)).toBe(true);
   });
 
   it('returns unsupported for https links', async () => {

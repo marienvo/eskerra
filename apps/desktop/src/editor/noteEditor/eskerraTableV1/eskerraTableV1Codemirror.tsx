@@ -18,12 +18,10 @@ import {
 } from '@codemirror/view';
 import {createRoot, type Root} from 'react-dom/client';
 
-import {
-  findEskerraTableDocBlocks,
-  looksLikeDelimitedTableLine,
-  type EskerraTableDocBlock,
-} from './eskerraTableV1DocBlocks';
+import {looksLikeDelimitedTableLine, type EskerraTableDocBlock} from './eskerraTableV1DocBlocks';
+import {eskerraTableDocBlocksField} from './eskerraTableDocBlocksField';
 import {EskerraTableShell} from './EskerraTableShell';
+import {eskerraTableShellDocSyncPlugin} from './eskerraTableShellDocSyncRegistry';
 import {
   clearTableSuppressionAt,
   closeTableShellEffect,
@@ -76,6 +74,7 @@ const suppressedTableLines = StateField.define<Set<number>>({
 /** Prefer caret table; else first valid non-suppressed table (structured edit is default when present). */
 function initialTableShellOpenForState(state: EditorState): TableShellOpen | null {
   const suppressed = state.field(suppressedTableLines);
+  const blocks = state.field(eskerraTableDocBlocksField);
   const anchor = state.selection.main.anchor;
   const tryBlock = (block: EskerraTableDocBlock | null): TableShellOpen | null => {
     if (!block || suppressed.has(block.lineFrom)) {
@@ -90,11 +89,11 @@ function initialTableShellOpenForState(state: EditorState): TableShellOpen | nul
       baselineText: state.doc.sliceString(block.from, block.to),
     };
   };
-  const fromCaret = tryBlock(findBlockContaining(state.doc, anchor, suppressed));
+  const fromCaret = tryBlock(findBlockContaining(blocks, anchor, suppressed));
   if (fromCaret) {
     return fromCaret;
   }
-  for (const block of findEskerraTableDocBlocks(state.doc)) {
+  for (const block of blocks) {
     const shell = tryBlock(block);
     if (shell) {
       return shell;
@@ -134,7 +133,7 @@ const tableShellOpenField = StateField.define<TableShellOpen | null>({
       if (suppressed.has(headerLineFrom)) {
         next = null;
       } else {
-        const block = findEskerraTableDocBlocks(tr.state.doc).find(
+        const block = tr.state.field(eskerraTableDocBlocksField).find(
           b => b.lineFrom === headerLineFrom,
         );
         if (!block) {
@@ -193,7 +192,7 @@ class TableRawMarkdownExitWidget extends WidgetType {
     appendMaterialIcon(showTableBtn, 'code_off');
     showTableBtn.addEventListener('click', e => {
       e.preventDefault();
-      const block = findEskerraTableDocBlocks(view.state.doc).find(
+      const block = view.state.field(eskerraTableDocBlocksField).find(
         b => b.lineFrom === tableFrom,
       );
       const openEffects = [
@@ -258,7 +257,6 @@ class EskerraTableShellWidget extends WidgetType {
     return (
       other instanceof EskerraTableShellWidget
       && other.headerLineFrom === this.headerLineFrom
-      && other.baselineText === this.baselineText
     );
   }
 
@@ -272,7 +270,7 @@ class EskerraTableShellWidget extends WidgetType {
       if (open?.headerLineFrom === headerLineFrom) {
         return;
       }
-      const blk = findEskerraTableDocBlocks(st.doc).find(
+      const blk = st.field(eskerraTableDocBlocksField).find(
         b => b.lineFrom === headerLineFrom,
       );
       if (!blk) {
@@ -291,7 +289,7 @@ class EskerraTableShellWidget extends WidgetType {
     };
     wrap.addEventListener('focusin', promoteIfNeeded);
     wrap.addEventListener('pointerdown', promoteIfNeeded);
-    const block = findEskerraTableDocBlocks(view.state.doc).find(
+    const block = view.state.field(eskerraTableDocBlocksField).find(
       b => b.lineFrom === this.headerLineFrom,
     );
     const raw = block
@@ -320,11 +318,11 @@ class EskerraTableShellWidget extends WidgetType {
 }
 
 function findBlockContaining(
-  doc: EditorState['doc'],
+  blocks: readonly EskerraTableDocBlock[],
   pos: number,
   suppressed: Set<number>,
 ): EskerraTableDocBlock | null {
-  for (const block of findEskerraTableDocBlocks(doc)) {
+  for (const block of blocks) {
     if (pos >= block.from && pos <= block.to && !suppressed.has(block.lineFrom)) {
       return block;
     }
@@ -340,7 +338,8 @@ function shouldScheduleFocusForOpenShell(state: EditorState): boolean {
   }
   const suppressed = state.field(suppressedTableLines);
   const anchor = state.selection.main.anchor;
-  const block = findBlockContaining(state.doc, anchor, suppressed);
+  const blocks = state.field(eskerraTableDocBlocksField);
+  const block = findBlockContaining(blocks, anchor, suppressed);
   return block !== null && block.lineFrom === open.headerLineFrom;
 }
 
@@ -367,7 +366,7 @@ const eskerraTableShellFocusCellPlugin = ViewPlugin.define(view => {
 
 function buildDecorations(state: EditorState): BuildResult {
   const suppressed = state.field(suppressedTableLines);
-  const blocks = findEskerraTableDocBlocks(state.doc);
+  const blocks = state.field(eskerraTableDocBlocksField);
   const decoBuilder = new RangeSetBuilder<Decoration>();
 
   for (const block of blocks) {
@@ -405,10 +404,8 @@ function buildDecorations(state: EditorState): BuildResult {
 }
 
 function transactionAffectsTableDecorations(tr: Transaction): boolean {
-  const selectionChanged = !tr.startState.selection.eq(tr.state.selection);
   return (
     tr.docChanged
-    || selectionChanged
     || tr.effects.some(
       effect =>
         effect.is(suppressTableWidgetAt)
@@ -439,7 +436,8 @@ const eskerraTableShellSelectionBridge = EditorView.updateListener.of(update => 
   const st = update.state;
   const anchor = st.selection.main.anchor;
   const suppressed = st.field(suppressedTableLines);
-  const blockIn = findBlockContaining(st.doc, anchor, suppressed);
+  const blocks = st.field(eskerraTableDocBlocksField);
+  const blockIn = findBlockContaining(blocks, anchor, suppressed);
   const open = st.field(tableShellOpenField);
   const startOpen = update.startState.field(tableShellOpenField);
 
@@ -472,8 +470,10 @@ const eskerraTableShellSelectionBridge = EditorView.updateListener.of(update => 
 export function eskerraTableV1Extension(): readonly Extension[] {
   return [
     suppressedTableLines,
+    eskerraTableDocBlocksField,
     tableShellOpenField,
     tableBuilt,
+    eskerraTableShellDocSyncPlugin,
     eskerraTableShellSelectionBridge,
     eskerraTableShellFocusCellPlugin,
   ];

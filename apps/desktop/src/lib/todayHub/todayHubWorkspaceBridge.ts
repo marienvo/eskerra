@@ -5,6 +5,8 @@ export type TodayHubWorkspaceBridge = {
   flushPendingEdits: () => Promise<void>;
   getLiveRowUri: () => string | null;
   getLiveRowMergedMarkdown: () => string | null;
+  /** True when a debounced hub row persist is scheduled or in flight (see TodayHubCanvas). */
+  hasPendingHubFlush: () => boolean;
 };
 
 export function createIdleTodayHubWorkspaceBridge(): TodayHubWorkspaceBridge {
@@ -12,5 +14,6 @@ export function createIdleTodayHubWorkspaceBridge(): TodayHubWorkspaceBridge {
     flushPendingEdits: async () => {},
     getLiveRowUri: () => null,
     getLiveRowMergedMarkdown: () => null,
+    hasPendingHubFlush: () => false,
   };
 }

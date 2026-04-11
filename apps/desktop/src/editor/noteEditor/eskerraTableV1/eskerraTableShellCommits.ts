@@ -6,9 +6,9 @@ import {
 import {EditorSelection} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
 
+import {eskerraTableDocBlockAtHeaderLine} from './eskerraTableDocBlocksField';
 import {
   buildEskerraTableInsertWithBlankLines,
-  findEskerraTableDocBlockByLineFrom,
   neededNewlinesBeforeTable,
 } from './eskerraTableV1DocBlocks';
 import {closeTableShellEffect, suppressTableWidgetAt} from './eskerraTableShellEffects';
@@ -21,7 +21,7 @@ export function flushTableDraftToDocumentSilent(
   headerLineFrom: number,
   model: EskerraTableModelV1,
 ): number | null {
-  const block = findEskerraTableDocBlockByLineFrom(view.state.doc, headerLineFrom);
+  const block = eskerraTableDocBlockAtHeaderLine(view.state, headerLineFrom);
   if (!block) {
     return null;
   }
@@ -45,7 +45,7 @@ export function restoreTableBaseline(
   headerLineFrom: number,
   baselineText: string,
 ): void {
-  const block = findEskerraTableDocBlockByLineFrom(view.state.doc, headerLineFrom);
+  const block = eskerraTableDocBlockAtHeaderLine(view.state, headerLineFrom);
   if (!block) {
     view.dispatch({effects: closeTableShellEffect.of(null)});
     return;
@@ -82,7 +82,7 @@ export function commitThenEditTableAsMarkdown(
 }
 
 export function parseBlockLines(view: EditorView, headerLineFrom: number) {
-  const block = findEskerraTableDocBlockByLineFrom(view.state.doc, headerLineFrom);
+  const block = eskerraTableDocBlockAtHeaderLine(view.state, headerLineFrom);
   if (!block) {
     return {ok: false as const, reason: 'missing_block'};
   }

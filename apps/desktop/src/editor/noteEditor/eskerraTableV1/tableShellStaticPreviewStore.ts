@@ -1,6 +1,9 @@
 let version = 0;
 const listeners = new Set<() => void>();
 
+/** Coalesce multiple sync bumps into one microtask so batched parent reconfig reparses static cells once. */
+let bumpCoalesceScheduled = false;
+
 export function subscribeTableShellStaticPreview(cb: () => void): () => void {
   listeners.add(cb);
   return () => {
@@ -14,8 +17,14 @@ export function getTableShellStaticPreviewVersion(): number {
 
 /** Bumped when nested table cell editors receive wiki / relative link highlight reconfiguration. */
 export function bumpTableShellStaticPreview(): void {
-  version += 1;
-  for (const cb of listeners) {
-    cb();
+  if (!bumpCoalesceScheduled) {
+    bumpCoalesceScheduled = true;
+    queueMicrotask(() => {
+      bumpCoalesceScheduled = false;
+      version += 1;
+      for (const cb of listeners) {
+        cb();
+      }
+    });
   }
 }
