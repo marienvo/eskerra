@@ -5,10 +5,12 @@ mod tiling_score;
 #[cfg(target_os = "linux")]
 mod tiling_gdk;
 mod vault;
+mod vault_search;
 mod vault_watch;
 mod window_state_disk;
 
 use vault::VaultRootState;
+use vault_search::VaultSearchSessionState;
 
 #[cfg(all(not(mobile), debug_assertions))]
 fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
@@ -35,6 +37,7 @@ fn prevent_default_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 pub fn run() {
     let mut builder = tauri::Builder::default()
         .manage(VaultRootState::default())
+        .manage(VaultSearchSessionState::default())
         .manage(media::MediaSessionState::default());
 
     #[cfg(not(mobile))]
@@ -75,6 +78,8 @@ pub fn run() {
             vault::vault_remove_tree,
             vault::vault_rename_file,
             vault::vault_list_dir,
+            vault_search::vault_search_start,
+            vault_search::vault_search_cancel,
             vault_watch::vault_start_watch,
             window_state_disk::eskerra_peek_window_state_file,
             media::media_set_metadata,

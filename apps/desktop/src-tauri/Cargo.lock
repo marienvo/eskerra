@@ -67,6 +67,7 @@ dependencies = [
  "tauri-plugin-prevent-default",
  "tauri-plugin-store",
  "tauri-plugin-window-state",
+ "tempfile",
  "webkit2gtk",
 ]
 

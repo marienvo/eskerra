@@ -1803,6 +1803,31 @@ html.tauri-main-chrome .quick-open-overlay {
   word-break: break-all;
 }
 
+.vault-search-content {
+  max-height: min(78vh, 32rem);
+}
+
+.vault-search-status {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  padding: 0.15rem 0.35rem 0.05rem;
+  line-height: 1.35;
+}
+
+.vault-search-hit__line {
+  font-weight: 400;
+  color: var(--color-muted);
+  font-size: 0.82em;
+}
+
+.vault-search-hit__snippet {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 .alert-dialog-overlay {
   position: fixed;
   inset: 0;

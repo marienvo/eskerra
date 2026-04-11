@@ -29,6 +29,16 @@ flowchart LR
 
 Implementation pointers: tree load **`apps/desktop/src/lib/vaultTreeLoadChildren.ts`**; vault markdown refs **`packages/eskerra-core/src/vaultMarkdownRefs.ts`**.
 
+### Full vault content search (streaming, on-demand)
+
+- **Shortcut:** **Ctrl+Shift+F** (Windows/Linux) or **Cmd+Shift+F** (macOS) opens **`VaultSearchPalette`** (**`apps/desktop/src/components/VaultSearchPalette.tsx`**). While this palette or **Quick Open** is open, the other shortcut sequence does not open the sibling palette.
+- **Scope:** Eligible **`.md`** files only, with **strict parity** to the vault tree listing rules in **`vaultVisibility.ts`** and **`vaultLayout.ts`** (ignored names, hard-excluded directories `Assets` / `Excalidraw` / `Scripts` / `Templates`, sync-conflict filenames, `.md` eligibility). When those rules change, update **`apps/desktop/src-tauri/src/vault_search.rs`** and its parity tests **in the same change**.
+- **No startup cost:** The Rust pipeline runs only after a **debounced** query in the palette. There is **no** vault-wide crawl or index at app launch for this feature.
+- **Protocol:** The UI generates a **`searchId`** (UUID) per run and passes it to **`vault_search_start`**. Tauri emits **`vault-search:update`** (batched **hits** plus **progress** in one payload) and **`vault-search:done`**. The UI ignores events whose **`searchId`** does not match the active search.
+- **Limits:** Files larger than **512 KiB (524288 bytes)** are skipped entirely (**no partial reads**); **`skippedLargeFiles`** counts them. Snippets are **single-line**, trimmed, max **160** Unicode scalars. **Max 3** matches per file. Matching is **plain substring**, case-insensitive (Unicode `to_lowercase()`), **v1** — no regex, fuzzy, or ranking.
+- **Pipeline (Rust):** Single-thread **walker** → bounded **`VecDeque`** (capacity **`min(256, worker_count * 8)`**, **`worker_count`** default **5**, clamped **4..=8**) → **worker pool** → bounded **`sync_channel(256)`** to a single **aggregator** → events. **`vault_search_cancel`** and starting a new search preempt the previous run.
+- **Hit `uri`:** Absolute filesystem path string, same form as **`VaultDirEntryDto.uri`** from **`vault_list_dir`** (what **`openMarkdownInEditor`** / **`selectNote`** already expect).
+
 ### Vault tree vs. open note (manual reveal)
 
 The vault tree **does not** follow the editor: changing the active note (tabs, wiki navigation, etc.) **must not** auto-expand folders or move tree selection. Expansion and selection are **user-owned** until explicitly synced.

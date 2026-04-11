@@ -22,6 +22,7 @@ import {
   type DesktopStartupSplashPhase,
 } from './components/DesktopStartupSplash';
 import {QuickOpenNotePalette} from './components/QuickOpenNotePalette';
+import {VaultSearchPalette} from './components/VaultSearchPalette';
 import {VaultTab} from './components/VaultTab.tsx';
 import type {NoteMarkdownEditorHandle} from './editor/noteEditor/NoteMarkdownEditor';
 import {EpisodesPane} from './components/EpisodesPane';
@@ -265,17 +266,45 @@ export default function App() {
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
   const quickOpenOpenRef = useRef(false);
   quickOpenOpenRef.current = quickOpenOpen;
+  const [vaultSearchOpen, setVaultSearchOpen] = useState(false);
+  const vaultSearchOpenRef = useRef(false);
+  vaultSearchOpenRef.current = vaultSearchOpen;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || busy) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || !e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 'f' && e.key !== 'F') {
+        return;
+      }
+      if (quickOpenOpenRef.current || vaultSearchOpenRef.current) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      setVaultSearchOpen(true);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [vaultRoot, busy]);
 
   useEffect(() => {
     let state = initialDoubleShiftState;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
         return;
       }
       state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || busy) {
+      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
         return;
       }
       if (e.repeat) {
@@ -1035,6 +1064,12 @@ export default function App() {
             onOpenChange={setQuickOpenOpen}
             vaultRoot={vaultRoot}
             refs={vaultMarkdownRefs}
+            onPickNote={selectNote}
+          />
+          <VaultSearchPalette
+            open={vaultSearchOpen}
+            onOpenChange={setVaultSearchOpen}
+            vaultRoot={vaultRoot}
             onPickNote={selectNote}
           />
         </div>
