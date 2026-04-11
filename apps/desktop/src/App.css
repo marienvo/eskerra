@@ -3807,6 +3807,7 @@ button.primary.destructive {
   min-inline-size: 0;
   max-inline-size: 100%;
   padding: 0;
+  cursor: text;
 }
 
 [data-app-surface='capture']
@@ -3826,7 +3827,7 @@ button.primary.destructive {
   line-height: inherit;
   text-align: inherit;
   white-space: pre-wrap;
-  cursor: default;
+  cursor: text;
   outline: none;
 }
 
@@ -3849,8 +3850,23 @@ button.primary.destructive {
   max-inline-size: 100%;
   margin: 0;
   padding: 0;
-  cursor: default;
+  cursor: text;
   white-space: pre-wrap;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-rel-link,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-external-link,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-wiki-link {
+  cursor: pointer;
 }
 
 /*
