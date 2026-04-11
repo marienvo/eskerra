@@ -1,12 +1,14 @@
 import type {VaultMarkdownRef} from '@eskerra/core';
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {
   filterVaultNotesForQuickOpen,
   quickOpenVaultRelativePath,
 } from '../lib/quickOpenNoteFilter';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 export type QuickOpenNotePaletteProps = {
   open: boolean;
@@ -24,22 +26,48 @@ export function QuickOpenNotePalette({
   onPickNote,
 }: QuickOpenNotePaletteProps) {
   const [search, setSearch] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const searchTrimmed = search.trim();
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (!next) {
         setSearch('');
+        setAppliedQuery('');
       }
       onOpenChange(next);
     },
     [onOpenChange],
   );
 
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    if (!value.trim()) {
+      setAppliedQuery('');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!searchTrimmed) {
+      return;
+    }
+    const t = window.setTimeout(() => {
+      setAppliedQuery(searchTrimmed);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [search, searchTrimmed]);
+
   const filtered = useMemo(
-    () => filterVaultNotesForQuickOpen(search, vaultRoot, refs),
-    [refs, search, vaultRoot],
+    () => filterVaultNotesForQuickOpen(appliedQuery, vaultRoot, refs),
+    [appliedQuery, refs, vaultRoot],
   );
+
+  const searchPending =
+    searchTrimmed.length > 0 && appliedQuery !== searchTrimmed;
+
+  const displayed = searchPending ? [] : filtered;
 
   const handlePick = useCallback(
     (uri: string) => {
@@ -76,13 +104,17 @@ export function QuickOpenNotePalette({
               className="quick-open-command__input"
               placeholder="Search by name or path…"
               value={search}
-              onValueChange={setSearch}
+              onValueChange={handleSearchChange}
             />
             <CommandList className="quick-open-command__list">
               <CommandEmpty className="quick-open-command__empty">
-                No matching notes.
+                {searchTrimmed.length === 0
+                  ? 'Type to search by name or path.'
+                  : searchPending
+                    ? 'Searching…'
+                    : 'No matching notes.'}
               </CommandEmpty>
-              {filtered.map(r => {
+              {displayed.map(r => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, r.uri);
                 return (
                   <CommandItem

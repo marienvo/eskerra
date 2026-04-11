@@ -26,11 +26,9 @@ describe('filterVaultNotesForQuickOpen', () => {
     {name: 'Beta', uri: 'file:///v/General/Beta.md'},
   ];
 
-  it('returns all sorted when query empty', () => {
-    expect(filterVaultNotesForQuickOpen('', vault, refs)).toEqual([
-      {name: 'Alpha', uri: 'file:///v/Inbox/Alpha.md'},
-      {name: 'Beta', uri: 'file:///v/General/Beta.md'},
-    ]);
+  it('returns no rows when query empty or whitespace', () => {
+    expect(filterVaultNotesForQuickOpen('', vault, refs)).toEqual([]);
+    expect(filterVaultNotesForQuickOpen('   ', vault, refs)).toEqual([]);
   });
 
   it('matches stem substring', () => {
