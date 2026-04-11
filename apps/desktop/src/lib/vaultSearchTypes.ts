@@ -1,49 +1,58 @@
 export type VaultSearchProgress = {
+  /** In indexed search, mirrors backend: currently the number of matching notes in the result set. */
   scannedFiles: number;
   totalHits: number;
   skippedLargeFiles: number;
+  /** Backend index lifecycle: `ready` | `building` | `failed` | `idle` | `unavailable`. */
+  indexStatus: string;
+  indexReady: boolean;
 };
 
-export type VaultFilenameMatchStrength = 'exact' | 'partial';
+export type VaultSearchBestField = 'title' | 'path' | 'body';
 
-export type VaultSearchHit = {
-  uri: string;
+export type VaultSearchNoteSnippet = {
   lineNumber: number;
-  snippet: string;
-  /** Present only for filename hits (`lineNumber === 0`). */
-  filenameMatch?: VaultFilenameMatchStrength;
+  text: string;
 };
 
-/** Lower rank sorts earlier: exact filename, then partial filename, then body lines. */
-export function vaultSearchHitTierRank(hit: VaultSearchHit): number {
-  if (hit.lineNumber !== 0) {
-    return 2;
+export type VaultSearchNoteResult = {
+  uri: string;
+  relativePath: string;
+  title: string;
+  bestField: VaultSearchBestField;
+  matchCount: number;
+  score: number;
+  snippets: VaultSearchNoteSnippet[];
+};
+
+/** Lower rank sorts earlier: title, then path, then body (tie-breaker after score). */
+export function vaultSearchBestFieldRank(field: VaultSearchBestField): number {
+  switch (field) {
+    case 'title':
+      return 0;
+    case 'path':
+      return 1;
+    case 'body':
+      return 2;
   }
-  if (hit.filenameMatch === 'exact') {
-    return 0;
-  }
-  if (hit.filenameMatch === 'partial') {
-    return 1;
-  }
-  return 1;
 }
 
-export function compareVaultSearchHits(a: VaultSearchHit, b: VaultSearchHit): number {
-  const ra = vaultSearchHitTierRank(a);
-  const rb = vaultSearchHitTierRank(b);
-  if (ra !== rb) {
-    return ra - rb;
+/** Sort note-level results: higher score first, then stronger bestField, then uri. */
+export function compareVaultSearchNotes(a: VaultSearchNoteResult, b: VaultSearchNoteResult): number {
+  if (b.score !== a.score) {
+    return b.score - a.score;
   }
-  const pathCmp = a.uri.localeCompare(b.uri);
-  if (pathCmp !== 0) {
-    return pathCmp;
+  const fa = vaultSearchBestFieldRank(a.bestField);
+  const fb = vaultSearchBestFieldRank(b.bestField);
+  if (fa !== fb) {
+    return fa - fb;
   }
-  return a.lineNumber - b.lineNumber;
+  return a.uri.localeCompare(b.uri);
 }
 
 export type VaultSearchUpdatePayload = {
   searchId: string;
-  hits: VaultSearchHit[];
+  notes: VaultSearchNoteResult[];
   progress: VaultSearchProgress;
 };
 

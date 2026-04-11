@@ -84,6 +84,7 @@ import {
   setVaultSession,
   startVaultWatch,
 } from '../lib/tauriVault';
+import {vaultSearchIndexSchedule, vaultSearchIndexTouchPaths} from '../lib/tauriVaultSearch';
 import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
 import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
 import {
@@ -1525,6 +1526,9 @@ export function useMainWindowWorkspace(options: {
         await store.set(STORE_KEY_VAULT, root);
         await store.save();
         await startVaultWatch();
+        queueMicrotask(() => {
+          void vaultSearchIndexSchedule().catch(() => undefined);
+        });
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
@@ -1894,6 +1898,9 @@ export function useMainWindowWorkspace(options: {
 
     void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const paths = event.payload?.paths ?? [];
+      if (paths.length > 0) {
+        void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
+      }
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);

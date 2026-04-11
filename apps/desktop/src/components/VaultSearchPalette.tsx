@@ -4,10 +4,10 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
-import {compareVaultSearchHits} from '../lib/vaultSearchTypes';
+import {compareVaultSearchNotes} from '../lib/vaultSearchTypes';
 
-/** Max hits rendered as rows; full list is still sorted for ranking before slicing. */
-const VAULT_SEARCH_UI_MAX_VISIBLE_HITS = 100;
+/** Max notes rendered as rows; full list is still sorted for ranking before slicing. */
+const VAULT_SEARCH_UI_MAX_VISIBLE_NOTES = 100;
 
 export type VaultSearchPaletteProps = {
   open: boolean;
@@ -15,6 +15,17 @@ export type VaultSearchPaletteProps = {
   vaultRoot: string;
   onPickNote: (uri: string) => void;
 };
+
+function bestFieldLabel(field: 'title' | 'path' | 'body'): string {
+  switch (field) {
+    case 'title':
+      return 'Title';
+    case 'path':
+      return 'Path';
+    case 'body':
+      return 'Body';
+  }
+}
 
 export function VaultSearchPalette({
   open,
@@ -25,7 +36,7 @@ export function VaultSearchPalette({
   const {
     query,
     setQuery,
-    hits,
+    notes,
     progress,
     scanDone,
     awaitingDebouncedRun,
@@ -56,29 +67,28 @@ export function VaultSearchPalette({
   );
 
   const trimmedQuery = query.trim();
-  const sortedHits = useMemo(
-    () => (hits.length <= 1 ? hits : [...hits].sort(compareVaultSearchHits)),
-    [hits],
+  const sortedNotes = useMemo(
+    () => (notes.length <= 1 ? notes : [...notes].sort(compareVaultSearchNotes)),
+    [notes],
   );
-  const displayedHits =
-    sortedHits.length <= VAULT_SEARCH_UI_MAX_VISIBLE_HITS
-      ? sortedHits
-      : sortedHits.slice(0, VAULT_SEARCH_UI_MAX_VISIBLE_HITS);
-  const hiddenHitCount = sortedHits.length - displayedHits.length;
+  const displayedNotes =
+    sortedNotes.length <= VAULT_SEARCH_UI_MAX_VISIBLE_NOTES
+      ? sortedNotes
+      : sortedNotes.slice(0, VAULT_SEARCH_UI_MAX_VISIBLE_NOTES);
+  const hiddenNoteCount = sortedNotes.length - displayedNotes.length;
 
-  /** Any change to the ordered hit list resets cmdk selection to the first row (stable under object identity). */
-  const hitsOrderSignature = useMemo(
-    () => sortedHits.map(h => `${h.uri}:${h.lineNumber}`).join('\0'),
-    [sortedHits],
+  /** Any change to the ordered note list resets cmdk selection to the first row (stable under object identity). */
+  const notesOrderSignature = useMemo(
+    () => sortedNotes.map(n => `${n.uri}:${n.score}`).join('\0'),
+    [sortedNotes],
   );
 
   const firstDisplayedItemValue = useMemo(() => {
-    if (displayedHits.length === 0) {
+    if (displayedNotes.length === 0) {
       return '';
     }
-    const h = displayedHits[0]!;
-    return `${h.uri}:${h.lineNumber}`;
-  }, [displayedHits]);
+    return displayedNotes[0]!.uri;
+  }, [displayedNotes]);
 
   const [commandValue, setCommandValue] = useState(firstDisplayedItemValue);
 
@@ -86,12 +96,19 @@ export function VaultSearchPalette({
     queueMicrotask(() => {
       setCommandValue(firstDisplayedItemValue);
     });
-  }, [hitsOrderSignature, firstDisplayedItemValue]);
+  }, [notesOrderSignature, firstDisplayedItemValue]);
 
+  const indexHint =
+    progress != null && !progress.indexReady
+      ? ` · index ${progress.indexStatus}`
+      : '';
+
+  const skipPart =
+    progress != null && progress.skippedLargeFiles > 0
+      ? ` · ${progress.skippedLargeFiles} skipped (>512 KiB)`
+      : '';
   const progressCounts =
-    progress != null
-      ? `${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
-      : null;
+    progress != null ? `${progress.totalHits} notes${indexHint}${skipPart}` : null;
 
   const statusLine =
     trimmedQuery.length === 0
@@ -148,37 +165,51 @@ export function VaultSearchPalette({
               <CommandEmpty className="quick-open-command__empty">
                 {trimmedQuery.length === 0
                   ? 'Type to search markdown in the vault.'
-                  : scanDone && !awaitingDebouncedRun && hits.length === 0
-                    ? 'No matches.'
+                  : scanDone && !awaitingDebouncedRun && notes.length === 0
+                    ? progress != null && !progress.indexReady
+                      ? 'Index not ready yet — try again in a moment.'
+                      : 'No matches.'
                     : null}
               </CommandEmpty>
-              {displayedHits.map((h, i) => {
-                const rel = quickOpenVaultRelativePath(vaultRoot, h.uri);
+              {displayedNotes.map((n, i) => {
+                const rel = quickOpenVaultRelativePath(vaultRoot, n.uri);
+                const preview = n.snippets.slice(0, 3);
                 return (
                   <CommandItem
-                    key={`${h.uri}:${h.lineNumber}:${h.filenameMatch ?? 'line'}:${i}`}
-                    value={`${h.uri}:${h.lineNumber}`}
+                    key={`${n.uri}:${i}`}
+                    value={n.uri}
                     className="quick-open-command__item vault-search-hit"
                     onSelect={() => {
-                      handlePick(h.uri);
+                      handlePick(n.uri);
                     }}
                   >
                     <span className="quick-open-command__item-title">
-                      {rel}{' '}
+                      {n.title || rel}{' '}
                       <span className="vault-search-hit__line">
-                        {h.lineNumber === 0 ? 'Filename' : `L${h.lineNumber}`}
+                        {bestFieldLabel(n.bestField)}
+                        {n.matchCount > 1 ? ` · ${n.matchCount} matches` : ''}
                       </span>
                     </span>
-                    <span className="quick-open-command__item-path vault-search-hit__snippet">
-                      {h.snippet}
+                    <span className="quick-open-command__item-path vault-search-hit__path-muted">
+                      {rel}
                     </span>
+                    {preview.length > 0 ? (
+                      <span className="quick-open-command__item-path vault-search-hit__snippet-block">
+                        {preview.map(s => (
+                          <span key={`${s.lineNumber}:${s.text.slice(0, 24)}`} className="vault-search-hit__snippet">
+                            {s.lineNumber > 0 ? `L${s.lineNumber}: ` : ''}
+                            {s.text}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                   </CommandItem>
                 );
               })}
             </CommandList>
-            {hiddenHitCount > 0 ? (
+            {hiddenNoteCount > 0 ? (
               <div className="vault-search-overflow" role="status">
-                Showing {VAULT_SEARCH_UI_MAX_VISIBLE_HITS} of {sortedHits.length} matches
+                Showing {VAULT_SEARCH_UI_MAX_VISIBLE_NOTES} of {sortedNotes.length} notes
               </div>
             ) : null}
           </Command>

@@ -30,11 +30,15 @@ tauri-plugin-opener = "2"
 tauri-plugin-store = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-prevent-default = { version = "4", default-features = false }
+# Disable zstd (optional codec) to avoid zstd-sys build breakage on some toolchains.
+tantivy = { version = "0.21", default-features = false, features = ["mmap"] }
 
 # Vendored patch: persist size/position when WM reports maximized but geometry is not fullscreen
 # (tiling / Wayland false positives). See vendor/tauri-plugin-window-state/src/lib.rs.
 [patch.crates-io]
 tauri-plugin-window-state = { path = "vendor/tauri-plugin-window-state" }
+# Patched: drop zstd "experimental" (see vendor/tantivy-sstable/Cargo.toml).
+tantivy-sstable = { path = "vendor/tantivy-sstable" }
 
 [dev-dependencies]
 tempfile = "3"

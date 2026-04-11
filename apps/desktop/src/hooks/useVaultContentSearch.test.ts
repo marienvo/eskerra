@@ -4,6 +4,17 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import type {VaultSearchDonePayload, VaultSearchUpdatePayload} from '../lib/vaultSearchTypes';
 import {useVaultContentSearch, isVaultSearchEventCurrent} from './useVaultContentSearch';
 
+function progress(partial: Partial<VaultSearchDonePayload['progress']> = {}): VaultSearchDonePayload['progress'] {
+  return {
+    scannedFiles: 0,
+    totalHits: 0,
+    skippedLargeFiles: 0,
+    indexStatus: 'ready',
+    indexReady: true,
+    ...partial,
+  };
+}
+
 const tauriCtx = vi.hoisted(() => {
   const state = {
     emitUpdate: (_payload: VaultSearchUpdatePayload) => {},
@@ -152,7 +163,7 @@ describe('useVaultContentSearch', () => {
       tauriCtx.state.emitDone({
         searchId: id,
         cancelled: false,
-        progress: {scannedFiles: 1, totalHits: 0, skippedLargeFiles: 0},
+        progress: progress({scannedFiles: 1, totalHits: 0}),
       });
     });
     expect(result.current.scanDone).toBe(true);
@@ -164,7 +175,7 @@ describe('useVaultContentSearch', () => {
     expect(result.current.searchingStatusVisible).toBe(false);
   });
 
-  it('keeps hits during debounce, then holds prior hits briefly when a new run starts', async () => {
+  it('keeps notes during debounce, then holds prior notes briefly when a new run starts', async () => {
     const {result} = renderHook(() =>
       useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
     );
@@ -183,16 +194,24 @@ describe('useVaultContentSearch', () => {
     expect(vaultSearchStartMock).toHaveBeenCalledTimes(1);
     const firstSearchId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
 
-    const hit = {uri: 'file:///a.md', lineNumber: 1, snippet: 'x'};
+    const note = {
+      uri: 'file:///a.md',
+      relativePath: 'a.md',
+      title: 'a',
+      bestField: 'body' as const,
+      matchCount: 1,
+      score: 1,
+      snippets: [{lineNumber: 1, text: 'x'}],
+    };
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: firstSearchId,
-        hits: [hit],
-        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+        notes: [note],
+        progress: progress({scannedFiles: 1, totalHits: 1}),
       });
     });
     await flushSearchRaf();
-    expect(result.current.hits).toEqual([hit]);
+    expect(result.current.notes).toEqual([note]);
     expect(result.current.scanDone).toBe(false);
 
     await act(async () => {
@@ -203,7 +222,7 @@ describe('useVaultContentSearch', () => {
     });
     expect(result.current.awaitingDebouncedRun).toBe(true);
     expect(result.current.scanDone).toBe(true);
-    expect(result.current.hits).toEqual([hit]);
+    expect(result.current.notes).toEqual([note]);
 
     await act(async () => {
       vi.advanceTimersByTime(300);
@@ -213,25 +232,25 @@ describe('useVaultContentSearch', () => {
     });
 
     expect(vaultSearchStartMock).toHaveBeenCalledTimes(2);
-    expect(result.current.hits).toEqual([hit]);
+    expect(result.current.notes).toEqual([note]);
     expect(result.current.holdingPreviousResults).toBe(true);
     expect(result.current.scanDone).toBe(false);
 
     await act(async () => {
       vi.advanceTimersByTime(99);
     });
-    expect(result.current.hits).toEqual([hit]);
+    expect(result.current.notes).toEqual([note]);
 
     await act(async () => {
       vi.advanceTimersByTime(1);
     });
-    expect(result.current.hits).toEqual([]);
+    expect(result.current.notes).toEqual([]);
     expect(result.current.progress).toBeNull();
     expect(result.current.holdingPreviousResults).toBe(false);
     expect(result.current.scanDone).toBe(false);
   });
 
-  it('replaces held prior hits when the first update arrives before the hold timeout', async () => {
+  it('replaces held prior notes when the first update arrives before the hold timeout', async () => {
     const {result} = renderHook(() =>
       useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
     );
@@ -247,12 +266,20 @@ describe('useVaultContentSearch', () => {
       await Promise.resolve();
     });
     const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
-    const oldHit = {uri: 'file:///old.md', lineNumber: 1, snippet: 'old'};
+    const oldNote = {
+      uri: 'file:///old.md',
+      relativePath: 'old.md',
+      title: 'old',
+      bestField: 'body' as const,
+      matchCount: 1,
+      score: 1,
+      snippets: [{lineNumber: 1, text: 'old'}],
+    };
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: firstId,
-        hits: [oldHit],
-        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+        notes: [oldNote],
+        progress: progress({scannedFiles: 1, totalHits: 1}),
       });
     });
     await flushSearchRaf();
@@ -268,31 +295,39 @@ describe('useVaultContentSearch', () => {
     });
     const secondId = vaultSearchStartMock.mock.calls[1]![0].searchId as string;
     expect(result.current.holdingPreviousResults).toBe(true);
-    expect(result.current.hits).toEqual([oldHit]);
+    expect(result.current.notes).toEqual([oldNote]);
 
-    const newHit = {uri: 'file:///new.md', lineNumber: 1, snippet: 'new'};
+    const newNote = {
+      uri: 'file:///new.md',
+      relativePath: 'new.md',
+      title: 'new',
+      bestField: 'body' as const,
+      matchCount: 1,
+      score: 2,
+      snippets: [{lineNumber: 1, text: 'new'}],
+    };
     await act(async () => {
       vi.advanceTimersByTime(50);
     });
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: secondId,
-        hits: [newHit],
-        progress: {scannedFiles: 2, totalHits: 1, skippedLargeFiles: 0},
+        notes: [newNote],
+        progress: progress({scannedFiles: 2, totalHits: 1}),
       });
     });
     await flushSearchRaf();
 
     expect(result.current.holdingPreviousResults).toBe(false);
-    expect(result.current.hits).toEqual([newHit]);
+    expect(result.current.notes).toEqual([newNote]);
 
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
-    expect(result.current.hits).toEqual([newHit]);
+    expect(result.current.notes).toEqual([newNote]);
   });
 
-  it('clears held prior hits when done arrives before the first update', async () => {
+  it('clears held prior notes when done arrives before the first update', async () => {
     const {result} = renderHook(() =>
       useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
     );
@@ -311,8 +346,18 @@ describe('useVaultContentSearch', () => {
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: firstId,
-        hits: [{uri: 'file:///a.md', lineNumber: 1, snippet: 'x'}],
-        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+        notes: [
+          {
+            uri: 'file:///a.md',
+            relativePath: 'a.md',
+            title: 'a',
+            bestField: 'body',
+            matchCount: 1,
+            score: 1,
+            snippets: [{lineNumber: 1, text: 'x'}],
+          },
+        ],
+        progress: progress({scannedFiles: 1, totalHits: 1}),
       });
     });
     await flushSearchRaf();
@@ -335,12 +380,12 @@ describe('useVaultContentSearch', () => {
       tauriCtx.state.emitDone({
         searchId: secondId,
         cancelled: false,
-        progress: {scannedFiles: 0, totalHits: 0, skippedLargeFiles: 0},
+        progress: progress({scannedFiles: 0, totalHits: 0}),
       });
     });
 
     expect(result.current.holdingPreviousResults).toBe(false);
-    expect(result.current.hits).toEqual([]);
+    expect(result.current.notes).toEqual([]);
     expect(result.current.scanDone).toBe(true);
   });
 
@@ -364,12 +409,22 @@ describe('useVaultContentSearch', () => {
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: firstId,
-        hits: [{uri: 'file:///old.md', lineNumber: 1, snippet: 'old'}],
-        progress: {scannedFiles: 5, totalHits: 1, skippedLargeFiles: 0},
+        notes: [
+          {
+            uri: 'file:///old.md',
+            relativePath: 'old.md',
+            title: 'old',
+            bestField: 'body',
+            matchCount: 1,
+            score: 1,
+            snippets: [{lineNumber: 1, text: 'old'}],
+          },
+        ],
+        progress: progress({scannedFiles: 5, totalHits: 1}),
       });
     });
     await flushSearchRaf();
-    expect(result.current.hits).toHaveLength(1);
+    expect(result.current.notes).toHaveLength(1);
 
     await act(async () => {
       result.current.setQuery('ab');
@@ -381,12 +436,22 @@ describe('useVaultContentSearch', () => {
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: firstId,
-        hits: [{uri: 'file:///stale.md', lineNumber: 2, snippet: 'no'}],
-        progress: {scannedFiles: 99, totalHits: 2, skippedLargeFiles: 0},
+        notes: [
+          {
+            uri: 'file:///stale.md',
+            relativePath: 'stale.md',
+            title: 'stale',
+            bestField: 'body',
+            matchCount: 1,
+            score: 1,
+            snippets: [{lineNumber: 2, text: 'no'}],
+          },
+        ],
+        progress: progress({scannedFiles: 99, totalHits: 2}),
       });
     });
-    expect(result.current.hits).toHaveLength(1);
-    expect(result.current.hits[0]!.uri).toBe('file:///old.md');
+    expect(result.current.notes).toHaveLength(1);
+    expect(result.current.notes[0]!.uri).toBe('file:///old.md');
   });
 
   it('applies done only for the active searchId', async () => {
@@ -410,7 +475,7 @@ describe('useVaultContentSearch', () => {
       tauriCtx.state.emitDone({
         searchId: 'other-id',
         cancelled: false,
-        progress: {scannedFiles: 1, totalHits: 0, skippedLargeFiles: 0},
+        progress: progress({scannedFiles: 1, totalHits: 0}),
       });
     });
     expect(result.current.scanDone).toBe(false);
@@ -419,7 +484,7 @@ describe('useVaultContentSearch', () => {
       tauriCtx.state.emitDone({
         searchId: id,
         cancelled: false,
-        progress: {scannedFiles: 10, totalHits: 3, skippedLargeFiles: 0},
+        progress: progress({scannedFiles: 10, totalHits: 3}),
       });
     });
     expect(result.current.scanDone).toBe(true);
@@ -452,7 +517,7 @@ describe('useVaultContentSearch', () => {
     expect(vaultSearchStartMock.mock.calls[0]![0].query).toBe('ab');
   });
 
-  it('coalesces rapid vault-search:update events into one rAF flush', async () => {
+  it('coalesces rapid vault-search:update events into one rAF flush (last payload wins)', async () => {
     const {result} = renderHook(() =>
       useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
     );
@@ -469,33 +534,39 @@ describe('useVaultContentSearch', () => {
     });
 
     const id = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
-    expect(result.current.hits).toEqual([]);
+    expect(result.current.notes).toEqual([]);
 
-    const h1 = {uri: 'file:///a.md', lineNumber: 1, snippet: '1'};
-    const h2 = {uri: 'file:///b.md', lineNumber: 1, snippet: '2'};
-    const h3 = {uri: 'file:///c.md', lineNumber: 1, snippet: '3'};
+    const mk = (uri: string, text: string) => ({
+      uri,
+      relativePath: uri.replace('file:///', ''),
+      title: text,
+      bestField: 'body' as const,
+      matchCount: 1,
+      score: 1,
+      snippets: [{lineNumber: 1, text}],
+    });
 
     await act(async () => {
       tauriCtx.state.emitUpdate({
         searchId: id,
-        hits: [h1],
-        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+        notes: [mk('file:///a.md', '1')],
+        progress: progress({scannedFiles: 1, totalHits: 1}),
       });
       tauriCtx.state.emitUpdate({
         searchId: id,
-        hits: [h2],
-        progress: {scannedFiles: 2, totalHits: 2, skippedLargeFiles: 0},
+        notes: [mk('file:///b.md', '2')],
+        progress: progress({scannedFiles: 2, totalHits: 1}),
       });
       tauriCtx.state.emitUpdate({
         searchId: id,
-        hits: [h3],
-        progress: {scannedFiles: 3, totalHits: 3, skippedLargeFiles: 0},
+        notes: [mk('file:///c.md', '3')],
+        progress: progress({scannedFiles: 3, totalHits: 1}),
       });
     });
-    expect(result.current.hits).toEqual([]);
+    expect(result.current.notes).toEqual([]);
 
     await flushSearchRaf();
-    expect(result.current.hits).toEqual([h1, h2, h3]);
+    expect(result.current.notes).toEqual([mk('file:///c.md', '3')]);
     expect(result.current.progress?.scannedFiles).toBe(3);
   });
 });

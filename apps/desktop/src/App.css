@@ -1837,6 +1837,18 @@ html.tauri-main-chrome .quick-open-overlay {
   font-size: 0.82em;
 }
 
+.vault-search-hit__path-muted {
+  opacity: 0.88;
+  font-size: 0.9em;
+}
+
+.vault-search-hit__snippet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.1rem;
+}
+
 /* Snippet: inherit UI sans like `.quick-open-command__item-path`. Monospace at ~12px
    read as jagged on WebKitGTK (computed `ui-monospace` + `-webkit-font-smoothing: auto`). */
 .vault-search-hit__snippet {
