@@ -127,7 +127,7 @@ html {
   /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
   --color-icon-ghost-hover-bg: color-mix(in srgb, var(--color-text) 16%, transparent);
 
-  /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
+  /* Resizable panel groups: gutter shows --color-bg at pane edges */
   --panel-grid-gap: 8px;
   --panel-grid-padding: 5px;
   /* Title bar row height (fits 29px window controls with small vertical margin). */

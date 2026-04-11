@@ -345,7 +345,7 @@ a:focus:not(:focus-visible) {
   -webkit-app-region: drag;
 }
 
-/* Absorbs horizontal space to the right of tabs / after the "Editor" placeholder. */
+/* Absorbs horizontal space to the right of tabs (or full width when no tabs). */
 .app-root--tauri .editor-open-tabs-titlebar-drag-filler {
   -webkit-app-region: drag;
   flex: 1 1 0;
@@ -355,10 +355,6 @@ a:focus:not(:focus-visible) {
 
 /* Pills handle their own hits (context menu, tab activate); gaps use parent strip drag. */
 .app-root--tauri .editor-open-tabs-scroll--titlebar .editor-open-tab-pill {
-  -webkit-app-region: no-drag;
-}
-
-.app-root--tauri .editor-open-tabs-scroll--titlebar .editor-open-tabs-placeholder--titlebar {
   -webkit-app-region: no-drag;
 }
 
@@ -904,7 +900,7 @@ a:focus:not(:focus-visible) {
 }
 
 .main-shell-stage.panel-group.fill > .main-end-split,
-.inbox-root > .main-end-split {
+.main-workspace-canvas > .main-end-split {
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -956,7 +952,7 @@ a:focus:not(:focus-visible) {
   align-items: flex-start;
   gap: 0.35rem;
   padding: 0.35rem 0.4rem;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--color-border-soft, var(--color-border));
   background: var(--color-surface);
 }
@@ -1057,7 +1053,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   min-height: 0;
   background: var(--color-surface);
-  border-radius: 6px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -1165,13 +1161,13 @@ a:focus:not(:focus-visible) {
 .resize-sep.resize-sep--canvas::after {
   inset: 0;
   border-radius: 0;
-  background: color-mix(in srgb, var(--color-text) 12%, transparent);
+  /* Match capture pane title bars: `[data-app-surface='capture'] .pane-header { border-bottom-color }` */
+  background: var(--color-capture-border);
   box-shadow: none;
-  opacity: 1;
 }
 
 .resize-sep.resize-sep--canvas:hover::after {
-  background: color-mix(in srgb, var(--color-text) 20%, transparent);
+  background: var(--color-capture-border);
 }
 
 .resize-sep.resize-sep--row.resize-sep--canvas {
@@ -1191,7 +1187,7 @@ a:focus:not(:focus-visible) {
 }
 
 .resize-sep.resize-sep--row.resize-sep--canvas:hover::after {
-  background: color-mix(in srgb, var(--color-text) 20%, transparent);
+  background: var(--color-capture-border);
 }
 
 .panel-group.fill-vertical .resize-sep {
@@ -1273,21 +1269,6 @@ a:focus:not(:focus-visible) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.editor-open-tabs-placeholder {
-  color: var(--color-muted);
-}
-
-.editor-open-tabs-placeholder--titlebar {
-  flex: 0 1 auto;
-  min-width: 0;
-  font-size: 0.78rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-inline: 0.2rem;
 }
 
 .editor-open-tabs-scroll {
@@ -1376,6 +1357,8 @@ body.editor-tab-strip--dragging {
 .editor-open-tabs-scroll--titlebar
   .editor-open-tab-pill:not(.editor-open-tab-pill--active):focus-within:not([data-disabled]) {
   background: var(--color-shell-hover-bg);
+  /* Match `.today-hub-workspace-select:hover` (1px shell border on chrome). */
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(255, 255, 255, 0.18));
 }
 
 .editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
@@ -1400,10 +1383,6 @@ body.editor-tab-strip--dragging {
   background: var(--color-shell-hover-bg);
 }
 
-.editor-open-tabs-scroll--titlebar .editor-open-tabs-placeholder--titlebar {
-  color: var(--color-shell-icon-muted);
-}
-
 .editor-open-tab-pill {
   flex: 0 0 auto;
   display: flex;
@@ -1413,7 +1392,9 @@ body.editor-tab-strip--dragging {
   border: 1px solid transparent;
   box-sizing: border-box;
   background: transparent;
-  transition: background 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
   padding-block: 2px;
 }
 
@@ -1586,7 +1567,7 @@ body.editor-tab-strip--dragging {
   padding: 0.4rem 0.45rem;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 0;
   cursor: default;
   color: var(--color-text);
   font: inherit;
@@ -1604,7 +1585,7 @@ body.editor-tab-strip--dragging {
   width: 4px;
   flex-shrink: 0;
   align-self: stretch;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .note-list-row__body {
@@ -1705,7 +1686,7 @@ body.editor-tab-strip--dragging {
   cursor: default;
   /* Keep gap 0; icon-to-label spacing is `margin-inline-end` on `.iconCell` in FileTreeNode.module.css (module `gap` would lose to this rule otherwise). */
   gap: 0;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .vault-tree-row:hover {
@@ -1754,7 +1735,7 @@ body.editor-tab-strip--dragging {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border-soft, var(--color-border));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
@@ -1861,7 +1842,7 @@ body.editor-tab-strip--dragging {
   cursor: default;
   font: inherit;
   text-align: left;
-  border-radius: 4px;
+  border-radius: 0;
   padding: 0.22rem 0.26rem;
   display: flex;
   flex-direction: column;
@@ -3402,7 +3383,7 @@ button.primary.destructive {
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -4873,7 +4854,7 @@ button:disabled {
   text-align: left;
   padding: 0.45rem 0.4rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   /* Opaque layer matching the pane (not transparent) so WebKit text AA matches hover. */
   background: var(--color-consume-surface);
   cursor: default;
@@ -4952,6 +4933,19 @@ button:disabled {
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* One rounded shell for toolbar + workspace (not per inner `.panel-surface`). */
+.inbox-root > .main-workspace-canvas {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--window-radius);
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--color-capture-panel);
 }
 
 [data-app-surface='capture'] .panel-surface {

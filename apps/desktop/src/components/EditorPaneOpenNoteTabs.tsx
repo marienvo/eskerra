@@ -469,18 +469,11 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
     if (inTitleBar) {
       return (
         <div className="editor-open-tabs-scroll editor-open-tabs-scroll--titlebar editor-open-tabs-scroll--titlebar-empty">
-          <span className="editor-open-tabs-placeholder editor-open-tabs-placeholder--titlebar">
-            Editor
-          </span>
           <TitleBarTabStripDragFiller />
         </div>
       );
     }
-    return (
-      <span className="pane-title pane-title--truncate editor-open-tabs-placeholder">
-        Editor
-      </span>
-    );
+    return null;
   }
 
   const multiTabs = workspaceTabs.length > 1;

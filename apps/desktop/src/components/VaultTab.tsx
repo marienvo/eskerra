@@ -1132,6 +1132,7 @@ export function VaultTab({
         </Dialog.Portal>
       </Dialog.Root>
 
+      <div className="main-workspace-canvas">
       <EditorWorkspaceToolbar
         vaultPaneVisible={vaultPaneVisible}
         onToggleVault={onToggleVault}
@@ -1256,6 +1257,7 @@ export function VaultTab({
           />
         }
       />
+      </div>
     </div>
     </Fragment>
   );
