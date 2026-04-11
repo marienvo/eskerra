@@ -26,7 +26,7 @@ Both apps use the same **vault layout** on disk: user-chosen root folder, then `
 | `npm run mobile` | Start Metro for the Android app |
 | `npm run mobile:android` | Build/run the Android app on a device or emulator |
 | `npm run desktop` | **Desktop:** `tauri dev` (Vite + native window) |
-| `npm run desktop:build` | **Desktop:** production web build + `tauri build` |
+| `npm run desktop:build` | **Desktop:** release semver bump (same rules as APK) + production web build + `tauri build` |
 | `npm test` | `@eskerra/core` (Vitest) + mobile (Jest) + release helper tests |
 | `npm run lint` | ESLint for mobile + desktop |
 
@@ -96,7 +96,7 @@ npm run apk-release -w @eskerra/mobile
 
 APK output: `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`
 
-The release flow runs [`scripts/bump-release-version.mjs`](scripts/bump-release-version.mjs) first (see script comments). Debug APK builds do **not** bump versions.
+The release flow runs [`scripts/bump-release-version.mjs`](scripts/bump-release-version.mjs) first (see script comments): [`build-apk-release.sh`](scripts/build-apk-release.sh) calls it directly; `npm run desktop:build` runs it via [`scripts/tauri-desktop-build.mjs`](scripts/tauri-desktop-build.mjs). Debug APK builds do **not** bump versions.
 
 Release signing defaults to the **debug keystore** in [`apps/mobile/android/app/build.gradle`](apps/mobile/android/app/build.gradle) — fine for local testing, not for Play Store.
 

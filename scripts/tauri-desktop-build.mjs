@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Runs `tauri build` with a merged config that sets `bundle.linux.rpm.release`.
+ * Runs `scripts/bump-release-version.mjs` (same branch/commit rules as APK release),
+ * then `tauri build` with a merged config that sets `bundle.linux.rpm.release`.
  * Each invocation uses a new release value so RPM NEVRA increases and
  * `dnf install` / `rpm -Uvh` can upgrade without uninstall.
  */
@@ -14,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DESKTOP = join(ROOT, 'apps', 'desktop');
+const BUMP_RELEASE_VERSION = join(ROOT, 'scripts', 'bump-release-version.mjs');
 
 function git(...args) {
   return execFileSync('git', args, {
@@ -39,6 +41,11 @@ if (process.argv.includes('--print-rpm-release')) {
   console.log(computeRpmRelease());
   process.exit(0);
 }
+
+execFileSync(process.execPath, [BUMP_RELEASE_VERSION], {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
 
 const release = computeRpmRelease();
 const overlay = {
