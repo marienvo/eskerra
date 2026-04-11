@@ -1,7 +1,7 @@
 import type {EskerraTableAlignment, EskerraTableModelV1} from '@eskerra/core';
 import {parseEskerraTableV1FromLines} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import {EditorState} from '@codemirror/state';
+import {EditorSelection, EditorState} from '@codemirror/state';
 import type {Compartment} from '@codemirror/state';
 import {openSearchPanel} from '@codemirror/search';
 import {EditorView} from '@codemirror/view';
@@ -100,6 +100,33 @@ function modelFromDraft(
     cells: cells.map(r => [...r]),
     align: alignOut,
   };
+}
+
+type NestedCellPointerCaret = {
+  row: number;
+  col: number;
+  clientX: number;
+  clientY: number;
+};
+
+/** Applies pointer hit as selection; clears ref on success. Returns whether a cursor was set. */
+function tryApplyNestedCellPointerCaret(
+  view: EditorView,
+  row: number,
+  col: number,
+  pendingRef: MutableRefObject<NestedCellPointerCaret | null>,
+): boolean {
+  const pending = pendingRef.current;
+  if (!pending || pending.row !== row || pending.col !== col) {
+    return false;
+  }
+  const pos = view.posAtCoords({x: pending.clientX, y: pending.clientY});
+  if (pos == null) {
+    return false;
+  }
+  view.dispatch({selection: EditorSelection.cursor(pos)});
+  pendingRef.current = null;
+  return true;
 }
 
 function isIdentityPermutation(perm: number[]): boolean {
@@ -268,6 +295,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   });
 
   const activeCellEditorRef = useRef<EditorView | null>(null);
+  const pendingNestedCellCaretRef = useRef<NestedCellPointerCaret | null>(null);
 
   const linkCompartments = parentView.state.facet(
     eskerraTableParentLinkCompartmentsFacet,
@@ -327,8 +355,59 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     });
   }, []);
 
+  const scheduleNestedCellFocusAndCaret = useCallback((row: number, col: number) => {
+    requestAnimationFrame(() => {
+      const ev = activeCellEditorRef.current;
+      const before = pendingNestedCellCaretRef.current;
+      const appliedBeforeFocus =
+        ev != null &&
+        tryApplyNestedCellPointerCaret(
+          ev,
+          row,
+          col,
+          pendingNestedCellCaretRef,
+        );
+      ev?.focus();
+      if (
+        !appliedBeforeFocus &&
+        before &&
+        before.row === row &&
+        before.col === col &&
+        pendingNestedCellCaretRef.current
+      ) {
+        requestAnimationFrame(() => {
+          const ev2 = activeCellEditorRef.current;
+          if (
+            !ev2 ||
+            activeCellRef.current.row !== row ||
+            activeCellRef.current.col !== col
+          ) {
+            return;
+          }
+          tryApplyNestedCellPointerCaret(
+            ev2,
+            row,
+            col,
+            pendingNestedCellCaretRef,
+          );
+          ev2.focus();
+        });
+      }
+    });
+  }, []);
+
   const navigateToCell = useCallback(
-    (row: number, col: number) => {
+    (row: number, col: number, pointer?: {x: number; y: number}) => {
+      if (pointer) {
+        pendingNestedCellCaretRef.current = {
+          row,
+          col,
+          clientX: pointer.x,
+          clientY: pointer.y,
+        };
+      } else {
+        pendingNestedCellCaretRef.current = null;
+      }
       const v = activeCellEditorRef.current;
       const prev = activeCellRef.current;
       if (v && (prev.row !== row || prev.col !== col)) {
@@ -336,23 +415,40 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         onCellDocChange(prev.row, prev.col, text);
       }
       syncActiveCellCoords(row, col);
-      requestAnimationFrame(() => {
-        activeCellEditorRef.current?.focus();
-      });
+      scheduleNestedCellFocusAndCaret(row, col);
     },
-    [onCellDocChange, syncActiveCellCoords],
+    [onCellDocChange, scheduleNestedCellFocusAndCaret, syncActiveCellCoords],
   );
 
   const activateCell = useCallback(
-    (row: number, col: number) => {
+    (row: number, col: number, clientX?: number, clientY?: number) => {
       const cur = activeCellRef.current;
+      const hasPointer =
+        clientX != null &&
+        clientY != null &&
+        Number.isFinite(clientX) &&
+        Number.isFinite(clientY);
       if (cur.row === row && cur.col === col) {
-        requestAnimationFrame(() => activeCellEditorRef.current?.focus());
+        if (hasPointer) {
+          pendingNestedCellCaretRef.current = {
+            row,
+            col,
+            clientX,
+            clientY,
+          };
+        } else {
+          pendingNestedCellCaretRef.current = null;
+        }
+        scheduleNestedCellFocusAndCaret(row, col);
         return;
       }
-      navigateToCell(row, col);
+      navigateToCell(
+        row,
+        col,
+        hasPointer ? {x: clientX, y: clientY} : undefined,
+      );
     },
-    [navigateToCell],
+    [navigateToCell, scheduleNestedCellFocusAndCaret],
   );
 
   const snapshotAllCellDocs = useCallback((): string[][] => {
@@ -1260,6 +1356,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   wikiCompartment={linkCompartments.wikiLink}
                   relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
                   activeCellEditorRef={activeCellEditorRef}
+                  pendingNestedCellCaretRef={pendingNestedCellCaretRef}
                   setNotice={setNotice}
                   onCellActivate={activateCell}
                   moveTabFrom={moveTabFrom}
@@ -1298,6 +1395,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                       wikiCompartment={linkCompartments.wikiLink}
                       relativeMdLinkCompartment={linkCompartments.relativeMarkdownLink}
                       activeCellEditorRef={activeCellEditorRef}
+                      pendingNestedCellCaretRef={pendingNestedCellCaretRef}
                       setNotice={setNotice}
                       onCellActivate={activateCell}
                       moveTabFrom={moveTabFrom}
@@ -1352,8 +1450,14 @@ type ShellCellProps = {
   wikiCompartment: Compartment;
   relativeMdLinkCompartment: Compartment;
   activeCellEditorRef: MutableRefObject<EditorView | null>;
+  pendingNestedCellCaretRef: MutableRefObject<NestedCellPointerCaret | null>;
   setNotice: (msg: string | null) => void;
-  onCellActivate: (row: number, col: number) => void;
+  onCellActivate: (
+    row: number,
+    col: number,
+    clientX?: number,
+    clientY?: number,
+  ) => void;
   moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
   runEnterFrom: (row: number, col: number) => boolean;
   revertBaselineRef: MutableRefObject<string | null>;
@@ -1377,6 +1481,7 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
     wikiCompartment,
     relativeMdLinkCompartment,
     activeCellEditorRef,
+    pendingNestedCellCaretRef,
     setNotice,
     onCellActivate,
     moveTabFrom,
@@ -1423,7 +1528,7 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
     runEnterFrom,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isActive) {
       return;
     }
@@ -1467,6 +1572,12 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
     const v = new EditorView({parent: host, state});
     viewRef.current = v;
     activeCellEditorRef.current = v;
+    tryApplyNestedCellPointerCaret(
+      v,
+      row,
+      col,
+      pendingNestedCellCaretRef,
+    );
     const unregisterNested = registerEskerraTableNestedCellEditor(
       parentView,
       v,
@@ -1527,7 +1638,7 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
             if (e.button !== 0 || e.shiftKey) {
               return;
             }
-            onCellActivate(row, col);
+            onCellActivate(row, col, e.clientX, e.clientY);
           }}
         >
           <EskerraTableCellStaticRichText
