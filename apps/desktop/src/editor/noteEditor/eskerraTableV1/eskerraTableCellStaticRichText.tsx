@@ -10,6 +10,7 @@ import {markdownActivatableRelativeMdLinkAtPosition} from '../markdownActivatabl
 import {relativeMdLinkHrefIsResolvedFacet} from '../markdownRelativeLinkCodemirror';
 import {wikiLinkPointerActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDocPosition';
 import {wikiLinkIsResolvedFacet} from '../wikiLinkCodemirror';
+import {useEskerraCellStaticCache} from './eskerraTableCellStaticCacheContext';
 import {buildCellStaticSegments} from './eskerraTableCellStaticSegments';
 import {eskerraTableShellLinkBridgeFacet} from './eskerraTableShellLinkBridgeFacet';
 
@@ -68,8 +69,13 @@ export function EskerraTableCellStaticRichText(
   props: EskerraTableCellStaticRichTextProps,
 ): ReactElement | null {
   const {parentView, cellText, staticRichPaintKey} = props;
+  const cellStaticCache = useEskerraCellStaticCache();
 
   const {segments, hitState} = useMemo(() => {
+    if (cellStaticCache) {
+      const built = cellStaticCache.getCellStatic(cellText);
+      return {segments: built.segments, hitState: built.state};
+    }
     const wikiTargetIsResolved = parentView.state.facet(wikiLinkIsResolvedFacet);
     const relativeMarkdownLinkHrefIsResolved = parentView.state.facet(
       relativeMdLinkHrefIsResolvedFacet,
@@ -80,7 +86,7 @@ export function EskerraTableCellStaticRichText(
     });
     return {segments: segs, hitState: state};
   // eslint-disable-next-line react-hooks/exhaustive-deps -- staticRichPaintKey bumps when link facets refresh (stable EditorView)
-  }, [cellText, parentView, staticRichPaintKey]);
+  }, [cellStaticCache, cellText, parentView, staticRichPaintKey]);
 
   if (cellText.length === 0) {
     return null;

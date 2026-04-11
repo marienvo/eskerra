@@ -18,12 +18,10 @@ import {
 } from '@codemirror/view';
 import {createRoot, type Root} from 'react-dom/client';
 
-import {
-  findEskerraTableDocBlocks,
-  looksLikeDelimitedTableLine,
-  type EskerraTableDocBlock,
-} from './eskerraTableV1DocBlocks';
+import {looksLikeDelimitedTableLine, type EskerraTableDocBlock} from './eskerraTableV1DocBlocks';
+import {eskerraTableDocBlocksField} from './eskerraTableDocBlocksField';
 import {EskerraTableShell} from './EskerraTableShell';
+import {eskerraTableShellDocSyncPlugin} from './eskerraTableShellDocSyncRegistry';
 import {
   clearTableSuppressionAt,
   closeTableShellEffect,
@@ -70,19 +68,6 @@ const suppressedTableLines = StateField.define<Set<number>>({
       }
     }
     return next;
-  },
-});
-
-/** Valid Eskerra v1 table blocks in document order; recomputed only on doc changes. */
-const eskerraTableDocBlocksField = StateField.define<EskerraTableDocBlock[]>({
-  create(state) {
-    return findEskerraTableDocBlocks(state.doc);
-  },
-  update(value, tr) {
-    if (tr.docChanged) {
-      return findEskerraTableDocBlocks(tr.state.doc);
-    }
-    return value;
   },
 });
 
@@ -272,7 +257,6 @@ class EskerraTableShellWidget extends WidgetType {
     return (
       other instanceof EskerraTableShellWidget
       && other.headerLineFrom === this.headerLineFrom
-      && other.baselineText === this.baselineText
     );
   }
 
@@ -489,6 +473,7 @@ export function eskerraTableV1Extension(): readonly Extension[] {
     eskerraTableDocBlocksField,
     tableShellOpenField,
     tableBuilt,
+    eskerraTableShellDocSyncPlugin,
     eskerraTableShellSelectionBridge,
     eskerraTableShellFocusCellPlugin,
   ];
