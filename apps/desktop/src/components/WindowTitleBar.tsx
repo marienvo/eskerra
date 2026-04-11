@@ -1,15 +1,21 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
-import logoEskerraUrl from '@eskerra/brand/logo-eskerra.svg?url';
+import {TabButton} from '../ds';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
+  vaultPaneVisible: boolean;
+  onToggleVault: () => void;
 };
 
-export function WindowTitleBar({tiling = 'none'}: WindowTitleBarProps) {
+export function WindowTitleBar({
+  tiling = 'none',
+  vaultPaneVisible,
+  onToggleVault,
+}: WindowTitleBarProps) {
   const tauri = isTauri();
 
   const onMinimize = () => {
@@ -28,14 +34,17 @@ export function WindowTitleBar({tiling = 'none'}: WindowTitleBarProps) {
 
   return (
     <header className="window-title-bar" data-window-tiling={tiling}>
-      <div className="window-title-bar-leading">
-        <img
-          className="window-title-bar-icon"
-          src={logoEskerraUrl}
-          alt=""
-          width={29}
-          height={29}
-          {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      <div
+        className="window-title-bar-leading"
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      >
+        <TabButton
+          active={vaultPaneVisible}
+          ariaPressed={vaultPaneVisible}
+          aria-label="Vault"
+          icon="list_alt"
+          tooltip="Vault"
+          onClick={onToggleVault}
         />
       </div>
       <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />

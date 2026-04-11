@@ -1,22 +1,11 @@
-import {TabButton} from '../ds';
-
-type RailNavProps = {
-  vaultPaneVisible: boolean;
-  onToggleVault: () => void;
-};
-
-export function RailNav({vaultPaneVisible, onToggleVault}: RailNavProps) {
+/**
+ * Fixed-width left gutter matching `.rail` geometry so `main-shell-stage` aligns with
+ * `WindowTitleBar` / `AppStatusBar` leading columns. No interactive controls.
+ */
+export function RailNav() {
   return (
-    <nav className="rail" aria-label="Main">
-      <TabButton
-        active={vaultPaneVisible}
-        ariaPressed={vaultPaneVisible}
-        aria-label="Vault"
-        icon="edit_note"
-        tooltip="Vault"
-        onClick={onToggleVault}
-      />
-      <div className="rail-spacer" aria-hidden />
-    </nav>
+    <div className="rail" aria-hidden>
+      <div className="rail-spacer" />
+    </div>
   );
 }

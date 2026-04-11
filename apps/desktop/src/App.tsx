@@ -866,13 +866,14 @@ export default function App() {
       <div ref={appRootRef} className={appRootClassName}>
         <AppChromeBackground />
         <div className="app-root-chrome">
-          <WindowTitleBar tiling={tiling} />
+          <WindowTitleBar
+            tiling={tiling}
+            vaultPaneVisible={vaultPaneVisible}
+            onToggleVault={() => setVaultPaneVisible(v => !v)}
+          />
 
           <div className="app-body">
-            <RailNav
-              vaultPaneVisible={vaultPaneVisible}
-              onToggleVault={() => setVaultPaneVisible(v => !v)}
-            />
+            <RailNav />
             <div className="main-shell-stage panel-group fill">
               <DesktopHorizontalSplitEnd
                 endVisible={notificationsPanelVisible}
