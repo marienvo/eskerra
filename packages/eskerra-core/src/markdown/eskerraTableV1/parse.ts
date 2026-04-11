@@ -20,21 +20,22 @@ function parseDelimitedRow(line: string): ParsedRow | null {
 }
 
 /**
- * GFM-style separator cell: optional colons + a run of at least three hyphens.
- * Matches common exports that pad with extra hyphens (e.g. `------`, `-----------`).
+ * Pipe-table separator cell: optional colons + a run of hyphens.
+ * Uses the same minimum as markdown-it's GFM table rule (`^:?-+:?$`): **one or more** hyphens
+ * (so `--` and `---` both work). Canonical serialization still emits GFM-style `---` / `:---` tokens.
  */
 function parseAlignmentCell(cell: string): EskerraTableAlignment | null {
   const trimmed = cell.trim();
-  if (/^:-{3,}:$/.test(trimmed)) {
+  if (/^:-{1,}:$/.test(trimmed)) {
     return 'center';
   }
-  if (/^:-{3,}$/.test(trimmed)) {
+  if (/^:-{1,}$/.test(trimmed)) {
     return 'left';
   }
-  if (/^-{3,}:$/.test(trimmed)) {
+  if (/^-{1,}:$/.test(trimmed)) {
     return 'right';
   }
-  if (/^-{3,}$/.test(trimmed)) {
+  if (/^-{1,}$/.test(trimmed)) {
     return undefined;
   }
   return null;

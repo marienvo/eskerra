@@ -35,11 +35,51 @@ describe('parseEskerraTableV1FromLines', () => {
     ).toEqual({ok: false, reason: 'unsupported_escaped_pipe'});
   });
 
+  it('accepts separator cells with only one or two hyphens (markdown-it / export interop)', () => {
+    expect(
+      parseEskerraTableV1FromLines([
+        '| Name | Score |',
+        '| -- | - |',
+        '| Alice | 42 |',
+      ]),
+    ).toEqual({
+      ok: true,
+      lineCount: 3,
+      model: {
+        cells: [
+          ['Name', 'Score'],
+          ['Alice', '42'],
+        ],
+        align: [undefined, undefined],
+      },
+    });
+  });
+
+  it('accepts wide tables where some separator cells use two hyphens', () => {
+    expect(
+      parseEskerraTableV1FromLines([
+        '| | PROD | RC | QA |',
+        '| --- | ---- | -- | -- |',
+        '| row | a | b | c |',
+      ]),
+    ).toEqual({
+      ok: true,
+      lineCount: 3,
+      model: {
+        cells: [
+          ['', 'PROD', 'RC', 'QA'],
+          ['row', 'a', 'b', 'c'],
+        ],
+        align: [undefined, undefined, undefined, undefined],
+      },
+    });
+  });
+
   it('fails closed for invalid separator row syntax', () => {
     expect(
       parseEskerraTableV1FromLines([
         '| Name | Score |',
-        '| -- | --- |',
+        '| --- | not-a-sep |',
       ]),
     ).toEqual({ok: false, reason: 'invalid_separator'});
   });
