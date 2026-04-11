@@ -992,7 +992,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     dispatchEskerraTableNestedCellEditors(view, {effects: relEffect});
   }, [relativeMarkdownLinkHrefIsResolved]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const compartment = readOnlyCompartmentRef.current;
     const view = viewRef.current;
     if (!compartment || !view) {

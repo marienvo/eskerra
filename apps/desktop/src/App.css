@@ -3383,27 +3383,79 @@ button.primary.destructive {
   position: relative;
   width: 100%;
   min-height: 6rem;
+  /*
+   * Single grid cell stacks CM host + readonly overlay so toggling edit mode does not swap
+   * `position: relative` ↔ `absolute` between the CM host and the warm underlay.
+   */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  justify-items: stretch;
+  /* Own stacking context so CM vs readonly layer changes stay contained within the cell. */
+  isolation: isolate;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack
+  > .today-hub-canvas__cm-host,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack
+  > .today-hub-canvas__cell-readonly {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
 }
 
 /*
- * Warm-only: clip CodeMirror (`cm-scroller` overflow visible). Underlay text is hidden with
- * `visibility:hidden` (opaque fills alone fail on even hub rows with mixed row/cell backgrounds).
+ * Hub cells in the warm LRU (including while actively editing a warm cell): clip the stack so
+ * `cm-scroller` overflow does not spill; removing this on edit caused a one-frame clip jump.
+ * Underlay text is hidden with `visibility:hidden` (opaque fills alone fail on striped hub rows).
  */
 [data-app-surface='capture'] .today-hub-canvas__cell-editor-stack--warm {
   overflow: hidden;
 }
 
 /*
- * Warm hub cell: read-only CodeMirror sits under the static preview (same React subtree as active
- * so warm→active does not remount the editor). Underlay is invisible but still laid out (prewarm).
+ * Warm hub cell: read-only CodeMirror sits under the static preview in the same `.cm-host` sibling
+ * order as edit mode (see `TodayHubCanvasNonEmptyCell`) so warm→active does not remount the editor.
+ * Underlay is invisible but still laid out (prewarm).
  */
 [data-app-surface='capture'] .today-hub-canvas__cell-warm-underlay {
-  position: absolute;
-  inset: 0;
+  position: relative;
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
   visibility: hidden;
+}
+
+/* Active edit: same `.cm-host` node as warm underlay; visible and above the static hold layer. */
+[data-app-surface='capture'] .today-hub-canvas__cm-host--editing {
+  position: relative;
+  visibility: visible;
+  pointer-events: auto;
+  overflow: visible;
+  z-index: 1;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cm-host--editing.today-hub-canvas__cm-host--surface-ready {
+  z-index: 2;
+}
+
+/* Cold-open edit: static preview stays on top until CM has had two frames to paint. */
+[data-app-surface='capture'] .today-hub-canvas__cell-readonly--editing-hold {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__cell-readonly--editing-buried {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Cold hub cell: placeholder slot so warm does not remount the readonly static preview subtree. */

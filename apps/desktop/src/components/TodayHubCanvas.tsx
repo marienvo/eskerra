@@ -9,6 +9,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type MutableRefObject,
+  type ReactElement,
+  type ReactNode,
   type RefObject,
 } from 'react';
 import {
@@ -48,30 +50,11 @@ import type {
 } from '../editor/noteEditor/vaultLinkActivatePayload';
 import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
 
-/** Cap simultaneous warm (read-only underlay) hub cells. Conservative first default. */
-const MAX_HUB_WARM_CELLS = 2;
-
-/** First paint: only this many week rows mount; the rest expand via idle/rAF (see progressive reveal). */
-const INITIAL_VISIBLE_TODAY_HUB_ROWS = 4;
-
-/** How many additional week rows to mount per idle slice after first paint. */
-const TODAY_HUB_ROW_REVEAL_BATCH = 8;
-
-function scheduleHubRowRevealStep(cb: () => void): number {
-  const ric = window.requestIdleCallback;
-  if (typeof ric === 'function') {
-    return ric(cb, {timeout: 120});
-  }
-  return window.requestAnimationFrame(cb);
-}
-
-function cancelHubRowRevealStep(handle: number): void {
-  if (typeof window.cancelIdleCallback === 'function') {
-    window.cancelIdleCallback(handle);
-  } else {
-    window.cancelAnimationFrame(handle);
-  }
-}
+/**
+ * Cap simultaneous warm (read-only underlay) hub cells. Too few evictions churn CM mounts (flicker).
+ * Two columns × several weeks quickly exceeds a small cap; logs showed ~7 distinct cells touched while max was 4.
+ */
+const MAX_HUB_WARM_CELLS = 8;
 
 type TodayHubCanvasProps = {
   vaultRoot: string;
@@ -119,6 +102,109 @@ function mergedMarkdownForTodayHubRow(
   return mergeTodayRowColumns(splitTodayRowIntoColumns(raw, columnCount));
 }
 
+type TodayHubReadonlyCellInteractiveProps = {
+  role: 'button';
+  tabIndex: 0;
+  'aria-label': string | undefined;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+  onKeyDown: (e: ReactKeyboardEvent) => void;
+  onClick: (e: ReactMouseEvent) => void;
+};
+
+/**
+ * Single stable DOM for hub cells: CodeMirror host + static overlay. Avoids remounting the editor
+ * when toggling edit mode; keeps static preview on top until cold-open CM is ready (no white flash).
+ */
+function TodayHubCanvasNonEmptyCell({
+  stackClassName,
+  editing,
+  isWarm,
+  warmOrActive,
+  canPrewarm,
+  readonlyInteractiveProps,
+  staticPreview,
+  cmChild,
+}: {
+  stackClassName: string;
+  editing: boolean;
+  isWarm: boolean;
+  warmOrActive: boolean;
+  canPrewarm: boolean;
+  readonlyInteractiveProps: TodayHubReadonlyCellInteractiveProps;
+  staticPreview: ReactNode;
+  cmChild: ReactNode;
+}): ReactElement {
+  const [coldSurfaceReady, setColdSurfaceReady] = useState(false);
+
+  /** Warm cells already mount a laid-out CM under the static overlay; skip hold→buried on first edit frame. */
+  const warmSurfaceInstant = editing && isWarm;
+  const cmSurfaceReady = warmSurfaceInstant || (editing && coldSurfaceReady);
+
+  useLayoutEffect(() => {
+    if (!editing) {
+      queueMicrotask(() => {
+        setColdSurfaceReady(false);
+      });
+      return;
+    }
+    if (isWarm) {
+      // Surface readiness is derived during render; do not schedule cold rAF.
+      return;
+    }
+    queueMicrotask(() => {
+      setColdSurfaceReady(false);
+    });
+    let cancelled = false;
+    let raf2 = 0;
+    const raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        if (!cancelled) {
+          setColdSurfaceReady(true);
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+    };
+  }, [editing, isWarm, canPrewarm]);
+
+  const cmHostClass =
+    editing
+      ? `today-hub-canvas__cm-host today-hub-canvas__cm-host--editing${
+          cmSurfaceReady ? ' today-hub-canvas__cm-host--surface-ready' : ''
+        }`
+      : warmOrActive
+        ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
+        : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant';
+
+  const readonlyClassNames = [
+    'today-hub-canvas__cell-readonly',
+    !editing && isWarm ? 'today-hub-canvas__cell-warm-overlay' : '',
+    editing &&
+      (cmSurfaceReady
+        ? 'today-hub-canvas__cell-readonly--editing-buried'
+        : 'today-hub-canvas__cell-readonly--editing-hold'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return (
+    <div className={stackClassName}>
+      <div className={cmHostClass}>{cmChild}</div>
+      <div
+        {...(editing ? {} : readonlyInteractiveProps)}
+        className={readonlyClassNames}
+        aria-hidden={editing ? true : undefined}
+      >
+        {staticPreview}
+      </div>
+    </div>
+  );
+}
+
 export function TodayHubCanvas({
   vaultRoot,
   todayNoteUri,
@@ -153,51 +239,7 @@ export function TodayHubCanvas({
     [weekStarts, hubDirectoryUri],
   );
 
-  const [visibleRowCount, setVisibleRowCount] = useState(
-    INITIAL_VISIBLE_TODAY_HUB_ROWS,
-  );
-  const visibleRowCountRef = useRef(visibleRowCount);
-  useLayoutEffect(() => {
-    visibleRowCountRef.current = visibleRowCount;
-  }, [visibleRowCount]);
-
-  const visibleWeekStarts = useMemo(
-    () => weekStarts.slice(0, Math.min(visibleRowCount, weekStarts.length)),
-    [weekStarts, visibleRowCount],
-  );
-
-  useEffect(() => {
-    const total = weekStarts.length;
-    let cancelled = false;
-    let idleHandle = 0;
-
-    const step = (): void => {
-      if (cancelled) {
-        return;
-      }
-      const c = visibleRowCountRef.current;
-      if (c >= total) {
-        return;
-      }
-      const next = Math.min(c + TODAY_HUB_ROW_REVEAL_BATCH, total);
-      visibleRowCountRef.current = next;
-      setVisibleRowCount(next);
-      if (next < total) {
-        idleHandle = scheduleHubRowRevealStep(step);
-      }
-    };
-
-    if (visibleRowCountRef.current < total) {
-      idleHandle = scheduleHubRowRevealStep(step);
-    }
-
-    return () => {
-      cancelled = true;
-      if (idleHandle !== 0) {
-        cancelHubRowRevealStep(idleHandle);
-      }
-    };
-  }, [weekStarts.length]);
+  const visibleWeekStarts = weekStarts;
 
   const noteRefs = useMemo(
     () => vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
@@ -349,9 +391,20 @@ export function TodayHubCanvas({
           return next;
         });
         const wk = hubCellWarmKey(key, col);
-        setWarmOrder(prev =>
-          touchWarmLru(prev, wk, MAX_HUB_WARM_CELLS, wk),
-        );
+        const prevActive = activeRef.current;
+        setWarmOrder(prev => {
+          let next = touchWarmLru(prev, wk, MAX_HUB_WARM_CELLS, wk);
+          if (prevActive) {
+            const oldWk = hubCellWarmKey(
+              normUri(prevActive.uri),
+              prevActive.col,
+            );
+            if (oldWk !== wk) {
+              next = touchWarmLru(next, oldWk, MAX_HUB_WARM_CELLS, wk);
+            }
+          }
+          return next;
+        });
         setActive({uri: key, col});
         if (todayHubPerfEnabled()) {
           todayHubPerfLog('openCell_finishOpen', {
@@ -757,6 +810,7 @@ export function TodayHubCanvas({
                   );
 
                   const warmOrActive = editing || isWarm;
+                  const showCm = warmOrActive || editing;
 
                   return (
                     <div
@@ -775,41 +829,20 @@ export function TodayHubCanvas({
                           {staticPreview}
                         </div>
                       ) : (
-                        <div
-                          className={
-                            isWarm && !editing
+                        <TodayHubCanvasNonEmptyCell
+                          stackClassName={
+                            isWarm
                               ? 'today-hub-canvas__cell-editor-stack today-hub-canvas__cell-editor-stack--warm'
                               : 'today-hub-canvas__cell-editor-stack'
                           }
-                        >
-                          {!editing ? (
-                            <>
-                              <div
-                                className={
-                                  warmOrActive
-                                    ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
-                                    : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant'
-                                }
-                              >
-                                {warmOrActive ? hubCellEditor : null}
-                              </div>
-                              <div
-                                {...readonlyInteractiveProps}
-                                className={
-                                  isWarm
-                                    ? 'today-hub-canvas__cell-readonly today-hub-canvas__cell-warm-overlay'
-                                    : 'today-hub-canvas__cell-readonly'
-                                }
-                              >
-                                {staticPreview}
-                              </div>
-                            </>
-                          ) : (
-                            <div className="today-hub-canvas__cm-host">
-                              {hubCellEditor}
-                            </div>
-                          )}
-                        </div>
+                          editing={editing}
+                          isWarm={isWarm}
+                          warmOrActive={warmOrActive}
+                          canPrewarm={canPrewarm}
+                          readonlyInteractiveProps={readonlyInteractiveProps}
+                          staticPreview={staticPreview}
+                          cmChild={showCm ? hubCellEditor : null}
+                        />
                       )}
                     </div>
                   );
