@@ -51,12 +51,19 @@ describe('isVaultSearchEventCurrent', () => {
 describe('useVaultContentSearch', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+      window.setTimeout(() => cb(0), 0),
+    );
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => {
+      window.clearTimeout(handle);
+    });
     vaultSearchStartMock.mockClear();
     vaultSearchCancelMock.mockClear();
     tauriCtx.listen.mockClear();
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -64,6 +71,13 @@ describe('useVaultContentSearch', () => {
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
+    });
+  }
+
+  /** Drain `requestAnimationFrame` flushes from `useVaultContentSearch` (stubbed as `setTimeout(0)`). */
+  async function flushSearchRaf() {
+    await act(async () => {
+      vi.advanceTimersByTime(0);
     });
   }
 
@@ -177,6 +191,7 @@ describe('useVaultContentSearch', () => {
         progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
       });
     });
+    await flushSearchRaf();
     expect(result.current.hits).toEqual([hit]);
     expect(result.current.scanDone).toBe(false);
 
@@ -227,6 +242,7 @@ describe('useVaultContentSearch', () => {
         progress: {scannedFiles: 5, totalHits: 1, skippedLargeFiles: 0},
       });
     });
+    await flushSearchRaf();
     expect(result.current.hits).toHaveLength(1);
 
     await act(async () => {
@@ -308,5 +324,52 @@ describe('useVaultContentSearch', () => {
 
     expect(vaultSearchStartMock).toHaveBeenCalledTimes(1);
     expect(vaultSearchStartMock.mock.calls[0]![0].query).toBe('ab');
+  });
+
+  it('coalesces rapid vault-search:update events into one rAF flush', async () => {
+    const {result} = renderHook(() =>
+      useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
+    );
+    await flushListeners();
+
+    await act(async () => {
+      result.current.setQuery('q');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const id = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
+    expect(result.current.hits).toEqual([]);
+
+    const h1 = {uri: 'file:///a.md', lineNumber: 1, snippet: '1'};
+    const h2 = {uri: 'file:///b.md', lineNumber: 1, snippet: '2'};
+    const h3 = {uri: 'file:///c.md', lineNumber: 1, snippet: '3'};
+
+    await act(async () => {
+      tauriCtx.state.emitUpdate({
+        searchId: id,
+        hits: [h1],
+        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+      });
+      tauriCtx.state.emitUpdate({
+        searchId: id,
+        hits: [h2],
+        progress: {scannedFiles: 2, totalHits: 2, skippedLargeFiles: 0},
+      });
+      tauriCtx.state.emitUpdate({
+        searchId: id,
+        hits: [h3],
+        progress: {scannedFiles: 3, totalHits: 3, skippedLargeFiles: 0},
+      });
+    });
+    expect(result.current.hits).toEqual([]);
+
+    await flushSearchRaf();
+    expect(result.current.hits).toEqual([h1, h2, h3]);
+    expect(result.current.progress?.scannedFiles).toBe(3);
   });
 });

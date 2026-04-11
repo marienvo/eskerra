@@ -6,6 +6,9 @@ import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
 import {compareVaultSearchHits} from '../lib/vaultSearchTypes';
 
+/** Max hits rendered as rows; full list is still sorted for ranking before slicing. */
+const VAULT_SEARCH_UI_MAX_VISIBLE_HITS = 100;
+
 export type VaultSearchPaletteProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,6 +52,11 @@ export function VaultSearchPalette({
     () => (hits.length <= 1 ? hits : [...hits].sort(compareVaultSearchHits)),
     [hits],
   );
+  const displayedHits =
+    sortedHits.length <= VAULT_SEARCH_UI_MAX_VISIBLE_HITS
+      ? sortedHits
+      : sortedHits.slice(0, VAULT_SEARCH_UI_MAX_VISIBLE_HITS);
+  const hiddenHitCount = sortedHits.length - displayedHits.length;
   const progressCounts =
     progress != null
       ? `${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
@@ -109,7 +117,7 @@ export function VaultSearchPalette({
                     ? 'No matches.'
                     : null}
               </CommandEmpty>
-              {sortedHits.map((h, i) => {
+              {displayedHits.map((h, i) => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, h.uri);
                 return (
                   <CommandItem
@@ -133,6 +141,11 @@ export function VaultSearchPalette({
                 );
               })}
             </CommandList>
+            {hiddenHitCount > 0 ? (
+              <div className="vault-search-overflow" role="status">
+                Showing {VAULT_SEARCH_UI_MAX_VISIBLE_HITS} of {sortedHits.length} matches
+              </div>
+            ) : null}
           </Command>
         </Dialog.Content>
       </Dialog.Portal>

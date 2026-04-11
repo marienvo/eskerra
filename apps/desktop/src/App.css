@@ -1823,6 +1823,14 @@ html.tauri-main-chrome .quick-open-overlay {
   line-height: 1.35;
 }
 
+.vault-search-overflow {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  padding: 0.35rem 0.5rem 0.5rem;
+  line-height: 1.35;
+  border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08));
+}
+
 .vault-search-hit__line {
   font-weight: 400;
   color: var(--color-muted);

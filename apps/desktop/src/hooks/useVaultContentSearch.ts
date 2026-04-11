@@ -50,6 +50,23 @@ export function useVaultContentSearch({
   const queryRef = useRef(query);
   /** Next `vault-search:update` for this `searchId` replaces `hits`; later updates append. */
   const replaceNextHitsRef = useRef(true);
+  /** Full hit list accumulated from backend updates; flushed to React state via `requestAnimationFrame`. */
+  const pendingFlushHitsRef = useRef<VaultSearchHit[]>([]);
+  const pendingProgressRef = useRef<VaultSearchProgress | null>(null);
+  const hitsFlushRafRef = useRef<number | null>(null);
+
+  const cancelHitsFlushRaf = useCallback(() => {
+    if (hitsFlushRafRef.current != null) {
+      window.cancelAnimationFrame(hitsFlushRafRef.current);
+      hitsFlushRafRef.current = null;
+    }
+  }, []);
+
+  const clearPendingSearchFlush = useCallback(() => {
+    cancelHitsFlushRaf();
+    pendingFlushHitsRef.current = [];
+    pendingProgressRef.current = null;
+  }, [cancelHitsFlushRaf]);
 
   useEffect(() => {
     queryRef.current = query;
@@ -92,11 +109,12 @@ export function useVaultContentSearch({
   const resetLocal = useCallback(() => {
     searchIdRef.current = null;
     replaceNextHitsRef.current = true;
+    clearPendingSearchFlush();
     setHits([]);
     setProgress(null);
     setScanDone(true);
     setAwaitingDebouncedRun(false);
-  }, []);
+  }, [clearPendingSearchFlush]);
 
   useEffect(() => {
     if (!open) {
@@ -114,6 +132,25 @@ export function useVaultContentSearch({
     let unlistenUpdate: (() => void) | undefined;
     let unlistenDone: (() => void) | undefined;
     let cancelled = false;
+
+    const scheduleHitsFlush = () => {
+      if (hitsFlushRafRef.current != null) {
+        return;
+      }
+      hitsFlushRafRef.current = window.requestAnimationFrame(() => {
+        hitsFlushRafRef.current = null;
+        if (searchIdRef.current == null) {
+          return;
+        }
+        setHits([...pendingFlushHitsRef.current]);
+        const prog = pendingProgressRef.current;
+        if (prog != null) {
+          setProgress(prog);
+        }
+        setScanDone(false);
+      });
+    };
+
     void (async () => {
       unlistenUpdate = await listen<VaultSearchUpdatePayload>(
         'vault-search:update',
@@ -124,12 +161,12 @@ export function useVaultContentSearch({
           }
           if (replaceNextHitsRef.current) {
             replaceNextHitsRef.current = false;
-            setHits(p.hits);
+            pendingFlushHitsRef.current = [...p.hits];
           } else {
-            setHits(prev => [...prev, ...p.hits]);
+            pendingFlushHitsRef.current = [...pendingFlushHitsRef.current, ...p.hits];
           }
-          setProgress(p.progress);
-          setScanDone(false);
+          pendingProgressRef.current = p.progress;
+          scheduleHitsFlush();
         },
       );
       if (cancelled) {
@@ -141,16 +178,19 @@ export function useVaultContentSearch({
         if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
           return;
         }
+        cancelHitsFlushRaf();
+        setHits([...pendingFlushHitsRef.current]);
         setProgress(p.progress);
         setScanDone(true);
       });
     })();
     return () => {
       cancelled = true;
+      cancelHitsFlushRaf();
       unlistenUpdate?.();
       unlistenDone?.();
     };
-  }, [open, vaultRoot]);
+  }, [open, vaultRoot, cancelHitsFlushRaf]);
 
   useEffect(() => {
     if (!open || !vaultRoot) {
@@ -172,6 +212,7 @@ export function useVaultContentSearch({
 
     // Debouncing: drop in-flight run for event matching; keep visible hits until a new run starts.
     searchIdRef.current = null;
+    clearPendingSearchFlush();
     void vaultSearchCancel().catch(() => undefined);
     queueMicrotask(() => {
       setScanDone(true);
@@ -190,6 +231,7 @@ export function useVaultContentSearch({
       const id = crypto.randomUUID();
       searchIdRef.current = id;
       replaceNextHitsRef.current = true;
+      clearPendingSearchFlush();
       queueMicrotask(() => {
         setAwaitingDebouncedRun(false);
       });
@@ -211,7 +253,7 @@ export function useVaultContentSearch({
         debounceTimerRef.current = null;
       }
     };
-  }, [query, open, vaultRoot, debounceMs, resetLocal]);
+  }, [query, open, vaultRoot, debounceMs, resetLocal, clearPendingSearchFlush]);
 
   return {
     query,
