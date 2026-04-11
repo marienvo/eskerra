@@ -130,6 +130,8 @@ html {
   /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
   --panel-grid-gap: 8px;
   --panel-grid-padding: 5px;
+  /* Title bar / status bar leading icon column; main-shell-stage margin-inline-start matches this. */
+  --desktop-leading-track-width: calc(40px + 0.34rem + 0.2rem);
 
   color: var(--color-text);
   background: var(--color-app-chrome-backdrop);

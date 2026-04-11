@@ -176,7 +176,7 @@ a:focus:not(:focus-visible) {
   flex-shrink: 0;
   min-height: 40px;
   height: 40px;
-  /* inline-start matches .rail padding so the Vault tab aligns with the left gutter column. */
+  /* inline-start matches --desktop-leading-track-width so the Vault tab aligns with the main column. */
   padding: 0 0.3rem 0 0.34rem;
   box-sizing: border-box;
   border-bottom: none;
@@ -432,8 +432,8 @@ a:focus:not(:focus-visible) {
 .app-status-bar {
   flex-shrink: 0;
   display: grid;
-  /* Leading track matches .rail width so Episodes tab aligns with Vault. */
-  grid-template-columns: calc(40px + 0.34rem + 0.2rem) minmax(0, 1fr) auto;
+  /* Leading track matches --desktop-leading-track-width (Vault title bar / main-shell inset). */
+  grid-template-columns: var(--desktop-leading-track-width) minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 0.35rem;
   box-sizing: border-box;
@@ -771,30 +771,6 @@ a:focus:not(:focus-visible) {
   }
 }
 
-.rail {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.32rem;
-  box-sizing: border-box;
-  /* Fixed track: 40px tab + mirrored inline gutters (matches .rail--end). */
-  width: calc(40px + 0.34rem + 0.2rem);
-  min-width: calc(40px + 0.34rem + 0.2rem);
-  max-width: calc(40px + 0.34rem + 0.2rem);
-  /* Mirror .rail--end: window-edge gutter = 0.34rem (see inline padding). */
-  padding-block: 0.38rem 0.22rem;
-  padding-inline: 0.34rem 0.2rem;
-  background: transparent;
-}
-
-.rail-spacer {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-}
-
 .rail-tab {
   position: relative;
   display: inline-flex;
@@ -883,23 +859,6 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-icon-disabled);
 }
 
-/* Right rail: physical mirror of .rail (same tab geometry vs window edge). */
-.rail--end {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.32rem;
-  box-sizing: border-box;
-  width: calc(40px + 0.34rem + 0.2rem);
-  min-width: calc(40px + 0.34rem + 0.2rem);
-  max-width: calc(40px + 0.34rem + 0.2rem);
-  padding-block: 0.38rem 0.22rem;
-  padding-inline: 0.2rem 0.34rem;
-  background: transparent;
-}
-
 /* Main stage + notifications: outer chrome matches vault|editor (see .panel-group.fill). */
 .main-shell-stage.panel-group.fill {
   flex: 1;
@@ -907,7 +866,8 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Symmetric horizontal inset so left vs right rail-to-panel gutters mirror (overrides .panel-group.fill 0.75/1.0 split). */
+  /* Symmetric thin gutter vs app-body (same token as panel grid); no leading-track margin. */
+  margin-inline: 0;
   padding-inline: var(--panel-grid-padding);
 }
 
@@ -1222,6 +1182,8 @@ a:focus:not(:focus-visible) {
 /* Vault / Episodes / Notifications panel titles: match file tree typography, bold, slightly taller bar. */
 .pane-header--workspace-panel {
   padding-block: calc(0.32rem + 1px);
+  /* Match .pane-header--editor-toolbar horizontal inset so left panes align with the editor chrome. */
+  padding-inline: 0.38rem;
 }
 
 .pane-header--workspace-panel .pane-title {
@@ -1591,7 +1553,7 @@ body.editor-tab-strip--dragging {
   min-height: 0;
   overflow: auto;
   /* Horizontal inset here (not row margin) keeps virtual row geometry aligned with estimateSize */
-  padding: 6px;
+  padding: 4px;
   box-sizing: border-box;
 }
 

@@ -33,7 +33,6 @@ import {
 } from './components/AppStatusBar';
 import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
 import {NotificationsPanel} from './components/NotificationsPanel';
-import {RailNav} from './components/RailNav';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
@@ -921,7 +920,6 @@ export default function App() {
           />
 
           <div className="app-body">
-            <RailNav />
             <div className="main-shell-stage panel-group fill">
               <DesktopHorizontalSplitEnd
                 endVisible={notificationsPanelVisible}
