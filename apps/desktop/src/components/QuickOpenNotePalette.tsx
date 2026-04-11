@@ -1,14 +1,10 @@
 import type {VaultMarkdownRef} from '@eskerra/core';
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useRef, useState} from 'react';
 
-import {
-  filterVaultNotesForQuickOpen,
-  quickOpenVaultRelativePath,
-} from '../lib/quickOpenNoteFilter';
-
-const SEARCH_DEBOUNCE_MS = 300;
+import {useQuickOpenSearch} from '../hooks/useQuickOpenSearch';
+import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
 
 export type QuickOpenNotePaletteProps = {
   open: boolean;
@@ -26,16 +22,12 @@ export function QuickOpenNotePalette({
   onPickNote,
 }: QuickOpenNotePaletteProps) {
   const [search, setSearch] = useState('');
-  const [appliedQuery, setAppliedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const searchTrimmed = search.trim();
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
       if (!next) {
         setSearch('');
-        setAppliedQuery('');
       }
       onOpenChange(next);
     },
@@ -44,30 +36,13 @@ export function QuickOpenNotePalette({
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
-    if (!value.trim()) {
-      setAppliedQuery('');
-    }
   }, []);
 
-  useEffect(() => {
-    if (!searchTrimmed) {
-      return;
-    }
-    const t = window.setTimeout(() => {
-      setAppliedQuery(searchTrimmed);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(t);
-  }, [search, searchTrimmed]);
-
-  const filtered = useMemo(
-    () => filterVaultNotesForQuickOpen(appliedQuery, vaultRoot, refs),
-    [appliedQuery, refs, vaultRoot],
+  const {displayed, searchPending, searchTrimmed} = useQuickOpenSearch(
+    search,
+    vaultRoot,
+    refs,
   );
-
-  const searchPending =
-    searchTrimmed.length > 0 && appliedQuery !== searchTrimmed;
-
-  const displayed = searchPending ? [] : filtered;
 
   const handlePick = useCallback(
     (uri: string) => {
