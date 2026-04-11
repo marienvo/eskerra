@@ -6,7 +6,8 @@ import type {Compartment} from '@codemirror/state';
 import {openSearchPanel} from '@codemirror/search';
 import {EditorView} from '@codemirror/view';
 import {
-   useCallback,
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -36,9 +37,13 @@ import {relativeMdLinkHrefIsResolvedFacet} from '../markdownRelativeLinkCodemirr
 import {wikiLinkIsResolvedFacet} from '../wikiLinkCodemirror';
 import {
   EskerraCellStaticCacheContext,
+  useEskerraCellStaticCache,
   type EskerraCellStaticCache,
 } from './eskerraTableCellStaticCacheContext';
-import {buildCellStaticSegments, type CellStaticSegmentsResult} from './eskerraTableCellStaticSegments';
+import {
+  buildCellStaticSegments,
+  type CellStaticSegmentsResult,
+} from './eskerraTableCellStaticSegments';
 import {eskerraTableDocBlocksField} from './eskerraTableDocBlocksField';
 import {EskerraTableCellStaticRichText} from './eskerraTableCellStaticRichText';
 import {registerShellDocSyncListener} from './eskerraTableShellDocSyncRegistry';
@@ -198,28 +203,34 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     paintKeyForCacheRef.current = staticRichPaintKey;
   }
 
-  const cellStaticCache = useMemo<EskerraCellStaticCache>(
-    () => ({
-      getCellStatic(cellText: string) {
-        const m = cellStaticCacheRef.current;
-        const hit = m.get(cellText);
-        if (hit) {
-          return hit;
+  const cellStaticCache = useMemo<EskerraCellStaticCache>(() => {
+    const getCellStatic = (cellText: string): CellStaticSegmentsResult => {
+      const m = cellStaticCacheRef.current;
+      const hit = m.get(cellText);
+      if (hit) {
+        return hit;
+      }
+      const wikiTargetIsResolved = parentView.state.facet(wikiLinkIsResolvedFacet);
+      const relativeMarkdownLinkHrefIsResolved = parentView.state.facet(
+        relativeMdLinkHrefIsResolvedFacet,
+      );
+      const built = buildCellStaticSegments(cellText, {
+        wikiTargetIsResolved,
+        relativeMarkdownLinkHrefIsResolved,
+      });
+      m.set(cellText, built);
+      return built;
+    };
+    return {
+      getCellStatic,
+      prefetchStaticForHover(cellText: string) {
+        if (cellText.length === 0) {
+          return;
         }
-        const wikiTargetIsResolved = parentView.state.facet(wikiLinkIsResolvedFacet);
-        const relativeMarkdownLinkHrefIsResolved = parentView.state.facet(
-          relativeMdLinkHrefIsResolvedFacet,
-        );
-        const built = buildCellStaticSegments(cellText, {
-          wikiTargetIsResolved,
-          relativeMarkdownLinkHrefIsResolved,
-        });
-        m.set(cellText, built);
-        return built;
+        void getCellStatic(cellText);
       },
-    }),
-    [parentView],
-  );
+    };
+  }, [parentView]);
 
   const [cells, setCells] = useState<string[][]>(() =>
     initialCells.map(r => [...r]),
@@ -1352,7 +1363,7 @@ type ShellCellProps = {
   staticRichPaintKey: number;
 };
 
-function EskerraShellCell(props: ShellCellProps): ReactElement {
+function EskerraShellCellView(props: ShellCellProps): ReactElement {
   const {
     row,
     col,
@@ -1376,6 +1387,8 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     flushDraft,
     staticRichPaintKey,
   } = props;
+
+  const cellStaticCacheApi = useEskerraCellStaticCache();
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -1507,6 +1520,9 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
           className="cm-eskerra-table-shell__cell-static"
           tabIndex={-1}
           data-eskerra-cell={`${row},${col}`}
+          onPointerEnter={() => {
+            cellStaticCacheApi?.prefetchStaticForHover(cellText);
+          }}
           onPointerDown={e => {
             if (e.button !== 0 || e.shiftKey) {
               return;
@@ -1524,3 +1540,5 @@ function EskerraShellCell(props: ShellCellProps): ReactElement {
     </CellTag>
   );
 }
+
+const EskerraShellCell = memo(EskerraShellCellView);

@@ -1,6 +1,6 @@
 import {type EditorView} from '@codemirror/view';
 
-import {findEskerraTableDocBlockByLineFrom} from './eskerraTableV1DocBlocks';
+import {eskerraTableDocBlockAtHeaderLine} from './eskerraTableDocBlocksField';
 
 type FlushEntry = {
   /** Tracks the header line `from` position; updated by the grid each render. */
@@ -35,10 +35,12 @@ export function registerEskerraTableDraftFlusher(
 export function flushAllEskerraTableDrafts(view: EditorView): void {
   const remaining = new Set(flushEntries);
   while (remaining.size > 0) {
-    const doc = view.state.doc;
     let best: {sortFrom: number; entry: FlushEntry} | null = null;
     for (const entry of remaining) {
-      const block = findEskerraTableDocBlockByLineFrom(doc, entry.lineFromRef.current);
+      const block = eskerraTableDocBlockAtHeaderLine(
+        view.state,
+        entry.lineFromRef.current,
+      );
       if (!block) {
         remaining.delete(entry);
         continue;

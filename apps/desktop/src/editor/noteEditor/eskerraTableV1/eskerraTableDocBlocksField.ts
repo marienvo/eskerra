@@ -1,4 +1,4 @@
-import {StateField} from '@codemirror/state';
+import {StateField, type EditorState} from '@codemirror/state';
 
 import {
   findEskerraTableDocBlocks,
@@ -17,3 +17,14 @@ export const eskerraTableDocBlocksField = StateField.define<EskerraTableDocBlock
     return value;
   },
 });
+
+/** O(1) lookup when `eskerraTableDocBlocksField` is present on the state (vault table editor). */
+export function eskerraTableDocBlockAtHeaderLine(
+  state: EditorState,
+  headerLineFrom: number,
+): EskerraTableDocBlock | null {
+  return (
+    state.field(eskerraTableDocBlocksField).find(b => b.lineFrom === headerLineFrom)
+    ?? null
+  );
+}

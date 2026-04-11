@@ -2,6 +2,7 @@ import {EditorState} from '@codemirror/state';
 import {EditorView} from '@codemirror/view';
 import {describe, expect, it} from 'vitest';
 
+import {eskerraTableDocBlocksField} from './eskerraTableDocBlocksField';
 import {flushAllEskerraTableDrafts, registerEskerraTableDraftFlusher} from './eskerraTableDraftFlush';
 
 function makeTable(name: string, cols: number): string {
@@ -30,7 +31,7 @@ describe('flushAllEskerraTableDrafts', () => {
     const lineBottom = {current: lineBottomFrom};
     const parent = document.createElement('div');
     const view = new EditorView({
-      state: EditorState.create({doc: md}),
+      state: EditorState.create({doc: md, extensions: [eskerraTableDocBlocksField]}),
       parent,
     });
     const unregTop = registerEskerraTableDraftFlusher(lineTop, () => order.push('top'));
@@ -50,7 +51,7 @@ describe('flushAllEskerraTableDrafts', () => {
     const goodFrom = EditorState.create({doc: md}).doc.line(1).from;
     const parent = document.createElement('div');
     const view = new EditorView({
-      state: EditorState.create({doc: md}),
+      state: EditorState.create({doc: md, extensions: [eskerraTableDocBlocksField]}),
       parent,
     });
     const stale = {current: 99999};
