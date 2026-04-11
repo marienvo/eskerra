@@ -1725,6 +1725,10 @@ html.tauri-main-chrome .quick-open-overlay {
   background: var(--color-surface);
   box-shadow: 0 10px 36px rgba(0, 0, 0, 0.18);
   outline: none;
+  /* WebKitGTK: same shell palette tuning as vault search — avoids uneven/jagged small path type vs titles. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  font-synthesis: none;
 }
 
 .quick-open-a11y-title {
@@ -1801,14 +1805,15 @@ html.tauri-main-chrome .quick-open-overlay {
   font-size: 0.78rem;
   color: var(--color-muted);
   word-break: break-all;
+  /* Match title: UI sans, not system monospace; reinforces parent smoothing for ~12px paths. */
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  font-synthesis: none;
 }
 
 .vault-search-content {
   max-height: min(78vh, 32rem);
-  /* WebKitGTK: match other shell overlays; avoids crunchy subpixel LCD on small list type. */
-  -webkit-font-smoothing: antialiased;
-  text-rendering: auto;
-  font-synthesis: none;
 }
 
 .vault-search-status {

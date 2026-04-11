@@ -39,6 +39,10 @@ Implementation pointers: tree load **`apps/desktop/src/lib/vaultTreeLoadChildren
 - **Pipeline (Rust):** Single-thread **walker** → bounded **`VecDeque`** (capacity **`min(256, worker_count * 8)`**, **`worker_count`** default **5**, clamped **4..=8**) → **worker pool** → bounded **`sync_channel(256)`** to a single **aggregator** → events. **`vault_search_cancel`** and starting a new search preempt the previous run.
 - **Hit `uri`:** Absolute filesystem path string, same form as **`VaultDirEntryDto.uri`** from **`vault_list_dir`** (what **`openMarkdownInEditor`** / **`selectNote`** already expect).
 
+### Quick Open (Shift-Shift) and shared palette typography
+
+**`QuickOpenNotePalette`** and **`VaultSearchPalette`** share **`Dialog.Content`** styling via **`.quick-open-content`** and the **`cmdk`** row classes (**`.quick-open-command__item-title`** / **`__item-path`**). On **WebKitGTK**, path and snippet lines must use the same **UI sans + smoothing** rules as the shell container, or secondary text looks **jagged** next to titles. **Authoritative checklist:** **Command palettes** section in [`desktop-text-rendering.md`](desktop-text-rendering.md). **Do not** put smoothing rules only on **`.vault-search-content`** (that class is for **layout** overrides such as **`max-height`**, not an alternate typography stack).
+
 ### Vault tree vs. open note (manual reveal)
 
 The vault tree **does not** follow the editor: changing the active note (tabs, wiki navigation, etc.) **must not** auto-expand folders or move tree selection. Expansion and selection are **user-owned** until explicitly synced.
