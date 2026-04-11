@@ -1,7 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import {ChevronDownIcon, DashboardIcon} from '@radix-ui/react-icons';
 import {useLayoutEffect, useRef, useState} from 'react';
-
-import {MaterialIcon} from './MaterialIcon';
 
 export type TodayHubWorkspaceSelectItem = {
   todayNoteUri: string;
@@ -17,6 +16,8 @@ type TodayHubWorkspaceSelectProps = {
   /** Middle-click / aux click: open hub note in a new editor tab. */
   onOpenHubInNewTab: (todayNoteUri: string) => void;
 };
+
+const HUB_WORKSPACE_ICON_DIM = {width: 15, height: 15} as const;
 
 export function TodayHubWorkspaceSelect({
   items,
@@ -70,7 +71,9 @@ export function TodayHubWorkspaceSelect({
           }
         }}
       >
-        <MaterialIcon name="today" size={24} className="today-hub-workspace-select__icon" />
+        <span className="today-hub-workspace-select__icon" aria-hidden>
+          <DashboardIcon {...HUB_WORKSPACE_ICON_DIM} />
+        </span>
         <span className="today-hub-workspace-select__label">{activeLabel}</span>
       </button>
       <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
@@ -82,7 +85,7 @@ export function TodayHubWorkspaceSelect({
             aria-expanded={menuOpen}
             aria-haspopup="menu"
           >
-            <MaterialIcon name="expand_more" size={24} aria-hidden />
+            <ChevronDownIcon {...HUB_WORKSPACE_ICON_DIM} aria-hidden />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -113,7 +116,7 @@ export function TodayHubWorkspaceSelect({
                 }}
               >
                 <span className="today-hub-workspace-select__menu-item-inner">
-                  <MaterialIcon name="today" size={12} aria-hidden />
+                  <DashboardIcon {...HUB_WORKSPACE_ICON_DIM} aria-hidden />
                   <span>{it.label}</span>
                 </span>
               </DropdownMenu.Item>

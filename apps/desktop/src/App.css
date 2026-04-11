@@ -176,8 +176,8 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
-  min-height: 40px;
-  height: 40px;
+  min-height: var(--window-title-bar-height);
+  height: var(--window-title-bar-height);
   /* Match main-shell horizontal inset and panel-group block padding (vault/select ↔ window = gap under row ↔ panes). */
   padding: 0 var(--panel-grid-padding);
   box-sizing: border-box;
@@ -194,41 +194,75 @@ a:focus:not(:focus-visible) {
   gap: 0.28rem;
 }
 
+/* Title bar only: same vertical footprint as `.editor-open-tab-pill` (global `.rail-tab` stays 40×40). */
+.window-title-bar .rail-tab {
+  align-self: center;
+  width: var(--window-title-bar-chrome-height);
+  height: var(--window-title-bar-chrome-height);
+  min-width: var(--window-title-bar-chrome-height);
+  border-radius: 3px;
+}
+
+.window-title-bar .rail-tab svg {
+  display: block;
+}
+
 .today-hub-workspace-select {
   display: inline-flex;
   align-items: stretch;
+  align-self: center;
   flex-shrink: 1;
-  min-width: 16rem;
-  max-width: 26rem;
-  /* Match `.rail-tab` / Vault control height (40px title bar row). */
-  height: 40px;
-  min-height: 40px;
+  min-width: 8rem;
+  max-width: 13rem;
+  height: var(--window-title-bar-chrome-height);
+  min-height: var(--window-title-bar-chrome-height);
   box-sizing: border-box;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
   overflow: hidden;
-  border: none;
   background: transparent;
   box-shadow: none;
   outline: none;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.today-hub-workspace-select:hover {
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(255, 255, 255, 0.18));
 }
 
 .today-hub-workspace-select__main,
 .today-hub-workspace-select__chevron {
   margin: 0;
-  padding: 0 0.35rem;
+  padding: 0 0.22rem;
   border: none;
   background: transparent;
   color: var(--color-shell-icon-muted);
   cursor: default;
   display: inline-flex;
   align-items: center;
-  gap: 0.28rem;
+  gap: 0.22rem;
   min-height: 100%;
   font: inherit;
   box-shadow: none;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
-.today-hub-workspace-select__main:hover,
+/* Main hover: full shell wash + bright text/icon. Chevron hover: wash on chevron only; main gets bright foreground only (no wash on main). */
+.today-hub-workspace-select__main:hover {
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
+}
+
+.today-hub-workspace-select:has(.today-hub-workspace-select__chevron:hover)
+  .today-hub-workspace-select__main {
+  background: transparent;
+  color: var(--color-shell-icon);
+}
+
 .today-hub-workspace-select__chevron:hover {
   background: var(--color-shell-hover-bg);
   color: var(--color-shell-icon);
@@ -239,23 +273,47 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   justify-content: flex-start;
   border-inline-end: none;
+  border-radius: 3px 0 0 3px;
 }
 
 .today-hub-workspace-select__chevron {
   flex-shrink: 0;
-  width: 2rem;
-  min-width: 2rem;
-  max-width: 2rem;
+  width: 1.35rem;
+  min-width: 1.35rem;
+  max-width: 1.35rem;
   padding-inline: 0;
   justify-content: center;
+  border-radius: 0 3px 3px 0;
+}
+
+.today-hub-workspace-select__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+  color: inherit;
+}
+
+.today-hub-workspace-select__icon svg {
+  display: block;
+}
+
+.today-hub-workspace-select__chevron svg {
+  display: block;
 }
 
 .today-hub-workspace-select__label {
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-size: var(--file-tree-node-font-size);
+  font-weight: var(--file-tree-node-font-weight);
+  line-height: normal;
+  font-family: var(--file-tree-node-font-family);
+  font-synthesis: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: relative;
+  top: -1px;
 }
 
 .today-hub-workspace-select__menu-item-inner {
@@ -574,15 +632,15 @@ a:focus:not(:focus-visible) {
   justify-self: end;
 }
 
-.app-status-bar-settings {
+/* Status bar leading/trailing compact icon tiles (Episodes, Settings); size from `--app-shell-icon-tile-size`. */
+.app-status-bar-icon-tile {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  /* Compact 12px icon; smaller hit target than rail tabs */
-  width: 1.65rem;
-  height: 1.65rem;
-  min-width: 1.65rem;
+  width: var(--app-shell-icon-tile-size);
+  height: var(--app-shell-icon-tile-size);
+  min-width: var(--app-shell-icon-tile-size);
   margin: 0;
   padding: 0;
   border-radius: 6px;
@@ -590,11 +648,11 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.app-status-bar-settings:hover:not(:disabled) {
+.app-status-bar-icon-tile:hover:not(:disabled) {
   color: var(--color-shell-icon);
 }
 
-.app-status-bar-settings.icon-btn-ghost:hover:not(:disabled) {
+.app-status-bar-icon-tile.icon-btn-ghost:hover:not(:disabled) {
   background: var(--color-shell-hover-bg);
 }
 
@@ -812,7 +870,8 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-.rail-tab.active .material-icons {
+.rail-tab.active .material-icons,
+.rail-tab.active svg {
   position: relative;
   z-index: 1;
   color: #ffffff;
@@ -828,7 +887,8 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-.rail-tab.active:disabled .material-icons {
+.rail-tab.active:disabled .material-icons,
+.rail-tab.active:disabled svg {
   mix-blend-mode: normal;
 }
 
@@ -1382,6 +1442,9 @@ body.editor-tab-strip--dragging {
   white-space: nowrap;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Optical alignment with 15px Radix leading icons (label sat ~1px low). */
+  position: relative;
+  top: -1px;
 }
 
 .editor-open-tab-pill__close {

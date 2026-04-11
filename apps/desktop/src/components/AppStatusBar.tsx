@@ -1,6 +1,5 @@
 import {useLayoutEffect, useRef, useState} from 'react';
 
-import {TabButton} from '../ds';
 import type {AppStatusBarCenter} from '../lib/resolveAppStatusBarCenter';
 
 import {MaterialIcon} from './MaterialIcon';
@@ -140,14 +139,17 @@ export function AppStatusBar({
   return (
     <footer className="app-status-bar">
       <div className="app-status-bar-leading">
-        <TabButton
-          active={episodesPaneVisible}
-          ariaPressed={episodesPaneVisible}
+        <button
+          type="button"
+          className="app-status-bar-icon-tile app-tooltip-trigger icon-btn-ghost"
           aria-label="Episodes pane"
-          icon="radio"
-          tooltip="Episodes"
+          aria-pressed={episodesPaneVisible}
+          data-tooltip="Episodes"
+          data-tooltip-placement="inline-end"
           onClick={onToggleEpisodes}
-        />
+        >
+          <MaterialIcon name="radio" size={12} aria-hidden />
+        </button>
       </div>
       <div className="app-status-bar-center-stack">
         {playbackTransport ? <PlaybackTransport {...playbackTransport} /> : null}
@@ -159,7 +161,7 @@ export function AppStatusBar({
       <div className="app-status-bar-trailing">
         <button
           type="button"
-          className="app-status-bar-settings app-tooltip-trigger icon-btn-ghost"
+          className="app-status-bar-icon-tile app-tooltip-trigger icon-btn-ghost"
           aria-label="Settings"
           data-tooltip="Settings"
           data-tooltip-placement="inline-start"

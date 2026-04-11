@@ -1,13 +1,14 @@
+import {ListBulletIcon} from '@radix-ui/react-icons';
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
-
-import {TabButton} from '../ds';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 import {
   TodayHubWorkspaceSelect,
   type TodayHubWorkspaceSelectItem,
 } from './TodayHubWorkspaceSelect';
+
+const VAULT_RAIL_ICON_DIM = {width: 15, height: 15} as const;
 
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
@@ -54,14 +55,23 @@ export function WindowTitleBar({
         className="window-title-bar-leading"
         {...(tauri ? {'data-tauri-drag-region': true} : {})}
       >
-        <TabButton
-          active={vaultPaneVisible}
-          ariaPressed={vaultPaneVisible}
+        <button
+          type="button"
+          className={[
+            'rail-tab',
+            'app-tooltip-trigger',
+            vaultPaneVisible ? 'active' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           aria-label="Vault"
-          icon="list_alt"
-          tooltip="Vault"
+          aria-pressed={vaultPaneVisible}
+          data-tooltip="Vault"
+          data-tooltip-placement="inline-end"
           onClick={onToggleVault}
-        />
+        >
+          <ListBulletIcon {...VAULT_RAIL_ICON_DIM} aria-hidden />
+        </button>
         {todayHubSelect != null && todayHubSelect.items.length > 0 ? (
           <TodayHubWorkspaceSelect
             items={todayHubSelect.items}

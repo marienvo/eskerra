@@ -130,8 +130,14 @@ html {
   /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
   --panel-grid-gap: 8px;
   --panel-grid-padding: 5px;
-  /* Title bar / status bar leading icon column; main-shell-stage margin-inline-start matches this. */
-  --desktop-leading-track-width: calc(40px + 0.34rem + 0.2rem);
+  /* Title bar row height (fits 29px window controls with small vertical margin). */
+  --window-title-bar-height: 32px;
+  /* Vault tile + Today hub workspace strip: match editor tab pill vertical chrome (~15px icon + padding + border). */
+  --window-title-bar-chrome-height: 22px;
+  /* Status bar icon tiles (Settings / Episodes). */
+  --app-shell-icon-tile-size: 1.65rem;
+  /* Status bar leading column: align Episodes under title bar Vault tile + gutter. */
+  --desktop-leading-track-width: calc(var(--window-title-bar-chrome-height) + 0.34rem + 0.2rem);
 
   color: var(--color-text);
   background: var(--color-app-chrome-backdrop);
