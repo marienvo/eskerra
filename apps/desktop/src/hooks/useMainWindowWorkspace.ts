@@ -15,6 +15,7 @@ import {
   buildInboxMarkdownFromCompose,
   collectVaultMarkdownRefs,
   ensureDeviceInstanceId,
+  getGeneralDirectoryUri,
   getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
   normalizeVaultBaseUri,
@@ -487,6 +488,7 @@ export function useMainWindowWorkspace(options: {
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
+  const showTodayHubCanvasRef = useRef(false);
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -535,6 +537,7 @@ export function useMainWindowWorkspace(options: {
   vaultRootRef.current = vaultRoot;
   selectedUriRef.current = selectedUri;
   composingNewEntryRef.current = composingNewEntry;
+  showTodayHubCanvasRef.current = showTodayHubCanvas;
   editorBodyRef.current = editorBody;
   inboxContentByUriRef.current = inboxContentByUri;
   backlinksActiveBodyRef.current = backlinksActiveBody;
@@ -2746,12 +2749,17 @@ export function useMainWindowWorkspace(options: {
       try {
         const wikiParent =
           todayHubWikiNavParentRef.current ?? selectedUriRef.current;
+        const todayHubNewNoteParent =
+          showTodayHubCanvasRef.current && !composingNewEntryRef.current
+            ? getGeneralDirectoryUri(normalizeVaultBaseUri(vaultRoot))
+            : null;
         const result = await openOrCreateInboxWikiLinkTarget({
           inner,
           notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
           vaultRoot,
           fs,
           activeMarkdownUri: composingNewEntryRef.current ? null : wikiParent,
+          newNoteParentDirectory: todayHubNewNoteParent,
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
@@ -2848,7 +2856,9 @@ export function useMainWindowWorkspace(options: {
       const relParent = todayHubWikiNavParentRef.current;
       const sourceMarkdownUriOrDir = composingNewEntryRef.current
         ? getInboxDirectoryUri(base)
-        : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+        : showTodayHubCanvasRef.current && !composingNewEntryRef.current
+          ? getGeneralDirectoryUri(base)
+          : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
       try {
         const result = await openOrCreateVaultRelativeMarkdownLink({
           href,

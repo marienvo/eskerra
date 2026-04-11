@@ -21,6 +21,7 @@ import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
   buildInboxWikiLinkCompletionCandidates,
   extractFirstMarkdownH1,
+  getGeneralDirectoryUri,
   getInboxDirectoryUri,
   getNoteTitle,
   normalizeVaultBaseUri,
@@ -690,13 +691,15 @@ export function VaultTab({
   );
 
   const relativeMarkdownSourceUriOrDir = useMemo(() => {
+    const base = normalizeVaultBaseUri(vaultRoot);
     if (composingNewEntry) {
-      return getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot));
+      return getInboxDirectoryUri(base);
     }
-    return (
-      selectedUri ?? getInboxDirectoryUri(normalizeVaultBaseUri(vaultRoot))
-    );
-  }, [composingNewEntry, selectedUri, vaultRoot]);
+    if (showTodayHubCanvas) {
+      return getGeneralDirectoryUri(base);
+    }
+    return selectedUri ?? getInboxDirectoryUri(base);
+  }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
 
   const relativeMarkdownLinkHrefIsResolved = useMemo(
     () => (href: string) =>
