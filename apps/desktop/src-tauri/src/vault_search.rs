@@ -26,6 +26,8 @@ const MATCH_QUEUE_CAPACITY: usize = 256;
 const FLUSH_INTERVAL_MS: u64 = 75;
 const FLUSH_HIT_THRESHOLD: u32 = 35;
 const SNIPPET_MAX_CHARS: usize = 160;
+/// Sentinel `line_number` for a filename match hit (shown as "Filename" in the desktop UI).
+const FILENAME_HIT_LINE_NUMBER: u32 = 0;
 const DEFAULT_WORKER_COUNT: u32 = 5;
 const MIN_WORKERS: u32 = 4;
 const MAX_WORKERS: u32 = 8;
@@ -64,6 +66,15 @@ pub struct VaultSearchProgressDto {
     pub skipped_large_files: u32,
 }
 
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VaultFilenameMatchStrength {
+    /// Full filename or stem equals the query (case-insensitive).
+    Exact,
+    /// Filename contains the query but is not an exact stem/full-name match.
+    Partial,
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultSearchHitDto {
@@ -71,6 +82,8 @@ pub struct VaultSearchHitDto {
     #[serde(rename = "lineNumber")]
     pub line_number: u32,
     pub snippet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename_match: Option<VaultFilenameMatchStrength>,
 }
 
 #[derive(Serialize, Clone)]
@@ -234,6 +247,42 @@ fn trim_snippet(line: &str) -> String {
     line.trim().chars().take(SNIPPET_MAX_CHARS).collect()
 }
 
+fn classify_vault_note_filename_match(
+    file_name: &str,
+    stem: &str,
+    query_lower: &str,
+) -> Option<VaultFilenameMatchStrength> {
+    if query_lower.is_empty() {
+        return None;
+    }
+    let name_lower = file_name.to_lowercase();
+    if !name_lower.contains(query_lower) {
+        return None;
+    }
+    let stem_lower = stem.to_lowercase();
+    if stem_lower == query_lower || name_lower == query_lower {
+        return Some(VaultFilenameMatchStrength::Exact);
+    }
+    Some(VaultFilenameMatchStrength::Partial)
+}
+
+fn emit_filename_hit_if_needed(
+    uri: &str,
+    file_name_display: &str,
+    strength: Option<VaultFilenameMatchStrength>,
+    tx: &SyncSender<WorkerMsg>,
+) {
+    let Some(strength) = strength else {
+        return;
+    };
+    let _ = tx.send(WorkerMsg::Hit(VaultSearchHitDto {
+        uri: uri.to_string(),
+        line_number: FILENAME_HIT_LINE_NUMBER,
+        snippet: format!("Filename · {}", trim_snippet(file_name_display)),
+        filename_match: Some(strength),
+    }));
+}
+
 /// Absolute filesystem path for a note, same string class as `VaultDirEntryDto.uri` / `vault_list_dir`
 /// and what `openMarkdownInEditor` / `selectNote` expect (same contract as `normalizeEditorDocUri` in TS).
 /// Use `to_string_lossy` like listing; do not add `file://` or a trailing slash.
@@ -263,8 +312,21 @@ fn process_one_file(path: PathBuf, query_lower: &str, cancel: &AtomicBool, tx: &
         });
         return;
     }
+    let uri = path_to_note_uri(&path);
+    let file_name_display = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let stem_display = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let filename_strength =
+        classify_vault_note_filename_match(&file_name_display, &stem_display, query_lower);
+
     let len = meta.len();
     if len > MAX_FILE_BYTES {
+        emit_filename_hit_if_needed(&uri, &file_name_display, filename_strength, tx);
         let _ = tx.send(WorkerMsg::FileScanned {
             skipped_large: true,
         });
@@ -280,8 +342,9 @@ fn process_one_file(path: PathBuf, query_lower: &str, cancel: &AtomicBool, tx: &
         }
     };
     let text = String::from_utf8_lossy(&bytes);
-    let uri = path_to_note_uri(&path);
-    let mut matches_in_file = 0u32;
+    emit_filename_hit_if_needed(&uri, &file_name_display, filename_strength, tx);
+
+    let mut body_matches = 0u32;
     let mut line_number = 0u32;
     for line in text.lines() {
         if cancel.load(Ordering::Relaxed) {
@@ -294,10 +357,11 @@ fn process_one_file(path: PathBuf, query_lower: &str, cancel: &AtomicBool, tx: &
                 uri: uri.clone(),
                 line_number,
                 snippet: trim_snippet(line),
+                filename_match: None,
             };
             let _ = tx.send(WorkerMsg::Hit(hit));
-            matches_in_file += 1;
-            if matches_in_file >= 3 {
+            body_matches += 1;
+            if body_matches >= 3 {
                 break;
             }
         }
@@ -656,5 +720,117 @@ mod tests {
         let long: String = (0..300).map(|_| 'β').collect();
         let out = trim_snippet(&format!("  {long}  "));
         assert_eq!(out.chars().count(), SNIPPET_MAX_CHARS);
+    }
+
+    #[test]
+    fn classify_vault_note_filename_match_strength() {
+        use VaultFilenameMatchStrength::{Exact, Partial};
+
+        assert_eq!(
+            classify_vault_note_filename_match("Foo Bar.md", "Foo Bar", "foo"),
+            Some(Partial)
+        );
+        assert_eq!(
+            classify_vault_note_filename_match("Foo Bar.md", "Foo Bar", "foo bar"),
+            Some(Exact)
+        );
+        assert_eq!(
+            classify_vault_note_filename_match("Foo Bar.md", "Foo Bar", "baz"),
+            None
+        );
+        assert_eq!(
+            classify_vault_note_filename_match("Report.md", "Report", "report"),
+            Some(Exact)
+        );
+        assert_eq!(
+            classify_vault_note_filename_match("Report.md", "Report", "report.md"),
+            Some(Exact)
+        );
+    }
+
+    #[test]
+    fn filename_match_emits_hit_without_body_match() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("Quarterly Report.md");
+        std::fs::write(&p, "Hello world.\nNothing relevant.\n").unwrap();
+        let (tx, rx) = sync_channel::<WorkerMsg>(8);
+        let cancel = AtomicBool::new(false);
+        process_one_file(p, "report", &cancel, &tx);
+        drop(tx);
+        let mut hits = Vec::new();
+        let mut scanned = false;
+        let mut skipped_large = false;
+        while let Ok(m) = rx.recv() {
+            match m {
+                WorkerMsg::Hit(h) => hits.push(h),
+                WorkerMsg::FileScanned { skipped_large: s } => {
+                    scanned = true;
+                    skipped_large = s;
+                }
+            }
+        }
+        assert!(scanned);
+        assert!(!skipped_large);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line_number, FILENAME_HIT_LINE_NUMBER);
+        assert_eq!(
+            hits[0].filename_match,
+            Some(VaultFilenameMatchStrength::Partial)
+        );
+        assert!(hits[0].snippet.to_lowercase().contains("report"));
+    }
+
+    #[test]
+    fn filename_exact_match_emits_exact_strength() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("Standup Notes.md");
+        std::fs::write(&p, "Unrelated body.\n").unwrap();
+        let (tx, rx) = sync_channel::<WorkerMsg>(8);
+        let cancel = AtomicBool::new(false);
+        process_one_file(p, "standup notes", &cancel, &tx);
+        drop(tx);
+        let mut hits = Vec::new();
+        while let Ok(m) = rx.recv() {
+            if let WorkerMsg::Hit(h) = m {
+                hits.push(h);
+            }
+        }
+        assert_eq!(hits.len(), 1);
+        assert_eq!(
+            hits[0].filename_match,
+            Some(VaultFilenameMatchStrength::Exact)
+        );
+    }
+
+    #[test]
+    fn oversized_file_emits_filename_hit_when_name_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("Target Huge.md");
+        let mut f = std::fs::File::create(&p).unwrap();
+        f.write_all(&vec![b'x'; (MAX_FILE_BYTES as usize) + 1]).unwrap();
+        drop(f);
+        let (tx, rx) = sync_channel::<WorkerMsg>(8);
+        let cancel = AtomicBool::new(false);
+        process_one_file(p, "target", &cancel, &tx);
+        drop(tx);
+        let mut hits = Vec::new();
+        let mut skipped = false;
+        while let Ok(m) = rx.recv() {
+            match m {
+                WorkerMsg::Hit(h) => hits.push(h),
+                WorkerMsg::FileScanned { skipped_large } => {
+                    if skipped_large {
+                        skipped = true;
+                    }
+                }
+            }
+        }
+        assert!(skipped);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].line_number, FILENAME_HIT_LINE_NUMBER);
+        assert_eq!(
+            hits[0].filename_match,
+            Some(VaultFilenameMatchStrength::Partial)
+        );
     }
 }

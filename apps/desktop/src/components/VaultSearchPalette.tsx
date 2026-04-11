@@ -1,9 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useRef} from 'react';
+import {useCallback, useMemo, useRef} from 'react';
 
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
+import {compareVaultSearchHits} from '../lib/vaultSearchTypes';
 
 export type VaultSearchPaletteProps = {
   open: boolean;
@@ -43,6 +44,10 @@ export function VaultSearchPalette({
   );
 
   const trimmedQuery = query.trim();
+  const sortedHits = useMemo(
+    () => (hits.length <= 1 ? hits : [...hits].sort(compareVaultSearchHits)),
+    [hits],
+  );
   const statusLine =
     trimmedQuery.length === 0
       ? null
@@ -96,11 +101,11 @@ export function VaultSearchPalette({
                       ? 'No matches.'
                       : null}
               </CommandEmpty>
-              {hits.map((h, i) => {
+                           {sortedHits.map((h, i) => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, h.uri);
                 return (
                   <CommandItem
-                    key={`${h.uri}:${h.lineNumber}:${i}`}
+                    key={`${h.uri}:${h.lineNumber}:${h.filenameMatch ?? 'line'}:${i}`}
                     value={`${h.uri}:${h.lineNumber}`}
                     className="quick-open-command__item vault-search-hit"
                     onSelect={() => {
@@ -108,7 +113,10 @@ export function VaultSearchPalette({
                     }}
                   >
                     <span className="quick-open-command__item-title">
-                      {rel} <span className="vault-search-hit__line">L{h.lineNumber}</span>
+                      {rel}{' '}
+                      <span className="vault-search-hit__line">
+                        {h.lineNumber === 0 ? 'Filename' : `L${h.lineNumber}`}
+                      </span>
                     </span>
                     <span className="quick-open-command__item-path vault-search-hit__snippet">
                       {h.snippet}
