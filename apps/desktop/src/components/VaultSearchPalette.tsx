@@ -22,11 +22,19 @@ export function VaultSearchPalette({
   vaultRoot,
   onPickNote,
 }: VaultSearchPaletteProps) {
-  const {query, setQuery, hits, progress, scanDone, awaitingDebouncedRun, searchingStatusVisible} =
-    useVaultContentSearch({
-      open,
-      vaultRoot,
-    });
+  const {
+    query,
+    setQuery,
+    hits,
+    progress,
+    scanDone,
+    awaitingDebouncedRun,
+    searchingStatusVisible,
+    holdingPreviousResults,
+  } = useVaultContentSearch({
+    open,
+    vaultRoot,
+  });
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleOpenChange = useCallback(
@@ -98,6 +106,8 @@ export function VaultSearchPalette({
             shouldFilter={false}
             className="quick-open-command"
             loop={false}
+            aria-busy={trimmedQuery.length > 0 && !scanDone}
+            data-holding-previous-results={holdingPreviousResults ? 'true' : undefined}
           >
             <CommandInput
               ref={inputRef}

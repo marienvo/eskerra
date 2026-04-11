@@ -164,7 +164,7 @@ describe('useVaultContentSearch', () => {
     expect(result.current.searchingStatusVisible).toBe(false);
   });
 
-  it('keeps hits during debounce then clears when a new run starts', async () => {
+  it('keeps hits during debounce, then holds prior hits briefly when a new run starts', async () => {
     const {result} = renderHook(() =>
       useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
     );
@@ -181,12 +181,12 @@ describe('useVaultContentSearch', () => {
     });
 
     expect(vaultSearchStartMock).toHaveBeenCalledTimes(1);
-    const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
+    const firstSearchId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
 
     const hit = {uri: 'file:///a.md', lineNumber: 1, snippet: 'x'};
     await act(async () => {
       tauriCtx.state.emitUpdate({
-        searchId: firstId,
+        searchId: firstSearchId,
         hits: [hit],
         progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
       });
@@ -212,10 +212,136 @@ describe('useVaultContentSearch', () => {
       await Promise.resolve();
     });
 
+    expect(vaultSearchStartMock).toHaveBeenCalledTimes(2);
+    expect(result.current.hits).toEqual([hit]);
+    expect(result.current.holdingPreviousResults).toBe(true);
+    expect(result.current.scanDone).toBe(false);
+
+    await act(async () => {
+      vi.advanceTimersByTime(99);
+    });
+    expect(result.current.hits).toEqual([hit]);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
     expect(result.current.hits).toEqual([]);
     expect(result.current.progress).toBeNull();
+    expect(result.current.holdingPreviousResults).toBe(false);
     expect(result.current.scanDone).toBe(false);
-    expect(vaultSearchStartMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('replaces held prior hits when the first update arrives before the hold timeout', async () => {
+    const {result} = renderHook(() =>
+      useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
+    );
+    await flushListeners();
+
+    await act(async () => {
+      result.current.setQuery('foo');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
+    const oldHit = {uri: 'file:///old.md', lineNumber: 1, snippet: 'old'};
+    await act(async () => {
+      tauriCtx.state.emitUpdate({
+        searchId: firstId,
+        hits: [oldHit],
+        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+      });
+    });
+    await flushSearchRaf();
+
+    await act(async () => {
+      result.current.setQuery('food');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const secondId = vaultSearchStartMock.mock.calls[1]![0].searchId as string;
+    expect(result.current.holdingPreviousResults).toBe(true);
+    expect(result.current.hits).toEqual([oldHit]);
+
+    const newHit = {uri: 'file:///new.md', lineNumber: 1, snippet: 'new'};
+    await act(async () => {
+      vi.advanceTimersByTime(50);
+    });
+    await act(async () => {
+      tauriCtx.state.emitUpdate({
+        searchId: secondId,
+        hits: [newHit],
+        progress: {scannedFiles: 2, totalHits: 1, skippedLargeFiles: 0},
+      });
+    });
+    await flushSearchRaf();
+
+    expect(result.current.holdingPreviousResults).toBe(false);
+    expect(result.current.hits).toEqual([newHit]);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(result.current.hits).toEqual([newHit]);
+  });
+
+  it('clears held prior hits when done arrives before the first update', async () => {
+    const {result} = renderHook(() =>
+      useVaultContentSearch({open: true, vaultRoot: '/vault', debounceMs: 300}),
+    );
+    await flushListeners();
+
+    await act(async () => {
+      result.current.setQuery('foo');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
+    await act(async () => {
+      tauriCtx.state.emitUpdate({
+        searchId: firstId,
+        hits: [{uri: 'file:///a.md', lineNumber: 1, snippet: 'x'}],
+        progress: {scannedFiles: 1, totalHits: 1, skippedLargeFiles: 0},
+      });
+    });
+    await flushSearchRaf();
+
+    await act(async () => {
+      result.current.setQuery('food');
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const secondId = vaultSearchStartMock.mock.calls[1]![0].searchId as string;
+
+    await act(async () => {
+      vi.advanceTimersByTime(50);
+    });
+    await act(async () => {
+      tauriCtx.state.emitDone({
+        searchId: secondId,
+        cancelled: false,
+        progress: {scannedFiles: 0, totalHits: 0, skippedLargeFiles: 0},
+      });
+    });
+
+    expect(result.current.holdingPreviousResults).toBe(false);
+    expect(result.current.hits).toEqual([]);
+    expect(result.current.scanDone).toBe(true);
   });
 
   it('ignores updates for a stale searchId after input moved on', async () => {

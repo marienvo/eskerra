@@ -15,6 +15,9 @@ const DEFAULT_DEBOUNCE_MS = 300;
 /** Hold off showing `Searching…` until a run stays active this long (avoids sub-100ms flicker). */
 const SEARCHING_STATUS_VISIBLE_DELAY_MS = 100;
 
+/** After a new run starts, keep prior hits on screen this long if the backend is still quiet (gap smoothing). */
+const PREVIOUS_RESULTS_HOLD_MS = 100;
+
 export function isVaultSearchEventCurrent(
   payloadSearchId: string,
   currentId: string | null,
@@ -41,13 +44,17 @@ export function useVaultContentSearch({
   const [awaitingDebouncedRun, setAwaitingDebouncedRun] = useState(false);
   /** True only after an active run (`!scanDone`) has lasted at least 100 ms (see `SEARCHING_STATUS_VISIBLE_DELAY_MS`). */
   const [searchingStatusVisible, setSearchingStatusVisible] = useState(false);
+  /** True while showing prior-query hits briefly after a new run started (until first update, done, or hold timeout). */
+  const [holdingPreviousResults, setHoldingPreviousResults] = useState(false);
 
   const searchIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
   const searchingStatusTimerRef = useRef<number | null>(null);
+  const resultHoldTimerRef = useRef<number | null>(null);
   const openRef = useRef(open);
   const scanDoneRef = useRef(scanDone);
   const queryRef = useRef(query);
+  const hitsRef = useRef(hits);
   /** Next `vault-search:update` for this `searchId` replaces `hits`; later updates append. */
   const replaceNextHitsRef = useRef(true);
   /** Full hit list accumulated from backend updates; flushed to React state via `requestAnimationFrame`. */
@@ -68,9 +75,20 @@ export function useVaultContentSearch({
     pendingProgressRef.current = null;
   }, [cancelHitsFlushRaf]);
 
+  const clearResultHoldTimer = useCallback(() => {
+    if (resultHoldTimerRef.current != null) {
+      window.clearTimeout(resultHoldTimerRef.current);
+      resultHoldTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     queryRef.current = query;
   }, [query]);
+
+  useEffect(() => {
+    hitsRef.current = hits;
+  }, [hits]);
 
   useEffect(() => {
     openRef.current = open;
@@ -109,12 +127,16 @@ export function useVaultContentSearch({
   const resetLocal = useCallback(() => {
     searchIdRef.current = null;
     replaceNextHitsRef.current = true;
+    clearResultHoldTimer();
     clearPendingSearchFlush();
+    queueMicrotask(() => {
+      setHoldingPreviousResults(false);
+    });
     setHits([]);
     setProgress(null);
     setScanDone(true);
     setAwaitingDebouncedRun(false);
-  }, [clearPendingSearchFlush]);
+  }, [clearPendingSearchFlush, clearResultHoldTimer]);
 
   useEffect(() => {
     if (!open) {
@@ -159,6 +181,10 @@ export function useVaultContentSearch({
           if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
             return;
           }
+          clearResultHoldTimer();
+          queueMicrotask(() => {
+            setHoldingPreviousResults(false);
+          });
           if (replaceNextHitsRef.current) {
             replaceNextHitsRef.current = false;
             pendingFlushHitsRef.current = [...p.hits];
@@ -178,6 +204,10 @@ export function useVaultContentSearch({
         if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
           return;
         }
+        clearResultHoldTimer();
+        queueMicrotask(() => {
+          setHoldingPreviousResults(false);
+        });
         cancelHitsFlushRaf();
         setHits([...pendingFlushHitsRef.current]);
         setProgress(p.progress);
@@ -186,11 +216,12 @@ export function useVaultContentSearch({
     })();
     return () => {
       cancelled = true;
+      clearResultHoldTimer();
       cancelHitsFlushRaf();
       unlistenUpdate?.();
       unlistenDone?.();
     };
-  }, [open, vaultRoot, cancelHitsFlushRaf]);
+  }, [open, vaultRoot, cancelHitsFlushRaf, clearResultHoldTimer]);
 
   useEffect(() => {
     if (!open || !vaultRoot) {
@@ -212,6 +243,10 @@ export function useVaultContentSearch({
 
     // Debouncing: drop in-flight run for event matching; keep visible hits until a new run starts.
     searchIdRef.current = null;
+    clearResultHoldTimer();
+    queueMicrotask(() => {
+      setHoldingPreviousResults(false);
+    });
     clearPendingSearchFlush();
     void vaultSearchCancel().catch(() => undefined);
     queueMicrotask(() => {
@@ -232,16 +267,42 @@ export function useVaultContentSearch({
       searchIdRef.current = id;
       replaceNextHitsRef.current = true;
       clearPendingSearchFlush();
+      clearResultHoldTimer();
       queueMicrotask(() => {
         setAwaitingDebouncedRun(false);
       });
-      setHits([]);
-      setProgress(null);
+      const hadPriorHits = hitsRef.current.length > 0;
+      if (hadPriorHits) {
+        queueMicrotask(() => {
+          setHoldingPreviousResults(true);
+        });
+        resultHoldTimerRef.current = window.setTimeout(() => {
+          resultHoldTimerRef.current = null;
+          if (searchIdRef.current !== id) {
+            return;
+          }
+          queueMicrotask(() => {
+            setHoldingPreviousResults(false);
+          });
+          setHits([]);
+          setProgress(null);
+        }, PREVIOUS_RESULTS_HOLD_MS);
+      } else {
+        queueMicrotask(() => {
+          setHoldingPreviousResults(false);
+        });
+        setHits([]);
+        setProgress(null);
+      }
       setScanDone(false);
       void (async () => {
         await vaultSearchCancel().catch(() => undefined);
         await vaultSearchStart({searchId: id, query: q}).catch(() => {
           searchIdRef.current = null;
+          clearResultHoldTimer();
+          queueMicrotask(() => {
+            setHoldingPreviousResults(false);
+          });
           setScanDone(true);
         });
       })();
@@ -253,7 +314,15 @@ export function useVaultContentSearch({
         debounceTimerRef.current = null;
       }
     };
-  }, [query, open, vaultRoot, debounceMs, resetLocal, clearPendingSearchFlush]);
+  }, [
+    query,
+    open,
+    vaultRoot,
+    debounceMs,
+    resetLocal,
+    clearPendingSearchFlush,
+    clearResultHoldTimer,
+  ]);
 
   return {
     query,
@@ -263,5 +332,6 @@ export function useVaultContentSearch({
     scanDone,
     awaitingDebouncedRun,
     searchingStatusVisible,
+    holdingPreviousResults,
   };
 }
