@@ -1805,6 +1805,10 @@ html.tauri-main-chrome .quick-open-overlay {
 
 .vault-search-content {
   max-height: min(78vh, 32rem);
+  /* WebKitGTK: match other shell overlays; avoids crunchy subpixel LCD on small list type. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  font-synthesis: none;
 }
 
 .vault-search-status {
@@ -1820,8 +1824,9 @@ html.tauri-main-chrome .quick-open-overlay {
   font-size: 0.82em;
 }
 
+/* Snippet: inherit UI sans like `.quick-open-command__item-path`. Monospace at ~12px
+   read as jagged on WebKitGTK (computed `ui-monospace` + `-webkit-font-smoothing: auto`). */
 .vault-search-hit__snippet {
-  font-family: var(--font-mono, ui-monospace, monospace);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
