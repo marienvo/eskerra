@@ -1182,7 +1182,12 @@ export function useMainWindowWorkspace(options: {
       const openGen = ++openMarkdownGenerationRef.current;
       const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
-      await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
+      const hubBridge = todayHubBridgeRef.current;
+      const needHubFlush =
+        hubBridge.getLiveRowUri() != null || hubBridge.hasPendingHubFlush();
+      if (needHubFlush) {
+        await hubBridge.flushPendingEdits().catch(() => undefined);
+      }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
       }
@@ -1231,10 +1236,14 @@ export function useMainWindowWorkspace(options: {
 
       const root = vaultRootRef.current;
       const curUri = selectedUriRef.current;
-      const snapshot =
+      const snapMdForSlice =
         curUri != null && !composingNewEntryRef.current
+          ? inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current
+          : undefined;
+      const snapshot =
+        curUri != null && !composingNewEntryRef.current && snapMdForSlice !== undefined
           ? inboxEditorSliceToFullMarkdown(
-              inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
+              snapMdForSlice,
               curUri,
               false,
               inboxEditorYamlFrontmatterBlockRef.current,

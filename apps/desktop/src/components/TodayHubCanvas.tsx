@@ -521,6 +521,8 @@ export function TodayHubCanvas({
     const bridge = bridgeRef.current;
     const flushFn = flushScheduledPersist;
     bridge.flushPendingEdits = flushFn;
+    bridge.hasPendingHubFlush = () =>
+      debounceTimerRef.current != null || pendingPersistRef.current != null;
     bridge.getLiveRowUri = () => active?.uri ?? null;
     bridge.getLiveRowMergedMarkdown = () => {
       if (!active) {
@@ -536,6 +538,7 @@ export function TodayHubCanvas({
     return () => {
       if (bridge.flushPendingEdits === flushFn) {
         bridge.flushPendingEdits = async () => {};
+        bridge.hasPendingHubFlush = () => false;
         bridge.getLiveRowUri = () => null;
         bridge.getLiveRowMergedMarkdown = () => null;
       }

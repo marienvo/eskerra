@@ -93,7 +93,10 @@ import {
   markdownCaretInOpaquePasteBlock,
   markdownSmartExpandExtension,
 } from './markdownSmartExpandSelection';
-import {dispatchEskerraTableNestedCellEditors} from './eskerraTableV1/eskerraTableNestedCellEditors';
+import {
+  clearEskerraTableNestedCellRegistrations,
+  dispatchEskerraTableNestedCellEditors,
+} from './eskerraTableV1/eskerraTableNestedCellEditors';
 import {eskerraTableV1Extension} from './eskerraTableV1/eskerraTableV1Codemirror';
 import {flushAllEskerraTableDrafts} from './eskerraTableV1/eskerraTableDraftFlush';
 import {
@@ -1026,20 +1029,8 @@ const NoteMarkdownEditorImpl = forwardRef<
       const curText = v.state.doc.toString();
       const selMatches =
         v.state.selection.main.from === at && v.state.selection.main.empty;
-      if (!hadFoldedRanges && (curText !== markdown || !selMatches)) {
-        v.dispatch({
-          changes: {from: 0, to: curLen, insert: markdown},
-          selection: EditorSelection.cursor(at),
-          annotations: Transaction.addToHistory.of(false),
-        });
-      } else if (hadFoldedRanges || curText !== markdown || !selMatches) {
-        const nextState = EditorState.create({
-          doc: markdown,
-          selection: EditorSelection.cursor(at),
-          extensions: be,
-        });
-        v.setState(nextState);
-      }
+      const mergedReplace =
+        !hadFoldedRanges && (curText !== markdown || !selMatches);
       const wikiEff = wc.reconfigure(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
       );
@@ -1058,7 +1049,26 @@ const NoteMarkdownEditorImpl = forwardRef<
           : null;
       const effects =
         roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
-      v.dispatch({effects});
+      if (mergedReplace) {
+        v.dispatch({
+          changes: {from: 0, to: curLen, insert: markdown},
+          selection: EditorSelection.cursor(at),
+          annotations: Transaction.addToHistory.of(false),
+          effects,
+        });
+        clearEskerraTableNestedCellRegistrations(v);
+      } else if (hadFoldedRanges || curText !== markdown || !selMatches) {
+        const nextState = EditorState.create({
+          doc: markdown,
+          selection: EditorSelection.cursor(at),
+          extensions: be,
+        });
+        v.setState(nextState);
+        clearEskerraTableNestedCellRegistrations(v);
+      }
+      if (!mergedReplace) {
+        v.dispatch({effects});
+      }
       dispatchEskerraTableNestedCellEditors(v, {effects});
       onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
       onFoldableRangesPresentChangeRef.current?.(

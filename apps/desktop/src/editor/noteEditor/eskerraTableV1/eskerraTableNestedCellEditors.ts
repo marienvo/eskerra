@@ -5,6 +5,13 @@ import {bumpTableShellStaticPreview} from './tableShellStaticPreviewStore';
 
 const parentToCellViews = new Map<EditorView, Set<EditorView>>();
 
+/** Drop all nested cell registrations for a parent (e.g. after a full-document swap). */
+export function clearEskerraTableNestedCellRegistrations(
+  parentView: EditorView,
+): void {
+  parentToCellViews.delete(parentView);
+}
+
 /**
  * Register a table shell's nested cell EditorView so the parent note editor can
  * reconfigure shared compartments (wiki / relative link highlights).
@@ -36,8 +43,15 @@ export function dispatchEskerraTableNestedCellEditors(
 ): void {
   const set = parentToCellViews.get(parentView);
   if (set) {
-    for (const v of set) {
+    for (const v of [...set]) {
+      if (!v.dom.isConnected) {
+        set.delete(v);
+        continue;
+      }
       v.dispatch(spec);
+    }
+    if (set.size === 0) {
+      parentToCellViews.delete(parentView);
     }
   }
   bumpTableShellStaticPreview();
