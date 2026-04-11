@@ -1274,6 +1274,43 @@ body.editor-tab-strip--dragging {
   max-width: 10.5rem;
 }
 
+/*
+ * Title bar tab row sits on AppChromeBackground (dark). Pills must use shell fg/hover
+ * like `.rail-tab` / `.window-ctrl`, not panel `--color-text` / `--color-muted`.
+ */
+.editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):hover:not([data-disabled]),
+.editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):focus-within:not([data-disabled]) {
+  background: var(--color-shell-hover-bg);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
+  background: color-mix(in srgb, var(--color-accent) 22%, rgba(255, 255, 255, 0.04));
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__main {
+  color: var(--color-shell-icon);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__icon {
+  color: var(--color-shell-icon-muted);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__close {
+  color: var(--color-shell-icon-muted);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__close.icon-btn-ghost:hover:not(:disabled) {
+  color: var(--color-shell-icon-muted);
+  background: var(--color-shell-hover-bg);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tabs-placeholder--titlebar {
+  color: var(--color-shell-icon-muted);
+}
+
 .editor-open-tab-pill {
   flex: 0 0 auto;
   display: flex;
