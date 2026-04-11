@@ -5,14 +5,11 @@ import logoEskerraUrl from '@eskerra/brand/logo-eskerra.svg?url';
 
 import type {WindowTilingState} from '../lib/windowTiling';
 
-import {TitleBarTransport, type TitleBarTransportProps} from './TitleBarTransport';
-
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
-  transport?: TitleBarTransportProps;
 };
 
-export function WindowTitleBar({tiling = 'none', transport}: WindowTitleBarProps) {
+export function WindowTitleBar({tiling = 'none'}: WindowTitleBarProps) {
   const tauri = isTauri();
 
   const onMinimize = () => {
@@ -42,7 +39,6 @@ export function WindowTitleBar({tiling = 'none', transport}: WindowTitleBarProps
         />
       </div>
       <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
-      {transport ? <TitleBarTransport {...transport} /> : null}
       <div className="window-title-bar-trailing">
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">

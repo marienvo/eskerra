@@ -46,8 +46,10 @@ function resolveSimpleMessage(
 }
 
 /**
- * Priority (low → high): tagline, player (paused/playing + episode), simple messages (err, then rename progress, then wiki notice).
- * Simple messages are suppressed while a disk conflict is active (same gating as legacy banners in App).
+ * Resolves the status bar **second row** (below playback transport when an episode is active).
+ * Priority (high wins): simple messages (err, then rename progress, then wiki notice), else player
+ * (playing/paused/loading + episode), else tagline. Simple messages are suppressed while a disk
+ * conflict is active (same gating as legacy banners in App), except **err** still wins.
  */
 export function resolveAppStatusBarCenter(
   input: ResolveAppStatusBarCenterInput,
@@ -58,7 +60,9 @@ export function resolveAppStatusBarCenter(
   }
 
   if (
-    (input.playerLabel === 'playing' || input.playerLabel === 'paused') &&
+    (input.playerLabel === 'playing' ||
+      input.playerLabel === 'paused' ||
+      input.playerLabel === 'loading') &&
     input.activeEpisode
   ) {
     return {

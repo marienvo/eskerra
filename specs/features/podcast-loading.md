@@ -197,7 +197,7 @@ Total target on warm path: roughly 4 SAF calls plus any required validation miss
 
 ## Desktop playback chrome (no separate player pane)
 
-- The **title bar** (`TitleBarTransport`) is the primary in-window transport: elapsed, ±10s, play/pause or **loading** (spinning `progress_activity`), duration. There is no separate docked player panel.
+- The **status bar** (`PlaybackTransport` in `AppStatusBar`) is the primary in-window transport: elapsed, ±10s, play/pause or **loading** (spinning `autorenew`), duration, centered in a row **above** the episode/podcast title line. There is no separate docked player panel.
 - When `DesktopPlayerLabel` is `loading`, skip buttons are disabled and the center control shows the loading spinner (not a disabled play/pause icon alone).
 
 ## Non-Goals

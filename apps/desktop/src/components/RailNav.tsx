@@ -2,17 +2,10 @@ import {TabButton} from '../ds';
 
 type RailNavProps = {
   vaultPaneVisible: boolean;
-  episodesPaneVisible: boolean;
   onToggleVault: () => void;
-  onToggleEpisodes: () => void;
 };
 
-export function RailNav({
-  vaultPaneVisible,
-  episodesPaneVisible,
-  onToggleVault,
-  onToggleEpisodes,
-}: RailNavProps) {
+export function RailNav({vaultPaneVisible, onToggleVault}: RailNavProps) {
   return (
     <nav className="rail" aria-label="Main">
       <TabButton
@@ -24,14 +17,6 @@ export function RailNav({
         onClick={onToggleVault}
       />
       <div className="rail-spacer" aria-hidden />
-      <TabButton
-        active={episodesPaneVisible}
-        ariaPressed={episodesPaneVisible}
-        aria-label="Episodes"
-        icon="radio"
-        tooltip="Episodes"
-        onClick={onToggleEpisodes}
-      />
     </nav>
   );
 }

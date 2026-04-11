@@ -35,7 +35,7 @@ import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd'
 import {NotificationsPanel} from './components/NotificationsPanel';
 import {NotificationsRail} from './components/NotificationsRail';
 import {RailNav} from './components/RailNav';
-import type {TitleBarTransportProps} from './components/TitleBarTransport';
+import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
@@ -80,7 +80,7 @@ import './App.css';
 
 type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
-const TITLE_BAR_SKIP_MS = 10_000;
+const PLAYBACK_SKIP_MS = 10_000;
 const MAIN_WINDOW_LABEL = 'main';
 
 /**
@@ -377,7 +377,7 @@ export default function App() {
     vaultRoot,
   });
 
-  const titleBarTransport = useMemo((): TitleBarTransportProps | undefined => {
+  const playbackTransport = useMemo((): PlaybackTransportProps | undefined => {
     if (desktopPlayback.activeEpisode == null) {
       return undefined;
     }
@@ -394,8 +394,8 @@ export default function App() {
       durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
       seekDisabled: label === 'loading',
       playControl,
-      onSeekBack: () => void seek(-TITLE_BAR_SKIP_MS),
-      onSeekForward: () => void seek(TITLE_BAR_SKIP_MS),
+      onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
+      onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
       onTogglePlay: () => void desktopPlayback.togglePause(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
@@ -866,14 +866,12 @@ export default function App() {
       <div ref={appRootRef} className={appRootClassName}>
         <AppChromeBackground />
         <div className="app-root-chrome">
-          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+          <WindowTitleBar tiling={tiling} />
 
           <div className="app-body">
             <RailNav
               vaultPaneVisible={vaultPaneVisible}
-              episodesPaneVisible={episodesPaneVisible}
               onToggleVault={() => setVaultPaneVisible(v => !v)}
-              onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
             />
             <div className="main-shell-stage panel-group fill">
               <DesktopHorizontalSplitEnd
@@ -1056,6 +1054,9 @@ export default function App() {
 
           <AppStatusBar
             center={statusBarCenter}
+            episodesPaneVisible={episodesPaneVisible}
+            onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
+            playbackTransport={playbackTransport}
             onOpenSettings={() => void openSettingsWindow()}
             onReadMoreStatusMessage={onReadMoreStatusMessage}
           />

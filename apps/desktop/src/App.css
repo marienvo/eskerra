@@ -214,24 +214,15 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.window-title-bar-transport {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 2;
+.app-playback-transport {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.06rem;
-  transform: translate(-50%, calc(-50% + 2px));
-  pointer-events: none;
+  flex-shrink: 0;
 }
 
-.window-title-bar-transport button {
-  pointer-events: auto;
-}
-
-.window-title-bar-transport__time {
+.app-playback-transport__time {
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
   font-weight: 500;
@@ -242,17 +233,17 @@ a:focus:not(:focus-visible) {
   -webkit-user-select: none;
 }
 
-.window-title-bar-transport__time--position {
+.app-playback-transport__time--position {
   text-align: end;
   margin-inline-end: 0.24rem;
 }
 
-.window-title-bar-transport__time--duration {
+.app-playback-transport__time--duration {
   text-align: start;
   margin-inline-start: 0.24rem;
 }
 
-/* Shared: title-bar playback controls (only used in TitleBarTransport) */
+/* Shared: shell playback controls (PlaybackTransport) */
 .app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
@@ -341,24 +332,39 @@ a:focus:not(:focus-visible) {
 }
 
 .app-status-bar {
-  position: relative;
   flex-shrink: 0;
-  display: flex;
+  display: grid;
+  /* Leading track matches .rail width so Episodes tab aligns with Vault. */
+  grid-template-columns: calc(40px + 0.34rem + 0.2rem) minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-end;
+  column-gap: 0.35rem;
   box-sizing: border-box;
-  /* Bottom inset matches rail offset from window edge (see .rail padding-inline-start). */
-  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
+  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0;
   background: transparent;
 }
 
-/* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
-.app-status-bar-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+.app-status-bar-leading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.app-status-bar-center-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Second row: tagline, episode line, or width of message chip (see AppStatusBar). */
+.app-status-bar-center-line {
   margin: 0;
-  max-width: calc(100% - 5rem);
+  max-width: 100%;
+  width: 100%;
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
@@ -390,11 +396,8 @@ a:focus:not(:focus-visible) {
 
 /* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
 .app-status-bar-message {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   margin: 0;
-  max-width: calc(100% - 5rem);
+  max-width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -464,7 +467,7 @@ a:focus:not(:focus-visible) {
   z-index: 1;
   display: flex;
   align-items: center;
-  margin-left: auto;
+  justify-self: end;
 }
 
 .app-status-bar-settings {

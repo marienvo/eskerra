@@ -1,21 +1,21 @@
 import {MaterialIcon} from './MaterialIcon';
 
-export type TitleBarPlayControl = 'loading' | 'paused' | 'playing';
+export type PlaybackTransportPlayControl = 'loading' | 'paused' | 'playing';
 
-export type TitleBarTransportProps = {
+export type PlaybackTransportProps = {
   positionLabel: string;
   durationLabel: string;
   seekDisabled: boolean;
-  playControl: TitleBarPlayControl;
+  playControl: PlaybackTransportPlayControl;
   onSeekBack: () => void;
   onSeekForward: () => void;
   onTogglePlay: () => void;
 };
 
 /**
- * Centered title-bar playback: elapsed, skip back, play/pause or loading, skip forward, duration.
+ * Centered playback row: elapsed, skip back, play/pause or loading, skip forward, duration.
  */
-export function TitleBarTransport({
+export function PlaybackTransport({
   positionLabel,
   durationLabel,
   seekDisabled,
@@ -23,19 +23,15 @@ export function TitleBarTransport({
   onSeekBack,
   onSeekForward,
   onTogglePlay,
-}: TitleBarTransportProps) {
+}: PlaybackTransportProps) {
   const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
   const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
 
   return (
-    <div
-      className="window-title-bar-transport"
-      role="group"
-      aria-label="Playback"
-    >
+    <div className="app-playback-transport" role="group" aria-label="Playback">
       <span
-        className="window-title-bar-transport__time window-title-bar-transport__time--position"
+        className="app-playback-transport__time app-playback-transport__time--position"
         aria-hidden
       >
         {positionLabel}
@@ -81,7 +77,7 @@ export function TitleBarTransport({
       >
         <MaterialIcon name="forward_10" size={24} aria-hidden />
       </button>
-      <span className="window-title-bar-transport__time window-title-bar-transport__time--duration" aria-hidden>
+      <span className="app-playback-transport__time app-playback-transport__time--duration" aria-hidden>
         {durationLabel}
       </span>
     </div>

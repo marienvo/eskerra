@@ -86,8 +86,21 @@ describe('resolveAppStatusBarCenter', () => {
     });
   });
 
-  it('does not show player for loading/idle/ended when no message', () => {
-    for (const playerLabel of ['loading', 'idle', 'ended', 'error'] as const) {
+  it('shows player when loading with active episode', () => {
+    const r = resolveAppStatusBarCenter({
+      ...base,
+      playerLabel: 'loading',
+      activeEpisode: {title: 'E', seriesName: 'S'},
+    });
+    expect(r).toEqual({
+      kind: 'player',
+      episodeTitle: 'E',
+      seriesName: 'S',
+    });
+  });
+
+  it('does not show player for idle/ended/error when no message', () => {
+    for (const playerLabel of ['idle', 'ended', 'error'] as const) {
       const r = resolveAppStatusBarCenter({
         ...base,
         playerLabel,
