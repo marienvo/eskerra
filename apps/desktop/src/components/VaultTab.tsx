@@ -293,11 +293,28 @@ function EditorPaneBody({
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
   const editorHasFoldedRangesRef = useRef(editorHasFoldedRanges);
   const editorHasFoldableRangesRef = useRef(editorHasFoldableRanges);
+  const isInitialHeavySidecarLayoutRef = useRef(true);
+  const [heavySidecarsVisible, setHeavySidecarsVisible] = useState(true);
 
   useLayoutEffect(() => {
     editorHasFoldedRangesRef.current = editorHasFoldedRanges;
     editorHasFoldableRangesRef.current = editorHasFoldableRanges;
   }, [editorHasFoldedRanges, editorHasFoldableRanges]);
+
+  useLayoutEffect(() => {
+    if (isInitialHeavySidecarLayoutRef.current) {
+      isInitialHeavySidecarLayoutRef.current = false;
+      return;
+    }
+    // Drop backlinks / Today hub before the first paint for the new `selectedUri` so the editor
+    // surface commits first; remount them on the next frame.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional layout-phase flush before paint
+    setHeavySidecarsVisible(false);
+    const id = window.requestAnimationFrame(() => {
+      setHeavySidecarsVisible(true);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [selectedUri]);
 
   const onFoldedRangesPresentChange = useCallback((next: boolean) => {
     setEditorHasFoldedRanges(next);
@@ -392,7 +409,10 @@ function EditorPaneBody({
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
               />
-              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
+              {heavySidecarsVisible &&
+              !composingNewEntry &&
+              selectedUri &&
+              !showTodayHubCanvas ? (
                 <InboxBacklinksSection
                   selectedUri={selectedUri}
                   backlinkRows={backlinkRows}
@@ -402,7 +422,8 @@ function EditorPaneBody({
               ) : null}
             </div>
           </div>
-          {showTodayHubCanvas &&
+          {heavySidecarsVisible &&
+          showTodayHubCanvas &&
           selectedUri &&
           todayHubSettings &&
           !composingNewEntry ? (

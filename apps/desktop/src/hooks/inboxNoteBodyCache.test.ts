@@ -7,7 +7,54 @@ import {
   fsChangePathsMayAffectUri,
   normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
+  shouldMergeCacheAfterOutgoingPersist,
+  shouldSkipOutgoingPersistAfterNoteLeave,
+  shouldSkipOutgoingPersistBeforeWrite,
 } from './inboxNoteBodyCache';
+
+describe('outgoing deferred persist guards', () => {
+  it('skips enqueue when cache diverged from leave snapshot', () => {
+    expect(
+      shouldSkipOutgoingPersistAfterNoteLeave('edited', 'leave'),
+    ).toBe(true);
+    expect(shouldSkipOutgoingPersistAfterNoteLeave('leave', 'leave')).toBe(
+      false,
+    );
+    expect(shouldSkipOutgoingPersistAfterNoteLeave(undefined, 'leave')).toBe(
+      false,
+    );
+  });
+
+  it('skips write when cache matches neither leave nor final markdown', () => {
+    expect(
+      shouldSkipOutgoingPersistBeforeWrite('x', 'leave', 'final'),
+    ).toBe(true);
+    expect(
+      shouldSkipOutgoingPersistBeforeWrite('leave', 'leave', 'final'),
+    ).toBe(false);
+    expect(
+      shouldSkipOutgoingPersistBeforeWrite('final', 'leave', 'final'),
+    ).toBe(false);
+    expect(
+      shouldSkipOutgoingPersistBeforeWrite(undefined, 'leave', 'final'),
+    ).toBe(false);
+  });
+
+  it('merges after save unless user clearly diverged', () => {
+    expect(
+      shouldMergeCacheAfterOutgoingPersist('leave', 'disk', 'leave'),
+    ).toBe(true);
+    expect(
+      shouldMergeCacheAfterOutgoingPersist('disk', 'disk', 'leave'),
+    ).toBe(true);
+    expect(shouldMergeCacheAfterOutgoingPersist(undefined, 'disk', 'leave')).toBe(
+      true,
+    );
+    expect(
+      shouldMergeCacheAfterOutgoingPersist('newer', 'disk', 'leave'),
+    ).toBe(false);
+  });
+});
 
 describe('mergeInboxNoteBodyIntoCache', () => {
   it('returns null when the entry already matches', () => {

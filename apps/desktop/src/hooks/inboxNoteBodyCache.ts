@@ -21,6 +21,51 @@ export function normalizeVaultMarkdownDiskRead(raw: string): string {
 
 export type LastPersistedNote = {uri: string; markdown: string};
 
+/**
+ * Deferred outgoing persist (note switch): skip the chained save when the body cache for that URI
+ * no longer matches the markdown snapshot captured at leave time (user re-opened the note and
+ * edited, or another path advanced the cache).
+ */
+export function shouldSkipOutgoingPersistAfterNoteLeave(
+  cached: string | undefined,
+  leaveSnapshotMarkdown: string,
+): boolean {
+  return cached !== undefined && cached !== leaveSnapshotMarkdown;
+}
+
+/**
+ * Before writing disk for a deferred outgoing save, skip when the cache has diverged from both the
+ * leave snapshot and the final markdown after `persistTransientMarkdownImages` (for example image
+ * URL rewrites merged into the cache).
+ */
+export function shouldSkipOutgoingPersistBeforeWrite(
+  cached: string | undefined,
+  leaveSnapshotMarkdown: string,
+  markdownToWrite: string,
+): boolean {
+  return (
+    cached !== undefined &&
+    cached !== leaveSnapshotMarkdown &&
+    cached !== markdownToWrite
+  );
+}
+
+/**
+ * After a successful deferred outgoing save, merge disk-known markdown into the cache unless the
+ * user diverged in memory while the save was in flight.
+ */
+export function shouldMergeCacheAfterOutgoingPersist(
+  cached: string | undefined,
+  persistedMarkdown: string,
+  leaveSnapshotMarkdown: string,
+): boolean {
+  return (
+    cached === undefined ||
+    cached === persistedMarkdown ||
+    cached === leaveSnapshotMarkdown
+  );
+}
+
 /** How to reconcile the open editor when disk content may have diverged. */
 export type NoteDiskReconcileKind = 'noop' | 'reload_from_disk' | 'conflict';
 

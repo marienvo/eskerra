@@ -11,6 +11,7 @@ import {
   Compartment,
   EditorSelection,
   EditorState,
+  Transaction,
   type Extension,
 } from '@codemirror/state';
 import {
@@ -1020,12 +1021,25 @@ const NoteMarkdownEditorImpl = forwardRef<
         return;
       }
       const at = options?.selection === 'start' ? 0 : markdown.length;
-      const nextState = EditorState.create({
-        doc: markdown,
-        selection: EditorSelection.cursor(at),
-        extensions: be,
-      });
-      v.setState(nextState);
+      const hadFoldedRanges = foldedRangesPresent(v.state);
+      const curLen = v.state.doc.length;
+      const curText = v.state.doc.toString();
+      const selMatches =
+        v.state.selection.main.from === at && v.state.selection.main.empty;
+      if (!hadFoldedRanges && (curText !== markdown || !selMatches)) {
+        v.dispatch({
+          changes: {from: 0, to: curLen, insert: markdown},
+          selection: EditorSelection.cursor(at),
+          annotations: Transaction.addToHistory.of(false),
+        });
+      } else if (hadFoldedRanges || curText !== markdown || !selMatches) {
+        const nextState = EditorState.create({
+          doc: markdown,
+          selection: EditorSelection.cursor(at),
+          extensions: be,
+        });
+        v.setState(nextState);
+      }
       const wikiEff = wc.reconfigure(
         wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
       );

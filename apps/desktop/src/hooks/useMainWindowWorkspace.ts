@@ -130,6 +130,9 @@ import {
   fsChangePathsMayAffectUri,
   normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
+  shouldMergeCacheAfterOutgoingPersist,
+  shouldSkipOutgoingPersistAfterNoteLeave,
+  shouldSkipOutgoingPersistBeforeWrite,
 } from './inboxNoteBodyCache';
 
 /** Skip showing an immediate blocking disk conflict if the user just edited; one deferred re-check follows. */
@@ -798,6 +801,109 @@ export function useMainWindowWorkspace(options: {
     [fs],
   );
 
+  /**
+   * Persists a fixed URI + markdown captured when leaving a dirty note, chained like
+   * `enqueueInboxPersist` but **not** awaited by `openMarkdownInEditor`. Uses stale-cache guards so
+   * a slow save cannot overwrite newer in-memory edits if the user re-opened the note before the
+   * write ran.
+   */
+  const enqueuePersistOutgoingNoteMarkdown = useCallback(
+    (uri: string, leaveSnapshotMarkdown: string): void => {
+      const norm = normalizeEditorDocUri(uri);
+      const run = async (): Promise<void> => {
+        const root = vaultRootRef.current;
+        if (!root) {
+          return;
+        }
+        const dc = diskConflictRef.current;
+        if (dc && normalizeEditorDocUri(dc.uri) === norm) {
+          return;
+        }
+        const memStart = inboxContentByUriRef.current[norm];
+        if (shouldSkipOutgoingPersistAfterNoteLeave(memStart, leaveSnapshotMarkdown)) {
+          return;
+        }
+        try {
+          setErr(null);
+          const md = await persistTransientMarkdownImages(
+            leaveSnapshotMarkdown,
+            root,
+          );
+          if (markdownContainsTransientImageUrls(md)) {
+            setErr(
+              'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+            );
+            return;
+          }
+          if (md !== leaveSnapshotMarkdown) {
+            const nextCache = mergeInboxNoteBodyIntoCache(
+              inboxContentByUriRef.current,
+              norm,
+              md,
+            );
+            if (nextCache) {
+              inboxContentByUriRef.current = nextCache;
+              setInboxContentByUri(prev =>
+                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
+              );
+            }
+            const active = selectedUriRef.current;
+            if (active && normalizeEditorDocUri(active) === norm) {
+              loadFullMarkdownIntoInboxEditor(md, norm, 'start');
+              scheduleBacklinksDeferOneFrameAfterLoad();
+            }
+          }
+          const memBeforeSave = inboxContentByUriRef.current[norm];
+          if (
+            shouldSkipOutgoingPersistBeforeWrite(
+              memBeforeSave,
+              leaveSnapshotMarkdown,
+              md,
+            )
+          ) {
+            return;
+          }
+          await saveNoteMarkdown(norm, fs, md);
+          void refreshNotes(root).catch(() => undefined);
+
+          const activeSel = selectedUriRef.current;
+          if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
+            lastPersistedRef.current = {uri: norm, markdown: md};
+          }
+
+          const memAfter = inboxContentByUriRef.current[norm];
+          if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
+            const nextCache2 = mergeInboxNoteBodyIntoCache(
+              inboxContentByUriRef.current,
+              norm,
+              md,
+            );
+            if (nextCache2) {
+              inboxContentByUriRef.current = nextCache2;
+              setInboxContentByUri(prev =>
+                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
+              );
+            }
+          }
+        } catch (e) {
+          setErr(e instanceof Error ? e.message : String(e));
+        }
+      };
+
+      saveActiveRef.current = true;
+      const next = saveChainRef.current.then(run).finally(() => {
+        saveActiveRef.current = false;
+      });
+      saveChainRef.current = next.catch(() => undefined);
+    },
+    [
+      fs,
+      refreshNotes,
+      loadFullMarkdownIntoInboxEditor,
+      scheduleBacklinksDeferOneFrameAfterLoad,
+    ],
+  );
+
   const enqueueInboxPersist = useCallback(async (): Promise<void> => {
     const run = async (): Promise<void> => {
       const root = vaultRootRef.current;
@@ -1077,9 +1183,6 @@ export function useMainWindowWorkspace(options: {
       const targetNorm = normalizeEditorDocUri(uri);
       autosaveSchedulerRef.current.cancel();
       await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
-      if (saveActiveRef.current) {
-        await saveChainRef.current.catch(() => undefined);
-      }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
       }
@@ -1159,8 +1262,8 @@ export function useMainWindowWorkspace(options: {
           const prev = lastPersistedRef.current;
           return !(prev && prev.uri === curUri && prev.markdown === snapshot);
         })();
-      if (needsPersist) {
-        await enqueueInboxPersist();
+      if (needsPersist && curUri != null && snapshot !== undefined) {
+        enqueuePersistOutgoingNoteMarkdown(curUri, snapshot);
       }
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
@@ -1295,7 +1398,7 @@ export function useMainWindowWorkspace(options: {
       setSelectedUri(targetNorm);
     },
     [
-      enqueueInboxPersist,
+      enqueuePersistOutgoingNoteMarkdown,
       fs,
       inboxEditorRef,
       inboxEditorShellScrollRef,
