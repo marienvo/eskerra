@@ -1725,6 +1725,10 @@ html.tauri-main-chrome .quick-open-overlay {
   background: var(--color-surface);
   box-shadow: 0 10px 36px rgba(0, 0, 0, 0.18);
   outline: none;
+  /* WebKitGTK: same shell palette tuning as vault search — avoids uneven/jagged small path type vs titles. */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  font-synthesis: none;
 }
 
 .quick-open-a11y-title {
@@ -1801,6 +1805,87 @@ html.tauri-main-chrome .quick-open-overlay {
   font-size: 0.78rem;
   color: var(--color-muted);
   word-break: break-all;
+  /* Match title: UI sans, not system monospace; reinforces parent smoothing for ~12px paths. */
+  font-family: inherit;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+  font-synthesis: none;
+}
+
+.vault-search-content {
+  max-height: min(78vh, 32rem);
+}
+
+.vault-search-status {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  padding: 0.15rem 0.35rem 0.05rem;
+  line-height: 1.35;
+}
+
+.vault-search-overflow {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  padding: 0.35rem 0.5rem 0.5rem;
+  line-height: 1.35;
+  border-top: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.vault-search-hit__line {
+  font-weight: 400;
+  color: var(--color-muted);
+  font-size: 0.82em;
+}
+
+.vault-search-hit__query-mark {
+  background: var(--color-markdown-highlight-bg);
+  color: inherit;
+  padding: 0 0.04em;
+  border-radius: 2px;
+}
+
+.vault-search-hit__path-muted {
+  opacity: 0.88;
+  font-size: 0.9em;
+}
+
+.vault-search-hit__snippet-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 0.1rem;
+}
+
+/* Snippet row: tabular line-no column (monospace) + body (UI sans like `.quick-open-command__item-path`). */
+.vault-search-hit__snippet {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.vault-search-hit__snippet-lineno {
+  flex: 0 0 auto;
+  min-width: 3ch;
+  text-align: right;
+  font-family: ui-monospace, monospace;
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+  opacity: 0.88;
+  padding-right: 0.4rem;
+  border-right: 1px solid color-mix(in srgb, var(--color-muted) 26%, transparent);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: auto;
+}
+
+.vault-search-hit__snippet-text {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .alert-dialog-overlay {
@@ -1905,7 +1990,7 @@ button.primary.destructive {
   /* `%%…%%` delimiters: lighter than other syntax marks (`--nb-editor-hash-tone`). */
   --nb-editor-percent-mark-tone: color-mix(in srgb, var(--nb-editor-hash-tone) 44%, var(--nb-editor-paper) 56%);
   /* `==…==` highlight background (highlighter yellow). */
-  --nb-editor-equal-highlight-bg: #fff59d;
+  --nb-editor-equal-highlight-bg: var(--color-markdown-highlight-bg);
   --nb-editor-accent: rgb(203, 77, 73);
   --nb-editor-inline-code-bg: rgb(240, 240, 240);
   --nb-editor-inline-code-border: rgb(215, 215, 215);

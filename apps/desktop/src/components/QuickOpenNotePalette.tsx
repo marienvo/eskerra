@@ -1,12 +1,10 @@
 import type {VaultMarkdownRef} from '@eskerra/core';
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
-import {
-  filterVaultNotesForQuickOpen,
-  quickOpenVaultRelativePath,
-} from '../lib/quickOpenNoteFilter';
+import {useQuickOpenSearch} from '../hooks/useQuickOpenSearch';
+import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
 
 export type QuickOpenNotePaletteProps = {
   open: boolean;
@@ -36,10 +34,30 @@ export function QuickOpenNotePalette({
     [onOpenChange],
   );
 
-  const filtered = useMemo(
-    () => filterVaultNotesForQuickOpen(search, vaultRoot, refs),
-    [refs, search, vaultRoot],
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+  }, []);
+
+  const {displayed, searchPending, searchTrimmed} = useQuickOpenSearch(
+    search,
+    vaultRoot,
+    refs,
   );
+
+  const listOrderSignature = useMemo(
+    () => displayed.map(r => r.uri).join('\0'),
+    [displayed],
+  );
+
+  const firstDisplayedItemValue = useMemo(() => displayed[0]?.uri ?? '', [displayed]);
+
+  const [commandValue, setCommandValue] = useState(firstDisplayedItemValue);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCommandValue(firstDisplayedItemValue);
+    });
+  }, [listOrderSignature, firstDisplayedItemValue]);
 
   const handlePick = useCallback(
     (uri: string) => {
@@ -70,19 +88,25 @@ export function QuickOpenNotePalette({
             shouldFilter={false}
             className="quick-open-command"
             loop={false}
+            value={commandValue}
+            onValueChange={setCommandValue}
           >
             <CommandInput
               ref={inputRef}
               className="quick-open-command__input"
               placeholder="Search by name or path…"
               value={search}
-              onValueChange={setSearch}
+              onValueChange={handleSearchChange}
             />
             <CommandList className="quick-open-command__list">
               <CommandEmpty className="quick-open-command__empty">
-                No matching notes.
+                {searchTrimmed.length === 0
+                  ? 'Type to search by name or path.'
+                  : searchPending
+                    ? 'Searching…'
+                    : 'No matching notes.'}
               </CommandEmpty>
-              {filtered.map(r => {
+              {displayed.map(r => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, r.uri);
                 return (
                   <CommandItem

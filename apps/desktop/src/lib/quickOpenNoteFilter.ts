@@ -26,12 +26,17 @@ export type QuickOpenNoteRef = {name: string; uri: string};
 /**
  * Case-insensitive substring match on note stem (`name`) or relative vault path (`uri`).
  * Results sorted like `collectVaultMarkdownRefs`: name then uri.
+ * Empty or whitespace-only `query` returns **no** rows (palette stays empty until the user types).
  */
 export function filterVaultNotesForQuickOpen(
   query: string,
   vaultRoot: string,
   refs: readonly QuickOpenNoteRef[],
 ): QuickOpenNoteRef[] {
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return [];
+  }
   const sorted = [...refs].sort((a, b) => {
     const byName = a.name.localeCompare(b.name);
     if (byName !== 0) {
@@ -39,10 +44,6 @@ export function filterVaultNotesForQuickOpen(
     }
     return a.uri.localeCompare(b.uri);
   });
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    return sorted;
-  }
   return sorted.filter(r => {
     const rel = quickOpenVaultRelativePath(vaultRoot, r.uri).toLowerCase();
     return r.name.toLowerCase().includes(q) || rel.includes(q);

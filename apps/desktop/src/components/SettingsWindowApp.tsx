@@ -17,6 +17,7 @@ import {
   writeVaultSettings,
 } from '../lib/vaultBootstrap';
 import {createTauriVaultFilesystem, getVaultSession, setVaultSession, startVaultWatch} from '../lib/tauriVault';
+import {vaultSearchIndexSchedule} from '../lib/tauriVaultSearch';
 import {SettingsContent} from './SettingsContent';
 
 const STORE_PATH = 'eskerra-desktop.json';
@@ -53,6 +54,9 @@ export function SettingsWindowApp() {
         await store.set(STORE_KEY_VAULT, root);
         await store.save();
         await startVaultWatch();
+        queueMicrotask(() => {
+          void vaultSearchIndexSchedule().catch(() => undefined);
+        });
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       } finally {
