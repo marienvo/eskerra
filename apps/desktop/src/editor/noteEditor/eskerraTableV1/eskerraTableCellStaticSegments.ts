@@ -51,23 +51,41 @@ export function mergeStyledIntervals(
     return [];
   }
   const breaks = new Set<number>([0, textLen]);
+  const clipped: StyledInterval[] = [];
   for (const iv of intervals) {
     const a = Math.max(0, Math.min(iv.from, textLen));
     const b = Math.max(0, Math.min(iv.to, textLen));
     if (a < b) {
       breaks.add(a);
       breaks.add(b);
+      clipped.push({from: a, to: b, priority: iv.priority, classes: iv.classes});
     }
   }
   const sorted = [...breaks].sort((x, y) => x - y);
+  const byStart = [...clipped].sort((x, y) => x.from - y.from || x.to - y.to);
+  const active: StyledInterval[] = [];
+  let startIdx = 0;
   const out: CellStaticSegment[] = [];
-  for (let i = 0; i < sorted.length - 1; i += 1) {
-    const a = sorted[i]!;
-    const b = sorted[i + 1]!;
+
+  for (let k = 0; k < sorted.length - 1; k += 1) {
+    const a = sorted[k]!;
+    const b = sorted[k + 1]!;
     if (a === b) {
       continue;
     }
-    const covering = intervals.filter(iv => a >= iv.from && a < iv.to);
+    for (let i = active.length - 1; i >= 0; i -= 1) {
+      if (active[i]!.to <= a) {
+        active.splice(i, 1);
+      }
+    }
+    while (startIdx < byStart.length && byStart[startIdx]!.from <= a) {
+      const iv = byStart[startIdx]!;
+      if (iv.to > a) {
+        active.push(iv);
+      }
+      startIdx += 1;
+    }
+    const covering = active.filter(iv => a >= iv.from && a < iv.to);
     if (covering.length === 0) {
       joinOrPush(out, a, b, '');
       continue;
@@ -227,18 +245,23 @@ function collectBareBrowserStyledIntervals(state: EditorState): StyledInterval[]
   return out;
 }
 
+export type CellStaticSegmentsResult = {
+  state: EditorState;
+  segments: CellStaticSegment[];
+};
+
 /**
  * Build disjoint styled segments for an inactive table cell using the same markdown parse +
  * class policy as nested CodeMirror (Lezer + wiki + relative-.md overlays).
+ *
+ * Returns the same `EditorState` used for highlighting so callers can reuse it for link hit-tests
+ * (avoids a second Lezer parse per cell).
  */
 export function buildCellStaticSegments(
   text: string,
   resolve: CellStaticResolvePredicates,
-): CellStaticSegment[] {
+): CellStaticSegmentsResult {
   const textLen = text.length;
-  if (textLen === 0) {
-    return [];
-  }
   const state = EditorState.create({
     doc: text,
     extensions: [
@@ -248,14 +271,17 @@ export function buildCellStaticSegments(
       }),
     ],
   });
+  if (textLen === 0) {
+    return {state, segments: []};
+  }
   ensureSyntaxTree(state, textLen, TREE_ENSURE_MS);
   const tree = syntaxTree(state);
   const intervals: StyledInterval[] = [
     ...collectLezerIntervals(textLen, tree),
-      ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
-      ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
-      ...collectExternalMdIntervals(state),
-      ...collectBareBrowserStyledIntervals(state),
+    ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
+    ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
+    ...collectExternalMdIntervals(state),
+    ...collectBareBrowserStyledIntervals(state),
   ];
-  return mergeStyledIntervals(textLen, intervals);
+  return {state, segments: mergeStyledIntervals(textLen, intervals)};
 }
