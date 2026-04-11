@@ -1,8 +1,14 @@
+import {mergeConfig} from 'vite';
 import {defineConfig} from 'vitest/config';
 
-export default defineConfig({
-  test: {
-    environment: 'happy-dom',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
-  },
-});
+import viteConfig from './vite.config';
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      environment: 'happy-dom',
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    },
+  }),
+);

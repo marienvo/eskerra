@@ -28,6 +28,9 @@ export type MainWorkspaceSplitProps = {
 /**
  * Optional vault and episodes areas to the left of the editor. When both are visible they stack
  * vertically in one column; otherwise the same fixed-px horizontal splits as before apply.
+ *
+ * The editor always stays under `DesktopHorizontalSplit` as `right` so toggling Vault (with
+ * Episodes hidden) does not swap React roots and remount the editor subtree.
  */
 export function MainWorkspaceSplit({
   vaultVisible,
@@ -42,74 +45,61 @@ export function MainWorkspaceSplit({
   episodesPane,
   editorPane,
 }: MainWorkspaceSplitProps) {
-  if (!vaultVisible && !episodesVisible) {
-    return (
-      <div
-        className="main-workspace-editor-only"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        {editorPane}
-      </div>
-    );
-  }
+  const leftCollapsed = !vaultVisible && !episodesVisible;
+
+  let leftWidthPx: number;
+  let minLeftPx: number;
+  let maxLeftPx: number;
+  let onLeftWidthPxChanged: (px: number) => void;
+  let left: ReactNode;
 
   if (vaultVisible && episodesVisible) {
-    return (
-      <DesktopHorizontalSplit
+    leftWidthPx = vaultWidthPx;
+    minLeftPx = INBOX_LEFT_PANEL.minPx;
+    maxLeftPx = INBOX_LEFT_PANEL.maxPx;
+    onLeftWidthPxChanged = onVaultWidthPxChanged;
+    left = (
+      <DesktopVerticalSplit
         className="split-inner"
-        leftWidthPx={vaultWidthPx}
-        minLeftPx={INBOX_LEFT_PANEL.minPx}
-        maxLeftPx={INBOX_LEFT_PANEL.maxPx}
-        minRightPx={MIN_RESIZABLE_PANE_PX}
-        onLeftWidthPxChanged={onVaultWidthPxChanged}
-        left={
-          <DesktopVerticalSplit
-            className="split-inner"
-            topHeightPx={stackTopHeightPx}
-            minTopPx={MIN_RESIZABLE_PANE_PX}
-            maxTopPx={VAULT_EPISODES_STACK_TOP.maxPx}
-            minBottomPx={MIN_RESIZABLE_PANE_PX}
-            onTopHeightPxChanged={onStackTopHeightPxChanged}
-            top={vaultPane}
-            bottom={episodesPane}
-          />
-        }
-        right={editorPane}
+        topHeightPx={stackTopHeightPx}
+        minTopPx={MIN_RESIZABLE_PANE_PX}
+        maxTopPx={VAULT_EPISODES_STACK_TOP.maxPx}
+        minBottomPx={MIN_RESIZABLE_PANE_PX}
+        onTopHeightPxChanged={onStackTopHeightPxChanged}
+        top={vaultPane}
+        bottom={episodesPane}
       />
     );
-  }
-
-  if (vaultVisible) {
-    return (
-      <DesktopHorizontalSplit
-        className="split-inner"
-        leftWidthPx={vaultWidthPx}
-        minLeftPx={INBOX_LEFT_PANEL.minPx}
-        maxLeftPx={INBOX_LEFT_PANEL.maxPx}
-        minRightPx={MIN_RESIZABLE_PANE_PX}
-        onLeftWidthPxChanged={onVaultWidthPxChanged}
-        left={vaultPane}
-        right={editorPane}
-      />
-    );
+  } else if (vaultVisible) {
+    leftWidthPx = vaultWidthPx;
+    minLeftPx = INBOX_LEFT_PANEL.minPx;
+    maxLeftPx = INBOX_LEFT_PANEL.maxPx;
+    onLeftWidthPxChanged = onVaultWidthPxChanged;
+    left = vaultPane;
+  } else if (episodesVisible) {
+    leftWidthPx = episodesWidthPx;
+    minLeftPx = PODCASTS_LEFT_PANEL.minPx;
+    maxLeftPx = PODCASTS_LEFT_PANEL.maxPx;
+    onLeftWidthPxChanged = onEpisodesWidthPxChanged;
+    left = episodesPane;
+  } else {
+    leftWidthPx = vaultWidthPx;
+    minLeftPx = INBOX_LEFT_PANEL.minPx;
+    maxLeftPx = INBOX_LEFT_PANEL.maxPx;
+    onLeftWidthPxChanged = onVaultWidthPxChanged;
+    left = null;
   }
 
   return (
     <DesktopHorizontalSplit
       className="split-inner"
-      leftWidthPx={episodesWidthPx}
-      minLeftPx={PODCASTS_LEFT_PANEL.minPx}
-      maxLeftPx={PODCASTS_LEFT_PANEL.maxPx}
+      leftCollapsed={leftCollapsed}
+      leftWidthPx={leftWidthPx}
+      minLeftPx={minLeftPx}
+      maxLeftPx={maxLeftPx}
       minRightPx={MIN_RESIZABLE_PANE_PX}
-      onLeftWidthPxChanged={onEpisodesWidthPxChanged}
-      left={episodesPane}
+      onLeftWidthPxChanged={onLeftWidthPxChanged}
+      left={left}
       right={editorPane}
     />
   );
