@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type {MutableRefObject, ReactNode, RefObject} from 'react';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,6 +11,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import {createPortal} from 'react-dom';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
 import {
@@ -152,6 +154,8 @@ type VaultTabProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
+  titleBarEditorTabsHost?: HTMLElement | null;
 };
 
 type InboxBacklinksSectionProps = {
@@ -541,6 +545,7 @@ export function VaultTab({
   todayHubCellEditorRef,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  titleBarEditorTabsHost = null,
 }: VaultTabProps) {
   const reopenClosedTabKbdLabel = useMemo(
     () => reopenClosedTabMenuShortcutLabel(),
@@ -799,8 +804,28 @@ export function VaultTab({
     inboxEditorShellScrollRef,
   ]);
 
+  const titleBarTabsPortal =
+    titleBarEditorTabsHost != null && !composingNewEntry
+      ? createPortal(
+          <EditorPaneOpenNoteTabs
+            notes={notes}
+            workspaceTabs={editorWorkspaceTabs}
+            activeTabId={activeEditorTabId}
+            busy={busy}
+            onActivateTab={onActivateOpenTab}
+            onCloseTab={onCloseEditorTab}
+            onRenameNote={openRenameDialog}
+            onCloseOtherTabs={onCloseOtherEditorTabs}
+            inTitleBar
+          />,
+          titleBarEditorTabsHost,
+        )
+      : null;
+
   return (
-    <div className="inbox-root" data-app-surface="capture">
+    <Fragment>
+      {titleBarTabsPortal}
+      <div className="inbox-root" data-app-surface="capture">
       <AlertDialog.Root
         open={confirmDeleteUri !== null}
         onOpenChange={open => {
@@ -1158,18 +1183,7 @@ export function VaultTab({
                   >
                     {editorPaneTitle}
                   </span>
-                ) : (
-                  <EditorPaneOpenNoteTabs
-                    notes={notes}
-                    workspaceTabs={editorWorkspaceTabs}
-                    activeTabId={activeEditorTabId}
-                    busy={busy}
-                    onActivateTab={onActivateOpenTab}
-                    onCloseTab={onCloseEditorTab}
-                    onRenameNote={openRenameDialog}
-                    onCloseOtherTabs={onCloseOtherEditorTabs}
-                  />
-                )}
+                ) : null}
               </div>
               <div className="pane-header-trailing-actions">
                 {!composingNewEntry
@@ -1294,5 +1308,6 @@ export function VaultTab({
         }
       />
     </div>
+    </Fragment>
   );
 }

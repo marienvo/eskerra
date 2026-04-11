@@ -258,13 +258,53 @@ a:focus:not(:focus-visible) {
   gap: 0.4rem;
 }
 
-.window-title-bar-drag {
-  flex: 1;
-  min-width: 2rem;
+/* Fills space between workspace chrome and drag sliver; portaled editor tabs render here. */
+.window-title-editor-tabs-host {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   align-items: center;
+  overflow: hidden;
   cursor: default;
+}
+
+/* Predictable window-drag strip when the tab row is full (no buttons). */
+.window-title-bar-drag-sliver {
+  flex-shrink: 0;
+  width: 10px;
+  align-self: stretch;
+  cursor: default;
+}
+
+/*
+ * WebKit/GTK: `data-tauri-drag-region` alone is not always enough; pair with drag region
+ * so empty title-bar space (and the flex filler beside tabs) moves the window.
+ */
+.app-root--tauri .window-title-editor-tabs-host,
+.app-root--tauri .window-title-bar-drag-sliver {
+  -webkit-app-region: drag;
+}
+
+.app-root--tauri .editor-open-tabs-scroll--titlebar {
+  -webkit-app-region: drag;
+}
+
+/* Absorbs horizontal space to the right of tabs / after the "Editor" placeholder. */
+.app-root--tauri .editor-open-tabs-titlebar-drag-filler {
+  -webkit-app-region: drag;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+}
+
+/* Pills handle their own hits (context menu, tab activate); gaps use parent strip drag. */
+.app-root--tauri .editor-open-tabs-scroll--titlebar .editor-open-tab-pill {
+  -webkit-app-region: no-drag;
+}
+
+.app-root--tauri .editor-open-tabs-scroll--titlebar .editor-open-tabs-placeholder--titlebar {
+  -webkit-app-region: no-drag;
 }
 
 .app-playback-transport {
@@ -1157,27 +1197,16 @@ a:focus:not(:focus-visible) {
   gap: 0.15rem;
 }
 
-/* Vault editor column: tighter chrome around open-note pills. */
+/* Vault editor column: tighter chrome; open-note tabs live in the window title bar. */
 .pane-header--inbox-editor {
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
-  /* Keep Back/Forward + trailing actions on the first row when pills wrap. */
-  align-items: flex-start;
+  align-items: center;
 }
 
 .pane-header--inbox-editor .pane-header-start {
   gap: 0.12rem;
-  align-items: flex-start;
-}
-
-/* Back / Forward (first two buttons) and trailing tab-menu: 2px lower vs wrapped pills. */
-.pane-header--inbox-editor .pane-header-start > button:nth-child(1),
-.pane-header--inbox-editor .pane-header-start > button:nth-child(2) {
-  transform: translateY(2px);
-}
-
-.pane-header--inbox-editor .pane-header-trailing-actions .pane-header-add-btn {
-  transform: translateY(2px);
+  align-items: center;
 }
 
 .pane-title {
@@ -1209,6 +1238,17 @@ a:focus:not(:focus-visible) {
   color: var(--color-muted);
 }
 
+.editor-open-tabs-placeholder--titlebar {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: 0.2rem;
+}
+
 .editor-open-tabs-scroll {
   flex: 1 1 auto;
   min-width: 0;
@@ -1219,6 +1259,24 @@ a:focus:not(:focus-visible) {
   gap: 0.1rem;
   overflow: visible;
   padding-block: 0;
+}
+
+/* Title bar: single row, browser-style flex shrink then clip (no scroll, no second line). */
+.editor-open-tabs-scroll--titlebar {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-content: center;
+  overflow: hidden;
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill {
+  flex: 1 1 0;
+  min-width: calc(
+    0.22rem + 15px + var(--file-tree-icon-label-gap, 6px) + 1.05rem + 4px
+  );
+  max-width: 10.5rem;
 }
 
 .editor-open-tab-pill {

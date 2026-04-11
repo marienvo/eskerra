@@ -1,4 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import {isTauri} from '@tauri-apps/api/core';
 import {Cross2Icon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {
   memo,
@@ -23,6 +24,17 @@ const TAB_PILL_ICON_DIM = {
   width: FILE_TREE_ICON_SIZE_PX,
   height: FILE_TREE_ICON_SIZE_PX,
 } as const;
+
+function TitleBarTabStripDragFiller() {
+  const tauri = isTauri();
+  return (
+    <div
+      className="editor-open-tabs-titlebar-drag-filler"
+      aria-hidden
+      {...(tauri ? {'data-tauri-drag-region': true} : {})}
+    />
+  );
+}
 
 function EditorOpenTabPillLeadingIcon({iconName}: {iconName: EditorOpenTabPillIconName}) {
   return iconName === 'today' ? (
@@ -222,6 +234,8 @@ export type EditorPaneOpenNoteTabsProps = {
   onCloseTab: (tabId: string) => void;
   onRenameNote: (uri: string) => void;
   onCloseOtherTabs: (keepTabId: string) => void;
+  /** When true, tab strip uses title bar layout (single row, flex shrink, clip). */
+  inTitleBar?: boolean;
 };
 
 export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
@@ -233,8 +247,19 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
   onCloseTab,
   onRenameNote,
   onCloseOtherTabs,
+  inTitleBar = false,
 }: EditorPaneOpenNoteTabsProps) {
   if (workspaceTabs.length === 0) {
+    if (inTitleBar) {
+      return (
+        <div className="editor-open-tabs-scroll editor-open-tabs-scroll--titlebar editor-open-tabs-scroll--titlebar-empty">
+          <span className="editor-open-tabs-placeholder editor-open-tabs-placeholder--titlebar">
+            Editor
+          </span>
+          <TitleBarTabStripDragFiller />
+        </div>
+      );
+    }
     return (
       <span className="pane-title pane-title--truncate editor-open-tabs-placeholder">
         Editor
@@ -244,8 +269,12 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
 
   const multiTabs = workspaceTabs.length > 1;
 
+  const scrollClass = inTitleBar
+    ? 'editor-open-tabs-scroll editor-open-tabs-scroll--titlebar'
+    : 'editor-open-tabs-scroll';
+
   return (
-    <div className="editor-open-tabs-scroll" role="tablist" aria-label="Open notes">
+    <div className={scrollClass} role="tablist" aria-label="Open notes">
       {workspaceTabs.map(tab => {
         const uri = tabCurrentUri(tab);
         const active = tab.id === activeTabId;
@@ -270,6 +299,7 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
           />
         );
       })}
+      {inTitleBar ? <TitleBarTabStripDragFiller /> : null}
     </div>
   );
 });

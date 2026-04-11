@@ -13,6 +13,8 @@ type WindowTitleBarProps = {
   tiling?: WindowTilingState;
   vaultPaneVisible: boolean;
   onToggleVault: () => void;
+  /** Mount point for editor open-note tabs (React portal target). */
+  onEditorTabsHostRef?: (el: HTMLDivElement | null) => void;
   todayHubSelect?: {
     items: readonly TodayHubWorkspaceSelectItem[];
     activeTodayNoteUri: string | null;
@@ -27,6 +29,7 @@ export function WindowTitleBar({
   tiling = 'none',
   vaultPaneVisible,
   onToggleVault,
+  onEditorTabsHostRef,
   todayHubSelect = null,
 }: WindowTitleBarProps) {
   const tauri = isTauri();
@@ -70,7 +73,16 @@ export function WindowTitleBar({
           />
         ) : null}
       </div>
-      <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
+      <div
+        ref={onEditorTabsHostRef}
+        className="window-title-editor-tabs-host"
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      />
+      <div
+        className="window-title-bar-drag-sliver"
+        aria-hidden
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      />
       <div className="window-title-bar-trailing">
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">

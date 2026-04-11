@@ -259,6 +259,9 @@ export default function App() {
   const [episodesPaneVisible, setEpisodesPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
   );
+  const [titleBarEditorTabsHost, setTitleBarEditorTabsHost] = useState<HTMLDivElement | null>(
+    null,
+  );
   useEditorHistoryMouseButtons({
     vaultRoot,
     busy,
@@ -914,6 +917,7 @@ export default function App() {
             tiling={tiling}
             vaultPaneVisible={vaultPaneVisible}
             onToggleVault={() => setVaultPaneVisible(v => !v)}
+            onEditorTabsHostRef={setTitleBarEditorTabsHost}
             todayHubSelect={titleBarTodayHubSelect}
           />
 
@@ -1032,6 +1036,7 @@ export default function App() {
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
               </main>
             </div>
