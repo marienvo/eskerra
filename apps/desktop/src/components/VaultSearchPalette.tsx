@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {Command, CommandEmpty, CommandInput, CommandItem, CommandList} from 'cmdk';
-import {useCallback, useMemo, useRef} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
@@ -65,6 +65,29 @@ export function VaultSearchPalette({
       ? sortedHits
       : sortedHits.slice(0, VAULT_SEARCH_UI_MAX_VISIBLE_HITS);
   const hiddenHitCount = sortedHits.length - displayedHits.length;
+
+  /** Any change to the ordered hit list resets cmdk selection to the first row (stable under object identity). */
+  const hitsOrderSignature = useMemo(
+    () => sortedHits.map(h => `${h.uri}:${h.lineNumber}`).join('\0'),
+    [sortedHits],
+  );
+
+  const firstDisplayedItemValue = useMemo(() => {
+    if (displayedHits.length === 0) {
+      return '';
+    }
+    const h = displayedHits[0]!;
+    return `${h.uri}:${h.lineNumber}`;
+  }, [displayedHits]);
+
+  const [commandValue, setCommandValue] = useState(firstDisplayedItemValue);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCommandValue(firstDisplayedItemValue);
+    });
+  }, [hitsOrderSignature, firstDisplayedItemValue]);
+
   const progressCounts =
     progress != null
       ? `${progress.scannedFiles} files · ${progress.totalHits} hits · ${progress.skippedLargeFiles} skipped (>512 KiB)`
@@ -106,6 +129,8 @@ export function VaultSearchPalette({
             shouldFilter={false}
             className="quick-open-command"
             loop={false}
+            value={commandValue}
+            onValueChange={setCommandValue}
             aria-busy={trimmedQuery.length > 0 && !scanDone}
             data-holding-previous-results={holdingPreviousResults ? 'true' : undefined}
           >
