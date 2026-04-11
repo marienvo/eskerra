@@ -1264,16 +1264,33 @@ a:focus:not(:focus-visible) {
 
 /* Editor Toolbar (VaultTab): tighter chrome; open-note tabs live in the window title bar. */
 .pane-header--editor-toolbar {
-  position: relative;
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
   align-items: center;
 }
 
-.pane-header--editor-toolbar .pane-header-start,
-.pane-header--editor-toolbar .pane-header-trailing-actions {
-  position: relative;
-  z-index: 2;
+/* Three-column grid: equal 1fr sides keep now-playing centered at 50% of toolbar width. */
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback {
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) fit-content(50%) minmax(min-content, 1fr);
+  align-items: center;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .pane-header-start {
+  grid-column: 1;
+  justify-self: start;
+  min-width: 0;
+  flex: unset;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .editor-workspace-toolbar__now-playing.pane-title {
+  grid-column: 2;
+  justify-self: center;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .pane-header-trailing-actions {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .pane-header--editor-toolbar .pane-header-start {
@@ -1288,25 +1305,20 @@ a:focus:not(:focus-visible) {
   align-self: stretch;
 }
 
-/* Centered on full toolbar row (not remaining flex); pointer-events off so clicks hit pane-header-start. */
-.pane-header--editor-toolbar > .editor-workspace-toolbar__now-playing.pane-title {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1;
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .editor-workspace-toolbar__now-playing.pane-title {
   box-sizing: border-box;
   margin: 0;
   flex: none;
-  max-width: min(62vw, 28rem);
-  width: max-content;
   min-width: 0;
-  padding-inline: 0.35rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  padding-inline: 0.5rem;
   font-size: 0.72rem;
   line-height: 1.22;
   font-weight: 400;
-  text-align: center;
-  pointer-events: none;
 }
 
 .editor-workspace-toolbar__now-playing strong {

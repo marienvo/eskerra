@@ -63,7 +63,14 @@ export function EditorWorkspaceToolbar({
     !composingNewEntry && playbackTransport != null && nowPlaying != null;
 
   return (
-    <div className="pane-header pane-header--editor-toolbar editor-workspace-toolbar">
+    <div
+      className={[
+        'pane-header pane-header--editor-toolbar editor-workspace-toolbar',
+        showPlaybackChrome ? 'editor-workspace-toolbar--playback' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="pane-header-start">
         <button
           type="button"
