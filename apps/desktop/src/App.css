@@ -2558,7 +2558,7 @@ button.primary.destructive {
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
-  color: var(--color-interactive-text);
+  color: var(--color-accent);
   /* Bare and markdown `http(s)` spans; otherwise the line breaks after the list mark only. */
   overflow-wrap: anywhere;
 }
@@ -2575,7 +2575,7 @@ button.primary.destructive {
 
 /*
  * One “open externally” glyph per browser-openable link (markdown + wiki); neutral gray so the
- * icon does not inherit the red interactive link color.
+ * icon does not inherit the link text color.
  */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-external-link-glyph::after {
   content: '';
@@ -2596,7 +2596,7 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-wiki-link--external {
-  color: var(--color-interactive-text);
+  color: var(--color-accent);
 }
 
 /*
