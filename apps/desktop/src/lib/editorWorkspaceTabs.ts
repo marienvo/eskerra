@@ -96,6 +96,38 @@ export function findTabIdWithCurrentUri(
   return null;
 }
 
+/**
+ * Move the tab at `fromIndex` so it ends up immediately before the tab that is
+ * currently at `insertBeforeIndex` (0 = start, `tabs.length` = end).
+ * Indices refer to the array **before** the move.
+ */
+export function reorderEditorWorkspaceTabsInArray(
+  tabs: readonly EditorWorkspaceTab[],
+  fromIndex: number,
+  insertBeforeIndex: number,
+): EditorWorkspaceTab[] {
+  const n = tabs.length;
+  if (n <= 1) {
+    return [...tabs];
+  }
+  if (fromIndex < 0 || fromIndex >= n) {
+    return [...tabs];
+  }
+  const cappedInsert = Math.max(0, Math.min(insertBeforeIndex, n));
+  const list = [...tabs];
+  const [item] = list.splice(fromIndex, 1);
+  if (!item) {
+    return [...tabs];
+  }
+  let dest = cappedInsert;
+  if (fromIndex < cappedInsert) {
+    dest = cappedInsert - 1;
+  }
+  dest = Math.max(0, Math.min(dest, list.length));
+  list.splice(dest, 0, item);
+  return list;
+}
+
 export function ensureActiveTabId(
   tabs: readonly EditorWorkspaceTab[],
   activeId: string | null,

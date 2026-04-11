@@ -174,6 +174,7 @@ export default function App() {
     activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
+    reorderEditorWorkspaceTabs,
     closeOtherEditorTabs,
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
@@ -1025,6 +1026,7 @@ export default function App() {
                       activeEditorTabId={activeEditorTabId}
                       onActivateOpenTab={activateOpenTab}
                       onCloseEditorTab={closeEditorTab}
+                      onReorderEditorWorkspaceTabs={reorderEditorWorkspaceTabs}
                       onCloseOtherEditorTabs={closeOtherEditorTabs}
                       onCloseAllEditorTabs={closeAllEditorTabs}
                       onReopenClosedEditorTab={reopenLastClosedEditorTab}

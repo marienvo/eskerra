@@ -114,6 +114,7 @@ import {
   pushNavigateOnTab,
   remapAllTabsUriPrefix,
   removeUriFromAllTabs,
+  reorderEditorWorkspaceTabsInArray,
   tabCurrentUri,
   tabsFromStored,
   tabsToStored,
@@ -395,6 +396,8 @@ export type UseMainWindowWorkspaceResult = {
   activeEditorTabId: string | null;
   activateOpenTab: (tabId: string) => void;
   closeEditorTab: (tabId: string) => void;
+  /** Reorder open tabs in the title bar (`fromIndex` / `insertBeforeIndex` refer to order before the move). */
+  reorderEditorWorkspaceTabs: (fromIndex: number, insertBeforeIndex: number) => void;
   closeOtherEditorTabs: (keepTabId: string) => void;
   closeAllEditorTabs: () => void;
   reopenLastClosedEditorTab: () => void;
@@ -1484,6 +1487,29 @@ export function useMainWindowWorkspace(options: {
       void openMarkdownInEditor(u, {skipHistory: true});
     },
     [openMarkdownInEditor],
+  );
+
+  const reorderEditorWorkspaceTabs = useCallback(
+    (fromIndex: number, insertBeforeIndex: number) => {
+      if (busy) {
+        return;
+      }
+      const tabs = editorWorkspaceTabsRef.current;
+      const next = reorderEditorWorkspaceTabsInArray(tabs, fromIndex, insertBeforeIndex);
+      let sameOrder = true;
+      for (let i = 0; i < next.length; i++) {
+        if (next[i]!.id !== tabs[i]!.id) {
+          sameOrder = false;
+          break;
+        }
+      }
+      if (sameOrder) {
+        return;
+      }
+      editorWorkspaceTabsRef.current = next;
+      setEditorWorkspaceTabs(next);
+    },
+    [busy],
   );
 
   const closeEditorTab = useCallback(
@@ -3967,6 +3993,7 @@ export function useMainWindowWorkspace(options: {
     activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
+    reorderEditorWorkspaceTabs,
     closeOtherEditorTabs,
     closeAllEditorTabs,
     reopenLastClosedEditorTab,

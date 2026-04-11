@@ -139,6 +139,7 @@ type VaultTabProps = {
   activeEditorTabId: string | null;
   onActivateOpenTab: (tabId: string) => void;
   onCloseEditorTab: (tabId: string) => void;
+  onReorderEditorWorkspaceTabs?: (fromIndex: number, insertBeforeIndex: number) => void;
   onCloseOtherEditorTabs: (keepTabId: string) => void;
   onCloseAllEditorTabs: () => void;
   onReopenClosedEditorTab: () => void;
@@ -534,6 +535,7 @@ export function VaultTab({
   activeEditorTabId,
   onActivateOpenTab,
   onCloseEditorTab,
+  onReorderEditorWorkspaceTabs,
   onCloseOtherEditorTabs,
   onCloseAllEditorTabs,
   onReopenClosedEditorTab,
@@ -817,6 +819,7 @@ export function VaultTab({
             onRenameNote={openRenameDialog}
             onCloseOtherTabs={onCloseOtherEditorTabs}
             inTitleBar
+            onReorderTabs={onReorderEditorWorkspaceTabs}
           />,
           titleBarEditorTabsHost,
         )
