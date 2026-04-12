@@ -6,7 +6,7 @@ export type NoteMarkdownLoadSelection = 'start' | 'end' | 'preserve';
  * How to place the caret after a full-document `loadMarkdown` replace.
  *
  * - `start` / `end`: force an empty selection at 0 or EOF (`undefined` counts as `end` for backward compatibility).
- * - `preserve`: map the current selection through the replace when possible; use clamped head for `setState`.
+ * - `preserve`: map the current selection through minimal line-diff hunks (`dispatch`) or `mapPositionThroughDiff` (`setState`); see `noteMarkdownDiffChanges.ts`.
  */
 export type NoteMarkdownLoadOptions = {
   selection?: NoteMarkdownLoadSelection | undefined;

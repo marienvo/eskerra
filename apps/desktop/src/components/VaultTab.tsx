@@ -127,6 +127,8 @@ type VaultTabProps = {
   ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
+  /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
+  onCleanNote?: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
@@ -177,6 +179,8 @@ type VaultTabProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Skip hub row clean when this returns true (e.g. disk conflict on that week file). */
+  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
 };
@@ -208,6 +212,7 @@ type EditorPaneBodyProps = {
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   wikiLinkCompletionCandidates: ReturnType<typeof buildInboxWikiLinkCompletionCandidates>;
   onSaveShortcut: VaultTabProps['onSaveShortcut'];
+  onCleanNote?: VaultTabProps['onCleanNote'];
   onDeleteNoteShortcut: () => void;
   busy: boolean;
   backlinkRows: readonly {uri: string; fileName: string; title: string}[];
@@ -224,6 +229,7 @@ type EditorPaneBodyProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
 };
 
 function InboxBacklinksSection({
@@ -304,6 +310,7 @@ function EditorPaneBody({
   wikiLinkTargetIsResolved,
   wikiLinkCompletionCandidates,
   onSaveShortcut,
+  onCleanNote,
   onDeleteNoteShortcut,
   busy,
   backlinkRows,
@@ -316,6 +323,7 @@ function EditorPaneBody({
   todayHubCellEditorRef,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  todayHubCleanRowBlocked,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -445,6 +453,7 @@ function EditorPaneBody({
                 wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                 wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                 onSaveShortcut={onSaveShortcut}
+                onCleanNote={onCleanNote}
                 onDeleteNoteShortcut={onDeleteNoteShortcut}
                 placeholder={
                   composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
@@ -492,6 +501,7 @@ function EditorPaneBody({
                   onSaveShortcut={onSaveShortcut}
                   prehydrateTodayHubRows={prehydrateTodayHubRows}
                   persistTodayHubRow={persistTodayHubRow}
+                  todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                 />
               </div>
             </div>
@@ -540,6 +550,7 @@ export function VaultTab({
   onMarkdownRelativeLinkActivate,
   onMarkdownExternalLinkOpen,
   onSaveShortcut,
+  onCleanNote,
   busy,
   onDeleteNote,
   onRenameNote,
@@ -578,6 +589,7 @@ export function VaultTab({
   todayHubCellEditorRef,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
@@ -1161,6 +1173,7 @@ export function VaultTab({
         onToggleNotificationsPanel={onToggleNotificationsPanel}
         playbackTransport={playbackTransport}
         nowPlaying={toolbarNowPlaying ?? null}
+        onCleanNote={onCleanNote}
       />
       <DesktopHorizontalSplitEnd
         endVisible={notificationsPanelVisible}
@@ -1227,6 +1240,7 @@ export function VaultTab({
                       wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
+                      onCleanNote={onCleanNote}
                       onDeleteNoteShortcut={onDeleteNoteShortcut}
                       busy={busy}
                       backlinkRows={backlinkRows}
@@ -1239,6 +1253,7 @@ export function VaultTab({
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                     />
                     {composingNewEntry ? (
                       <div className="pane-footer">

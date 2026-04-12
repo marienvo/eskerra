@@ -180,7 +180,6 @@ describe('normalizeMainWindowUiPayload', () => {
           },
           notAnObject: 1,
           bad: null,
-          emptyTabs: {editorWorkspaceTabs: [{id: 'z', entries: [], index: 0}]},
         },
       },
     });

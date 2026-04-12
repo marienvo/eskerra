@@ -18,6 +18,7 @@ import {
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
+  mergeYamlFrontmatterBody,
   normalizeVaultBaseUri,
   parseComposeInput,
   sanitizeInboxNoteStem,
@@ -133,6 +134,7 @@ import {
 } from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
+import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
 import {
   clearInboxYamlFrontmatterEditorRefs,
   inboxEditorSliceToFullMarkdown,
@@ -350,6 +352,8 @@ export type UseMainWindowWorkspaceResult = {
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
+  /** Normalize markdown layout for the open vault note (body only; YAML unchanged). */
+  onCleanNoteInbox: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   /** Editor intent entrypoint for wiki link open/create. */
@@ -420,6 +424,8 @@ export type UseMainWindowWorkspaceResult = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Skip Today Hub week-row clean when the blocking disk conflict targets that file. */
+  todayHubCleanRowBlocked: (rowUri: string) => boolean;
   /** Title bar: eligible `Today.md` hubs (vault scan), sorted for stable ordering. */
   todayHubSelectorItems: readonly {todayNoteUri: string; label: string}[];
   /** Canonical `Today.md` URI for the workspace whose tab bar is active. */
@@ -2011,7 +2017,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (kind === 'reload_from_disk') {
           autosaveSchedulerRef.current.cancel();
-          loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'start');
+          loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'preserve');
           scheduleBacklinksDeferOneFrameAfterLoad();
           lastPersistedRef.current = {uri: normTab, markdown: diskBody};
           const nextCache = mergeInboxNoteBodyIntoCache(
@@ -2674,6 +2680,74 @@ export function useMainWindowWorkspace(options: {
       void flushInboxSave();
     }
   }, [submitNewEntry, flushInboxSave]);
+
+  const todayHubCleanRowBlocked = useCallback((rowUri: string) => {
+    const dc = diskConflictRef.current;
+    return (
+      !!dc &&
+      normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(rowUri)
+    );
+  }, []);
+
+  const onCleanNoteInbox = useCallback(() => {
+    const uri = selectedUriRef.current;
+    if (!uri || composingNewEntryRef.current) {
+      return;
+    }
+    const dc = diskConflictRef.current;
+    if (dc && normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(uri)) {
+      return;
+    }
+    const slice =
+      inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+    const cleanedSlice = cleanNoteMarkdownBody(slice, uri);
+    if (cleanedSlice !== slice) {
+      const full = mergeYamlFrontmatterBody(
+        inboxEditorYamlFrontmatterBlockRef.current,
+        cleanedSlice,
+        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+      );
+      loadFullMarkdownIntoInboxEditor(full, uri, 'preserve');
+      scheduleBacklinksDeferOneFrameAfterLoad();
+      const norm = normalizeEditorDocUri(uri);
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        norm,
+        full,
+      );
+      if (nextCache) {
+        inboxContentByUriRef.current = nextCache;
+        setInboxContentByUri(prev =>
+          mergeInboxNoteBodyIntoCache(prev, norm, full) ?? prev,
+        );
+      }
+    }
+
+    const runHubClean = async () => {
+      if (!showTodayHubCanvasRef.current || composingNewEntryRef.current) {
+        return;
+      }
+      const hubTodayUri = selectedUriRef.current;
+      if (!hubTodayUri) {
+        return;
+      }
+      const block = diskConflictRef.current;
+      if (
+        block &&
+        normalizeEditorDocUri(block.uri) === normalizeEditorDocUri(hubTodayUri)
+      ) {
+        return;
+      }
+      await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
+      await todayHubBridgeRef.current.cleanHubPageDayColumns().catch(() => undefined);
+    };
+    void runHubClean();
+  }, [
+    inboxEditorRef,
+    loadFullMarkdownIntoInboxEditor,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+    setInboxContentByUri,
+  ]);
 
   const deleteNote = useCallback(
     async (uri: string) => {
@@ -4084,6 +4158,7 @@ export function useMainWindowWorkspace(options: {
     selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
+    onCleanNoteInbox,
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
@@ -4121,6 +4196,7 @@ export function useMainWindowWorkspace(options: {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubCleanRowBlocked,
     todayHubSelectorItems,
     activeTodayHubUri,
     todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,

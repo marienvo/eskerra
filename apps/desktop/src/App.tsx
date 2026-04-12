@@ -144,6 +144,7 @@ export default function App() {
     selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
+    onCleanNoteInbox,
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
@@ -179,6 +180,7 @@ export default function App() {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubCleanRowBlocked,
     todayHubSelectorItems,
     activeTodayHubUri,
     todayHubWorkspacesForSave,
@@ -300,6 +302,45 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown, true);
     };
   }, [vaultRoot, busy]);
+
+  const onCleanNoteInboxRef = useRef(onCleanNoteInbox);
+  useLayoutEffect(() => {
+    onCleanNoteInboxRef.current = onCleanNoteInbox;
+  }, [onCleanNoteInbox]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || busy) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 'e' && e.key !== 'E') {
+        return;
+      }
+      const focusEl =
+        (document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null) ?? (e.target as HTMLElement | null);
+      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
+      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
+      if (!inInboxCm && !inTodayHubCm) {
+        return;
+      }
+      if (composingNewEntry || !selectedUri) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onCleanNoteInboxRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [vaultRoot, busy, composingNewEntry, selectedUri]);
 
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
   const quickOpenOpenRef = useRef(false);
@@ -984,6 +1025,11 @@ export default function App() {
                       onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
                       onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
                       onSaveShortcut={onInboxSaveShortcut}
+                      onCleanNote={
+                        !composingNewEntry && selectedUri
+                          ? onCleanNoteInbox
+                          : undefined
+                      }
                       busy={busy}
                       onDeleteNote={uri => {
                         void deleteNote(uri);
@@ -1044,6 +1090,7 @@ export default function App() {
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
                 </main>

@@ -34,3 +34,4 @@ export {
   hubCellWarmKey,
   touchWarmLru,
 } from './todayHubWarmLru';
+export {mergeTodayHubRowAfterCleaningNonEmptyColumns} from './cleanTodayHubRowColumns';

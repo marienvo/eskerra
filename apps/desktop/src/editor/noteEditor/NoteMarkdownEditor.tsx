@@ -46,6 +46,7 @@ import {
   todayHubPerfLog,
 } from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {cleanPastedMarkdownFragment} from '../../lib/cleanNoteMarkdown';
 import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import {
   isNoteAttachmentImageFilePath,
@@ -114,6 +115,10 @@ import {
   caretJumpDetectorExtension,
   endProgrammaticMarkdownLoad,
 } from './caretJumpDetector';
+import {
+  computeMinimalEditorChanges,
+  mapPositionThroughDiff,
+} from './noteMarkdownDiffChanges';
 import {
   explicitCursorForMarkdownLoadDispatch,
   explicitCursorForMarkdownLoadSetState,
@@ -212,6 +217,8 @@ export type NoteMarkdownEditorProps = {
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
+  /** Desktop: normalize markdown layout for the open note (shell-owned). */
+  onCleanNote?: () => void;
   /** Desktop: Ctrl/Cmd+Shift+D — request delete current note (shell shows confirmation). */
   onDeleteNoteShortcut?: () => void;
   placeholder: string;
@@ -289,6 +296,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
+    onCleanNote,
     onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
@@ -537,14 +545,20 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (md == null) {
         return false;
       }
+      const insert = cleanPastedMarkdownFragment(md, activeNotePathRef.current);
+      if (insert.length === 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        return true;
+      }
       e.preventDefault();
       e.stopPropagation();
       const sel = viewForPaste.state.selection.main;
       const insertFrom = Math.min(sel.anchor, sel.head);
       const insertTo = Math.max(sel.anchor, sel.head);
       viewForPaste.dispatch({
-        changes: {from: insertFrom, to: insertTo, insert: md},
-        selection: EditorSelection.cursor(insertFrom + md.length),
+        changes: {from: insertFrom, to: insertTo, insert},
+        selection: EditorSelection.cursor(insertFrom + insert.length),
         scrollIntoView: true,
       });
       return true;
@@ -1091,7 +1105,9 @@ const NoteMarkdownEditorImpl = forwardRef<
           roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
         if (mergedReplace) {
           const spec: Parameters<EditorView['dispatch']>[0] = {
-            changes: {from: 0, to: curLen, insert: markdown},
+            changes: preserve
+              ? computeMinimalEditorChanges(curText, markdown)
+              : {from: 0, to: curLen, insert: markdown},
             annotations: Transaction.addToHistory.of(false),
             effects,
           };
@@ -1101,11 +1117,17 @@ const NoteMarkdownEditorImpl = forwardRef<
           v.dispatch(spec);
           clearEskerraTableNestedCellRegistrations(v);
         } else if (useSetState) {
-          const cursorAt = explicitCursorForMarkdownLoadSetState(
-            options,
-            markdown.length,
-            v.state.selection.main.head,
-          );
+          const cursorAt = preserve
+            ? mapPositionThroughDiff(
+                v.state.selection.main.head,
+                curText,
+                markdown,
+              )
+            : explicitCursorForMarkdownLoadSetState(
+                options,
+                markdown.length,
+                v.state.selection.main.head,
+              );
           const nextState = EditorState.create({
             doc: markdown,
             selection: EditorSelection.cursor(cursorAt),
@@ -1382,6 +1404,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         readOnly={readOnly}
         busy={busy}
         readClipboardText={readMarkdownEditorClipboard}
+        onCleanNote={onCleanNote}
       >
         <div
           ref={hostRef}
