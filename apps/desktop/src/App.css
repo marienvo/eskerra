@@ -705,12 +705,12 @@ a:focus:not(:focus-visible) {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 29px;
-  height: 29px;
-  min-width: 29px;
+  width: var(--window-title-bar-chrome-height);
+  height: var(--window-title-bar-chrome-height);
+  min-width: var(--window-title-bar-chrome-height);
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--color-shell-icon-muted);
   cursor: default;

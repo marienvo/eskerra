@@ -130,8 +130,8 @@ html {
   /* Resizable panel groups: gutter shows --color-bg at pane edges */
   --panel-grid-gap: 8px;
   --panel-grid-padding: 5px;
-  /* Title bar row height (fits 29px window controls with small vertical margin). */
-  --window-title-bar-height: 32px;
+  /* Title bar row height (tab pills + window controls share --window-title-bar-chrome-height). */
+  --window-title-bar-height: 28px;
   /* Today hub workspace strip height: match editor tab pill vertical chrome (~15px icon + padding + border). */
   --window-title-bar-chrome-height: 22px;
   /* Space between items in the title bar leading strip (e.g. multiple controls beside workspace select). */
