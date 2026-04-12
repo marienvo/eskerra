@@ -17,6 +17,7 @@ import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
 } from '../lib/inboxWikiLinkNavigation';
+import {countInboxVaultMarkdownRefs} from '../lib/countInboxVaultMarkdownRefs';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
@@ -618,6 +619,11 @@ export function VaultTab({
         .replace(/\/+$/, ''),
     [normalizedVaultRootForTree],
   );
+  const inboxHasItems = useMemo(
+    () => countInboxVaultMarkdownRefs(vaultRoot, vaultMarkdownRefs) > 0,
+    [vaultRoot, vaultMarkdownRefs],
+  );
+  const notificationsHasItems = notificationItems.length > 0;
   const revealActiveNoteDisabled =
     composingNewEntry
     || selectedUri == null
@@ -935,9 +941,10 @@ export function VaultTab({
     />
   );
 
-  const shellEndColumnContent = notificationsPanelVisible ? (
+  const shellEndColumnContent = shellEndColumnVisible ? (
     <DesktopVerticalSplit
       className="split-inner"
+      topCollapsed={!notificationsPanelVisible}
       bottomCollapsed={!inboxPaneVisible}
       topHeightPx={notificationsInboxStackTopHeightPx}
       minTopPx={NOTIFICATIONS_INBOX_STACK_TOP.minPx}
@@ -947,19 +954,6 @@ export function VaultTab({
       top={notificationsPanelEl}
       bottom={inboxTreePaneEl}
     />
-  ) : inboxPaneVisible ? (
-    <div
-      className="shell-end-inbox-only panel-group fill"
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      {inboxTreePaneEl}
-    </div>
   ) : null;
 
   return (
@@ -1271,6 +1265,8 @@ export function VaultTab({
         onCancelNewEntry={onCancelNewEntry}
         notificationsPanelVisible={notificationsPanelVisible}
         onToggleNotificationsPanel={onToggleNotificationsPanel}
+        inboxHasItems={inboxHasItems}
+        notificationsHasItems={notificationsHasItems}
         playbackTransport={playbackTransport}
         nowPlaying={toolbarNowPlaying ?? null}
         onCleanNote={onCleanNote}

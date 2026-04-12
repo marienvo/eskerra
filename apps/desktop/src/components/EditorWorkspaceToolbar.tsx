@@ -35,6 +35,10 @@ export type EditorWorkspaceToolbarProps = {
   onCancelNewEntry: () => void;
   notificationsPanelVisible: boolean;
   onToggleNotificationsPanel: () => void;
+  /** When true, show a red indicator dot on the Inbox toggle (≥1 eligible markdown under `Inbox/`). */
+  inboxHasItems: boolean;
+  /** When true, show a red indicator dot on the Notifications toggle (≥1 session notification). */
+  notificationsHasItems: boolean;
   /** When set and not composing, shown after Back/Forward with spacing, then {@link nowPlaying}. */
   playbackTransport?: PlaybackTransportProps;
   nowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
@@ -63,6 +67,8 @@ export function EditorWorkspaceToolbar({
   onCancelNewEntry,
   notificationsPanelVisible,
   onToggleNotificationsPanel,
+  inboxHasItems,
+  notificationsHasItems,
   playbackTransport,
   nowPlaying,
   onCleanNote,
@@ -190,13 +196,18 @@ export function EditorWorkspaceToolbar({
             .filter(Boolean)
             .join(' ')}
           onClick={onToggleInboxPane}
-          aria-label="Inbox tree pane"
+          aria-label={inboxHasItems ? 'Inbox tree pane (has notes)' : 'Inbox tree pane'}
           aria-pressed={inboxPaneVisible}
           data-tooltip="Inbox"
           data-tooltip-placement="inline-start"
         >
-          <span className="pane-header-add-btn__glyph" aria-hidden>
-            <MaterialIcon name="inbox" size={12} />
+          <span className="pane-header-add-btn__glyph-wrap">
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <MaterialIcon name="inbox" size={12} />
+            </span>
+            {inboxHasItems ? (
+              <span className="pane-header-add-btn__badge-dot" aria-hidden />
+            ) : null}
           </span>
         </button>
         {composingNewEntry ? (
@@ -223,13 +234,20 @@ export function EditorWorkspaceToolbar({
             .filter(Boolean)
             .join(' ')}
           onClick={onToggleNotificationsPanel}
-          aria-label="Notifications"
+          aria-label={
+            notificationsHasItems ? 'Notifications (unread)' : 'Notifications'
+          }
           aria-pressed={notificationsPanelVisible}
           data-tooltip="Notifications"
           data-tooltip-placement="inline-start"
         >
-          <span className="pane-header-add-btn__glyph" aria-hidden>
-            <BellIcon {...EDITOR_TOOLBAR_ICON_DIM} />
+          <span className="pane-header-add-btn__glyph-wrap">
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <BellIcon {...EDITOR_TOOLBAR_ICON_DIM} />
+            </span>
+            {notificationsHasItems ? (
+              <span className="pane-header-add-btn__badge-dot" aria-hidden />
+            ) : null}
           </span>
         </button>
       </div>

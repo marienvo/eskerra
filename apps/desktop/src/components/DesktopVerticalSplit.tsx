@@ -40,6 +40,11 @@ export type DesktopVerticalSplitProps = {
 /**
  * App-owned vertical split: fixed-px top row, flex bottom row.
  * Mirrors {@link DesktopHorizontalSplit} for the Vault + Episodes stack.
+ *
+ * **`topCollapsed` and `bottomCollapsed` must not both be true.** Callers should only mount this
+ * split when at least one child is needed (e.g. shell end column visible) so at most one flag is true.
+ * If both were true, this component evaluates `bottomCollapsed` first and would render only the top
+ * subtree.
  */
 export function DesktopVerticalSplit({
   topHeightPx,

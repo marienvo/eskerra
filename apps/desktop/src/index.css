@@ -71,6 +71,8 @@ html {
   --color-pane-chrome: #e6e6e6;
   --color-capture-chrome: var(--color-pane-chrome);
   --color-capture-border: #d6d6d6;
+  /* Editor toolbar icon tiles: opaque hover (no alpha wash); pairs with inbox badge ring on hover. */
+  --color-editor-toolbar-icon-hover-bg: #d0d0d0;
 
   --color-titlebar-close-hover: #e53935;
   --color-titlebar-close-fg: #ffffff;

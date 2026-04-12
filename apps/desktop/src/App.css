@@ -5068,6 +5068,11 @@ button:disabled {
   background: var(--color-icon-ghost-hover-bg);
 }
 
+/* Editor workspace toolbar: solid gray hover on icon buttons (see --color-editor-toolbar-icon-hover-bg). */
+.pane-header--editor-toolbar .pane-header-add-btn.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-editor-toolbar-icon-hover-bg);
+}
+
 .pane-header-add-btn {
   display: inline-flex;
   align-items: center;
@@ -5101,6 +5106,35 @@ button:disabled {
 
 .pane-header-add-btn__glyph svg {
   display: block;
+}
+
+/* Inbox / Notifications toolbar toggles: optional red badge (see EditorWorkspaceToolbar). */
+.pane-header--editor-toolbar .pane-header-add-btn__glyph-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.pane-header--editor-toolbar .pane-header-add-btn__badge-dot {
+  position: absolute;
+  inset-inline-end: -1px;
+  inset-block-start: 0;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  border: 1px solid var(--color-capture-chrome);
+}
+
+.pane-header--editor-toolbar
+  .pane-header-add-btn.icon-btn-ghost:hover:not(:disabled)
+  .pane-header-add-btn__badge-dot {
+  border-color: var(--color-editor-toolbar-icon-hover-bg);
 }
 
 .pane-header-add-btn:disabled {
