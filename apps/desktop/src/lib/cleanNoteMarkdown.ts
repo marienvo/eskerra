@@ -161,6 +161,28 @@ export function cleanNoteMarkdownBody(
   return postprocessMarkdown(restored, {preserveLeadingBlankLine}, resolved);
 }
 
+/**
+ * Placeholder path for `cleanNoteMarkdownBody` when pasting while no vault file path exists yet
+ * (for example a new inbox entry). Not used for H1 injection when `insertH1FromFilename` is false.
+ */
+export const CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH = '/tmp/Untitled.md';
+
+/**
+ * Same normalization pipeline as "Clean this note", scoped to pasted markdown only.
+ * Never injects H1 from the filename (safe for mid-document fragments).
+ */
+export function cleanPastedMarkdownFragment(
+  markdown: string,
+  activeNotePath: string | null,
+  options?: CleanNoteOptions,
+): string {
+  const filepath = activeNotePath ?? CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH;
+  return cleanNoteMarkdownBody(markdown, filepath, {
+    ...options,
+    insertH1FromFilename: false,
+  });
+}
+
 function preprocessMarkdown(input: string, resolved: ResolvedCleanNoteOptions): string {
   const b = resolved.bullet;
   const bEsc = escapeRegExp(b);

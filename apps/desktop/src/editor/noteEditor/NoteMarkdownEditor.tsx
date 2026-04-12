@@ -46,6 +46,7 @@ import {
   todayHubPerfLog,
 } from '../../lib/todayHub/todayHubPerf';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {cleanPastedMarkdownFragment} from '../../lib/cleanNoteMarkdown';
 import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import {
   isNoteAttachmentImageFilePath,
@@ -540,14 +541,20 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (md == null) {
         return false;
       }
+      const insert = cleanPastedMarkdownFragment(md, activeNotePathRef.current);
+      if (insert.length === 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        return true;
+      }
       e.preventDefault();
       e.stopPropagation();
       const sel = viewForPaste.state.selection.main;
       const insertFrom = Math.min(sel.anchor, sel.head);
       const insertTo = Math.max(sel.anchor, sel.head);
       viewForPaste.dispatch({
-        changes: {from: insertFrom, to: insertTo, insert: md},
-        selection: EditorSelection.cursor(insertFrom + md.length),
+        changes: {from: insertFrom, to: insertTo, insert},
+        selection: EditorSelection.cursor(insertFrom + insert.length),
         scrollIntoView: true,
       });
       return true;

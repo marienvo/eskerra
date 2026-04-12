@@ -3,13 +3,43 @@ import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {describe, expect, it} from 'vitest';
 
-import {cleanNoteMarkdownBody, resolveCleanNoteDefaults} from '../cleanNoteMarkdown';
+import {
+  CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH,
+  cleanNoteMarkdownBody,
+  cleanPastedMarkdownFragment,
+  resolveCleanNoteDefaults,
+} from '../cleanNoteMarkdown';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function readFixture(relPath: string): string {
   return readFileSync(join(__dirname, 'fixtures', relPath), 'utf8');
 }
+
+describe('cleanPastedMarkdownFragment', () => {
+  it('does not inject H1 from filename for a real path', () => {
+    const input = ['### Fragment', '', 'Body.'].join('\n');
+    const out = cleanPastedMarkdownFragment(input, '/tmp/Real note.md');
+    expect(out).toContain('### Fragment');
+    expect(out).not.toContain('# Real note');
+  });
+
+  it('uses placeholder path when activeNotePath is null', () => {
+    const input = '+ item';
+    const out = cleanPastedMarkdownFragment(input, null);
+    expect(out).toContain('- item');
+    expect(out).not.toContain('# Untitled');
+  });
+
+  it('matches explicit cleanNoteMarkdownBody with insertH1FromFilename false', () => {
+    const input = '* [ ] Task';
+    const viaHelper = cleanPastedMarkdownFragment(input, null);
+    const explicit = cleanNoteMarkdownBody(input, CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH, {
+      insertH1FromFilename: false,
+    });
+    expect(viaHelper).toBe(explicit);
+  });
+});
 
 describe('cleanNoteMarkdownBody', () => {
   it('inserts filename as H1 and limits heading jumps', () => {

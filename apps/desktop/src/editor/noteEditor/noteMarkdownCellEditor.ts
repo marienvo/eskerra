@@ -25,6 +25,7 @@ import {
 import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
 import {clipboardDataProbablyHasVaultImage} from '../../lib/clipboardImageFiles';
 import {formatVaultImageMarkdownForInsert} from '../../lib/formatVaultImageMarkdown';
+import {cleanPastedMarkdownFragment} from '../../lib/cleanNoteMarkdown';
 import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
@@ -432,7 +433,12 @@ export function buildNoteMarkdownCellExtensions(
               '',
             );
             if (mdEmptyPlain != null) {
-              const cleaned = sanitizeCellInsert(mdEmptyPlain);
+              const cleaned = sanitizeCellInsert(
+                cleanPastedMarkdownFragment(
+                  mdEmptyPlain,
+                  activeNotePathRef.current,
+                ),
+              );
               if (cleaned.length > 0) {
                 event.preventDefault();
                 const sel = view.state.selection.main;
@@ -461,7 +467,9 @@ export function buildNoteMarkdownCellExtensions(
           const plainForHtml = dt.getData('text/plain') ?? '';
           const md = tryClipboardHtmlToMarkdownInsert(htmlRaw, plainForHtml);
           if (md != null) {
-            const cleaned = sanitizeCellInsert(md);
+            const cleaned = sanitizeCellInsert(
+              cleanPastedMarkdownFragment(md, activeNotePathRef.current),
+            );
             if (cleaned.length > 0) {
               event.preventDefault();
               const sel = view.state.selection.main;
