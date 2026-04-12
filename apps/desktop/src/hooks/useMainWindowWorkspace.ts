@@ -128,7 +128,7 @@ import {
 } from '../lib/todayHubWorkspaceRestore';
 import {
   isActiveWorkspaceTodayLinkSurface,
-  shouldOpenActiveHubTodayAsShell,
+  selectNoteActiveHubTodayOpen,
   workspaceSelectShowsActiveTabPillState,
 } from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
@@ -1266,6 +1266,11 @@ export function useMainWindowWorkspace(options: {
          * Only honored for the active workspace `Today.md` (`activeTodayHubUri`).
          */
         workspaceShell?: boolean;
+        /**
+         * Keep tab rows but set `activeEditorTabId` to null while opening the active hub Today
+         * (implicit “home” surface; no tab pill active). Mutually exclusive with `workspaceShell`.
+         */
+        workspaceShellPreserveTabs?: boolean;
       },
     ) => {
       const openGen = ++openMarkdownGenerationRef.current;
@@ -1423,8 +1428,19 @@ export function useMainWindowWorkspace(options: {
         && targetNorm === activeHubNorm
         && vaultUriIsTodayMarkdownFile(targetNorm);
 
+      const useWorkspaceShellPreserveTabs =
+        !useWorkspaceShell
+        && options?.workspaceShellPreserveTabs === true
+        && activeHubNorm != null
+        && activeHubNorm !== ''
+        && targetNorm === activeHubNorm
+        && vaultUriIsTodayMarkdownFile(targetNorm);
+
       if (useWorkspaceShell) {
         nextTabs = [];
+        nextActiveId = null;
+      } else if (useWorkspaceShellPreserveTabs) {
+        nextTabs = [...editorWorkspaceTabsRef.current];
         nextActiveId = null;
       } else if (options?.newTab && options?.activateNewTab !== false) {
         const newTab = createEditorWorkspaceTab(targetNorm);
@@ -2500,15 +2516,18 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       const norm = normalizeEditorDocUri(uri) ?? '';
-      if (
-        shouldOpenActiveHubTodayAsShell({
-          editorWorkspaceTabCount: editorWorkspaceTabsRef.current.length,
-          uri,
-          activeTodayHubUri: activeTodayHubUriRef.current,
-          uriIsTodayMarkdownFile: vaultUriIsTodayMarkdownFile(norm),
-        })
-      ) {
+      const hubTodayOpen = selectNoteActiveHubTodayOpen({
+        uri,
+        activeTodayHubUri: activeTodayHubUriRef.current,
+        uriIsTodayMarkdownFile: vaultUriIsTodayMarkdownFile(norm),
+        editorWorkspaceTabCount: editorWorkspaceTabsRef.current.length,
+      });
+      if (hubTodayOpen === 'workspaceShell') {
         void openMarkdownInEditor(uri, {workspaceShell: true});
+        return;
+      }
+      if (hubTodayOpen === 'workspaceHomePreserveTabs') {
+        void openMarkdownInEditor(uri, {workspaceShellPreserveTabs: true});
         return;
       }
       void openMarkdownInEditor(uri);
@@ -2589,9 +2608,17 @@ export function useMainWindowWorkspace(options: {
       setActiveEditorTabId(nextActive);
       activeTodayHubUriRef.current = norm;
       setActiveTodayHubUri(norm);
-      selectNote(norm);
+      // Do not `selectNote(norm)` when B has restored tabs: that would navigate the
+      // active tab to B's Today and overwrite e.g. a tab that was still showing A's hub note.
+      if (nextTabs.length === 0) {
+        selectNote(norm);
+      } else if (nextActive) {
+        activateOpenTab(nextActive);
+      } else {
+        selectNote(norm);
+      }
     },
-    [selectNote],
+    [selectNote, activateOpenTab],
   );
 
   const focusActiveTodayHubNote = useCallback(() => {

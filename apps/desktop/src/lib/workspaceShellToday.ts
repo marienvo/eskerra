@@ -2,26 +2,46 @@ import {normalizeEditorDocUri} from './editorDocumentHistory';
 import {tabCurrentUri, type EditorWorkspaceTab} from './editorWorkspaceTabs';
 import {vaultUriIsTodayMarkdownFile} from './vaultTreeLoadChildren';
 
+export type SelectNoteActiveHubTodayOpen =
+  /** No tab row; load active hub Today as the implicit workspace surface. */
+  | 'workspaceShell'
+  /**
+   * Keep existing tabs but clear `activeEditorTabId` so no tab pill is “active” while the
+   * editor shows the active hub Today (title bar workspace control carries active chrome).
+   */
+  | 'workspaceHomePreserveTabs';
+
 /**
- * When true, `selectNote(uri)` should open the active hub Today in workspace-shell mode
- * (no editor tab pill) instead of creating a tab.
+ * After `findTabIdWithCurrentUri` is null: how `selectNote` should open the active hub Today.
+ * Returns `null` when `uri` is not the active workspace home Today.
  */
-export function shouldOpenActiveHubTodayAsShell(input: {
-  editorWorkspaceTabCount: number;
+export function selectNoteActiveHubTodayOpen(input: {
   uri: string;
   activeTodayHubUri: string | null;
   uriIsTodayMarkdownFile: boolean;
-}): boolean {
-  if (
-    input.activeTodayHubUri == null
-    || input.editorWorkspaceTabCount !== 0
-    || !input.uriIsTodayMarkdownFile
-  ) {
-    return false;
+  editorWorkspaceTabCount: number;
+}): SelectNoteActiveHubTodayOpen | null {
+  if (input.activeTodayHubUri == null || !input.uriIsTodayMarkdownFile) {
+    return null;
   }
   const normUri = normalizeEditorDocUri(input.uri);
   const normHub = normalizeEditorDocUri(input.activeTodayHubUri);
-  return normUri != null && normHub != null && normUri === normHub;
+  if (!normUri || !normHub || normUri !== normHub) {
+    return null;
+  }
+  return input.editorWorkspaceTabCount === 0
+    ? 'workspaceShell'
+    : 'workspaceHomePreserveTabs';
+}
+
+/** True only for the empty-tab-strip workspace shell (see {@link selectNoteActiveHubTodayOpen}). */
+export function shouldOpenActiveHubTodayAsShell(input: {
+  uri: string;
+  activeTodayHubUri: string | null;
+  uriIsTodayMarkdownFile: boolean;
+  editorWorkspaceTabCount: number;
+}): boolean {
+  return selectNoteActiveHubTodayOpen(input) === 'workspaceShell';
 }
 
 /**
