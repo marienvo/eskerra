@@ -104,6 +104,7 @@ import {
   recordPrimaryPointerDownForLinkClick,
   resolveDocPositionForLinkPrimaryClick,
 } from './linkClickUseMousedownPosition';
+import {multiCaretClickAddsSelectionRangeExtension} from './multiCaretClick';
 import {
   wikiLinkMatchAtDocPosition,
   wikiLinkPointerActivatableInnerAtDocPosition,
@@ -633,6 +634,10 @@ const NoteMarkdownEditorImpl = forwardRef<
         discardStoredPrimaryPointerDownForLinkClick(view);
         return false;
       }
+      if (e.altKey) {
+        discardStoredPrimaryPointerDownForLinkClick(view);
+        return false;
+      }
       const pos = resolveDocPositionForLinkPrimaryClick(view, e);
       if (pos == null) {
         return false;
@@ -767,6 +772,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         : []),
       history(),
       drawSelection(),
+      multiCaretClickAddsSelectionRangeExtension(),
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
