@@ -7,7 +7,19 @@ import {
   decideBump,
   mergeState,
   parseSemver,
+  releaseBumpBranchId,
 } from './bump-release-version-lib.mjs';
+
+describe('releaseBumpBranchId', () => {
+  it('uses a stable id for detached HEAD', () => {
+    assert.equal(releaseBumpBranchId('HEAD'), 'detached');
+  });
+
+  it('passes through named branches', () => {
+    assert.equal(releaseBumpBranchId('main'), 'main');
+    assert.equal(releaseBumpBranchId('feature/x'), 'feature/x');
+  });
+});
 
 describe('parseSemver', () => {
   it('parses valid versions', () => {
@@ -86,6 +98,13 @@ describe('decideBump', () => {
     const d = decideBump(true, s, 'feature', 'same', '0.3.0');
     assert.equal(d.kind, 'minor');
     assert.equal(d.newVersion, '0.4.0');
+  });
+
+  it('patch on stable detached id when commit is new', () => {
+    const s = { branchesBuilt: ['detached'], commitsBuilt: ['old'] };
+    const d = decideBump(true, s, 'detached', 'newsha', '0.5.0');
+    assert.equal(d.kind, 'patch');
+    assert.equal(d.newVersion, '0.5.1');
   });
 });
 

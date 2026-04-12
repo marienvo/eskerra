@@ -2,6 +2,21 @@
  * Pure helpers for release semver bumps (see scripts/bump-release-version.mjs).
  */
 
+/**
+ * Maps `git rev-parse --abbrev-ref HEAD` to the branch id used for bump rules.
+ * Git prints `HEAD` in detached state; a per-commit id (e.g. short SHA) would
+ * make every new commit look like a new branch and force minor bumps. Use one
+ * stable id so detached builds get patch bumps like named branches.
+ * @param {string} abbrevRef
+ */
+export function releaseBumpBranchId(abbrevRef) {
+  const ref = String(abbrevRef).trim();
+  if (ref === 'HEAD') {
+    return 'detached';
+  }
+  return ref;
+}
+
 /** @param {string} s */
 export function parseSemver(s) {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(s).trim());

@@ -10,6 +10,7 @@ import {
   pickNeighborTabIdAfterRemovingTab,
   pushNavigateOnTab,
   removeUriFromAllTabs,
+  reorderEditorWorkspaceTabsInArray,
   tabCurrentUri,
   tabsFromStored,
   tabsToStored,
@@ -66,6 +67,19 @@ describe('editorWorkspaceTabs', () => {
   it('migrateOpenTabUrisToWorkspaceTabs dedupes', () => {
     const tabs = migrateOpenTabUrisToWorkspaceTabs(['/a.md', '/a.md', '/b.md']);
     expect(tabs.length).toBe(2);
+  });
+
+  it('reorderEditorWorkspaceTabsInArray moves tab before target index', () => {
+    const a = createEditorWorkspaceTab('/a.md');
+    const b = createEditorWorkspaceTab('/b.md');
+    const c = createEditorWorkspaceTab('/c.md');
+    const tabs = [a, b, c];
+    const r1 = reorderEditorWorkspaceTabsInArray(tabs, 0, 2);
+    expect(r1.map(t => tabCurrentUri(t))).toEqual(['/b.md', '/a.md', '/c.md']);
+    const r2 = reorderEditorWorkspaceTabsInArray(tabs, 2, 0);
+    expect(r2.map(t => tabCurrentUri(t))).toEqual(['/c.md', '/a.md', '/b.md']);
+    const r3 = reorderEditorWorkspaceTabsInArray(tabs, 1, 1);
+    expect(r3.map(t => tabCurrentUri(t))).toEqual(['/a.md', '/b.md', '/c.md']);
   });
 
   it('tabsToStored round-trips via tabsFromStored', () => {

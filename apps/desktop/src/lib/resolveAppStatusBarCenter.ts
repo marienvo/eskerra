@@ -2,7 +2,6 @@ import type {DesktopPlayerLabel} from '../hooks/useDesktopPodcastPlayback';
 
 export type AppStatusBarCenter =
   | {kind: 'message'; tone: 'error' | 'info'; text: string}
-  | {kind: 'player'; episodeTitle: string; seriesName: string}
   | {kind: 'tagline'; text: string};
 
 export type ResolveAppStatusBarCenterInput = {
@@ -46,8 +45,11 @@ function resolveSimpleMessage(
 }
 
 /**
- * Priority (low → high): tagline, player (paused/playing + episode), simple messages (err, then rename progress, then wiki notice).
- * Simple messages are suppressed while a disk conflict is active (same gating as legacy banners in App).
+ * Resolves the status bar center line. Priority (high wins): simple messages (err, then rename
+ * progress, then wiki notice), else tagline. Episode title and playback live on
+ * {@link EditorWorkspaceToolbar}; this row stays tagline when nothing else applies. Simple messages
+ * are suppressed while a disk conflict is active (same gating as legacy banners in App), except
+ * **err** still wins.
  */
 export function resolveAppStatusBarCenter(
   input: ResolveAppStatusBarCenterInput,
@@ -55,17 +57,6 @@ export function resolveAppStatusBarCenter(
   const msg = resolveSimpleMessage(input);
   if (msg) {
     return {kind: 'message', ...msg};
-  }
-
-  if (
-    (input.playerLabel === 'playing' || input.playerLabel === 'paused') &&
-    input.activeEpisode
-  ) {
-    return {
-      kind: 'player',
-      episodeTitle: input.activeEpisode.title,
-      seriesName: input.activeEpisode.seriesName,
-    };
   }
 
   return {kind: 'tagline', text: input.tagline};

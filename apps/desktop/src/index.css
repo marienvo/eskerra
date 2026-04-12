@@ -127,9 +127,21 @@ html {
   /* Borderless icon controls (pane headers, toolbars): neutral gray wash on hover */
   --color-icon-ghost-hover-bg: color-mix(in srgb, var(--color-text) 16%, transparent);
 
-  /* Resizable panel groups: gutter shows --color-bg so rounded panels read clearly */
+  /* Resizable panel groups: gutter shows --color-bg at pane edges */
   --panel-grid-gap: 8px;
   --panel-grid-padding: 5px;
+  /* Title bar row height (fits 29px window controls with small vertical margin). */
+  --window-title-bar-height: 32px;
+  /* Today hub workspace strip height: match editor tab pill vertical chrome (~15px icon + padding + border). */
+  --window-title-bar-chrome-height: 22px;
+  /* Space between items in the title bar leading strip (e.g. multiple controls beside workspace select). */
+  --window-title-bar-vault-workspace-gap: 4px;
+  /* Status bar icon tiles (Settings). */
+  --app-shell-icon-tile-size: 1.65rem;
+  /* Legacy width token (shell layout); editor toolbar holds Vault / Episodes toggles. */
+  --desktop-leading-track-width: calc(
+    var(--panel-grid-padding) + var(--app-shell-icon-tile-size) + 0.34rem + 0.2rem
+  );
 
   color: var(--color-text);
   background: var(--color-app-chrome-backdrop);

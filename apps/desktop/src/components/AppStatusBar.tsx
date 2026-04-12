@@ -3,7 +3,6 @@ import {useLayoutEffect, useRef, useState} from 'react';
 import type {AppStatusBarCenter} from '../lib/resolveAppStatusBarCenter';
 
 import {MaterialIcon} from './MaterialIcon';
-
 /** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
 export const APP_SHELL_TAGLINE = 'Think. Compose. Nothing else.';
 
@@ -100,26 +99,17 @@ function AppStatusBarCenterRegion({
 }) {
   if (center.kind === 'tagline') {
     return (
-      <p className="app-status-bar-center app-status-bar-center--tagline">{center.text}</p>
-    );
-  }
-
-  if (center.kind === 'message') {
-    return (
-      <AppStatusBarMessageCenter
-        key={`${center.tone}:${center.text}`}
-        tone={center.tone}
-        text={center.text}
-        onReadMore={onReadMoreStatusMessage ?? (() => undefined)}
-      />
+      <p className="app-status-bar-center-line app-status-bar-center--tagline">{center.text}</p>
     );
   }
 
   return (
-    <p className="app-status-bar-center app-status-bar-center--player" aria-live="polite">
-      <strong>{center.episodeTitle}</strong>
-      <span className="muted small"> — {center.seriesName}</span>
-    </p>
+    <AppStatusBarMessageCenter
+      key={`${center.tone}:${center.text}`}
+      tone={center.tone}
+      text={center.text}
+      onReadMore={onReadMoreStatusMessage ?? (() => undefined)}
+    />
   );
 }
 
@@ -130,14 +120,16 @@ export function AppStatusBar({
 }: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
-      <AppStatusBarCenterRegion
-        center={center}
-        onReadMoreStatusMessage={onReadMoreStatusMessage}
-      />
+      <div className="app-status-bar-center-stack">
+        <AppStatusBarCenterRegion
+          center={center}
+          onReadMoreStatusMessage={onReadMoreStatusMessage}
+        />
+      </div>
       <div className="app-status-bar-trailing">
         <button
           type="button"
-          className="app-status-bar-settings app-tooltip-trigger icon-btn-ghost"
+          className="app-status-bar-icon-tile app-tooltip-trigger icon-btn-ghost"
           aria-label="Settings"
           data-tooltip="Settings"
           data-tooltip-placement="inline-start"

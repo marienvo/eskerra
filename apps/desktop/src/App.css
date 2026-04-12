@@ -109,6 +109,8 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  /* Strip above title bar / setup shell; background shows through (transparent). */
+  padding-block-start: var(--panel-grid-padding);
 }
 
 /* Flush to screen / WM: drop --window-radius (10px) on outer shell. */
@@ -174,10 +176,10 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
-  min-height: 40px;
-  height: 40px;
-  /* inline-start matches .rail padding so the logo centers on .rail-tab (40×40). */
-  padding: 0 0.3rem 0 0.34rem;
+  min-height: var(--window-title-bar-height);
+  height: var(--window-title-bar-height);
+  /* Match main-shell horizontal inset and panel-group block padding (vault/select ↔ window = gap under row ↔ panes). */
+  padding: 0 var(--panel-grid-padding);
   box-sizing: border-box;
   border-bottom: none;
   background: transparent;
@@ -189,49 +191,187 @@ a:focus:not(:focus-visible) {
   align-items: center;
   align-self: stretch;
   flex-shrink: 0;
-  gap: 0.28rem;
+  gap: var(--window-title-bar-vault-workspace-gap);
 }
 
-.window-title-bar-icon {
-  display: block;
-  flex-shrink: 0;
-  width: 29px;
-  height: 29px;
-  border-radius: 6px;
+.today-hub-workspace-select {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: center;
+  flex-shrink: 1;
+  min-width: 8rem;
+  max-width: 13rem;
+  height: var(--window-title-bar-chrome-height);
+  min-height: var(--window-title-bar-chrome-height);
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  margin-inline-start: 6px;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.today-hub-workspace-select:hover {
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(255, 255, 255, 0.18));
+}
+
+.today-hub-workspace-select__main,
+.today-hub-workspace-select__chevron {
+  margin: 0;
+  padding: 0 0.22rem;
+  border: none;
+  background: transparent;
+  color: var(--color-shell-icon-muted);
   cursor: default;
-  -webkit-user-drag: none;
-  /* 29px matches the app icon grid; avoids odd fractional raster sizes at 1x. */
-  /* Center 29px asset on the 40px rail tab column below (see .rail-tab width). */
-  margin-inline-start: calc((40px - 29px) / 2 + 1px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 100%;
+  font: inherit;
+  box-shadow: none;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
-.window-title-bar-drag {
+/* Main hover: full shell wash + bright text/icon. Chevron hover: wash on chevron only; main gets bright foreground only (no wash on main). */
+.today-hub-workspace-select__main:hover {
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
+}
+
+.today-hub-workspace-select:has(.today-hub-workspace-select__chevron:hover)
+  .today-hub-workspace-select__main {
+  background: transparent;
+  color: var(--color-shell-icon);
+}
+
+.today-hub-workspace-select__chevron:hover {
+  background: var(--color-shell-hover-bg);
+  color: var(--color-shell-icon);
+}
+
+.today-hub-workspace-select__main {
   flex: 1;
-  min-width: 2rem;
+  min-width: 0;
+  justify-content: flex-start;
+  border-inline-end: none;
+  border-radius: 3px 0 0 3px;
+}
+
+.today-hub-workspace-select__chevron {
+  flex-shrink: 0;
+  width: 1.35rem;
+  min-width: 1.35rem;
+  max-width: 1.35rem;
+  padding-inline: 0;
+  justify-content: center;
+  border-radius: 0 3px 3px 0;
+}
+
+.today-hub-workspace-select__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+  color: inherit;
+  transform: translateY(-1px);
+}
+
+.today-hub-workspace-select__icon svg {
+  display: block;
+}
+
+.today-hub-workspace-select__chevron svg {
+  display: block;
+}
+
+.today-hub-workspace-select__label {
+  font-size: var(--file-tree-node-font-size);
+  font-weight: var(--file-tree-node-font-weight);
+  line-height: normal;
+  font-family: var(--file-tree-node-font-family);
+  font-synthesis: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  top: -1px;
+}
+
+.today-hub-workspace-select__menu-item-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Fills space between workspace chrome and drag sliver; portaled editor tabs render here. */
+.window-title-editor-tabs-host {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   display: flex;
   align-items: center;
+  overflow: hidden;
+  cursor: default;
+  /* Breathing room between Vault + workspace select and open-note tabs. */
+  margin-inline-start: 2px;
+}
+
+/* Predictable window-drag strip when the tab row is full (no buttons). */
+.window-title-bar-drag-sliver {
+  flex-shrink: 0;
+  width: 10px;
+  align-self: stretch;
   cursor: default;
 }
 
-.window-title-bar-transport {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 2;
+/*
+ * WebKit/GTK: `data-tauri-drag-region` alone is not always enough; pair with drag region
+ * so empty title-bar space (and the flex filler beside tabs) moves the window.
+ */
+.app-root--tauri .window-title-editor-tabs-host,
+.app-root--tauri .window-title-bar-drag-sliver {
+  -webkit-app-region: drag;
+}
+
+.app-root--tauri .editor-open-tabs-scroll--titlebar {
+  -webkit-app-region: drag;
+}
+
+/* Absorbs horizontal space to the right of tabs (or full width when no tabs). */
+.app-root--tauri .editor-open-tabs-titlebar-drag-filler {
+  -webkit-app-region: drag;
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+}
+
+/* Pills handle their own hits (context menu, tab activate); gaps use parent strip drag. */
+.app-root--tauri .editor-open-tabs-scroll--titlebar .editor-open-tab-pill {
+  -webkit-app-region: no-drag;
+}
+
+.app-root--tauri .editor-open-tab-drag-ghost,
+.app-root--tauri .editor-open-tabs-drop-indicator {
+  -webkit-app-region: no-drag;
+}
+
+.app-playback-transport {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.06rem;
-  transform: translate(-50%, calc(-50% + 2px));
-  pointer-events: none;
+  flex-shrink: 0;
 }
 
-.window-title-bar-transport button {
-  pointer-events: auto;
-}
-
-.window-title-bar-transport__time {
+.app-playback-transport__time {
   font-variant-numeric: tabular-nums;
   font-size: 0.72rem;
   font-weight: 500;
@@ -242,17 +382,62 @@ a:focus:not(:focus-visible) {
   -webkit-user-select: none;
 }
 
-.window-title-bar-transport__time--position {
+.app-playback-transport__time--position {
   text-align: end;
   margin-inline-end: 0.24rem;
 }
 
-.window-title-bar-transport__time--duration {
+.app-playback-transport__time--duration {
   text-align: start;
   margin-inline-start: 0.24rem;
 }
 
-/* Shared: title-bar playback controls (only used in TitleBarTransport) */
+.app-playback-transport--toolbar {
+  flex-shrink: 0;
+  gap: 0;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time {
+  width: 3.45rem;
+  min-width: 3.45rem;
+  max-width: 3.45rem;
+  flex: 0 0 3.45rem;
+  box-sizing: border-box;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time--position {
+  margin-inline-end: 6px;
+}
+
+.app-playback-transport--toolbar .app-playback-transport__time--duration {
+  margin-inline-start: 6px;
+}
+
+/* Editor toolbar sits on --color-editor-bg (light); use panel ink, not shell (gradient) tokens. */
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-transport__time {
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn {
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn:disabled {
+  opacity: 0.45;
+  color: var(--color-muted);
+}
+
+.pane-header--editor-toolbar .app-playback-transport--toolbar .app-playback-chrome-btn:not(:disabled):hover {
+  background: transparent;
+  color: var(--color-text);
+}
+
+/* Shared: shell playback controls (PlaybackTransport) */
+.app-playback-chrome-btn > svg {
+  display: block;
+  flex-shrink: 0;
+}
+
 .app-playback-chrome-btn {
   display: inline-flex;
   align-items: center;
@@ -261,7 +446,7 @@ a:focus:not(:focus-visible) {
   margin: 0;
   padding: 0;
   border: none;
-  /* Play/pause: 32×32 circle, 28px play/pause icon (seek stays 22px). */
+  /* Play/pause: 32×32 hit target; Radix icons 15×15 (see PlaybackTransport). */
   width: 2rem;
   min-width: 2rem;
   height: 2rem;
@@ -277,6 +462,18 @@ a:focus:not(:focus-visible) {
   min-width: 1.75rem;
   height: 1.75rem;
   min-height: 1.75rem;
+}
+
+/* After .app-playback-chrome-btn--seek so toolbar seek + play share one tight size (icons stay 15px). */
+.app-playback-transport--toolbar .app-playback-chrome-btn {
+  width: 1.125rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  min-height: 1.125rem;
+}
+
+.app-playback-transport--toolbar .app-playback-chrome-btn ~ .app-playback-chrome-btn {
+  margin-inline-start: 3px;
 }
 
 @keyframes app-playback-chrome-spin {
@@ -341,24 +538,31 @@ a:focus:not(:focus-visible) {
 }
 
 .app-status-bar {
-  position: relative;
   flex-shrink: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: flex-end;
+  column-gap: 0.35rem;
   box-sizing: border-box;
-  /* Bottom inset matches rail offset from window edge (see .rail padding-inline-start). */
-  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0.42rem;
+  padding: 0.28rem var(--panel-grid-padding) 0.32rem 0;
   background: transparent;
 }
 
-/* Center on full window width; trailing controls stay on the same row (see AppStatusBar). */
-.app-status-bar-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+.app-status-bar-center-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Second row: tagline, episode line, or width of message chip (see AppStatusBar). */
+.app-status-bar-center-line {
   margin: 0;
-  max-width: calc(100% - 5rem);
+  max-width: 100%;
+  width: 100%;
   text-align: center;
   font-size: 0.78rem;
   font-weight: 400;
@@ -375,26 +579,10 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-tagline);
 }
 
-/* Same chrome as tagline / title bar: light foreground on AppChromeBackground — not panel --color-text. */
-.app-status-bar-center--player {
-  color: var(--color-shell-icon);
-}
-
-.app-status-bar-center--player strong {
-  font-weight: 600;
-}
-
-.app-status-bar-center--player .muted {
-  color: var(--color-shell-icon-muted);
-}
-
 /* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
 .app-status-bar-message {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
   margin: 0;
-  max-width: calc(100% - 5rem);
+  max-width: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -464,18 +652,18 @@ a:focus:not(:focus-visible) {
   z-index: 1;
   display: flex;
   align-items: center;
-  margin-left: auto;
+  justify-self: end;
 }
 
-.app-status-bar-settings {
+/* Status bar leading/trailing compact icon tiles (Episodes, Settings); size from `--app-shell-icon-tile-size`. */
+.app-status-bar-icon-tile {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  /* Compact 12px icon; smaller hit target than rail tabs */
-  width: 1.65rem;
-  height: 1.65rem;
-  min-width: 1.65rem;
+  width: var(--app-shell-icon-tile-size);
+  height: var(--app-shell-icon-tile-size);
+  min-width: var(--app-shell-icon-tile-size);
   margin: 0;
   padding: 0;
   border-radius: 6px;
@@ -483,11 +671,11 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.app-status-bar-settings:hover:not(:disabled) {
+.app-status-bar-icon-tile:hover:not(:disabled) {
   color: var(--color-shell-icon);
 }
 
-.app-status-bar-settings.icon-btn-ghost:hover:not(:disabled) {
+.app-status-bar-icon-tile.icon-btn-ghost:hover:not(:disabled) {
   background: var(--color-shell-hover-bg);
 }
 
@@ -670,30 +858,6 @@ a:focus:not(:focus-visible) {
   }
 }
 
-.rail {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.32rem;
-  box-sizing: border-box;
-  /* Fixed track: 40px tab + mirrored inline gutters (matches .rail--end). */
-  width: calc(40px + 0.34rem + 0.2rem);
-  min-width: calc(40px + 0.34rem + 0.2rem);
-  max-width: calc(40px + 0.34rem + 0.2rem);
-  /* Mirror .rail--end: window-edge gutter = 0.34rem (see inline padding). */
-  padding-block: 0.38rem 0.22rem;
-  padding-inline: 0.34rem 0.2rem;
-  background: transparent;
-}
-
-.rail-spacer {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-}
-
 .rail-tab {
   position: relative;
   display: inline-flex;
@@ -713,10 +877,10 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-.rail-tab:hover:not(.active),
-.rail-tab:focus-visible:not(.active) {
+/* Same hover wash for Vault and Episodes; icon color stays muted vs white (no brighten on hover). */
+.rail-tab:hover:not(:disabled),
+.rail-tab:focus-visible:not(:disabled) {
   background: var(--color-shell-hover-bg);
-  color: var(--color-shell-icon);
 }
 
 .rail-tab:focus-visible {
@@ -729,32 +893,12 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-/* Translucent light pill; icon knocks out via destination-out so shell shows through glyphs. */
-.rail-tab.active::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  z-index: 0;
-  pointer-events: none;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.rail-tab.active .material-icons {
+.rail-tab.active .material-icons,
+.rail-tab.active svg {
   position: relative;
   z-index: 1;
   color: #ffffff;
-  mix-blend-mode: destination-out;
-}
-
-.rail-tab.active:hover::before,
-.rail-tab.active:focus-visible::before {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.rail-tab.active:hover,
-.rail-tab.active:focus-visible {
-  color: #ffffff;
+  mix-blend-mode: normal;
 }
 
 .rail-tab:disabled,
@@ -766,11 +910,8 @@ a:focus:not(:focus-visible) {
   box-shadow: none;
 }
 
-.rail-tab.active:disabled::before {
-  display: none;
-}
-
-.rail-tab.active:disabled .material-icons {
+.rail-tab.active:disabled .material-icons,
+.rail-tab.active:disabled svg {
   mix-blend-mode: normal;
 }
 
@@ -782,23 +923,6 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-icon-disabled);
 }
 
-/* Right rail: physical mirror of .rail (same tab geometry vs window edge). */
-.rail--end {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.32rem;
-  box-sizing: border-box;
-  width: calc(40px + 0.34rem + 0.2rem);
-  min-width: calc(40px + 0.34rem + 0.2rem);
-  max-width: calc(40px + 0.34rem + 0.2rem);
-  padding-block: 0.38rem 0.22rem;
-  padding-inline: 0.2rem 0.34rem;
-  background: transparent;
-}
-
 /* Main stage + notifications: outer chrome matches vault|editor (see .panel-group.fill). */
 .main-shell-stage.panel-group.fill {
   flex: 1;
@@ -806,11 +930,13 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Symmetric horizontal inset so left vs right rail-to-panel gutters mirror (overrides .panel-group.fill 0.75/1.0 split). */
+  /* Symmetric thin gutter vs app-body (same token as panel grid); no leading-track margin. */
+  margin-inline: 0;
   padding-inline: var(--panel-grid-padding);
 }
 
-.main-shell-stage.panel-group.fill > .main-end-split {
+.main-shell-stage.panel-group.fill > .main-end-split,
+.main-workspace-canvas > .main-end-split {
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -862,7 +988,7 @@ a:focus:not(:focus-visible) {
   align-items: flex-start;
   gap: 0.35rem;
   padding: 0.35rem 0.4rem;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--color-border-soft, var(--color-border));
   background: var(--color-surface);
 }
@@ -963,19 +1089,13 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   min-height: 0;
   background: var(--color-surface);
-  border-radius: 6px;
+  border-radius: 0;
   overflow: hidden;
 }
 
 /* Split panes must consume column height so inner scroll regions (vault tree, editor) fill immediately. */
 .desktop-hsplit-left > .panel-surface,
 .desktop-hsplit-right > .panel-surface {
-  flex: 1;
-  min-height: 0;
-}
-
-/* No left column: editor is not inside .desktop-hsplit-right (see MainWorkspaceSplit). */
-.main-workspace-editor-only > .panel-surface {
   flex: 1;
   min-height: 0;
 }
@@ -1059,6 +1179,47 @@ a:focus:not(:focus-visible) {
   );
 }
 
+/* Main canvas splits: 1px track only — no extra gutter (drag target is the line). */
+.resize-sep.resize-sep--canvas {
+  flex: 0 0 1px;
+  width: 1px;
+  min-width: 1px;
+  max-width: 1px;
+  margin-inline: 0;
+}
+
+.resize-sep.resize-sep--canvas::after {
+  inset: 0;
+  border-radius: 0;
+  /* Match capture pane title bars: `[data-app-surface='capture'] .pane-header { border-bottom-color }` */
+  background: var(--color-capture-border);
+  box-shadow: none;
+}
+
+.resize-sep.resize-sep--canvas:hover::after {
+  background: var(--color-capture-border);
+}
+
+.resize-sep.resize-sep--row.resize-sep--canvas {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  flex: 0 0 1px;
+  height: 1px;
+  min-height: 1px;
+  max-height: 1px;
+  margin-block: 0;
+  margin-inline: 0;
+}
+
+.resize-sep.resize-sep--row.resize-sep--canvas::after {
+  inset: 0;
+}
+
+.resize-sep.resize-sep--row.resize-sep--canvas:hover::after {
+  background: var(--color-capture-border);
+}
+
 .panel-group.fill-vertical .resize-sep {
   cursor: row-resize;
   margin-inline: 0;
@@ -1101,27 +1262,72 @@ a:focus:not(:focus-visible) {
   gap: 0.15rem;
 }
 
-/* Vault editor column: tighter chrome around open-note pills. */
-.pane-header--inbox-editor {
+/* Editor Toolbar (VaultTab): tighter chrome; open-note tabs live in the window title bar. */
+.pane-header--editor-toolbar {
   gap: 0.28rem;
   padding: 0.24rem 0.38rem;
-  /* Keep Back/Forward + trailing actions on the first row when pills wrap. */
-  align-items: flex-start;
+  align-items: center;
 }
 
-.pane-header--inbox-editor .pane-header-start {
+/* Three-column grid: equal 1fr sides keep now-playing centered at 50% of toolbar width. */
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback {
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) fit-content(50%) minmax(min-content, 1fr);
+  align-items: center;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .pane-header-start {
+  grid-column: 1;
+  justify-self: start;
+  min-width: 0;
+  flex: unset;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .editor-workspace-toolbar__now-playing.pane-title {
+  grid-column: 2;
+  justify-self: center;
+}
+
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .pane-header-trailing-actions {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.pane-header--editor-toolbar .pane-header-start {
   gap: 0.12rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
-/* Back / Forward (first two buttons) and trailing tab-menu: 2px lower vs wrapped pills. */
-.pane-header--inbox-editor .pane-header-start > button:nth-child(1),
-.pane-header--inbox-editor .pane-header-start > button:nth-child(2) {
-  transform: translateY(2px);
+.editor-workspace-toolbar__playback-gap {
+  flex: 0 0 0.55rem;
+  width: 0.55rem;
+  min-width: 0.55rem;
+  align-self: stretch;
 }
 
-.pane-header--inbox-editor .pane-header-trailing-actions .pane-header-add-btn {
-  transform: translateY(2px);
+.pane-header--editor-toolbar.editor-workspace-toolbar--playback > .editor-workspace-toolbar__now-playing.pane-title {
+  box-sizing: border-box;
+  margin: 0;
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  padding-inline: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.22;
+  font-weight: 400;
+}
+
+.editor-workspace-toolbar__now-playing strong {
+  font-weight: 600;
+}
+
+.editor-workspace-toolbar__now-playing-series {
+  font-size: inherit;
+  font-weight: 400;
 }
 
 .pane-title {
@@ -1132,6 +1338,8 @@ a:focus:not(:focus-visible) {
 /* Vault / Episodes / Notifications panel titles: match file tree typography, bold, slightly taller bar. */
 .pane-header--workspace-panel {
   padding-block: calc(0.32rem + 1px);
+  /* Match .pane-header--editor-toolbar horizontal inset so left panes align with the editor chrome. */
+  padding-inline: 0.38rem;
 }
 
 .pane-header--workspace-panel .pane-title {
@@ -1149,10 +1357,6 @@ a:focus:not(:focus-visible) {
   white-space: nowrap;
 }
 
-.editor-open-tabs-placeholder {
-  color: var(--color-muted);
-}
-
 .editor-open-tabs-scroll {
   flex: 1 1 auto;
   min-width: 0;
@@ -1165,6 +1369,106 @@ a:focus:not(:focus-visible) {
   padding-block: 0;
 }
 
+/* Title bar: single row, browser-style flex shrink then clip (no scroll, no second line). */
+.editor-open-tabs-scroll--titlebar {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-content: center;
+  overflow: hidden;
+}
+
+.editor-open-tabs-drop-indicator {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  pointer-events: none;
+  z-index: 4;
+}
+
+.editor-open-tab-pill--dragging-source {
+  opacity: 0.42;
+}
+
+.editor-open-tab-drag-ghost {
+  position: fixed;
+  z-index: 20000;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+  padding: 0.12rem 0.42rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  background: var(--color-surface);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-text) 16%, transparent);
+  max-width: 12rem;
+}
+
+.editor-open-tab-drag-ghost__label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--file-tree-node-font-family);
+  font-size: var(--file-tree-node-font-size);
+  font-weight: var(--file-tree-node-font-weight);
+  font-synthesis: none;
+  color: var(--color-text);
+}
+
+body.editor-tab-strip--dragging {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill {
+  flex: 1 1 0;
+  min-width: calc(
+    0.22rem + 15px + var(--file-tree-icon-label-gap, 6px) + 1.05rem + 4px
+  );
+  max-width: 10.5rem;
+}
+
+/*
+ * Title bar tab row sits on AppChromeBackground (dark). Pills must use shell fg/hover
+ * like `.rail-tab` / `.window-ctrl`, not panel `--color-text` / `--color-muted`.
+ */
+.editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):hover:not([data-disabled]),
+.editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):focus-within:not([data-disabled]) {
+  background: var(--color-shell-hover-bg);
+  /* Match `.today-hub-workspace-select:hover` (1px shell border on chrome). */
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(255, 255, 255, 0.18));
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
+  background: color-mix(in srgb, var(--color-accent) 22%, rgba(255, 255, 255, 0.04));
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__main {
+  color: var(--color-shell-icon);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__icon {
+  color: var(--color-shell-icon-muted);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__close {
+  color: var(--color-shell-icon-muted);
+}
+
+.editor-open-tabs-scroll--titlebar .editor-open-tab-pill__close.icon-btn-ghost:hover:not(:disabled) {
+  color: var(--color-shell-icon-muted);
+  background: var(--color-shell-hover-bg);
+}
+
 .editor-open-tab-pill {
   flex: 0 0 auto;
   display: flex;
@@ -1174,7 +1478,9 @@ a:focus:not(:focus-visible) {
   border: 1px solid transparent;
   box-sizing: border-box;
   background: transparent;
-  transition: background 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
   padding-block: 2px;
 }
 
@@ -1236,6 +1542,9 @@ a:focus:not(:focus-visible) {
   white-space: nowrap;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Optical alignment with 15px Radix leading icons (label sat ~1px low). */
+  position: relative;
+  top: -1px;
 }
 
 .editor-open-tab-pill__close {
@@ -1344,7 +1653,7 @@ a:focus:not(:focus-visible) {
   padding: 0.4rem 0.45rem;
   border: none;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 0;
   cursor: default;
   color: var(--color-text);
   font: inherit;
@@ -1362,7 +1671,7 @@ a:focus:not(:focus-visible) {
   width: 4px;
   flex-shrink: 0;
   align-self: stretch;
-  border-radius: 3px;
+  border-radius: 0;
 }
 
 .note-list-row__body {
@@ -1425,7 +1734,7 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   overflow: auto;
   /* Horizontal inset here (not row margin) keeps virtual row geometry aligned with estimateSize */
-  padding: 6px;
+  padding: 4px;
   box-sizing: border-box;
 }
 
@@ -1463,7 +1772,7 @@ a:focus:not(:focus-visible) {
   cursor: default;
   /* Keep gap 0; icon-to-label spacing is `margin-inline-end` on `.iconCell` in FileTreeNode.module.css (module `gap` would lose to this rule otherwise). */
   gap: 0;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .vault-tree-row:hover {
@@ -1512,7 +1821,7 @@ a:focus:not(:focus-visible) {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border-soft, var(--color-border));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
@@ -1619,7 +1928,7 @@ a:focus:not(:focus-visible) {
   cursor: default;
   font: inherit;
   text-align: left;
-  border-radius: 4px;
+  border-radius: 0;
   padding: 0.22rem 0.26rem;
   display: flex;
   flex-direction: column;
@@ -3160,7 +3469,7 @@ button.primary.destructive {
   min-width: 0;
   min-height: 6rem;
   background: var(--color-surface-primary);
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell--empty-readonly {
@@ -4631,7 +4940,7 @@ button:disabled {
   text-align: left;
   padding: 0.45rem 0.4rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   /* Opaque layer matching the pane (not transparent) so WebKit text AA matches hover. */
   background: var(--color-consume-surface);
   cursor: default;
@@ -4712,6 +5021,19 @@ button:disabled {
   flex-direction: column;
 }
 
+/* One rounded shell for toolbar + workspace (not per inner `.panel-surface`). */
+.inbox-root > .main-workspace-canvas {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--window-radius);
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--color-capture-panel);
+}
+
 [data-app-surface='capture'] .panel-surface {
   background: var(--color-capture-panel);
 }
@@ -4737,9 +5059,9 @@ button:disabled {
   justify-content: center;
   flex-shrink: 0;
   box-sizing: border-box;
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
   margin: 0;
   padding: 0;
   border-radius: 3px;
@@ -4752,23 +5074,29 @@ button:disabled {
   color: var(--color-text);
 }
 
-/* 13×13 optical size: 12px grid via MaterialIcon + scale (see specs/design/desktop-icons.md). */
+/* Editor Toolbar: 15×15 Radix icons (see EditorWorkspaceToolbar pane-header--editor-toolbar). */
 .pane-header-add-btn__glyph {
   display: inline-flex;
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   align-items: center;
   justify-content: center;
+  line-height: 0;
 }
 
-.pane-header-add-btn__glyph .material-icons {
-  transform: scale(calc(13 / 12));
-  transform-origin: center center;
+.pane-header-add-btn__glyph svg {
+  display: block;
 }
 
 .pane-header-add-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.pane-header-add-btn--notifications-on:not(:disabled),
+.pane-header-add-btn--vault-on:not(:disabled),
+.pane-header-add-btn--episodes-on:not(:disabled) {
+  color: var(--color-accent);
 }
 
 [data-app-surface='capture'] .pane-footer {

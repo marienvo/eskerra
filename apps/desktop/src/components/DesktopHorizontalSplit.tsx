@@ -25,6 +25,11 @@ export type DesktopHorizontalSplitProps = {
   left: ReactNode;
   right: ReactNode;
   className?: string;
+  /**
+   * When true, the left column renders at 0px with no separator and width clamp/persist is
+   * skipped so stored widths are not overwritten. Used when both Vault and Episodes are hidden.
+   */
+  leftCollapsed?: boolean;
 };
 
 /**
@@ -40,6 +45,7 @@ export function DesktopHorizontalSplit({
   left,
   right,
   className,
+  leftCollapsed = false,
 }: DesktopHorizontalSplitProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const separatorRef = useRef<HTMLDivElement | null>(null);
@@ -50,9 +56,26 @@ export function DesktopHorizontalSplit({
 
   /** Local width while dragging so the parent debounce does not lag the handle. */
   const [dragWidthPx, setDragWidthPx] = useState<number | null>(null);
-  const displayLeftPx = dragWidthPx ?? leftWidthPx;
+  const displayLeftPx = leftCollapsed ? 0 : (dragWidthPx ?? leftWidthPx);
+
+  useEffect(() => {
+    if (!leftCollapsed) {
+      return;
+    }
+    draggingRef.current = false;
+    latestDragWidthRef.current = null;
+    const id = window.requestAnimationFrame(() => {
+      setDragWidthPx(null);
+    });
+    return () => {
+      window.cancelAnimationFrame(id);
+    };
+  }, [leftCollapsed]);
 
   const measureAndClamp = useCallback(() => {
+    if (leftCollapsed) {
+      return;
+    }
     const container = containerRef.current;
     const sep = separatorRef.current;
     if (!container || !sep) {
@@ -78,7 +101,7 @@ export function DesktopHorizontalSplit({
       }
       onLeftWidthPxChanged(next);
     }
-  }, [leftWidthPx, minLeftPx, maxLeftPx, minRightPx, onLeftWidthPxChanged]);
+  }, [leftCollapsed, leftWidthPx, minLeftPx, maxLeftPx, minRightPx, onLeftWidthPxChanged]);
 
   useLayoutEffect(() => {
     measureAndClamp();
@@ -86,7 +109,7 @@ export function DesktopHorizontalSplit({
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) {
+    if (!el || leftCollapsed) {
       return;
     }
     const ro = new ResizeObserver(() => {
@@ -99,10 +122,13 @@ export function DesktopHorizontalSplit({
     return () => {
       ro.disconnect();
     };
-  }, [measureAndClamp]);
+  }, [leftCollapsed, measureAndClamp]);
 
   const onSeparatorPointerDown = useCallback(
     (e: {button: number; clientX: number; currentTarget: HTMLDivElement; pointerId: number; preventDefault: () => void}) => {
+      if (leftCollapsed) {
+        return;
+      }
       if (e.button !== 0) {
         return;
       }
@@ -114,12 +140,12 @@ export function DesktopHorizontalSplit({
       setDragWidthPx(leftWidthPx);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [leftWidthPx],
+    [leftCollapsed, leftWidthPx],
   );
 
   const onSeparatorPointerMove = useCallback(
     (e: {clientX: number}) => {
-      if (!draggingRef.current) {
+      if (leftCollapsed || !draggingRef.current) {
         return;
       }
       const container = containerRef.current;
@@ -141,7 +167,7 @@ export function DesktopHorizontalSplit({
       latestDragWidthRef.current = next;
       setDragWidthPx(next);
     },
-    [minLeftPx, maxLeftPx, minRightPx],
+    [leftCollapsed, minLeftPx, maxLeftPx, minRightPx],
   );
 
   const endDrag = useCallback(
@@ -195,17 +221,19 @@ export function DesktopHorizontalSplit({
       >
         {left}
       </div>
-      <div
-        ref={separatorRef}
-        className="resize-sep"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize panels"
-        onPointerDown={onSeparatorPointerDown}
-        onPointerMove={onSeparatorPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      />
+      {leftCollapsed ? null : (
+        <div
+          ref={separatorRef}
+          className="resize-sep resize-sep--canvas"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize panels"
+          onPointerDown={onSeparatorPointerDown}
+          onPointerMove={onSeparatorPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        />
+      )}
       <div
         className="desktop-hsplit-right"
         style={{

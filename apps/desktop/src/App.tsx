@@ -31,11 +31,7 @@ import {
   AppSetupTagline,
   AppStatusBar,
 } from './components/AppStatusBar';
-import {DesktopHorizontalSplitEnd} from './components/DesktopHorizontalSplitEnd';
-import {NotificationsPanel} from './components/NotificationsPanel';
-import {NotificationsRail} from './components/NotificationsRail';
-import {RailNav} from './components/RailNav';
-import type {TitleBarTransportProps} from './components/TitleBarTransport';
+import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
@@ -56,8 +52,6 @@ import {
 import {
   DEFAULT_LAYOUTS,
   loadStoredLayouts,
-  MIN_RESIZABLE_PANE_PX,
-  NOTIFICATIONS_PANEL,
   saveStoredLayouts,
   type StoredLayouts,
 } from './lib/layoutStore';
@@ -67,6 +61,7 @@ import {
   DEFAULT_MAIN_WINDOW_PANE_VISIBILITY,
   loadMainWindowUi,
   saveMainWindowUi,
+  type TodayHubWorkspaceSnapshot,
 } from './lib/mainWindowUiStore';
 import {
   initialDoubleShiftState,
@@ -80,7 +75,7 @@ import './App.css';
 
 type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
-const TITLE_BAR_SKIP_MS = 10_000;
+const PLAYBACK_SKIP_MS = 10_000;
 const MAIN_WINDOW_LABEL = 'main';
 
 /**
@@ -110,6 +105,8 @@ export default function App() {
       index: number;
     }>;
     activeEditorTabId?: string | null;
+    activeTodayHubUri?: string | null;
+    todayHubWorkspaces?: Record<string, TodayHubWorkspaceSnapshot> | null;
   } | null>(null);
   const {
     vaultRoot,
@@ -171,8 +168,8 @@ export default function App() {
     activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
+    reorderEditorWorkspaceTabs,
     closeOtherEditorTabs,
-    closeAllEditorTabs,
     reopenLastClosedEditorTab,
     canReopenClosedEditorTab,
     showTodayHubCanvas,
@@ -182,6 +179,11 @@ export default function App() {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
+    switchTodayHubWorkspace,
+    focusActiveTodayHubNote,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -215,11 +217,44 @@ export default function App() {
 
   const mainShellReady = Boolean(vaultRoot && layoutsReady);
 
+  const titleBarTodayHubSelect = useMemo(() => {
+    if (
+      !vaultRoot
+      || todayHubSelectorItems.length === 0
+      || activeTodayHubUri == null
+    ) {
+      return null;
+    }
+    const activeLabel =
+      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
+        ?.label ?? 'Today';
+    return {
+      items: todayHubSelectorItems,
+      activeTodayNoteUri: activeTodayHubUri,
+      activeLabel,
+      onMainActivate: focusActiveTodayHubNote,
+      onPickHub: (uri: string) => {
+        void switchTodayHubWorkspace(uri);
+      },
+      onOpenHubInNewTab: selectNoteInNewActiveTab,
+    };
+  }, [
+    vaultRoot,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    focusActiveTodayHubNote,
+    switchTodayHubWorkspace,
+    selectNoteInNewActiveTab,
+  ]);
+
   const [vaultPaneVisible, setVaultPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
   );
   const [episodesPaneVisible, setEpisodesPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
+  );
+  const [titleBarEditorTabsHost, setTitleBarEditorTabsHost] = useState<HTMLDivElement | null>(
+    null,
   );
   useEditorHistoryMouseButtons({
     vaultRoot,
@@ -377,7 +412,17 @@ export default function App() {
     vaultRoot,
   });
 
-  const titleBarTransport = useMemo((): TitleBarTransportProps | undefined => {
+  const toolbarNowPlaying = useMemo(() => {
+    if (desktopPlayback.activeEpisode == null) {
+      return null;
+    }
+    return {
+      episodeTitle: desktopPlayback.activeEpisode.title,
+      seriesName: desktopPlayback.activeEpisode.seriesName,
+    };
+  }, [desktopPlayback.activeEpisode]);
+
+  const playbackTransport = useMemo((): PlaybackTransportProps | undefined => {
     if (desktopPlayback.activeEpisode == null) {
       return undefined;
     }
@@ -394,8 +439,8 @@ export default function App() {
       durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
       seekDisabled: label === 'loading',
       playControl,
-      onSeekBack: () => void seek(-TITLE_BAR_SKIP_MS),
-      onSeekForward: () => void seek(TITLE_BAR_SKIP_MS),
+      onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
+      onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
       onTogglePlay: () => void desktopPlayback.togglePause(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
@@ -506,6 +551,8 @@ export default function App() {
             openTabUris: ui.inbox.openTabUris,
             editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
             activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
+            activeTodayHubUri: ui.inbox.activeTodayHubUri ?? null,
+            todayHubWorkspaces: ui.inbox.todayHubWorkspaces ?? null,
           });
         }
         setLayoutsReady(true);
@@ -561,6 +608,8 @@ export default function App() {
           .filter((u): u is string => u != null),
         editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
         activeEditorTabId,
+        activeTodayHubUri,
+        todayHubWorkspaces: todayHubWorkspacesForSave,
       },
     };
     const t = window.setTimeout(() => {
@@ -578,6 +627,8 @@ export default function App() {
     composingNewEntry,
     editorWorkspaceTabs,
     activeEditorTabId,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
     inboxShellRestored,
   ]);
 
@@ -866,26 +917,16 @@ export default function App() {
       <div ref={appRootRef} className={appRootClassName}>
         <AppChromeBackground />
         <div className="app-root-chrome">
-          <WindowTitleBar tiling={tiling} transport={titleBarTransport} />
+          <WindowTitleBar
+            tiling={tiling}
+            onEditorTabsHostRef={setTitleBarEditorTabsHost}
+            todayHubSelect={titleBarTodayHubSelect}
+          />
 
           <div className="app-body">
-            <RailNav
-              vaultPaneVisible={vaultPaneVisible}
-              episodesPaneVisible={episodesPaneVisible}
-              onToggleVault={() => setVaultPaneVisible(v => !v)}
-              onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
-            />
             <div className="main-shell-stage panel-group fill">
-              <DesktopHorizontalSplitEnd
-                endVisible={notificationsPanelVisible}
-                endWidthPx={layouts.notifications.widthPx}
-                minEndPx={NOTIFICATIONS_PANEL.minPx}
-                maxEndPx={NOTIFICATIONS_PANEL.maxPx}
-                minMainPx={MIN_RESIZABLE_PANE_PX}
-                onEndWidthPxChanged={persistNotificationsWidthPx}
-                main={
-                  <div className="main-column">
-              <main className="main-stage">
+              <div className="main-column">
+                <main className="main-stage">
                   <VaultTab
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
@@ -897,7 +938,11 @@ export default function App() {
                         inboxEditorShellScrollDirectiveRef
                       }
                       vaultPaneVisible={vaultPaneVisible}
+                      onToggleVault={() => setVaultPaneVisible(v => !v)}
                       episodesPaneVisible={episodesPaneVisible}
+                      onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
+                      playbackTransport={playbackTransport}
+                      toolbarNowPlaying={toolbarNowPlaying}
                       vaultWidthPx={layouts.inbox.leftWidthPx}
                       episodesWidthPx={layouts.inbox.leftWidthPx}
                       onVaultWidthPxChanged={persistMainLeftWidthPx}
@@ -977,10 +1022,18 @@ export default function App() {
                       activeEditorTabId={activeEditorTabId}
                       onActivateOpenTab={activateOpenTab}
                       onCloseEditorTab={closeEditorTab}
+                      onReorderEditorWorkspaceTabs={reorderEditorWorkspaceTabs}
                       onCloseOtherEditorTabs={closeOtherEditorTabs}
-                      onCloseAllEditorTabs={closeAllEditorTabs}
-                      onReopenClosedEditorTab={reopenLastClosedEditorTab}
-                      canReopenClosedEditorTab={canReopenClosedEditorTab}
+                      notificationsPanelVisible={notificationsPanelVisible}
+                      onToggleNotificationsPanel={() =>
+                        setNotificationsPanelVisible(v => !v)
+                      }
+                      notificationsWidthPx={layouts.notifications.widthPx}
+                      onNotificationsWidthPxChanged={persistNotificationsWidthPx}
+                      notificationItems={notificationItems}
+                      notificationHighlightId={notificationHighlightId}
+                      onDismissNotification={dismissNotification}
+                      onClearAllNotifications={clearAllNotifications}
                       showTodayHubCanvas={showTodayHubCanvas}
                       todayHubSettings={todayHubSettings}
                       todayHubBridgeRef={todayHubBridgeRef}
@@ -988,25 +1041,11 @@ export default function App() {
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
-              </main>
+                </main>
+              </div>
             </div>
-                }
-                end={
-                  <NotificationsPanel
-                    appSurface={vaultPaneVisible ? 'capture' : 'consume'}
-                    items={notificationItems}
-                    highlightId={notificationHighlightId}
-                    onDismiss={dismissNotification}
-                    onClearAll={clearAllNotifications}
-                  />
-                }
-              />
-            </div>
-            <NotificationsRail
-              panelVisible={notificationsPanelVisible}
-              onToggle={() => setNotificationsPanelVisible(v => !v)}
-            />
           </div>
 
           {!err && diskConflict ? (

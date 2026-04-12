@@ -114,10 +114,18 @@ import {
   pushNavigateOnTab,
   remapAllTabsUriPrefix,
   removeUriFromAllTabs,
+  reorderEditorWorkspaceTabsInArray,
   tabCurrentUri,
   tabsFromStored,
+  tabsToStored,
   type EditorWorkspaceTab,
 } from '../lib/editorWorkspaceTabs';
+import {editorOpenTabPillLabel} from '../lib/editorOpenTabPillLabel';
+import type {TodayHubWorkspaceSnapshot} from '../lib/mainWindowUiStore';
+import {
+  pickDefaultActiveTodayHubUri,
+  sortedTodayHubNoteUrisFromRefs,
+} from '../lib/todayHubWorkspaceRestore';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {
@@ -388,6 +396,8 @@ export type UseMainWindowWorkspaceResult = {
   activeEditorTabId: string | null;
   activateOpenTab: (tabId: string) => void;
   closeEditorTab: (tabId: string) => void;
+  /** Reorder open tabs in the title bar (`fromIndex` / `insertBeforeIndex` refer to order before the move). */
+  reorderEditorWorkspaceTabs: (fromIndex: number, insertBeforeIndex: number) => void;
   closeOtherEditorTabs: (keepTabId: string) => void;
   closeAllEditorTabs: () => void;
   reopenLastClosedEditorTab: () => void;
@@ -405,7 +415,21 @@ export type UseMainWindowWorkspaceResult = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Title bar: eligible `Today.md` hubs (vault scan), sorted for stable ordering. */
+  todayHubSelectorItems: readonly {todayNoteUri: string; label: string}[];
+  /** Canonical `Today.md` URI for the workspace whose tab bar is active. */
+  activeTodayHubUri: string | null;
+  /** Per-hub tab snapshots merged for `saveMainWindowUi`. */
+  todayHubWorkspacesForSave: Record<string, TodayHubWorkspaceSnapshot>;
+  /** Switch hub workspace (persists current tabs under the old hub first). */
+  switchTodayHubWorkspace: (todayNoteUri: string) => Promise<void>;
+  /** Open or focus the active hub note (main segment of split control). */
+  focusActiveTodayHubNote: () => void;
 };
+
+function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
+  return tabsFromStored(tabsToStored(tabs));
+}
 
 export function useMainWindowWorkspace(options: {
   fs: VaultFilesystem;
@@ -423,6 +447,8 @@ export function useMainWindowWorkspace(options: {
       index: number;
     }> | null;
     activeEditorTabId?: string | null;
+    activeTodayHubUri?: string | null;
+    todayHubWorkspaces?: Record<string, TodayHubWorkspaceSnapshot> | null;
   } | null;
   inboxRestoreEnabled: boolean;
 }): UseMainWindowWorkspaceResult {
@@ -476,6 +502,12 @@ export function useMainWindowWorkspace(options: {
   const [activeEditorTabId, setActiveEditorTabId] = useState<string | null>(
     null,
   );
+  const [activeTodayHubUri, setActiveTodayHubUri] = useState<string | null>(
+    null,
+  );
+  const [todayHubWorkspacesForSave, setTodayHubWorkspacesForSave] = useState<
+    Record<string, TodayHubWorkspaceSnapshot>
+  >({});
   const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
@@ -514,6 +546,7 @@ export function useMainWindowWorkspace(options: {
   const renameNoticeTimeoutRef = useRef<number | null>(null);
   const editorWorkspaceTabsRef = useRef<EditorWorkspaceTab[]>([]);
   const activeEditorTabIdRef = useRef<string | null>(null);
+  const activeTodayHubUriRef = useRef<string | null>(null);
   /** User-initiated tab closes only (for Reopen closed tab). */
   const editorClosedTabsStackRef = useRef<string[]>([]);
   const notesRef = useRef<NoteRow[]>([]);
@@ -595,6 +628,10 @@ export function useMainWindowWorkspace(options: {
   }, [activeEditorTabId]);
 
   useLayoutEffect(() => {
+    activeTodayHubUriRef.current = activeTodayHubUri;
+  }, [activeTodayHubUri]);
+
+  useLayoutEffect(() => {
     notesRef.current = notes;
   }, [notes]);
 
@@ -622,6 +659,25 @@ export function useMainWindowWorkspace(options: {
     return false;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editorClosedStackVersion syncs ref stack mutations to UI
   }, [vaultRoot, notes, editorClosedStackVersion]);
+
+  const todayHubSelectorItems = useMemo(() => {
+    const hubs = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
+    return hubs.map(todayNoteUri => ({
+      todayNoteUri,
+      label: editorOpenTabPillLabel(notes, todayNoteUri),
+    }));
+  }, [vaultMarkdownRefs, notes]);
+
+  const todayHubWorkspacesPersistFiltered = useMemo(() => {
+    const hubs = new Set(sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs));
+    const out: Record<string, TodayHubWorkspaceSnapshot> = {};
+    for (const [k, v] of Object.entries(todayHubWorkspacesForSave)) {
+      if (hubs.has(k)) {
+        out[k] = v;
+      }
+    }
+    return out;
+  }, [todayHubWorkspacesForSave, vaultMarkdownRefs]);
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
@@ -1433,6 +1489,29 @@ export function useMainWindowWorkspace(options: {
     [openMarkdownInEditor],
   );
 
+  const reorderEditorWorkspaceTabs = useCallback(
+    (fromIndex: number, insertBeforeIndex: number) => {
+      if (busy) {
+        return;
+      }
+      const tabs = editorWorkspaceTabsRef.current;
+      const next = reorderEditorWorkspaceTabsInArray(tabs, fromIndex, insertBeforeIndex);
+      let sameOrder = true;
+      for (let i = 0; i < next.length; i++) {
+        if (next[i]!.id !== tabs[i]!.id) {
+          sameOrder = false;
+          break;
+        }
+      }
+      if (sameOrder) {
+        return;
+      }
+      editorWorkspaceTabsRef.current = next;
+      setEditorWorkspaceTabs(next);
+    },
+    [busy],
+  );
+
   const closeEditorTab = useCallback(
     (tabId: string) => {
       void (async () => {
@@ -1639,6 +1718,9 @@ export function useMainWindowWorkspace(options: {
         setEditorWorkspaceTabs([]);
         activeEditorTabIdRef.current = null;
         setActiveEditorTabId(null);
+        activeTodayHubUriRef.current = null;
+        setActiveTodayHubUri(null);
+        setTodayHubWorkspacesForSave({});
         editorClosedTabsStackRef.current = [];
         setEditorClosedStackVersion(n => n + 1);
         setSelectedUri(null);
@@ -2375,6 +2457,79 @@ export function useMainWindowWorkspace(options: {
     },
     [activateOpenTab, openMarkdownInEditor],
   );
+
+  const switchTodayHubWorkspace = useCallback(
+    async (todayNoteUri: string) => {
+      const norm = normalizeEditorDocUri(todayNoteUri);
+      if (!norm) {
+        return;
+      }
+      const hubs = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefsRef.current);
+      if (!hubs.includes(norm)) {
+        return;
+      }
+      if (norm === activeTodayHubUriRef.current) {
+        selectNote(norm);
+        return;
+      }
+
+      await flushInboxSaveRef.current();
+      if (composingNewEntryRef.current) {
+        composingNewEntryRef.current = false;
+        setComposingNewEntry(false);
+        clearInboxYamlFrontmatterEditorRefs({
+          block: inboxEditorYamlFrontmatterBlockRef,
+          leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+        });
+        setEditorBody('');
+        setInboxEditorResetNonce(n => n + 1);
+      }
+
+      const old = activeTodayHubUriRef.current;
+      let snapForTarget: TodayHubWorkspaceSnapshot | undefined;
+      setTodayHubWorkspacesForSave(prev => {
+        const next: Record<string, TodayHubWorkspaceSnapshot> = {...prev};
+        if (old != null && old !== norm) {
+          next[old] = {
+            editorWorkspaceTabs: tabsToStored(editorWorkspaceTabsRef.current),
+            activeEditorTabId: activeEditorTabIdRef.current,
+          };
+        }
+        snapForTarget = next[norm];
+        return next;
+      });
+
+      const snapTabs = snapForTarget?.editorWorkspaceTabs;
+      let nextTabs: EditorWorkspaceTab[];
+      let nextActive: string | null;
+      if (snapTabs != null && snapTabs.length > 0) {
+        nextTabs = cloneEditorWorkspaceTabs(tabsFromStored(snapTabs));
+        nextActive = ensureActiveTabId(
+          nextTabs,
+          snapForTarget?.activeEditorTabId ?? null,
+        );
+      } else {
+        nextTabs = [createEditorWorkspaceTab(norm)];
+        nextActive = nextTabs[0]!.id;
+      }
+
+      editorWorkspaceTabsRef.current = nextTabs;
+      activeEditorTabIdRef.current = nextActive;
+      setEditorWorkspaceTabs(nextTabs);
+      setActiveEditorTabId(nextActive);
+      activeTodayHubUriRef.current = norm;
+      setActiveTodayHubUri(norm);
+      selectNote(norm);
+    },
+    [selectNote],
+  );
+
+  const focusActiveTodayHubNote = useCallback(() => {
+    const u = activeTodayHubUriRef.current;
+    if (u) {
+      selectNote(u);
+    }
+  }, [selectNote]);
 
   const submitNewEntry = useCallback(async () => {
     if (!vaultRoot) {
@@ -3511,6 +3666,7 @@ export function useMainWindowWorkspace(options: {
     }
     if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
       const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+      const hubUris = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
       const filterStoredTab = (raw: string) => {
         const uri = raw.replace(/\\/g, '/');
         const inVault = uri === root || uri.startsWith(`${root}/`);
@@ -3519,12 +3675,17 @@ export function useMainWindowWorkspace(options: {
           && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'))
         );
       };
-      const rawTabs = restoredInboxState.openTabUris;
-      const storedWorkspaceTabs = restoredInboxState.editorWorkspaceTabs;
-      let restoredTabs: string[] = [];
 
-      if (storedWorkspaceTabs != null && storedWorkspaceTabs.length > 0) {
-        const sanitized = storedWorkspaceTabs
+      const sanitizeStoredWorkspaceRows = (
+        tabs:
+          | ReadonlyArray<{id: string; entries: string[]; index: number}>
+          | null
+          | undefined,
+      ): {id: string; entries: string[]; index: number}[] | null => {
+        if (tabs == null || tabs.length === 0) {
+          return null;
+        }
+        const sanitized = tabs
           .map(t => {
             const entries = t.entries
               .map(e => e.replace(/\\/g, '/'))
@@ -3546,11 +3707,65 @@ export function useMainWindowWorkspace(options: {
             return {id, entries, index};
           })
           .filter((x): x is {id: string; entries: string[]; index: number} => x != null);
-        if (sanitized.length > 0) {
+        return sanitized.length > 0 ? sanitized : null;
+      };
+
+      let chosenTabsSource = restoredInboxState.editorWorkspaceTabs;
+      let chosenActiveEditorTabId = restoredInboxState.activeEditorTabId ?? null;
+      let resolvedActiveHub: string | null = null;
+
+      if (hubUris.length > 0) {
+        const ws = restoredInboxState.todayHubWorkspaces;
+        if (ws && Object.keys(ws).length > 0) {
+          const rawActive =
+            typeof restoredInboxState.activeTodayHubUri === 'string'
+              ? restoredInboxState.activeTodayHubUri
+                  .replace(/\\/g, '/')
+                  .replace(/\/+/g, '/')
+                  .trim()
+              : null;
+          resolvedActiveHub =
+            rawActive && hubUris.includes(rawActive)
+              ? rawActive
+              : pickDefaultActiveTodayHubUri({
+                  hubUris,
+                  selectedUri: restoredInboxState.selectedUri,
+                  editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
+                  openTabUris: restoredInboxState.openTabUris,
+                });
+          const snap = resolvedActiveHub ? ws[resolvedActiveHub] : undefined;
+          const fromSnap = snap
+            ? sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs)
+            : null;
+          if (fromSnap != null && fromSnap.length > 0) {
+            chosenTabsSource = fromSnap;
+            if (snap!.activeEditorTabId === null) {
+              chosenActiveEditorTabId = null;
+            } else if (typeof snap!.activeEditorTabId === 'string') {
+              const aid = snap!.activeEditorTabId.trim();
+              chosenActiveEditorTabId = aid === '' ? null : aid;
+            }
+          }
+        } else {
+          resolvedActiveHub = pickDefaultActiveTodayHubUri({
+            hubUris,
+            selectedUri: restoredInboxState.selectedUri,
+            editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
+            openTabUris: restoredInboxState.openTabUris,
+          });
+        }
+      }
+
+      const rawTabs = restoredInboxState.openTabUris;
+      let restoredTabs: string[] = [];
+
+      if (chosenTabsSource != null && chosenTabsSource.length > 0) {
+        const sanitized = sanitizeStoredWorkspaceRows(chosenTabsSource);
+        if (sanitized != null && sanitized.length > 0) {
           const nextTabs = tabsFromStored(sanitized);
           let nextActive =
-            typeof restoredInboxState.activeEditorTabId === 'string'
-              ? restoredInboxState.activeEditorTabId.trim()
+            typeof chosenActiveEditorTabId === 'string'
+              ? chosenActiveEditorTabId.trim()
               : null;
           if (nextActive && !nextTabs.some(t => t.id === nextActive)) {
             nextActive = null;
@@ -3585,6 +3800,51 @@ export function useMainWindowWorkspace(options: {
         }
       }
 
+      if (hubUris.length > 0) {
+        const mergedWs: Record<string, TodayHubWorkspaceSnapshot> = {};
+        const ws = restoredInboxState.todayHubWorkspaces;
+        if (ws) {
+          for (const [rawKey, snap] of Object.entries(ws)) {
+            const h = rawKey.replace(/\\/g, '/').replace(/\/+/g, '/').trim();
+            if (!h || !hubUris.includes(h)) {
+              continue;
+            }
+            const rows = sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs);
+            if (rows == null || rows.length === 0) {
+              continue;
+            }
+            let aid: string | null = null;
+            if (snap.activeEditorTabId === null) {
+              aid = null;
+            } else if (typeof snap.activeEditorTabId === 'string') {
+              const t = snap.activeEditorTabId.trim();
+              aid = t === '' ? null : t;
+            }
+            mergedWs[h] = {editorWorkspaceTabs: rows, activeEditorTabId: aid};
+          }
+        }
+        const activeHubFinal =
+          resolvedActiveHub
+          ?? pickDefaultActiveTodayHubUri({
+            hubUris,
+            selectedUri: restoredInboxState.selectedUri,
+            editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
+            openTabUris: restoredInboxState.openTabUris,
+          })
+          ?? hubUris[0]!;
+        mergedWs[activeHubFinal] = {
+          editorWorkspaceTabs: tabsToStored(editorWorkspaceTabsRef.current),
+          activeEditorTabId: activeEditorTabIdRef.current,
+        };
+        setTodayHubWorkspacesForSave(mergedWs);
+        setActiveTodayHubUri(activeHubFinal);
+        activeTodayHubUriRef.current = activeHubFinal;
+      } else if (vaultMarkdownRefs.length > 0) {
+        setTodayHubWorkspacesForSave({});
+        setActiveTodayHubUri(null);
+        activeTodayHubUriRef.current = null;
+      }
+
       if (restoredInboxState.composingNewEntry) {
         startNewEntry();
       } else if (restoredInboxState.selectedUri) {
@@ -3609,8 +3869,67 @@ export function useMainWindowWorkspace(options: {
     inboxShellRestored,
     restoredInboxState,
     notes,
+    vaultMarkdownRefs,
     startNewEntry,
     selectNote,
+  ]);
+
+  useEffect(() => {
+    if (!vaultRoot || !inboxShellRestored || vaultMarkdownRefs.length === 0) {
+      return;
+    }
+    const hubs = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
+    if (hubs.length === 0) {
+      return;
+    }
+    const cur = activeTodayHubUri;
+    if (cur != null && hubs.includes(cur)) {
+      return;
+    }
+    if (cur != null && !hubs.includes(cur)) {
+      void switchTodayHubWorkspace(hubs[0]!);
+      return;
+    }
+    const pick =
+      pickDefaultActiveTodayHubUri({
+        hubUris: hubs,
+        selectedUri: selectedUriRef.current,
+        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabsRef.current),
+        openTabUris: null,
+      }) ?? hubs[0]!;
+    activeTodayHubUriRef.current = pick;
+    setActiveTodayHubUri(pick);
+    setTodayHubWorkspacesForSave(prev => ({
+      ...prev,
+      [pick]: {
+        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabsRef.current),
+        activeEditorTabId: activeEditorTabIdRef.current,
+      },
+    }));
+  }, [
+    vaultRoot,
+    inboxShellRestored,
+    vaultMarkdownRefs,
+    activeTodayHubUri,
+    switchTodayHubWorkspace,
+  ]);
+
+  useEffect(() => {
+    if (!activeTodayHubUri || !inboxShellRestored) {
+      return;
+    }
+    setTodayHubWorkspacesForSave(prev => ({
+      ...prev,
+      [activeTodayHubUri]: {
+        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
+        activeEditorTabId,
+      },
+    }));
+  }, [
+    editorWorkspaceTabs,
+    activeEditorTabId,
+    activeTodayHubUri,
+    inboxShellRestored,
   ]);
 
   return {
@@ -3674,6 +3993,7 @@ export function useMainWindowWorkspace(options: {
     activeEditorTabId,
     activateOpenTab,
     closeEditorTab,
+    reorderEditorWorkspaceTabs,
     closeOtherEditorTabs,
     closeAllEditorTabs,
     reopenLastClosedEditorTab,
@@ -3685,5 +4005,10 @@ export function useMainWindowWorkspace(options: {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,
+    switchTodayHubWorkspace,
+    focusActiveTodayHubNote,
   };
 }

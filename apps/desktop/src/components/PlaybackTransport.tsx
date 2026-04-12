@@ -1,21 +1,32 @@
-import {MaterialIcon} from './MaterialIcon';
+import {
+  DoubleArrowLeftIcon,
+  DoubleArrowRightIcon,
+  PauseIcon,
+  PlayIcon,
+  ReloadIcon,
+} from '@radix-ui/react-icons';
 
-export type TitleBarPlayControl = 'loading' | 'paused' | 'playing';
+export type PlaybackTransportPlayControl = 'loading' | 'paused' | 'playing';
 
-export type TitleBarTransportProps = {
+export type PlaybackTransportProps = {
   positionLabel: string;
   durationLabel: string;
   seekDisabled: boolean;
-  playControl: TitleBarPlayControl;
+  playControl: PlaybackTransportPlayControl;
   onSeekBack: () => void;
   onSeekForward: () => void;
   onTogglePlay: () => void;
+  /** Compact row for {@link EditorWorkspaceToolbar}; fixed-width time slots. */
+  variant?: 'default' | 'toolbar';
 };
 
+/** Radix icons in the playback row (15×15 viewBox, matches editor toolbar chrome). */
+const PLAYBACK_ICON_DIM = {width: 15, height: 15} as const;
+
 /**
- * Centered title-bar playback: elapsed, skip back, play/pause or loading, skip forward, duration.
+ * Playback row: elapsed, skip back, play/pause or loading, skip forward, duration.
  */
-export function TitleBarTransport({
+export function PlaybackTransport({
   positionLabel,
   durationLabel,
   seekDisabled,
@@ -23,19 +34,26 @@ export function TitleBarTransport({
   onSeekBack,
   onSeekForward,
   onTogglePlay,
-}: TitleBarTransportProps) {
+  variant = 'default',
+}: PlaybackTransportProps) {
   const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
   const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
+  const isToolbar = variant === 'toolbar';
 
   return (
     <div
-      className="window-title-bar-transport"
+      className={[
+        'app-playback-transport',
+        isToolbar ? 'app-playback-transport--toolbar' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="group"
       aria-label="Playback"
     >
       <span
-        className="window-title-bar-transport__time window-title-bar-transport__time--position"
+        className="app-playback-transport__time app-playback-transport__time--position"
         aria-hidden
       >
         {positionLabel}
@@ -47,7 +65,7 @@ export function TitleBarTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekBack()}
       >
-        <MaterialIcon name="replay_10" size={24} aria-hidden />
+        <DoubleArrowLeftIcon {...PLAYBACK_ICON_DIM} aria-hidden />
       </button>
       <button
         type="button"
@@ -58,18 +76,15 @@ export function TitleBarTransport({
         onClick={() => void onTogglePlay()}
       >
         {isLoading ? (
-          <MaterialIcon
+          <ReloadIcon
             aria-hidden
             className="app-playback-chrome-btn__spin"
-            name="autorenew"
-            size={24}
+            {...PLAYBACK_ICON_DIM}
           />
+        ) : isPlaying ? (
+          <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
         ) : (
-          <MaterialIcon
-            name={isPlaying ? 'pause_circle_filled' : 'play_circle_filled'}
-            size={24}
-            aria-hidden
-          />
+          <PlayIcon {...PLAYBACK_ICON_DIM} aria-hidden />
         )}
       </button>
       <button
@@ -79,9 +94,9 @@ export function TitleBarTransport({
         disabled={seekDisabled}
         onClick={() => void onSeekForward()}
       >
-        <MaterialIcon name="forward_10" size={24} aria-hidden />
+        <DoubleArrowRightIcon {...PLAYBACK_ICON_DIM} aria-hidden />
       </button>
-      <span className="window-title-bar-transport__time window-title-bar-transport__time--duration" aria-hidden>
+      <span className="app-playback-transport__time app-playback-transport__time--duration" aria-hidden>
         {durationLabel}
       </span>
     </div>

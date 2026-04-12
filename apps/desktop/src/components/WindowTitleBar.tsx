@@ -1,18 +1,31 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
 
-import logoEskerraUrl from '@eskerra/brand/logo-eskerra.svg?url';
-
 import type {WindowTilingState} from '../lib/windowTiling';
-
-import {TitleBarTransport, type TitleBarTransportProps} from './TitleBarTransport';
+import {
+  TodayHubWorkspaceSelect,
+  type TodayHubWorkspaceSelectItem,
+} from './TodayHubWorkspaceSelect';
 
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
-  transport?: TitleBarTransportProps;
+  /** Mount point for editor open-note tabs (React portal target). */
+  onEditorTabsHostRef?: (el: HTMLDivElement | null) => void;
+  todayHubSelect?: {
+    items: readonly TodayHubWorkspaceSelectItem[];
+    activeTodayNoteUri: string | null;
+    activeLabel: string;
+    onMainActivate: () => void;
+    onPickHub: (todayNoteUri: string) => void;
+    onOpenHubInNewTab: (todayNoteUri: string) => void;
+  } | null;
 };
 
-export function WindowTitleBar({tiling = 'none', transport}: WindowTitleBarProps) {
+export function WindowTitleBar({
+  tiling = 'none',
+  onEditorTabsHostRef,
+  todayHubSelect = null,
+}: WindowTitleBarProps) {
   const tauri = isTauri();
 
   const onMinimize = () => {
@@ -31,18 +44,31 @@ export function WindowTitleBar({tiling = 'none', transport}: WindowTitleBarProps
 
   return (
     <header className="window-title-bar" data-window-tiling={tiling}>
-      <div className="window-title-bar-leading">
-        <img
-          className="window-title-bar-icon"
-          src={logoEskerraUrl}
-          alt=""
-          width={29}
-          height={29}
-          {...(tauri ? {'data-tauri-drag-region': true} : {})}
-        />
+      <div
+        className="window-title-bar-leading"
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      >
+        {todayHubSelect != null && todayHubSelect.items.length > 0 ? (
+          <TodayHubWorkspaceSelect
+            items={todayHubSelect.items}
+            activeTodayNoteUri={todayHubSelect.activeTodayNoteUri}
+            activeLabel={todayHubSelect.activeLabel}
+            onMainActivate={todayHubSelect.onMainActivate}
+            onPickHub={todayHubSelect.onPickHub}
+            onOpenHubInNewTab={todayHubSelect.onOpenHubInNewTab}
+          />
+        ) : null}
       </div>
-      <div className="window-title-bar-drag" aria-hidden {...(tauri ? {'data-tauri-drag-region': true} : {})} />
-      {transport ? <TitleBarTransport {...transport} /> : null}
+      <div
+        ref={onEditorTabsHostRef}
+        className="window-title-editor-tabs-host"
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      />
+      <div
+        className="window-title-bar-drag-sliver"
+        aria-hidden
+        {...(tauri ? {'data-tauri-drag-region': true} : {})}
+      />
       <div className="window-title-bar-trailing">
         {tauri ? (
           <div className="window-title-bar-controls" role="group" aria-label="Window">

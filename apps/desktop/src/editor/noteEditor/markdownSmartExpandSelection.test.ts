@@ -67,6 +67,61 @@ describe('markdownSmartExpandSelection', () => {
     expect(mainSpan(view)).toEqual({from: 0, to: 5});
   });
 
+  it('expands to emoji first when caret is immediately after it', () => {
+    const doc = 'hello 😀';
+    const afterEmoji = doc.length;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(afterEmoji),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    const emojiStart = doc.indexOf('😀');
+    expect(emojiStart).toBeGreaterThanOrEqual(0);
+    expect(mainSpan(view)).toEqual({from: emojiStart, to: afterEmoji});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: afterEmoji});
+  });
+
+  it('expands to emoji first when caret is immediately before it', () => {
+    const doc = 'hello 😀';
+    const emojiStart = doc.indexOf('😀');
+    const afterEmoji = doc.length;
+    expect(emojiStart).toBeGreaterThanOrEqual(0);
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(emojiStart),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: emojiStart, to: afterEmoji});
+    expand(view);
+    expect(mainSpan(view)).toEqual({from: 0, to: afterEmoji});
+  });
+
+  it('expands ZWJ family emoji as one step when caret is after it', () => {
+    const doc = 'x 👨‍👩‍👧';
+    const afterEmoji = doc.length;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(afterEmoji),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view);
+    const emojiStart = doc.indexOf('👨');
+    expect(emojiStart).toBeGreaterThanOrEqual(0);
+    expect(mainSpan(view)).toEqual({from: emojiStart, to: afterEmoji});
+  });
+
   it('expands parenthesis inner then outer', () => {
     const doc = '(inside)';
     view = new EditorView({

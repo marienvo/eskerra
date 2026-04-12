@@ -3,6 +3,7 @@
  * Before release APK: bump semver from apps/mobile/package.json based on git branch/commit
  * history stored in .local/build-version-state.json (gitignored). Also syncs Android
  * Gradle, then desktop package.json, Cargo.toml, metainfo, and canonical mobile semver.
+ * Detached HEAD uses branch id "detached" (stable) so commits do not each trigger a minor bump.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -14,6 +15,7 @@ import {
   decideBump,
   mergeState,
   parseSemver,
+  releaseBumpBranchId,
 } from './bump-release-version-lib.mjs';
 import {
   applySemverToCargoLockPackageVersion,
@@ -66,6 +68,23 @@ function git(...args) {
   }).trim();
 }
 
+function normalizeStateData(parsed) {
+  const rawBranches = Array.isArray(parsed.branchesBuilt)
+    ? parsed.branchesBuilt.map(String)
+    : [];
+  const branches = [];
+  for (const b of rawBranches) {
+    const canonical = b.startsWith('detached:') ? 'detached' : b;
+    if (!branches.includes(canonical)) {
+      branches.push(canonical);
+    }
+  }
+  const commits = Array.isArray(parsed.commitsBuilt)
+    ? parsed.commitsBuilt.map(String)
+    : [];
+  return { branchesBuilt: branches, commitsBuilt: commits };
+}
+
 function readState() {
   if (!existsSync(STATE_FILE)) {
     return {
@@ -82,14 +101,7 @@ function readState() {
   }
   return {
     exists: true,
-    data: {
-      branchesBuilt: Array.isArray(parsed.branchesBuilt)
-        ? parsed.branchesBuilt.map(String)
-        : [],
-      commitsBuilt: Array.isArray(parsed.commitsBuilt)
-        ? parsed.commitsBuilt.map(String)
-        : [],
-    },
+    data: normalizeStateData(parsed),
   };
 }
 
@@ -111,11 +123,7 @@ function writeState(data) {
 
 function resolveBranchId() {
   const ref = git('rev-parse', '--abbrev-ref', 'HEAD');
-  if (ref === 'HEAD') {
-    const short = git('rev-parse', '--short', 'HEAD');
-    return `detached:${short}`;
-  }
-  return ref;
+  return releaseBumpBranchId(ref);
 }
 
 function readPackageVersion() {

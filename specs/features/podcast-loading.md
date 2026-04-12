@@ -197,7 +197,7 @@ Total target on warm path: roughly 4 SAF calls plus any required validation miss
 
 ## Desktop playback chrome (no separate player pane)
 
-- The **title bar** (`TitleBarTransport`) is the primary in-window transport: elapsed, ±10s, play/pause or **loading** (spinning `progress_activity`), duration. There is no separate docked player panel.
+- The **Editor Toolbar** (`PlaybackTransport` in `EditorWorkspaceToolbar`, `variant="toolbar"`) is the in-window transport: elapsed, ±10s skip, play/pause or **loading** (spinning **Radix `ReloadIcon`**), duration, then episode + series title on the same row. Radix icons are **15×15** (same as other toolbar chrome). There is no separate docked player panel.
 - When `DesktopPlayerLabel` is `loading`, skip buttons are disabled and the center control shows the loading spinner (not a disabled play/pause icon alone).
 
 ## Non-Goals
