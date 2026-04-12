@@ -3059,18 +3059,10 @@ export function useMainWindowWorkspace(options: {
               selectedUri: selectedUriRef.current,
             })
           ) {
-            if (existingTabId != null) {
-              activateOpenTab(existingTabId);
-              return;
-            }
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: true,
             });
-            return;
-          }
-          if (existingTabId != null) {
-            activateOpenTab(existingTabId);
             return;
           }
           await openMarkdownInEditor(result.uri);
@@ -3094,14 +3086,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [
-      activateOpenTab,
-      vaultRoot,
-      fs,
-      refreshNotes,
-      inboxEditorRef,
-      openMarkdownInEditor,
-    ],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -3185,18 +3170,10 @@ export function useMainWindowWorkspace(options: {
               selectedUri: selectedUriRef.current,
             })
           ) {
-            if (existingTabId != null) {
-              activateOpenTab(existingTabId);
-              return;
-            }
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: true,
             });
-            return;
-          }
-          if (existingTabId != null) {
-            activateOpenTab(existingTabId);
             return;
           }
           await openMarkdownInEditor(result.uri);
@@ -3207,14 +3184,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [
-      activateOpenTab,
-      vaultRoot,
-      fs,
-      refreshNotes,
-      inboxEditorRef,
-      openMarkdownInEditor,
-    ],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
