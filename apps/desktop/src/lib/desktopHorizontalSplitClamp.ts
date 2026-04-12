@@ -1,20 +1,20 @@
 /**
- * Horizontal split: left | separator | right.
- * Right column is flexible; `minRightPx` is a minimum reserve for the right pane.
+ * Horizontal split: fixed left | separator | flexible **center workspace** (editor).
+ * `minCenterPx` is the minimum width reserved for the center column when clamping the left width.
  */
 
 /**
- * Max CSS pixels available for the left column given container width and a minimum right reserve.
+ * Max CSS pixels available for the left column given container width and a minimum center reserve.
  * Matches the `maxW` step inside {@link clampSplitLeftWidthPx}.
  */
 export function maxAvailableLeftWidthPx(
   containerInnerWidthPx: number,
   separatorWidthPx: number,
-  minRightPx: number,
+  minCenterPx: number,
 ): number {
   return Math.max(
     0,
-    Math.floor(containerInnerWidthPx - separatorWidthPx - minRightPx),
+    Math.floor(containerInnerWidthPx - separatorWidthPx - minCenterPx),
   );
 }
 
@@ -37,12 +37,12 @@ export function clampSplitLeftWidthPx(
   maxLeftPx: number,
   containerInnerWidthPx: number,
   separatorWidthPx: number,
-  minRightPx: number,
+  minCenterPx: number,
 ): number {
   const maxW = maxAvailableLeftWidthPx(
     containerInnerWidthPx,
     separatorWidthPx,
-    minRightPx,
+    minCenterPx,
   );
   let w = Math.round(px);
   w = Math.min(maxLeftPx, w);

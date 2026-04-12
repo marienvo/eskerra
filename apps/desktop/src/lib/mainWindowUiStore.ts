@@ -42,6 +42,8 @@ export type StoredMainWindowUi = {
   vaultPaneVisible: boolean;
   /** When true, the episodes list column is shown (left of the editor, or between vault and editor). */
   episodesPaneVisible: boolean;
+  /** When true, the Inbox file tree is shown below the editor (right column). */
+  inboxPaneVisible: boolean;
   /** Notifications pane open (list is always session-only). */
   notificationsPanelVisible: boolean;
   inbox: StoredMainWindowInbox;
@@ -56,9 +58,11 @@ const DEFAULT_INBOX: StoredMainWindowInbox = {
 export const DEFAULT_MAIN_WINDOW_PANE_VISIBILITY: {
   vaultPaneVisible: boolean;
   episodesPaneVisible: boolean;
+  inboxPaneVisible: boolean;
 } = {
   vaultPaneVisible: false,
   episodesPaneVisible: true,
+  inboxPaneVisible: true,
 };
 
 function normalizeStoredVaultUriSlashes(uri: string): string {
@@ -131,6 +135,7 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
 
   let vaultPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible;
   let episodesPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible;
+  let inboxPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible;
 
   const v = o.vaultPaneVisible;
   const e = o.episodesPaneVisible;
@@ -149,6 +154,10 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
       vaultPaneVisible = false;
       episodesPaneVisible = true;
     }
+  }
+
+  if (typeof o.inboxPaneVisible === 'boolean') {
+    inboxPaneVisible = o.inboxPaneVisible;
   }
 
   let notificationsPanelVisible = true;
@@ -237,6 +246,7 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     vaultRoot,
     vaultPaneVisible,
     episodesPaneVisible,
+    inboxPaneVisible,
     notificationsPanelVisible,
     inbox,
   };

@@ -26,10 +26,10 @@ export type MainWorkspaceSplitProps = {
 };
 
 /**
- * Optional vault and episodes areas to the left of the editor. When both are visible they stack
+ * Optional vault and episodes areas to the left of the center workspace. When both are visible they stack
  * vertically in one column; otherwise the same fixed-px horizontal splits as before apply.
  *
- * The editor always stays under `DesktopHorizontalSplit` as `right` so toggling Vault (with
+ * The editor always stays under `DesktopHorizontalSplit` as `centerWorkspace` so toggling Vault (with
  * Episodes hidden) does not swap React roots and remount the editor subtree.
  */
 export function MainWorkspaceSplit({
@@ -97,10 +97,10 @@ export function MainWorkspaceSplit({
       leftWidthPx={leftWidthPx}
       minLeftPx={minLeftPx}
       maxLeftPx={maxLeftPx}
-      minRightPx={MIN_RESIZABLE_PANE_PX}
+      minCenterWorkspacePx={MIN_RESIZABLE_PANE_PX}
       onLeftWidthPxChanged={onLeftWidthPxChanged}
       left={left}
-      right={editorPane}
+      centerWorkspace={editorPane}
     />
   );
 }

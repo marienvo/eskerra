@@ -19,6 +19,14 @@ export type VaultEpisodesStackLayout = {
   topHeightPx: number;
 };
 
+/**
+ * Vertical stack in the shell **end** column: **Notifications** (top) and **Inbox** tree (bottom).
+ * `topHeightPx` is the persisted height of the notifications block when both are visible.
+ */
+export type NotificationsInboxStackLayout = {
+  topHeightPx: number;
+};
+
 export type StoredLayouts = {
   /** Legacy key: main workspace left column width (Vault / Episodes / stack). */
   inbox: LeftSplitLayout;
@@ -26,6 +34,7 @@ export type StoredLayouts = {
   podcastsMain: LeftSplitLayout;
   notifications: NotificationsPanelLayout;
   vaultEpisodesStack: VaultEpisodesStackLayout;
+  notificationsInboxStack: NotificationsInboxStackLayout;
 };
 
 /** Minimum CSS pixel size for each resizable split pane edge (left column, editor reserve, stack rows, notifications). */
@@ -60,11 +69,22 @@ export const VAULT_EPISODES_STACK_TOP = {
   maxPx: 10_000,
 } as const;
 
+/**
+ * Same semantics as {@link VAULT_EPISODES_STACK_TOP}: persisted **top** row height (notifications)
+ * when the Inbox tree is open below it in the shell end column.
+ */
+export const NOTIFICATIONS_INBOX_STACK_TOP = {
+  defaultPx: 280,
+  minPx: MIN_RESIZABLE_PANE_PX,
+  maxPx: 10_000,
+} as const;
+
 export const DEFAULT_LAYOUTS: StoredLayouts = {
   inbox: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
   podcastsMain: {leftWidthPx: INBOX_LEFT_PANEL.defaultPx},
   notifications: {widthPx: NOTIFICATIONS_PANEL.defaultPx},
   vaultEpisodesStack: {topHeightPx: VAULT_EPISODES_STACK_TOP.defaultPx},
+  notificationsInboxStack: {topHeightPx: NOTIFICATIONS_INBOX_STACK_TOP.defaultPx},
 };
 
 const ASSUMED_WIDTH_FOR_V3_MIGRATION = 1024;
@@ -162,6 +182,23 @@ function sanitizeVaultEpisodesStack(
   };
 }
 
+function sanitizeNotificationsInboxStack(
+  layout: NotificationsInboxStackLayout | undefined,
+): NotificationsInboxStackLayout {
+  const fb = DEFAULT_LAYOUTS.notificationsInboxStack.topHeightPx;
+  if (!layout || typeof layout.topHeightPx !== 'number') {
+    return {topHeightPx: fb};
+  }
+  return {
+    topHeightPx: clampLeftWidth(
+      layout.topHeightPx,
+      NOTIFICATIONS_INBOX_STACK_TOP.minPx,
+      NOTIFICATIONS_INBOX_STACK_TOP.maxPx,
+      fb,
+    ),
+  };
+}
+
 function isInboxV3Layout(v: unknown): v is {files: number; editor: number} {
   if (typeof v !== 'object' || v === null) {
     return false;
@@ -199,6 +236,7 @@ export function migrateV3LayoutsToV4(raw: unknown): StoredLayouts | null {
     podcastsMain: unified,
     notifications: sanitizeNotifications(undefined),
     vaultEpisodesStack: sanitizeVaultEpisodesStack(undefined),
+    notificationsInboxStack: sanitizeNotificationsInboxStack(undefined),
   };
 }
 
@@ -206,7 +244,10 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   if (typeof parsed !== 'object' || parsed === null) {
     return null;
   }
-  const o = parsed as Partial<StoredLayouts>;
+  const o = parsed as Partial<StoredLayouts> & {
+    /** @deprecated Renamed to {@link StoredLayouts.notificationsInboxStack}; read for migration. */
+    editorInboxStack?: NotificationsInboxStackLayout;
+  };
   if (o.inbox === undefined || o.podcastsMain === undefined) {
     return null;
   }
@@ -215,12 +256,21 @@ function parseV4Payload(parsed: unknown): StoredLayouts | null {
   const unifiedLeft = mergeMainLeftPaneWidths(inbox, podcastsMain);
   const notifications = sanitizeNotifications(o.notifications);
   const vaultEpisodesStack = sanitizeVaultEpisodesStack(o.vaultEpisodesStack);
+  const notificationsInboxStack = sanitizeNotificationsInboxStack(
+    o.notificationsInboxStack ?? o.editorInboxStack,
+  );
   return {
     inbox: unifiedLeft,
     podcastsMain: unifiedLeft,
     notifications,
     vaultEpisodesStack,
+    notificationsInboxStack,
   };
+}
+
+/** Exposed for unit tests (e.g. legacy `editorInboxStack` key migration). */
+export function parseLayoutPanelsV4ForTest(parsed: unknown): StoredLayouts | null {
+  return parseV4Payload(parsed);
 }
 
 export async function loadStoredLayouts(): Promise<StoredLayouts> {
@@ -270,6 +320,9 @@ export async function saveStoredLayouts(layouts: StoredLayouts): Promise<void> {
     podcastsMain: {leftWidthPx: inbox.leftWidthPx},
     notifications: sanitizeNotifications(layouts.notifications),
     vaultEpisodesStack: sanitizeVaultEpisodesStack(layouts.vaultEpisodesStack),
+    notificationsInboxStack: sanitizeNotificationsInboxStack(
+      layouts.notificationsInboxStack,
+    ),
   };
   await store.set(KEY_V4, JSON.stringify(normalized));
   await store.save();

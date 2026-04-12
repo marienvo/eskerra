@@ -258,6 +258,9 @@ export default function App() {
   const [episodesPaneVisible, setEpisodesPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
   );
+  const [inboxPaneVisible, setInboxPaneVisible] = useState(
+    DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible,
+  );
   const [titleBarEditorTabsHost, setTitleBarEditorTabsHost] = useState<HTMLDivElement | null>(
     null,
   );
@@ -587,6 +590,7 @@ export default function App() {
         if (ui) {
           setVaultPaneVisible(ui.vaultPaneVisible);
           setEpisodesPaneVisible(ui.episodesPaneVisible);
+          setInboxPaneVisible(ui.inboxPaneVisible);
           setNotificationsPanelVisible(ui.notificationsPanelVisible);
           setRestoredInboxState({
             vaultRoot: ui.vaultRoot,
@@ -643,6 +647,7 @@ export default function App() {
       vaultRoot,
       vaultPaneVisible,
       episodesPaneVisible,
+      inboxPaneVisible,
       notificationsPanelVisible,
       inbox: {
         composingNewEntry,
@@ -666,6 +671,7 @@ export default function App() {
     vaultRoot,
     vaultPaneVisible,
     episodesPaneVisible,
+    inboxPaneVisible,
     notificationsPanelVisible,
     selectedUri,
     composingNewEntry,
@@ -803,6 +809,14 @@ export default function App() {
   const persistVaultEpisodesStackTopHeightPx = useCallback((topHeightPx: number) => {
     setLayouts(prev => {
       const next = {...prev, vaultEpisodesStack: {topHeightPx}};
+      void saveStoredLayouts(next);
+      return next;
+    });
+  }, []);
+
+  const persistNotificationsInboxStackTopHeightPx = useCallback((topHeightPx: number) => {
+    setLayouts(prev => {
+      const next = {...prev, notificationsInboxStack: {topHeightPx}};
       void saveStoredLayouts(next);
       return next;
     });
@@ -985,6 +999,15 @@ export default function App() {
                       onToggleVault={() => setVaultPaneVisible(v => !v)}
                       episodesPaneVisible={episodesPaneVisible}
                       onToggleEpisodes={() => setEpisodesPaneVisible(v => !v)}
+                      inboxPaneVisible={inboxPaneVisible}
+                      onToggleInboxPane={() => setInboxPaneVisible(v => !v)}
+                      onOpenInboxPane={() => setInboxPaneVisible(true)}
+                      notificationsInboxStackTopHeightPx={
+                        layouts.notificationsInboxStack.topHeightPx
+                      }
+                      onNotificationsInboxStackTopHeightPxChanged={
+                        persistNotificationsInboxStackTopHeightPx
+                      }
                       playbackTransport={playbackTransport}
                       toolbarNowPlaying={toolbarNowPlaying}
                       vaultWidthPx={layouts.inbox.leftWidthPx}

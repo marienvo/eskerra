@@ -19,11 +19,12 @@ export type DesktopHorizontalSplitProps = {
   leftWidthPx: number;
   minLeftPx: number;
   maxLeftPx: number;
-  /** Minimum width reserved for the right column (approximates former %-min). */
-  minRightPx?: number;
+  /** Minimum width reserved for the center workspace column (editor stage; approximates former %-min). */
+  minCenterWorkspacePx?: number;
   onLeftWidthPxChanged: (px: number) => void;
   left: ReactNode;
-  right: ReactNode;
+  /** Main editor workspace (between the left rail and the optional shell end column). */
+  centerWorkspace: ReactNode;
   className?: string;
   /**
    * When true, the left column renders at 0px with no separator and width clamp/persist is
@@ -33,17 +34,17 @@ export type DesktopHorizontalSplitProps = {
 };
 
 /**
- * App-owned horizontal split: fixed-px left column, flex right column.
+ * App-owned horizontal split: fixed-px left column, flex **center workspace** column.
  * Avoids react-resizable-panels percentage remapping jitter on window resize.
  */
 export function DesktopHorizontalSplit({
   leftWidthPx,
   minLeftPx,
   maxLeftPx,
-  minRightPx = MIN_RESIZABLE_PANE_PX,
+  minCenterWorkspacePx = MIN_RESIZABLE_PANE_PX,
   onLeftWidthPxChanged,
   left,
-  right,
+  centerWorkspace,
   className,
   leftCollapsed = false,
 }: DesktopHorizontalSplitProps) {
@@ -86,14 +87,14 @@ export function DesktopHorizontalSplit({
     if (cw <= 0) {
       return;
     }
-    const maxW = maxAvailableLeftWidthPx(cw, sepW, minRightPx);
+    const maxW = maxAvailableLeftWidthPx(cw, sepW, minCenterWorkspacePx);
     const next = clampSplitLeftWidthPx(
       leftWidthPx,
       minLeftPx,
       maxLeftPx,
       cw,
       sepW,
-      minRightPx,
+      minCenterWorkspacePx,
     );
     if (next !== leftWidthPx) {
       if (!shouldPersistLeftSplitWidthClamp(maxW, minLeftPx)) {
@@ -101,7 +102,14 @@ export function DesktopHorizontalSplit({
       }
       onLeftWidthPxChanged(next);
     }
-  }, [leftCollapsed, leftWidthPx, minLeftPx, maxLeftPx, minRightPx, onLeftWidthPxChanged]);
+  }, [
+    leftCollapsed,
+    leftWidthPx,
+    minLeftPx,
+    maxLeftPx,
+    minCenterWorkspacePx,
+    onLeftWidthPxChanged,
+  ]);
 
   useLayoutEffect(() => {
     measureAndClamp();
@@ -162,12 +170,12 @@ export function DesktopHorizontalSplit({
         maxLeftPx,
         cw,
         sepW,
-        minRightPx,
+        minCenterWorkspacePx,
       );
       latestDragWidthRef.current = next;
       setDragWidthPx(next);
     },
-    [leftCollapsed, minLeftPx, maxLeftPx, minRightPx],
+    [leftCollapsed, minLeftPx, maxLeftPx, minCenterWorkspacePx],
   );
 
   const endDrag = useCallback(
@@ -235,7 +243,7 @@ export function DesktopHorizontalSplit({
         />
       )}
       <div
-        className="desktop-hsplit-right"
+        className="desktop-hsplit-center-workspace"
         style={{
           flex: '1 1 0',
           minWidth: 0,
@@ -245,7 +253,7 @@ export function DesktopHorizontalSplit({
           overflow: 'hidden',
         }}
       >
-        {right}
+        {centerWorkspace}
       </div>
     </div>
   );

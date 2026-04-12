@@ -13,7 +13,7 @@ describe('DesktopHorizontalSplit', () => {
         maxLeftPx={520}
         onLeftWidthPxChanged={vi.fn()}
         left={null}
-        right={<div>editor</div>}
+        centerWorkspace={<div>editor</div>}
       />,
     );
 
@@ -28,7 +28,7 @@ describe('DesktopHorizontalSplit', () => {
         maxLeftPx={520}
         onLeftWidthPxChanged={vi.fn()}
         left={<div>left</div>}
-        right={<div>editor</div>}
+        centerWorkspace={<div>editor</div>}
       />,
     );
 

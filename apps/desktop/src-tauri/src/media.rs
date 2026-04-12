@@ -32,8 +32,13 @@ impl Default for MediaSessionState {
 pub fn init_media_session(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "linux")]
     {
+        // MPRIS well-known names must be unique per session. A fixed `dbus_name` clashes when
+        // another Eskerra (or crashed) process still owns `org.mpris.MediaPlayer2.<name>`;
+        // souvlaki's background thread unwraps registration errors and would abort the app.
+        let dbus_name = format!("com_eskerra_desktop_{}", std::process::id());
+        let dbus_name: &'static str = Box::leak(dbus_name.into_boxed_str());
         let config = PlatformConfig {
-            dbus_name: "com_eskerra_desktop",
+            dbus_name,
             display_name: "Eskerra",
             hwnd: None,
         };

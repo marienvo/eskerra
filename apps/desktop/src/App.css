@@ -705,12 +705,12 @@ a:focus:not(:focus-visible) {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 29px;
-  height: 29px;
-  min-width: 29px;
+  width: var(--window-title-bar-chrome-height);
+  height: var(--window-title-bar-chrome-height);
+  min-width: var(--window-title-bar-chrome-height);
   padding: 0;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   background: transparent;
   color: var(--color-shell-icon-muted);
   cursor: default;
@@ -1110,7 +1110,7 @@ a:focus:not(:focus-visible) {
 
 /* Split panes must consume column height so inner scroll regions (vault tree, editor) fill immediately. */
 .desktop-hsplit-left > .panel-surface,
-.desktop-hsplit-right > .panel-surface {
+.desktop-hsplit-center-workspace > .panel-surface {
   flex: 1;
   min-height: 0;
 }
@@ -5068,6 +5068,11 @@ button:disabled {
   background: var(--color-icon-ghost-hover-bg);
 }
 
+/* Editor workspace toolbar: solid gray hover on icon buttons (see --color-editor-toolbar-icon-hover-bg). */
+.pane-header--editor-toolbar .pane-header-add-btn.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-editor-toolbar-icon-hover-bg);
+}
+
 .pane-header-add-btn {
   display: inline-flex;
   align-items: center;
@@ -5103,6 +5108,35 @@ button:disabled {
   display: block;
 }
 
+/* Inbox / Notifications toolbar toggles: optional red badge (see EditorWorkspaceToolbar). */
+.pane-header--editor-toolbar .pane-header-add-btn__glyph-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.pane-header--editor-toolbar .pane-header-add-btn__badge-dot {
+  position: absolute;
+  inset-inline-end: -1px;
+  inset-block-start: 0;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  border: 1px solid var(--color-capture-chrome);
+}
+
+.pane-header--editor-toolbar
+  .pane-header-add-btn.icon-btn-ghost:hover:not(:disabled)
+  .pane-header-add-btn__badge-dot {
+  border-color: var(--color-editor-toolbar-icon-hover-bg);
+}
+
 .pane-header-add-btn:disabled {
   opacity: 0.55;
   cursor: default;
@@ -5110,7 +5144,8 @@ button:disabled {
 
 .pane-header-add-btn--notifications-on:not(:disabled),
 .pane-header-add-btn--vault-on:not(:disabled),
-.pane-header-add-btn--episodes-on:not(:disabled) {
+.pane-header-add-btn--episodes-on:not(:disabled),
+.pane-header-add-btn--inbox-on:not(:disabled) {
   color: var(--color-accent);
 }
 

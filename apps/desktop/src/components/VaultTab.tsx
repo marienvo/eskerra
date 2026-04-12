@@ -17,6 +17,7 @@ import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
 } from '../lib/inboxWikiLinkNavigation';
+import {countInboxVaultMarkdownRefs} from '../lib/countInboxVaultMarkdownRefs';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
@@ -32,6 +33,7 @@ import {
 
 import {
   MIN_RESIZABLE_PANE_PX,
+  NOTIFICATIONS_INBOX_STACK_TOP,
   NOTIFICATIONS_PANEL,
 } from '../lib/layoutStore';
 import type {SessionNotification} from '../lib/sessionNotifications';
@@ -61,6 +63,7 @@ import type {
 import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
+import {DesktopVerticalSplit} from './DesktopVerticalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
 import {
   EditorWorkspaceToolbar,
@@ -71,6 +74,7 @@ import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {NotificationsPanel} from './NotificationsPanel';
 import {MaterialIcon} from './MaterialIcon';
 import {TodayHubCanvas} from './TodayHubCanvas';
+import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
@@ -94,6 +98,12 @@ type VaultTabProps = {
   onToggleVault: () => void;
   episodesPaneVisible: boolean;
   onToggleEpisodes: () => void;
+  inboxPaneVisible: boolean;
+  onToggleInboxPane: () => void;
+  /** Ensures the Inbox tree pane is shown (e.g. before reveal when the active note is under Inbox). */
+  onOpenInboxPane: () => void;
+  notificationsInboxStackTopHeightPx: number;
+  onNotificationsInboxStackTopHeightPxChanged: (px: number) => void;
   /** Shown in {@link EditorWorkspaceToolbar} when an episode is active. */
   playbackTransport?: PlaybackTransportProps;
   toolbarNowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
@@ -522,6 +532,11 @@ export function VaultTab({
   onToggleVault,
   episodesPaneVisible,
   onToggleEpisodes,
+  inboxPaneVisible,
+  onToggleInboxPane,
+  onOpenInboxPane,
+  notificationsInboxStackTopHeightPx,
+  onNotificationsInboxStackTopHeightPxChanged,
   playbackTransport,
   toolbarNowPlaying,
   vaultWidthPx,
@@ -597,6 +612,18 @@ export function VaultTab({
     () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
     [vaultRoot],
   );
+  const inboxDirectoryUriForTree = useMemo(
+    () =>
+      getInboxDirectoryUri(normalizedVaultRootForTree)
+        .replace(/\\/g, '/')
+        .replace(/\/+$/, ''),
+    [normalizedVaultRootForTree],
+  );
+  const inboxHasItems = useMemo(
+    () => countInboxVaultMarkdownRefs(vaultRoot, vaultMarkdownRefs) > 0,
+    [vaultRoot, vaultMarkdownRefs],
+  );
+  const notificationsHasItems = notificationItems.length > 0;
   const revealActiveNoteDisabled =
     composingNewEntry
     || selectedUri == null
@@ -604,9 +631,23 @@ export function VaultTab({
       selectedUri !== normalizedVaultRootForTree
       && !selectedUri.startsWith(`${normalizedVaultRootForTree}/`)
     );
+  const revealInInboxTreeDisabled =
+    composingNewEntry
+    || selectedUri == null
+    || (
+      selectedUri !== inboxDirectoryUriForTree
+      && !selectedUri.startsWith(`${inboxDirectoryUriForTree}/`)
+    );
   const bumpRevealActiveNoteInTree = useCallback(() => {
+    if (
+      selectedUri != null
+      && (selectedUri === inboxDirectoryUriForTree
+        || selectedUri.startsWith(`${inboxDirectoryUriForTree}/`))
+    ) {
+      onOpenInboxPane();
+    }
     setRevealTreeNonce(n => n + 1);
-  }, []);
+  }, [selectedUri, inboxDirectoryUriForTree, onOpenInboxPane]);
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
@@ -863,6 +904,57 @@ export function VaultTab({
           titleBarEditorTabsHost,
         )
       : null;
+
+  const shellEndColumnVisible = notificationsPanelVisible || inboxPaneVisible;
+
+  const notificationsPanelEl = (
+    <NotificationsPanel
+      appSurface={vaultPaneVisible ? 'capture' : 'consume'}
+      items={notificationItems}
+      highlightId={notificationHighlightId}
+      onDismiss={onDismissNotification}
+      onClearAll={onClearAllNotifications}
+    />
+  );
+
+  const inboxTreePaneEl = (
+    <InboxTreePane
+      vaultRoot={vaultRoot}
+      fs={fs}
+      fsRefreshNonce={fsRefreshNonce}
+      vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
+      editorActiveMarkdownUri={composingNewEntry ? null : selectedUri}
+      revealActiveNoteNonce={revealTreeNonce}
+      onRevealActiveNoteInTree={bumpRevealActiveNoteInTree}
+      revealActiveNoteDisabled={revealInInboxTreeDisabled || busy}
+      busy={busy}
+      onAddEntry={onAddEntry}
+      onOpenMarkdownNote={onSelectNote}
+      onOpenMarkdownNoteInNewActiveTab={onSelectNoteInNewActiveTab}
+      onRenameMarkdownRequest={openRenameDialog}
+      onDeleteMarkdownRequest={openTreeDeleteNoteDialog}
+      onRenameFolderRequest={openRenameFolderDialog}
+      onDeleteFolderRequest={openTreeDeleteFolderDialog}
+      onBulkDeleteRequest={openBulkDeleteDialog}
+      onMoveVaultTreeItem={moveVaultTreeItemStable}
+      onBulkMoveVaultTreeItems={bulkMoveVaultTreeItemsStable}
+    />
+  );
+
+  const shellEndColumnContent = shellEndColumnVisible ? (
+    <DesktopVerticalSplit
+      className="split-inner"
+      topCollapsed={!notificationsPanelVisible}
+      bottomCollapsed={!inboxPaneVisible}
+      topHeightPx={notificationsInboxStackTopHeightPx}
+      minTopPx={NOTIFICATIONS_INBOX_STACK_TOP.minPx}
+      maxTopPx={NOTIFICATIONS_INBOX_STACK_TOP.maxPx}
+      minBottomPx={MIN_RESIZABLE_PANE_PX}
+      onTopHeightPxChanged={onNotificationsInboxStackTopHeightPxChanged}
+      top={notificationsPanelEl}
+      bottom={inboxTreePaneEl}
+    />
+  ) : null;
 
   return (
     <Fragment>
@@ -1161,6 +1253,8 @@ export function VaultTab({
         onToggleVault={onToggleVault}
         episodesPaneVisible={episodesPaneVisible}
         onToggleEpisodes={onToggleEpisodes}
+        inboxPaneVisible={inboxPaneVisible}
+        onToggleInboxPane={onToggleInboxPane}
         busy={busy}
         editorHistoryCanGoBack={editorHistoryCanGoBack}
         editorHistoryCanGoForward={editorHistoryCanGoForward}
@@ -1171,12 +1265,14 @@ export function VaultTab({
         onCancelNewEntry={onCancelNewEntry}
         notificationsPanelVisible={notificationsPanelVisible}
         onToggleNotificationsPanel={onToggleNotificationsPanel}
+        inboxHasItems={inboxHasItems}
+        notificationsHasItems={notificationsHasItems}
         playbackTransport={playbackTransport}
         nowPlaying={toolbarNowPlaying ?? null}
         onCleanNote={onCleanNote}
       />
       <DesktopHorizontalSplitEnd
-        endVisible={notificationsPanelVisible}
+        endVisible={shellEndColumnVisible}
         endWidthPx={notificationsWidthPx}
         minEndPx={NOTIFICATIONS_PANEL.minPx}
         maxEndPx={NOTIFICATIONS_PANEL.maxPx}
@@ -1236,7 +1332,9 @@ export function VaultTab({
                       onWikiLinkActivate={onWikiLinkActivate}
                       onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
                       onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                      relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+                      relativeMarkdownLinkHrefIsResolved={
+                        relativeMarkdownLinkHrefIsResolved
+                      }
                       wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
@@ -1270,22 +1368,14 @@ export function VaultTab({
                   </>
                 ) : (
                   <p className="muted empty-hint">
-                    Select a note from the vault or use Add entry.
+                    Select a note from the vault or Inbox tree, or use Add entry.
                   </p>
                 )}
               </div>
             }
           />
         }
-        end={
-          <NotificationsPanel
-            appSurface={vaultPaneVisible ? 'capture' : 'consume'}
-            items={notificationItems}
-            highlightId={notificationHighlightId}
-            onDismiss={onDismissNotification}
-            onClearAll={onClearAllNotifications}
-          />
-        }
+        end={shellEndColumnContent}
       />
       </div>
     </div>
