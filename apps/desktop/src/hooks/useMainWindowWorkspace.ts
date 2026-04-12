@@ -126,6 +126,11 @@ import {
   pickDefaultActiveTodayHubUri,
   sortedTodayHubNoteUrisFromRefs,
 } from '../lib/todayHubWorkspaceRestore';
+import {
+  isActiveWorkspaceTodayLinkSurface,
+  shouldOpenActiveHubTodayAsShell,
+  workspaceSelectShowsActiveTabPillState,
+} from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {
@@ -425,6 +430,11 @@ export type UseMainWindowWorkspaceResult = {
   switchTodayHubWorkspace: (todayNoteUri: string) => Promise<void>;
   /** Open or focus the active hub note (main segment of split control). */
   focusActiveTodayHubNote: () => void;
+  /**
+   * When true, the title bar workspace control should use the same active styling as an editor tab pill
+   * (active-hub Today visible without a tab row entry for that URI).
+   */
+  workspaceSelectShowsActiveTabPill: boolean;
 };
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
@@ -678,6 +688,17 @@ export function useMainWindowWorkspace(options: {
     }
     return out;
   }, [todayHubWorkspacesForSave, vaultMarkdownRefs]);
+
+  const workspaceSelectShowsActiveTabPill = useMemo(
+    () =>
+      workspaceSelectShowsActiveTabPillState({
+        composingNewEntry,
+        activeTodayHubUri,
+        selectedUri,
+        editorWorkspaceTabs,
+      }),
+    [composingNewEntry, activeTodayHubUri, selectedUri, editorWorkspaceTabs],
+  );
 
   const clearRenameNotice = useCallback(() => {
     if (renameNoticeTimeoutRef.current != null) {
@@ -1240,6 +1261,11 @@ export function useMainWindowWorkspace(options: {
         newTab?: boolean;
         /** When `newTab` is true: default `true` (focus new tab). */
         activateNewTab?: boolean;
+        /**
+         * Clear editor tabs for the active hub and open this note without a tab pill.
+         * Only honored for the active workspace `Today.md` (`activeTodayHubUri`).
+         */
+        workspaceShell?: boolean;
       },
     ) => {
       const openGen = ++openMarkdownGenerationRef.current;
@@ -1387,7 +1413,20 @@ export function useMainWindowWorkspace(options: {
       let nextTabs = editorWorkspaceTabsRef.current;
       let nextActiveId = activeEditorTabIdRef.current;
 
-      if (options?.newTab && options?.activateNewTab !== false) {
+      const activeHubNorm = normalizeEditorDocUri(
+        activeTodayHubUriRef.current ?? '',
+      );
+      const useWorkspaceShell =
+        options?.workspaceShell === true
+        && activeHubNorm != null
+        && activeHubNorm !== ''
+        && targetNorm === activeHubNorm
+        && vaultUriIsTodayMarkdownFile(targetNorm);
+
+      if (useWorkspaceShell) {
+        nextTabs = [];
+        nextActiveId = null;
+      } else if (options?.newTab && options?.activateNewTab !== false) {
         const newTab = createEditorWorkspaceTab(targetNorm);
         nextTabs = [...nextTabs, newTab];
         nextActiveId = newTab.id;
@@ -1558,21 +1597,31 @@ export function useMainWindowWorkspace(options: {
           if (nextUri) {
             await openMarkdownInEditor(nextUri, {skipHistory: true});
           } else {
-            activeEditorTabIdRef.current = null;
-            setActiveEditorTabId(null);
-            selectedUriRef.current = null;
-            composingNewEntryRef.current = false;
-            lastPersistedRef.current = null;
-            setSelectedUri(null);
-            setComposingNewEntry(false);
-            clearInboxYamlFrontmatterEditorRefs({
-              block: inboxEditorYamlFrontmatterBlockRef,
-              leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-            });
-            setEditorBody('');
-            setInboxEditorResetNonce(n => n + 1);
+            const shellHubNeighbor = activeTodayHubUriRef.current;
+            if (shellHubNeighbor) {
+              await openMarkdownInEditor(shellHubNeighbor, {workspaceShell: true});
+            } else {
+              activeEditorTabIdRef.current = null;
+              setActiveEditorTabId(null);
+              selectedUriRef.current = null;
+              composingNewEntryRef.current = false;
+              lastPersistedRef.current = null;
+              setSelectedUri(null);
+              setComposingNewEntry(false);
+              clearInboxYamlFrontmatterEditorRefs({
+                block: inboxEditorYamlFrontmatterBlockRef,
+                leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+              });
+              setEditorBody('');
+              setInboxEditorResetNonce(n => n + 1);
+            }
           }
         } else {
+          const shellHub = activeTodayHubUriRef.current;
+          if (shellHub) {
+            await openMarkdownInEditor(shellHub, {workspaceShell: true});
+            return;
+          }
           activeEditorTabIdRef.current = null;
           setActiveEditorTabId(null);
           selectedUriRef.current = null;
@@ -1653,6 +1702,11 @@ export function useMainWindowWorkspace(options: {
       setEditorWorkspaceTabs([]);
       activeEditorTabIdRef.current = null;
       setActiveEditorTabId(null);
+      const shellHubAll = activeTodayHubUriRef.current;
+      if (shellHubAll) {
+        await openMarkdownInEditor(shellHubAll, {workspaceShell: true});
+        return;
+      }
       selectedUriRef.current = null;
       composingNewEntryRef.current = false;
       lastPersistedRef.current = null;
@@ -1665,7 +1719,7 @@ export function useMainWindowWorkspace(options: {
       setEditorBody('');
       setInboxEditorResetNonce(n => n + 1);
     })();
-  }, [bumpEditorClosedStack]);
+  }, [bumpEditorClosedStack, openMarkdownInEditor]);
 
   const reopenLastClosedEditorTab = useCallback(() => {
     void (async () => {
@@ -2445,6 +2499,18 @@ export function useMainWindowWorkspace(options: {
         activateOpenTab(existingId);
         return;
       }
+      const norm = normalizeEditorDocUri(uri) ?? '';
+      if (
+        shouldOpenActiveHubTodayAsShell({
+          editorWorkspaceTabCount: editorWorkspaceTabsRef.current.length,
+          uri,
+          activeTodayHubUri: activeTodayHubUriRef.current,
+          uriIsTodayMarkdownFile: vaultUriIsTodayMarkdownFile(norm),
+        })
+      ) {
+        void openMarkdownInEditor(uri, {workspaceShell: true});
+        return;
+      }
       void openMarkdownInEditor(uri);
     },
     [activateOpenTab, openMarkdownInEditor],
@@ -2513,8 +2579,8 @@ export function useMainWindowWorkspace(options: {
           snapForTarget?.activeEditorTabId ?? null,
         );
       } else {
-        nextTabs = [createEditorWorkspaceTab(norm)];
-        nextActive = nextTabs[0]!.id;
+        nextTabs = [];
+        nextActive = null;
       }
 
       editorWorkspaceTabsRef.current = nextTabs;
@@ -2959,6 +3025,23 @@ export function useMainWindowWorkspace(options: {
             });
             return;
           }
+          if (
+            isActiveWorkspaceTodayLinkSurface({
+              composingNewEntry: composingNewEntryRef.current,
+              activeTodayHubUri: activeTodayHubUriRef.current,
+              selectedUri: selectedUriRef.current,
+            })
+          ) {
+            if (existingTabId != null) {
+              activateOpenTab(existingTabId);
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: true,
+            });
+            return;
+          }
           if (existingTabId != null) {
             activateOpenTab(existingTabId);
             return;
@@ -3065,6 +3148,23 @@ export function useMainWindowWorkspace(options: {
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: false,
+            });
+            return;
+          }
+          if (
+            isActiveWorkspaceTodayLinkSurface({
+              composingNewEntry: composingNewEntryRef.current,
+              activeTodayHubUri: activeTodayHubUriRef.current,
+              selectedUri: selectedUriRef.current,
+            })
+          ) {
+            if (existingTabId != null) {
+              activateOpenTab(existingTabId);
+              return;
+            }
+            await openMarkdownInEditor(result.uri, {
+              newTab: true,
+              activateNewTab: true,
             });
             return;
           }
@@ -3686,8 +3786,11 @@ export function useMainWindowWorkspace(options: {
           | null
           | undefined,
       ): {id: string; entries: string[]; index: number}[] | null => {
-        if (tabs == null || tabs.length === 0) {
+        if (tabs == null) {
           return null;
+        }
+        if (tabs.length === 0) {
+          return [];
         }
         const sanitized = tabs
           .map(t => {
@@ -3711,7 +3814,7 @@ export function useMainWindowWorkspace(options: {
             return {id, entries, index};
           })
           .filter((x): x is {id: string; entries: string[]; index: number} => x != null);
-        return sanitized.length > 0 ? sanitized : null;
+        return sanitized;
       };
 
       let chosenTabsSource = restoredInboxState.editorWorkspaceTabs;
@@ -3741,7 +3844,7 @@ export function useMainWindowWorkspace(options: {
           const fromSnap = snap
             ? sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs)
             : null;
-          if (fromSnap != null && fromSnap.length > 0) {
+          if (fromSnap != null) {
             chosenTabsSource = fromSnap;
             if (snap!.activeEditorTabId === null) {
               chosenActiveEditorTabId = null;
@@ -3763,7 +3866,13 @@ export function useMainWindowWorkspace(options: {
       const rawTabs = restoredInboxState.openTabUris;
       let restoredTabs: string[] = [];
 
-      if (chosenTabsSource != null && chosenTabsSource.length > 0) {
+      if (chosenTabsSource != null && chosenTabsSource.length === 0) {
+        editorWorkspaceTabsRef.current = [];
+        activeEditorTabIdRef.current = null;
+        setEditorWorkspaceTabs([]);
+        setActiveEditorTabId(null);
+        restoredTabs = [];
+      } else if (chosenTabsSource != null && chosenTabsSource.length > 0) {
         const sanitized = sanitizeStoredWorkspaceRows(chosenTabsSource);
         if (sanitized != null && sanitized.length > 0) {
           const nextTabs = tabsFromStored(sanitized);
@@ -3814,7 +3923,7 @@ export function useMainWindowWorkspace(options: {
               continue;
             }
             const rows = sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs);
-            if (rows == null || rows.length === 0) {
+            if (rows == null) {
               continue;
             }
             let aid: string | null = null;
@@ -3864,6 +3973,12 @@ export function useMainWindowWorkspace(options: {
         }
       } else if (restoredTabs.length > 0) {
         selectNote(restoredTabs[0]!);
+      } else if (
+        hubUris.length > 0
+        && editorWorkspaceTabsRef.current.length === 0
+        && activeTodayHubUriRef.current
+      ) {
+        selectNote(activeTodayHubUriRef.current);
       }
     }
     setInboxShellRestored(true);
@@ -4014,5 +4129,6 @@ export function useMainWindowWorkspace(options: {
     todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
+    workspaceSelectShowsActiveTabPill,
   };
 }
