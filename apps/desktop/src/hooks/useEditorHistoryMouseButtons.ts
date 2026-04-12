@@ -20,6 +20,8 @@ type Options = {
  * - **Linux / WebKitGTK (WRY):** side buttons are injected as synthesized `mousedown`/`mouseup`
  *   with `button` 3/4 only (not `pointerdown` / `auxclick`). `mouseup` must call
  *   `preventDefault()` or WRY runs `window.history.back()` / `forward()` (often a no-op).
+ *   **Do not navigate on `mouseup`:** the gap between `mousedown` and `mouseup` can exceed the
+ *   inter-navigation cooldown, which would apply history twice for one physical press.
  * - **Other stacks:** `mousedown` / `mouseup` and `auxclick` (avoid `pointerdown` so we do not
  *   double-fire alongside `mousedown` on some engines).
  * - **Cooldown:** After a successful history step, ignore further side-button navigations from
@@ -48,7 +50,7 @@ export function useEditorHistoryMouseButtons({
     const sideButton = (e: MouseEvent) =>
       e.button === 3 || e.button === 4 || e.button === 8 || e.button === 9;
 
-    const tryNavigate = (e: MouseEvent) => {
+    const tryNavigate = (e: MouseEvent, source: 'mousedown' | 'mouseup' | 'auxclick') => {
       const navBack = e.button === 3 || e.button === 8;
       const navFwd = e.button === 4 || e.button === 9;
       const isSide = navBack || navFwd;
@@ -62,6 +64,10 @@ export function useEditorHistoryMouseButtons({
       }
 
       if (!isSide) {
+        return;
+      }
+
+      if (source === 'mouseup') {
         return;
       }
 
@@ -94,21 +100,21 @@ export function useEditorHistoryMouseButtons({
       if (e.button !== 3 && e.button !== 4) {
         return;
       }
-      tryNavigate(e);
+      tryNavigate(e, 'auxclick');
     };
 
     const onMouseDown = (e: MouseEvent) => {
       if (!sideButton(e)) {
         return;
       }
-      tryNavigate(e);
+      tryNavigate(e, 'mousedown');
     };
 
     const onMouseUp = (e: MouseEvent) => {
       if (!sideButton(e)) {
         return;
       }
-      tryNavigate(e);
+      tryNavigate(e, 'mouseup');
     };
 
     window.addEventListener('auxclick', onAuxClick, {capture: true});
