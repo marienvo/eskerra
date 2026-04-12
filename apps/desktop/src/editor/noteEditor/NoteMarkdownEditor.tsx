@@ -212,6 +212,8 @@ export type NoteMarkdownEditorProps = {
   wikiLinkCompletionCandidates?: ReadonlyArray<InboxWikiLinkCompletionCandidate>;
   /** Desktop: Ctrl/Cmd+S — auto-save flush or submit new entry (handled by shell). */
   onSaveShortcut?: () => void;
+  /** Desktop: normalize markdown layout for the open note (shell-owned). */
+  onCleanNote?: () => void;
   /** Desktop: Ctrl/Cmd+Shift+D — request delete current note (shell shows confirmation). */
   onDeleteNoteShortcut?: () => void;
   placeholder: string;
@@ -289,6 +291,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     wikiLinkTargetIsResolved,
     wikiLinkCompletionCandidates = defaultWikiLinkCompletionCandidates,
     onSaveShortcut,
+    onCleanNote,
     onDeleteNoteShortcut,
     placeholder: placeholderText,
     busy,
@@ -1382,6 +1385,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         readOnly={readOnly}
         busy={busy}
         readClipboardText={readMarkdownEditorClipboard}
+        onCleanNote={onCleanNote}
       >
         <div
           ref={hostRef}

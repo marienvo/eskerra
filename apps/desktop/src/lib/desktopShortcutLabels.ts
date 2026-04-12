@@ -11,3 +11,16 @@ export function reopenClosedTabMenuShortcutLabel(): string {
   }
   return 'Ctrl+Shift+T';
 }
+
+/** Clean this note (markdown normalize); shown in editor context menu. */
+export function cleanNoteMenuShortcutLabel(): string {
+  if (typeof navigator === 'undefined') {
+    return 'Ctrl+E';
+  }
+  const ua = navigator.userAgent;
+  const platform = navigator.platform ?? '';
+  if (/^Mac/i.test(platform) || ua.includes('Mac OS')) {
+    return '⌘E';
+  }
+  return 'Ctrl+E';
+}

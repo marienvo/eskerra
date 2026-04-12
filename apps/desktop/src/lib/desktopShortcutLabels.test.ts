@@ -1,6 +1,9 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
-import {reopenClosedTabMenuShortcutLabel} from './desktopShortcutLabels';
+import {
+  cleanNoteMenuShortcutLabel,
+  reopenClosedTabMenuShortcutLabel,
+} from './desktopShortcutLabels';
 
 describe('reopenClosedTabMenuShortcutLabel', () => {
   afterEach(() => {
@@ -21,5 +24,27 @@ describe('reopenClosedTabMenuShortcutLabel', () => {
       userAgent: 'Mozilla/5.0 Macintosh',
     });
     expect(reopenClosedTabMenuShortcutLabel()).toBe('⌘⇧T');
+  });
+});
+
+describe('cleanNoteMenuShortcutLabel', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns Ctrl+E for Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 X11; Linux',
+    });
+    expect(cleanNoteMenuShortcutLabel()).toBe('Ctrl+E');
+  });
+
+  it('returns ⌘E for macOS', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 Macintosh',
+    });
+    expect(cleanNoteMenuShortcutLabel()).toBe('⌘E');
   });
 });

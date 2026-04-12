@@ -18,6 +18,7 @@ import {
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
+  mergeYamlFrontmatterBody,
   normalizeVaultBaseUri,
   parseComposeInput,
   sanitizeInboxNoteStem,
@@ -133,6 +134,7 @@ import {
 } from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
+import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
 import {
   clearInboxYamlFrontmatterEditorRefs,
   inboxEditorSliceToFullMarkdown,
@@ -350,6 +352,8 @@ export type UseMainWindowWorkspaceResult = {
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
+  /** Normalize markdown layout for the open vault note (body only; YAML unchanged). */
+  onCleanNoteInbox: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   /** Editor intent entrypoint for wiki link open/create. */
@@ -2675,6 +2679,47 @@ export function useMainWindowWorkspace(options: {
     }
   }, [submitNewEntry, flushInboxSave]);
 
+  const onCleanNoteInbox = useCallback(() => {
+    const uri = selectedUriRef.current;
+    if (!uri || composingNewEntryRef.current) {
+      return;
+    }
+    const dc = diskConflictRef.current;
+    if (dc && normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(uri)) {
+      return;
+    }
+    const slice =
+      inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+    const cleanedSlice = cleanNoteMarkdownBody(slice, uri);
+    if (cleanedSlice === slice) {
+      return;
+    }
+    const full = mergeYamlFrontmatterBody(
+      inboxEditorYamlFrontmatterBlockRef.current,
+      cleanedSlice,
+      inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+    );
+    loadFullMarkdownIntoInboxEditor(full, uri, 'preserve');
+    scheduleBacklinksDeferOneFrameAfterLoad();
+    const norm = normalizeEditorDocUri(uri);
+    const nextCache = mergeInboxNoteBodyIntoCache(
+      inboxContentByUriRef.current,
+      norm,
+      full,
+    );
+    if (nextCache) {
+      inboxContentByUriRef.current = nextCache;
+      setInboxContentByUri(prev =>
+        mergeInboxNoteBodyIntoCache(prev, norm, full) ?? prev,
+      );
+    }
+  }, [
+    inboxEditorRef,
+    loadFullMarkdownIntoInboxEditor,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+    setInboxContentByUri,
+  ]);
+
   const deleteNote = useCallback(
     async (uri: string) => {
       if (!vaultRoot) {
@@ -4084,6 +4129,7 @@ export function useMainWindowWorkspace(options: {
     selectNoteInNewActiveTab,
     submitNewEntry,
     onInboxSaveShortcut,
+    onCleanNoteInbox,
     flushInboxSave,
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,

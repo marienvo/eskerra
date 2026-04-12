@@ -3,6 +3,7 @@ import type {ReactNode} from 'react';
 
 import type {EditorView} from '@codemirror/view';
 
+import {cleanNoteMenuShortcutLabel} from '../../lib/desktopShortcutLabels';
 import {bindMarkdownEditorContextMenuHandlers} from './markdownEditorContextMenuActions';
 
 export type NoteMarkdownEditorContextMenuProps = {
@@ -11,12 +12,13 @@ export type NoteMarkdownEditorContextMenuProps = {
   readOnly: boolean;
   busy: boolean;
   readClipboardText: () => Promise<string | null>;
+  onCleanNote?: () => void;
 };
 
 export function NoteMarkdownEditorContextMenu(
   props: NoteMarkdownEditorContextMenuProps,
 ) {
-  const {children, getView, readOnly, busy, readClipboardText} = props;
+  const {children, getView, readOnly, busy, readClipboardText, onCleanNote} = props;
   const blockEdit = readOnly || busy;
   const h = bindMarkdownEditorContextMenuHandlers(getView, readClipboardText, {
     blockEdit,
@@ -111,6 +113,24 @@ export function NoteMarkdownEditorContextMenu(
           </ContextMenu.Sub>
 
           <ContextMenu.Separator className="note-markdown-editor-context-menu__sep" />
+
+          {onCleanNote ? (
+            <>
+              <ContextMenu.Item
+                className="note-list-context-menu__item note-list-context-menu__item--with-kbd"
+                disabled={blockEdit}
+                onSelect={() => {
+                  onCleanNote();
+                }}
+              >
+                <span>Clean this note</span>
+                <span className="note-list-context-menu__kbd">
+                  {cleanNoteMenuShortcutLabel()}
+                </span>
+              </ContextMenu.Item>
+              <ContextMenu.Separator className="note-markdown-editor-context-menu__sep" />
+            </>
+          ) : null}
 
           <ContextMenu.Item
             className="note-list-context-menu__item"

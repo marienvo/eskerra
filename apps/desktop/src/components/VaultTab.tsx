@@ -127,6 +127,8 @@ type VaultTabProps = {
   ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
   onSaveShortcut: () => void;
+  /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
+  onCleanNote?: () => void;
   busy: boolean;
   onDeleteNote: (uri: string) => void | Promise<void>;
   onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
@@ -208,6 +210,7 @@ type EditorPaneBodyProps = {
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   wikiLinkCompletionCandidates: ReturnType<typeof buildInboxWikiLinkCompletionCandidates>;
   onSaveShortcut: VaultTabProps['onSaveShortcut'];
+  onCleanNote?: VaultTabProps['onCleanNote'];
   onDeleteNoteShortcut: () => void;
   busy: boolean;
   backlinkRows: readonly {uri: string; fileName: string; title: string}[];
@@ -304,6 +307,7 @@ function EditorPaneBody({
   wikiLinkTargetIsResolved,
   wikiLinkCompletionCandidates,
   onSaveShortcut,
+  onCleanNote,
   onDeleteNoteShortcut,
   busy,
   backlinkRows,
@@ -445,6 +449,7 @@ function EditorPaneBody({
                 wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                 wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                 onSaveShortcut={onSaveShortcut}
+                onCleanNote={onCleanNote}
                 onDeleteNoteShortcut={onDeleteNoteShortcut}
                 placeholder={
                   composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
@@ -540,6 +545,7 @@ export function VaultTab({
   onMarkdownRelativeLinkActivate,
   onMarkdownExternalLinkOpen,
   onSaveShortcut,
+  onCleanNote,
   busy,
   onDeleteNote,
   onRenameNote,
@@ -1161,6 +1167,7 @@ export function VaultTab({
         onToggleNotificationsPanel={onToggleNotificationsPanel}
         playbackTransport={playbackTransport}
         nowPlaying={toolbarNowPlaying ?? null}
+        onCleanNote={onCleanNote}
       />
       <DesktopHorizontalSplitEnd
         endVisible={notificationsPanelVisible}
@@ -1227,6 +1234,7 @@ export function VaultTab({
                       wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
+                      onCleanNote={onCleanNote}
                       onDeleteNoteShortcut={onDeleteNoteShortcut}
                       busy={busy}
                       backlinkRows={backlinkRows}

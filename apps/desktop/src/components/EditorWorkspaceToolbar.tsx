@@ -9,6 +9,7 @@ import {
 import type {PlaybackTransportProps} from './PlaybackTransport';
 import {PlaybackTransport} from './PlaybackTransport';
 import {MaterialIcon} from './MaterialIcon';
+import {cleanNoteMenuShortcutLabel} from '../lib/desktopShortcutLabels';
 
 const EDITOR_TOOLBAR_ICON_DIM = {width: 15, height: 15} as const;
 
@@ -35,6 +36,8 @@ export type EditorWorkspaceToolbarProps = {
   /** When set and not composing, shown after Back/Forward with spacing, then {@link nowPlaying}. */
   playbackTransport?: PlaybackTransportProps;
   nowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
+  /** Markdown layout normalize for the open note; omitted when unavailable (e.g. composing). */
+  onCleanNote?: () => void;
 };
 
 /**
@@ -58,6 +61,7 @@ export function EditorWorkspaceToolbar({
   onToggleNotificationsPanel,
   playbackTransport,
   nowPlaying,
+  onCleanNote,
 }: EditorWorkspaceToolbarProps) {
   const showPlaybackChrome =
     !composingNewEntry && playbackTransport != null && nowPlaying != null;
@@ -158,6 +162,21 @@ export function EditorWorkspaceToolbar({
         </p>
       ) : null}
       <div className="pane-header-trailing-actions">
+        {onCleanNote ? (
+          <button
+            type="button"
+            className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+            onClick={onCleanNote}
+            disabled={busy}
+            aria-label="Clean this note"
+            data-tooltip={`Clean this note (${cleanNoteMenuShortcutLabel()})`}
+            data-tooltip-placement="inline-start"
+          >
+            <span className="pane-header-add-btn__glyph" aria-hidden>
+              <MaterialIcon name="auto_fix_high" size={12} />
+            </span>
+          </button>
+        ) : null}
         {composingNewEntry ? (
           <button
             type="button"
