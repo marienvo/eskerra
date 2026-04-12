@@ -1,3 +1,4 @@
+import {captureException} from '@sentry/react';
 import {Component, type ErrorInfo, type ReactNode} from 'react';
 
 type Props = {children: ReactNode};
@@ -12,6 +13,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('Eskerra UI error:', error, info.componentStack);
+    captureException(error, {
+      extra: {componentStack: info.componentStack},
+    });
   }
 
   render(): ReactNode {

@@ -588,7 +588,7 @@ export function useMainWindowWorkspace(options: {
     (
       full: string,
       uri: string | null,
-      selection: 'start' | 'end' = 'start',
+      selection: 'start' | 'end' | 'preserve' = 'start',
     ) => {
       const composing = composingNewEntryRef.current;
       if (!uri || composing) {
@@ -908,7 +908,7 @@ export function useMainWindowWorkspace(options: {
             }
             const active = selectedUriRef.current;
             if (active && normalizeEditorDocUri(active) === norm) {
-              loadFullMarkdownIntoInboxEditor(md, norm, 'start');
+              loadFullMarkdownIntoInboxEditor(md, norm, 'preserve');
               scheduleBacklinksDeferOneFrameAfterLoad();
             }
           }
@@ -995,7 +995,11 @@ export function useMainWindowWorkspace(options: {
           return;
         }
         if (md !== raw) {
-          loadFullMarkdownIntoInboxEditor(md, selectedUriRef.current, 'start');
+          loadFullMarkdownIntoInboxEditor(
+            md,
+            selectedUriRef.current,
+            'preserve',
+          );
           scheduleBacklinksDeferOneFrameAfterLoad();
         }
         await saveNoteMarkdown(uri, fs, md);
@@ -1972,7 +1976,7 @@ export function useMainWindowWorkspace(options: {
           );
           if (merged.ok) {
             const mergedCanon = normalizeVaultMarkdownDiskRead(merged.merged);
-            loadFullMarkdownIntoInboxEditor(mergedCanon, normTab, 'end');
+            loadFullMarkdownIntoInboxEditor(mergedCanon, normTab, 'preserve');
             scheduleBacklinksDeferOneFrameAfterLoad();
             lastPersistedRef.current = {uri: normTab, markdown: mergedCanon};
             const mergeCache = mergeInboxNoteBodyIntoCache(
@@ -2551,7 +2555,7 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     if (body !== rawBody) {
-      inboxEditorRef.current?.loadMarkdown(body);
+      inboxEditorRef.current?.loadMarkdown(body, {selection: 'preserve'});
       scheduleBacklinksDeferOneFrameAfterLoad();
       setEditorBody(body);
     }
