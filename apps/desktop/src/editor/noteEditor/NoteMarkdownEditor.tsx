@@ -116,6 +116,10 @@ import {
   endProgrammaticMarkdownLoad,
 } from './caretJumpDetector';
 import {
+  computeMinimalEditorChanges,
+  mapPositionThroughDiff,
+} from './noteMarkdownDiffChanges';
+import {
   explicitCursorForMarkdownLoadDispatch,
   explicitCursorForMarkdownLoadSetState,
   selectionIsPreserve,
@@ -1101,7 +1105,9 @@ const NoteMarkdownEditorImpl = forwardRef<
           roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
         if (mergedReplace) {
           const spec: Parameters<EditorView['dispatch']>[0] = {
-            changes: {from: 0, to: curLen, insert: markdown},
+            changes: preserve
+              ? computeMinimalEditorChanges(curText, markdown)
+              : {from: 0, to: curLen, insert: markdown},
             annotations: Transaction.addToHistory.of(false),
             effects,
           };
@@ -1111,11 +1117,17 @@ const NoteMarkdownEditorImpl = forwardRef<
           v.dispatch(spec);
           clearEskerraTableNestedCellRegistrations(v);
         } else if (useSetState) {
-          const cursorAt = explicitCursorForMarkdownLoadSetState(
-            options,
-            markdown.length,
-            v.state.selection.main.head,
-          );
+          const cursorAt = preserve
+            ? mapPositionThroughDiff(
+                v.state.selection.main.head,
+                curText,
+                markdown,
+              )
+            : explicitCursorForMarkdownLoadSetState(
+                options,
+                markdown.length,
+                v.state.selection.main.head,
+              );
           const nextState = EditorState.create({
             doc: markdown,
             selection: EditorSelection.cursor(cursorAt),

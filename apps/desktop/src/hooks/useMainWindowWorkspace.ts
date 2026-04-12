@@ -2015,7 +2015,7 @@ export function useMainWindowWorkspace(options: {
         }
         if (kind === 'reload_from_disk') {
           autosaveSchedulerRef.current.cancel();
-          loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'start');
+          loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'preserve');
           scheduleBacklinksDeferOneFrameAfterLoad();
           lastPersistedRef.current = {uri: normTab, markdown: diskBody};
           const nextCache = mergeInboxNoteBodyIntoCache(
