@@ -3,10 +3,26 @@ import {describe, expect, it} from 'vitest';
 import {
   DEFAULT_LAYOUTS,
   INBOX_LEFT_PANEL,
+  NOTIFICATIONS_INBOX_STACK_TOP,
   NOTIFICATIONS_PANEL,
   VAULT_EPISODES_STACK_TOP,
   migrateV3LayoutsToV4,
+  parseLayoutPanelsV4ForTest,
 } from './layoutStore';
+
+describe('parseLayoutPanelsV4ForTest', () => {
+  it('maps legacy editorInboxStack to notificationsInboxStack', () => {
+    const out = parseLayoutPanelsV4ForTest({
+      inbox: {leftWidthPx: 280},
+      podcastsMain: {leftWidthPx: 280},
+      notifications: {widthPx: 280},
+      vaultEpisodesStack: {topHeightPx: 200},
+      editorInboxStack: {topHeightPx: 400},
+    });
+    expect(out).not.toBeNull();
+    expect(out!.notificationsInboxStack.topHeightPx).toBe(400);
+  });
+});
 
 describe('migrateV3LayoutsToV4', () => {
   it('maps v3 percentage left columns to pixel widths using the fixed migration width', () => {
@@ -19,6 +35,9 @@ describe('migrateV3LayoutsToV4', () => {
     expect(migrated!.podcastsMain.leftWidthPx).toBe(389);
     expect(migrated!.vaultEpisodesStack.topHeightPx).toBe(
       VAULT_EPISODES_STACK_TOP.defaultPx,
+    );
+    expect(migrated!.notificationsInboxStack.topHeightPx).toBe(
+      NOTIFICATIONS_INBOX_STACK_TOP.defaultPx,
     );
   });
 
@@ -46,6 +65,9 @@ describe('DEFAULT_LAYOUTS', () => {
     expect(DEFAULT_LAYOUTS.notifications.widthPx).toBe(NOTIFICATIONS_PANEL.defaultPx);
     expect(DEFAULT_LAYOUTS.vaultEpisodesStack.topHeightPx).toBe(
       VAULT_EPISODES_STACK_TOP.defaultPx,
+    );
+    expect(DEFAULT_LAYOUTS.notificationsInboxStack.topHeightPx).toBe(
+      NOTIFICATIONS_INBOX_STACK_TOP.defaultPx,
     );
   });
 });

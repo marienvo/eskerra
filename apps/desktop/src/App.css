@@ -1110,7 +1110,7 @@ a:focus:not(:focus-visible) {
 
 /* Split panes must consume column height so inner scroll regions (vault tree, editor) fill immediately. */
 .desktop-hsplit-left > .panel-surface,
-.desktop-hsplit-right > .panel-surface {
+.desktop-hsplit-center-workspace > .panel-surface {
   flex: 1;
   min-height: 0;
 }
@@ -5110,7 +5110,8 @@ button:disabled {
 
 .pane-header-add-btn--notifications-on:not(:disabled),
 .pane-header-add-btn--vault-on:not(:disabled),
-.pane-header-add-btn--episodes-on:not(:disabled) {
+.pane-header-add-btn--episodes-on:not(:disabled),
+.pane-header-add-btn--inbox-on:not(:disabled) {
   color: var(--color-accent);
 }
 

@@ -10,7 +10,7 @@ import {
 import {clampSplitRightWidthPx} from '../lib/desktopHorizontalSplitClamp';
 
 export type DesktopHorizontalSplitEndProps = {
-  /** Current end column width in CSS pixels (notifications pane only, not the rail). */
+  /** Current end column width in CSS pixels (shell end column: notifications ± inbox tree; not the rail). */
   endWidthPx: number;
   minEndPx: number;
   maxEndPx: number;
@@ -18,7 +18,7 @@ export type DesktopHorizontalSplitEndProps = {
   minMainPx?: number;
   onEndWidthPxChanged: (px: number) => void;
   main: ReactNode;
-  /** Fixed-width region (e.g. Notifications panel). Hidden when `endVisible` is false. */
+  /** Shell end column (notifications and/or inbox tree). Hidden when `endVisible` is false. */
   end: ReactNode;
   endVisible: boolean;
   className?: string;
@@ -26,7 +26,7 @@ export type DesktopHorizontalSplitEndProps = {
 
 /**
  * Main (flex) | separator | end (fixed px). Drag the separator to resize the end column;
- * mirrors {@link DesktopHorizontalSplit} for a **right** fixed pane.
+ * mirrors {@link DesktopHorizontalSplit} for a **trailing** fixed-width shell column (after the center workspace).
  */
 export function DesktopHorizontalSplitEnd({
   endWidthPx,

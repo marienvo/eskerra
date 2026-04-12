@@ -25,6 +25,16 @@ export type DesktopVerticalSplitProps = {
   top: ReactNode;
   bottom: ReactNode;
   className?: string;
+  /**
+   * When true, only the top pane renders at flex height with no separator and no bottom pane.
+   * Keeps the top React subtree stable when toggling an optional bottom pane (e.g. Inbox tree).
+   */
+  bottomCollapsed?: boolean;
+  /**
+   * When true, only the bottom pane renders at flex height with no separator and no top pane.
+   * Use when the top region is hidden but the bottom must stay mounted (e.g. Inbox-only shell column).
+   */
+  topCollapsed?: boolean;
 };
 
 /**
@@ -40,6 +50,8 @@ export function DesktopVerticalSplit({
   top,
   bottom,
   className,
+  bottomCollapsed = false,
+  topCollapsed = false,
 }: DesktopVerticalSplitProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const separatorRef = useRef<HTMLDivElement | null>(null);
@@ -49,9 +61,26 @@ export function DesktopVerticalSplit({
   const latestDragHeightRef = useRef<number | null>(null);
 
   const [dragHeightPx, setDragHeightPx] = useState<number | null>(null);
-  const displayTopPx = dragHeightPx ?? topHeightPx;
+  const displayTopPx = bottomCollapsed ? 0 : (dragHeightPx ?? topHeightPx);
+
+  useEffect(() => {
+    if (!bottomCollapsed && !topCollapsed) {
+      return;
+    }
+    draggingRef.current = false;
+    latestDragHeightRef.current = null;
+    const id = window.requestAnimationFrame(() => {
+      setDragHeightPx(null);
+    });
+    return () => {
+      window.cancelAnimationFrame(id);
+    };
+  }, [bottomCollapsed, topCollapsed]);
 
   const measureAndClamp = useCallback(() => {
+    if (bottomCollapsed || topCollapsed) {
+      return;
+    }
     const container = containerRef.current;
     const sep = separatorRef.current;
     if (!container || !sep) {
@@ -77,7 +106,15 @@ export function DesktopVerticalSplit({
       }
       onTopHeightPxChanged(next);
     }
-  }, [topHeightPx, minTopPx, maxTopPx, minBottomPx, onTopHeightPxChanged]);
+  }, [
+    bottomCollapsed,
+    topCollapsed,
+    topHeightPx,
+    minTopPx,
+    maxTopPx,
+    minBottomPx,
+    onTopHeightPxChanged,
+  ]);
 
   useLayoutEffect(() => {
     measureAndClamp();
@@ -108,7 +145,7 @@ export function DesktopVerticalSplit({
       pointerId: number;
       preventDefault: () => void;
     }) => {
-      if (e.button !== 0) {
+      if (bottomCollapsed || topCollapsed || e.button !== 0) {
         return;
       }
       e.preventDefault();
@@ -119,12 +156,12 @@ export function DesktopVerticalSplit({
       setDragHeightPx(topHeightPx);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
-    [topHeightPx],
+    [bottomCollapsed, topCollapsed, topHeightPx],
   );
 
   const onSeparatorPointerMove = useCallback(
     (e: {clientY: number}) => {
-      if (!draggingRef.current) {
+      if (bottomCollapsed || topCollapsed || !draggingRef.current) {
         return;
       }
       const container = containerRef.current;
@@ -146,7 +183,7 @@ export function DesktopVerticalSplit({
       latestDragHeightRef.current = next;
       setDragHeightPx(next);
     },
-    [minTopPx, maxTopPx, minBottomPx],
+    [bottomCollapsed, topCollapsed, minTopPx, maxTopPx, minBottomPx],
   );
 
   const endDrag = useCallback(
@@ -171,6 +208,68 @@ export function DesktopVerticalSplit({
   );
 
   const rootClass = ['desktop-vsplit', className].filter(Boolean).join(' ');
+
+  if (bottomCollapsed) {
+    return (
+      <div
+        ref={containerRef}
+        className={rootClass}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+        }}
+      >
+        <div
+          className="desktop-vsplit-top"
+          style={{
+            flex: '1 1 0',
+            minHeight: 0,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {top}
+        </div>
+      </div>
+    );
+  }
+
+  if (topCollapsed) {
+    return (
+      <div
+        ref={containerRef}
+        className={rootClass}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+        }}
+      >
+        <div
+          className="desktop-vsplit-bottom"
+          style={{
+            flex: '1 1 0',
+            minHeight: 0,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {bottom}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

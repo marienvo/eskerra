@@ -29,6 +29,7 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/vault',
       vaultPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
       episodesPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible,
+      inboxPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible,
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
@@ -43,6 +44,7 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/data/v',
       vaultPaneVisible: true,
       episodesPaneVisible: false,
+      inboxPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible,
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
@@ -57,6 +59,7 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/v',
       vaultPaneVisible: false,
       episodesPaneVisible: true,
+      inboxPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible,
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
@@ -83,9 +86,23 @@ describe('normalizeMainWindowUiPayload', () => {
       vaultRoot: '/v',
       vaultPaneVisible: true,
       episodesPaneVisible: false,
+      inboxPaneVisible: DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible,
       notificationsPanelVisible: true,
       inbox: {composingNewEntry: false, selectedUri: null},
     });
+  });
+
+  it('parses inboxPaneVisible', () => {
+    const hidden = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      inboxPaneVisible: false,
+    });
+    expect(hidden?.inboxPaneVisible).toBe(false);
+    const invalid = normalizeMainWindowUiPayload({
+      vaultRoot: '/v',
+      inboxPaneVisible: 'yes',
+    });
+    expect(invalid?.inboxPaneVisible).toBe(DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible);
   });
 
   it('sanitizes inbox fields', () => {

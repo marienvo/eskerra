@@ -7,7 +7,11 @@ import {
   type TreeInstance,
 } from '@headless-tree/core';
 import {AssistiveTreeDescription, useTree} from '@headless-tree/react';
-import {normalizeVaultBaseUri, type VaultFilesystem} from '@eskerra/core';
+import {
+  getInboxDirectoryUri,
+  normalizeVaultBaseUri,
+  type VaultFilesystem,
+} from '@eskerra/core';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {useVirtualizer} from '@tanstack/react-virtual';
 import {
@@ -31,6 +35,7 @@ import {
   createVaultSparsePlanLoader,
   pickLonelySubfolderWhenNoMarkdown,
 } from '../lib/vaultTreeAutoExpandThroughSparseFolders';
+import {filterTopLevelInboxFolderFromChildRows} from '../lib/vaultTreeFilterTopLevelInbox';
 import {
   loadVaultTreeVisibleChildRows,
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
@@ -193,26 +198,16 @@ export type VaultPaneTreeProps = {
     items: VaultTreeBulkItem[],
     targetDirectoryUri: string,
   ) => void | Promise<void>;
+  /** Main vault tree (hides top-level Inbox folder) vs Inbox-only tree rooted at `Inbox/`. */
+  treeScope?: 'vaultRoot' | 'inboxRoot';
 };
 
-/** Lists root then top-level `Inbox` so the first inbox note open hits warm tree loader state. */
-async function warmTopLevelInboxChildren(
+/** Preloads `Inbox/` children so first inbox note open hits warm loader state. */
+async function warmInboxChildrenAtUri(
   tree: TreeInstance<VaultTreeItemData>,
-  rootId: string,
-  itemStoreRef: MutableRefObject<Record<string, VaultTreeItemData>>,
-): Promise<{ inboxUri: string | null; rootKidCount: number }> {
-  await tree.loadChildrenIds(rootId);
-  const asyncRef = tree.getDataRef<AsyncDataLoaderDataRef<VaultTreeItemData>>().current;
-  const kidIds = asyncRef.childrenIds?.[rootId] ?? [];
-  const inboxUri =
-    kidIds.find(id => {
-      const data = itemStoreRef.current[id];
-      return data?.kind === 'folder' && data.name === 'Inbox';
-    }) ?? null;
-  if (inboxUri) {
-    await tree.loadChildrenIds(inboxUri);
-  }
-  return { inboxUri, rootKidCount: kidIds.length };
+  inboxUri: string,
+): Promise<void> {
+  await tree.loadChildrenIds(inboxUri);
 }
 
 export const VaultPaneTree = memo(function VaultPaneTree({
@@ -232,32 +227,43 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   onBulkDeleteRequest,
   onMoveVaultTreeItem,
   onBulkMoveVaultTreeItems,
+  treeScope = 'vaultRoot',
 }: VaultPaneTreeProps) {
-  const rootId = useMemo(
+  const vaultBaseUri = useMemo(
     () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
     [vaultRoot],
   );
+  const inboxDirectoryUri = useMemo(
+    () => getInboxDirectoryUri(vaultBaseUri).replace(/\\/g, '/').replace(/\/+$/, ''),
+    [vaultBaseUri],
+  );
+  const rootId = treeScope === 'inboxRoot' ? inboxDirectoryUri : vaultBaseUri;
   const itemStoreRef = useRef<Record<string, VaultTreeItemData>>({});
   const primedRootForStoreRef = useRef<string | null>(null);
   if (primedRootForStoreRef.current !== rootId) {
     primedRootForStoreRef.current = rootId;
     itemStoreRef.current = {
-      [rootId]: {
-        kind: 'folder',
-        name: 'Vault',
-        uri: rootId,
-        lastModified: null,
-      },
+      [rootId]:
+        treeScope === 'inboxRoot'
+          ? {
+              kind: 'folder',
+              name: 'Inbox',
+              uri: rootId,
+              lastModified: null,
+            }
+          : {
+              kind: 'folder',
+              name: 'Vault',
+              uri: rootId,
+              lastModified: null,
+            },
     };
   }
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const treeRef = useRef<TreeInstance<VaultTreeItemData> | null>(null);
   /** Serialize selection-driven loads with mount/fs-refresh Inbox warmup so we never run two cold `listFiles(Inbox)` in parallel. */
-  const topLevelInboxWarmupPromiseRef = useRef<Promise<{
-    inboxUri: string | null;
-    rootKidCount: number;
-  }> | null>(null);
+  const inboxWarmupPromiseRef = useRef<Promise<void> | null>(null);
   const dragGhostHostRef = useRef<HTMLDivElement | null>(null);
   const [dropTargetUri, setDropTargetUri] = useState<string | null>(null);
   const [draggingSourceUri, setDraggingSourceUri] = useState<string | null>(null);
@@ -327,11 +333,18 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         };
       },
       getChildrenWithData: async parentId => {
-        const rows = await loadVaultTreeVisibleChildRows({
+        let rows = await loadVaultTreeVisibleChildRows({
           parentUri: parentId,
           fs,
           itemStoreRef,
         });
+        if (treeScope === 'vaultRoot') {
+          rows = filterTopLevelInboxFolderFromChildRows({
+            rows,
+            parentUri: parentId,
+            vaultRootUri: vaultBaseUri,
+          });
+        }
         const childrenIds = rows.map(r => r.id);
         const lonely = pickLonelySubfolderWhenNoMarkdown(childrenIds, itemStoreRef.current, {
           parentUri: parentId,
@@ -413,19 +426,20 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     if (!t) {
       return;
     }
-    const warmupPromise = warmTopLevelInboxChildren(t, rootId, itemStoreRef);
-    topLevelInboxWarmupPromiseRef.current = warmupPromise;
+    const inboxUri = treeScope === 'inboxRoot' ? rootId : inboxDirectoryUri;
+    const warmupPromise = warmInboxChildrenAtUri(t, inboxUri);
+    inboxWarmupPromiseRef.current = warmupPromise;
     void warmupPromise.finally(() => {
-      if (topLevelInboxWarmupPromiseRef.current === warmupPromise) {
-        topLevelInboxWarmupPromiseRef.current = null;
+      if (inboxWarmupPromiseRef.current === warmupPromise) {
+        inboxWarmupPromiseRef.current = null;
       }
     });
     return () => {
-      if (topLevelInboxWarmupPromiseRef.current === warmupPromise) {
-        topLevelInboxWarmupPromiseRef.current = null;
+      if (inboxWarmupPromiseRef.current === warmupPromise) {
+        inboxWarmupPromiseRef.current = null;
       }
     };
-  }, [rootId]);
+  }, [rootId, treeScope, inboxDirectoryUri]);
 
   const vaultTreeClearSelRef = useRef(vaultTreeSelectionClearNonce);
   useEffect(() => {
@@ -471,22 +485,23 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         if (!t2) {
           return;
         }
-        const p = warmTopLevelInboxChildren(t2, rootId, itemStoreRef);
-        topLevelInboxWarmupPromiseRef.current = p;
+        const inboxUri = treeScope === 'inboxRoot' ? rootId : inboxDirectoryUri;
+        const p = warmInboxChildrenAtUri(t2, inboxUri);
+        inboxWarmupPromiseRef.current = p;
         try {
           await p;
         } catch {
           /* ignore */
         } finally {
-          if (topLevelInboxWarmupPromiseRef.current === p) {
-            topLevelInboxWarmupPromiseRef.current = null;
+          if (inboxWarmupPromiseRef.current === p) {
+            inboxWarmupPromiseRef.current = null;
           }
         }
       })
       .catch(() => {
         /* ignore: item ids may be stale during vault teardown */
       });
-  }, [fsRefreshNonce, rootId]);
+  }, [fsRefreshNonce, rootId, treeScope, inboxDirectoryUri]);
 
   void treeViewRevision;
   const items = tree.getItems();
@@ -521,13 +536,22 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     if (!uri || (!uri.startsWith(`${rootId}/`) && uri !== rootId)) {
       return;
     }
+    if (treeScope === 'vaultRoot') {
+      if (uri === inboxDirectoryUri || uri.startsWith(`${inboxDirectoryUri}/`)) {
+        return;
+      }
+    } else if (treeScope === 'inboxRoot') {
+      if (uri !== inboxDirectoryUri && !uri.startsWith(`${inboxDirectoryUri}/`)) {
+        return;
+      }
+    }
     let cancelled = false;
     void (async () => {
       const t = treeRef.current;
       if (!t) {
         return;
       }
-      const pendingMountWarmup = topLevelInboxWarmupPromiseRef.current;
+      const pendingMountWarmup = inboxWarmupPromiseRef.current;
       if (pendingMountWarmup) {
         try {
           await pendingMountWarmup;
@@ -585,7 +609,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         revealScrollFallbackTimeoutRef.current = null;
       }
     };
-  }, [revealActiveNoteNonce, rootId]);
+  }, [revealActiveNoteNonce, rootId, treeScope, inboxDirectoryUri]);
 
   useLayoutEffect(() => {
     const id = pendingScrollToTreeIdRef.current;
@@ -631,7 +655,9 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     inner.style.paddingTop = dy !== 0 ? `${dy}px` : '';
   }, [virtualItems, virtualizer, vaultTreeLayoutNonce, treeViewRevision]);
 
-  const containerProps = tree.getContainerProps('Vault');
+  const containerProps = tree.getContainerProps(
+    treeScope === 'inboxRoot' ? 'Inbox' : 'Vault',
+  );
 
   const selectedIdsForBulk = tree.getState().selectedItems;
   let vaultRootInMultiSelection = false;

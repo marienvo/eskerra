@@ -23,6 +23,8 @@ export type EditorWorkspaceToolbarProps = {
   onToggleVault: () => void;
   episodesPaneVisible: boolean;
   onToggleEpisodes: () => void;
+  inboxPaneVisible: boolean;
+  onToggleInboxPane: () => void;
   busy: boolean;
   editorHistoryCanGoBack: boolean;
   editorHistoryCanGoForward: boolean;
@@ -41,7 +43,7 @@ export type EditorWorkspaceToolbarProps = {
 };
 
 /**
- * Full-width chrome above the main workspace split (vault / episodes / editor + notifications).
+ * Full-width chrome above the main workspace split (vault / episodes / editor + inbox tree + notifications).
  * Open-note tabs render in the window title bar, not here.
  */
 export function EditorWorkspaceToolbar({
@@ -49,6 +51,8 @@ export function EditorWorkspaceToolbar({
   onToggleVault,
   episodesPaneVisible,
   onToggleEpisodes,
+  inboxPaneVisible,
+  onToggleInboxPane,
   busy,
   editorHistoryCanGoBack,
   editorHistoryCanGoForward,
@@ -177,6 +181,24 @@ export function EditorWorkspaceToolbar({
             </span>
           </button>
         ) : null}
+        <button
+          type="button"
+          className={[
+            'pane-header-add-btn icon-btn-ghost app-tooltip-trigger',
+            inboxPaneVisible ? 'pane-header-add-btn--inbox-on' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          onClick={onToggleInboxPane}
+          aria-label="Inbox tree pane"
+          aria-pressed={inboxPaneVisible}
+          data-tooltip="Inbox"
+          data-tooltip-placement="inline-start"
+        >
+          <span className="pane-header-add-btn__glyph" aria-hidden>
+            <MaterialIcon name="inbox" size={12} />
+          </span>
+        </button>
         {composingNewEntry ? (
           <button
             type="button"
