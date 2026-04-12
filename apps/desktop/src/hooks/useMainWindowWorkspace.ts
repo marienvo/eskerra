@@ -424,6 +424,8 @@ export type UseMainWindowWorkspaceResult = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Skip Today Hub week-row clean when the blocking disk conflict targets that file. */
+  todayHubCleanRowBlocked: (rowUri: string) => boolean;
   /** Title bar: eligible `Today.md` hubs (vault scan), sorted for stable ordering. */
   todayHubSelectorItems: readonly {todayNoteUri: string; label: string}[];
   /** Canonical `Today.md` URI for the workspace whose tab bar is active. */
@@ -2679,6 +2681,14 @@ export function useMainWindowWorkspace(options: {
     }
   }, [submitNewEntry, flushInboxSave]);
 
+  const todayHubCleanRowBlocked = useCallback((rowUri: string) => {
+    const dc = diskConflictRef.current;
+    return (
+      !!dc &&
+      normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(rowUri)
+    );
+  }, []);
+
   const onCleanNoteInbox = useCallback(() => {
     const uri = selectedUriRef.current;
     if (!uri || composingNewEntryRef.current) {
@@ -2691,28 +2701,47 @@ export function useMainWindowWorkspace(options: {
     const slice =
       inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
     const cleanedSlice = cleanNoteMarkdownBody(slice, uri);
-    if (cleanedSlice === slice) {
-      return;
-    }
-    const full = mergeYamlFrontmatterBody(
-      inboxEditorYamlFrontmatterBlockRef.current,
-      cleanedSlice,
-      inboxEditorYamlLeadingBeforeFrontmatterRef.current,
-    );
-    loadFullMarkdownIntoInboxEditor(full, uri, 'preserve');
-    scheduleBacklinksDeferOneFrameAfterLoad();
-    const norm = normalizeEditorDocUri(uri);
-    const nextCache = mergeInboxNoteBodyIntoCache(
-      inboxContentByUriRef.current,
-      norm,
-      full,
-    );
-    if (nextCache) {
-      inboxContentByUriRef.current = nextCache;
-      setInboxContentByUri(prev =>
-        mergeInboxNoteBodyIntoCache(prev, norm, full) ?? prev,
+    if (cleanedSlice !== slice) {
+      const full = mergeYamlFrontmatterBody(
+        inboxEditorYamlFrontmatterBlockRef.current,
+        cleanedSlice,
+        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
       );
+      loadFullMarkdownIntoInboxEditor(full, uri, 'preserve');
+      scheduleBacklinksDeferOneFrameAfterLoad();
+      const norm = normalizeEditorDocUri(uri);
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        norm,
+        full,
+      );
+      if (nextCache) {
+        inboxContentByUriRef.current = nextCache;
+        setInboxContentByUri(prev =>
+          mergeInboxNoteBodyIntoCache(prev, norm, full) ?? prev,
+        );
+      }
     }
+
+    const runHubClean = async () => {
+      if (!showTodayHubCanvasRef.current || composingNewEntryRef.current) {
+        return;
+      }
+      const hubTodayUri = selectedUriRef.current;
+      if (!hubTodayUri) {
+        return;
+      }
+      const block = diskConflictRef.current;
+      if (
+        block &&
+        normalizeEditorDocUri(block.uri) === normalizeEditorDocUri(hubTodayUri)
+      ) {
+        return;
+      }
+      await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
+      await todayHubBridgeRef.current.cleanHubPageDayColumns().catch(() => undefined);
+    };
+    void runHubClean();
   }, [
     inboxEditorRef,
     loadFullMarkdownIntoInboxEditor,
@@ -4167,6 +4196,7 @@ export function useMainWindowWorkspace(options: {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubCleanRowBlocked,
     todayHubSelectorItems,
     activeTodayHubUri,
     todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,

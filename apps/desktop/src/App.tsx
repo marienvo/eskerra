@@ -180,6 +180,7 @@ export default function App() {
     todayHubCellEditorRef,
     prehydrateTodayHubRows,
     persistTodayHubRow,
+    todayHubCleanRowBlocked,
     todayHubSelectorItems,
     activeTodayHubUri,
     todayHubWorkspacesForSave,
@@ -323,7 +324,9 @@ export default function App() {
         (document.activeElement instanceof HTMLElement
           ? document.activeElement
           : null) ?? (e.target as HTMLElement | null);
-      if (!focusEl?.closest('.inbox-root .cm-editor')) {
+      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
+      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
+      if (!inInboxCm && !inTodayHubCm) {
         return;
       }
       if (composingNewEntry || !selectedUri) {
@@ -1087,6 +1090,7 @@ export default function App() {
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
                 </main>

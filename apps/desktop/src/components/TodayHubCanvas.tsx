@@ -29,9 +29,14 @@ import {
 } from '../lib/inboxWikiLinkNavigation';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 import {
+  cleanNoteMarkdownBody,
+  CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH,
+} from '../lib/cleanNoteMarkdown';
+import {
   enumerateTodayHubWeekStarts,
   hubCellStableSessionKey,
   hubCellWarmKey,
+  mergeTodayHubRowAfterCleaningNonEmptyColumns,
   mergeTodayRowColumns,
   splitTodayRowIntoColumns,
   todayHubColumnCount,
@@ -80,6 +85,8 @@ type TodayHubCanvasProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** When true for a week row URI, skip cleaning that row (disk conflict). */
+  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
 };
 
 function normUri(u: string): string {
@@ -221,6 +228,7 @@ export function TodayHubCanvas({
   onSaveShortcut,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  todayHubCleanRowBlocked,
 }: TodayHubCanvasProps) {
   const hubDirectoryUri = useMemo(
     () => normUri(todayNoteUri).replace(/\/[^/]+$/, ''),
@@ -238,6 +246,11 @@ export function TodayHubCanvas({
     () => weekStarts.map(d => todayHubRowUri(hubDirectoryUri, d)),
     [weekStarts, hubDirectoryUri],
   );
+
+  const rowUrisRef = useRef(rowUris);
+  useLayoutEffect(() => {
+    rowUrisRef.current = rowUris;
+  }, [rowUris]);
 
   const visibleWeekStarts = weekStarts;
 
@@ -363,6 +376,59 @@ export function TodayHubCanvas({
     },
     [columnCount, persistTodayHubRow],
   );
+
+  const cleanHubPageDayColumns = useCallback(async () => {
+    const cleanCol = (text: string) =>
+      cleanNoteMarkdownBody(text, CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH, {
+        insertH1FromFilename: false,
+      });
+    for (const rawUri of rowUrisRef.current) {
+      const rowUri = normUri(rawUri);
+      if (todayHubCleanRowBlocked?.(rowUri)) {
+        continue;
+      }
+      const key = rowUri;
+      const sections =
+        localRowSectionsRef.current[key] !== undefined
+          ? [...localRowSectionsRef.current[key]!]
+          : splitTodayRowIntoColumns(
+              inboxContentByUriRef.current[key] ?? '',
+              columnCount,
+            );
+      const {merged, changed} = mergeTodayHubRowAfterCleaningNonEmptyColumns(
+        sections,
+        cleanCol,
+      );
+      if (!changed) {
+        continue;
+      }
+      await persistTodayHubRow(rowUri, merged, columnCount);
+      setLocalRowSections(prev => {
+        const next = {...prev};
+        const a = activeRef.current;
+        if (a && normUri(a.uri) === key) {
+          next[key] = splitTodayRowIntoColumns(merged, columnCount);
+        } else {
+          delete next[key];
+        }
+        localRowSectionsRef.current = next;
+        return next;
+      });
+      const a = activeRef.current;
+      if (a && normUri(a.uri) === key) {
+        const cols = splitTodayRowIntoColumns(merged, columnCount);
+        const col = a.col;
+        queueMicrotask(() => {
+          const cur = activeRef.current;
+          if (cur && normUri(cur.uri) === key && cur.col === col) {
+            cellEditorRef.current?.loadMarkdown(cols[col] ?? '', {
+              selection: 'preserve',
+            });
+          }
+        });
+      }
+    }
+  }, [cellEditorRef, columnCount, persistTodayHubRow, todayHubCleanRowBlocked]);
 
   const openCell = useCallback(
     (uri: string, col: number, clickCaret: number | null = null) => {
@@ -520,6 +586,7 @@ export function TodayHubCanvas({
   useLayoutEffect(() => {
     const bridge = bridgeRef.current;
     const flushFn = flushScheduledPersist;
+    const cleanFn = cleanHubPageDayColumns;
     bridge.flushPendingEdits = flushFn;
     bridge.hasPendingHubFlush = () =>
       debounceTimerRef.current != null || pendingPersistRef.current != null;
@@ -535,6 +602,7 @@ export function TodayHubCanvas({
         inboxContentByUriRef.current,
       );
     };
+    bridge.cleanHubPageDayColumns = cleanFn;
     return () => {
       if (bridge.flushPendingEdits === flushFn) {
         bridge.flushPendingEdits = async () => {};
@@ -542,8 +610,11 @@ export function TodayHubCanvas({
         bridge.getLiveRowUri = () => null;
         bridge.getLiveRowMergedMarkdown = () => null;
       }
+      if (bridge.cleanHubPageDayColumns === cleanFn) {
+        bridge.cleanHubPageDayColumns = async () => {};
+      }
     };
-  }, [bridgeRef, active, columnCount, flushScheduledPersist]);
+  }, [bridgeRef, active, columnCount, flushScheduledPersist, cleanHubPageDayColumns]);
 
   useEffect(() => {
     return () => {

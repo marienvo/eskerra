@@ -8,7 +8,17 @@ The desktop **Clean this note** action normalizes the **body** of the open vault
 
 - **Toolbar:** brush icon next to Notifications (`EditorWorkspaceToolbar`).
 - **Context menu:** editor right-click → **Clean this note** (shows OS-appropriate shortcut label).
-- **Shortcut:** **Ctrl+E** (Windows/Linux) or **⌘E** (macOS) when focus is inside the inbox note CodeMirror (`.inbox-root .cm-editor`).
+- **Shortcut:** **Ctrl+E** (Windows/Linux) or **⌘E** (macOS) when focus is inside the capture markdown CodeMirror for the open note: the main inbox editor (`.inbox-root .cm-editor`) or an active Today Hub cell (`.today-hub-canvas .cm-editor`).
+
+## Today Hub (weekly canvas)
+
+When **Today Hub** is open under `Today.md` (`TodayHubCanvas`), the same **Clean this note** action also normalizes **each week row file** that belongs to that hub canvas (the same `rowUris` the canvas renders — “on the hub page,” not unrelated vault notes).
+
+Implementation notes:
+
+- Split each row body with `splitTodayRowIntoColumns`, run `cleanNoteMarkdownBody` **only on columns whose text is non-empty after trim**, then `mergeTodayRowColumns`. Never run the cleaner on the full merged row text, or hub section delimiters (`::today-section::`) could be damaged by remark.
+- Use `CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH` and **`insertH1FromFilename: false`** for those column fragments so week filenames do not inject an H1.
+- Persist each changed row via `persistTodayHubRow` (same chain as hub autosave). Skip a row when a **blocking disk conflict** targets that row URI (`todayHubCleanRowBlocked`). If the open `Today.md` itself is in conflict, the whole clean action still bails out like other inbox saves.
 
 ## Cache and editor invariants
 
@@ -61,3 +71,4 @@ Writes `apps/desktop/src/lib/emojiVariationBases.generated.ts`.
 
 - `apps/desktop/src/lib/__tests__/cleanNoteMarkdown.test.ts` — ported unit and golden coverage.
 - `apps/desktop/src/lib/desktopShortcutLabels.test.ts` — shortcut label for the menu.
+- `apps/desktop/src/lib/todayHub/__tests__/cleanTodayHubRowColumns.test.ts` — merge helper for per-column hub clean (delimiter integrity, identity clean).

@@ -7,6 +7,11 @@ export type TodayHubWorkspaceBridge = {
   getLiveRowMergedMarkdown: () => string | null;
   /** True when a debounced hub row persist is scheduled or in flight (see TodayHubCanvas). */
   hasPendingHubFlush: () => boolean;
+  /**
+   * Normalizes markdown for every non-empty day column on hub canvas week rows, then persists
+   * changed row files (see `cleanTodayHubRowColumns` + `persistTodayHubRow`).
+   */
+  cleanHubPageDayColumns: () => Promise<void>;
 };
 
 export function createIdleTodayHubWorkspaceBridge(): TodayHubWorkspaceBridge {
@@ -15,5 +20,6 @@ export function createIdleTodayHubWorkspaceBridge(): TodayHubWorkspaceBridge {
     getLiveRowUri: () => null,
     getLiveRowMergedMarkdown: () => null,
     hasPendingHubFlush: () => false,
+    cleanHubPageDayColumns: async () => {},
   };
 }

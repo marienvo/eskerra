@@ -179,6 +179,8 @@ type VaultTabProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  /** Skip hub row clean when this returns true (e.g. disk conflict on that week file). */
+  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
 };
@@ -227,6 +229,7 @@ type EditorPaneBodyProps = {
     mergedMarkdown: string,
     columnCount: number,
   ) => Promise<void>;
+  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
 };
 
 function InboxBacklinksSection({
@@ -320,6 +323,7 @@ function EditorPaneBody({
   todayHubCellEditorRef,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  todayHubCleanRowBlocked,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -497,6 +501,7 @@ function EditorPaneBody({
                   onSaveShortcut={onSaveShortcut}
                   prehydrateTodayHubRows={prehydrateTodayHubRows}
                   persistTodayHubRow={persistTodayHubRow}
+                  todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                 />
               </div>
             </div>
@@ -584,6 +589,7 @@ export function VaultTab({
   todayHubCellEditorRef,
   prehydrateTodayHubRows,
   persistTodayHubRow,
+  todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
@@ -1247,6 +1253,7 @@ export function VaultTab({
                       todayHubCellEditorRef={todayHubCellEditorRef}
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
+                      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                     />
                     {composingNewEntry ? (
                       <div className="pane-footer">
