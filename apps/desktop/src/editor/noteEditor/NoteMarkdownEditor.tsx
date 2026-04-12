@@ -104,10 +104,24 @@ import {
   recordPrimaryPointerDownForLinkClick,
   resolveDocPositionForLinkPrimaryClick,
 } from './linkClickUseMousedownPosition';
+import {multiCaretClickAddsSelectionRangeExtension} from './multiCaretClick';
 import {
   wikiLinkMatchAtDocPosition,
   wikiLinkPointerActivatableInnerAtDocPosition,
 } from './wikiLinkInnerAtDocPosition';
+import {
+  beginProgrammaticMarkdownLoad,
+  caretJumpDetectorExtension,
+  endProgrammaticMarkdownLoad,
+} from './caretJumpDetector';
+import {
+  explicitCursorForMarkdownLoadDispatch,
+  explicitCursorForMarkdownLoadSetState,
+  selectionIsPreserve,
+  selMatchesForcedCursor,
+  shouldUseMergedReplaceForMarkdownLoad,
+  shouldUseSetStateBranchForMarkdownLoad,
+} from './noteMarkdownLoadMarkdown';
 import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
@@ -231,7 +245,7 @@ export type NoteMarkdownEditorHandle = {
   getMarkdown: () => string;
   loadMarkdown: (
     markdown: string,
-    options?: {selection?: 'start' | 'end'},
+    options?: {selection?: 'start' | 'end' | 'preserve'},
   ) => void;
   /** Unfolds every folded range in the editor (fold gutter, lists, etc.). */
   unfoldAllFolds: () => boolean;
@@ -620,6 +634,10 @@ const NoteMarkdownEditorImpl = forwardRef<
         discardStoredPrimaryPointerDownForLinkClick(view);
         return false;
       }
+      if (e.altKey) {
+        discardStoredPrimaryPointerDownForLinkClick(view);
+        return false;
+      }
       const pos = resolveDocPositionForLinkPrimaryClick(view, e);
       if (pos == null) {
         return false;
@@ -754,6 +772,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         : []),
       history(),
       drawSelection(),
+      multiCaretClickAddsSelectionRangeExtension(),
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),
       markdownSelectionSurroundKeymap(),
@@ -887,6 +906,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         },
       }),
       wikiEOLCaretPointerFixExtension(),
+      caretJumpDetectorExtension(),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {
           onMarkdownChangeRef.current(update.state.doc.toString());
@@ -1015,7 +1035,7 @@ const NoteMarkdownEditorImpl = forwardRef<
    * or user interaction (WebKit/GTK).
    */
   const applyMarkdownLoadNow = useCallback(
-    (markdown: string, options?: {selection?: 'start' | 'end'}) => {
+    (markdown: string, options?: {selection?: 'start' | 'end' | 'preserve'}) => {
       const v = viewRef.current;
       const be = codemirrorBootExtensionsRef.current;
       const wc = wikiLinkCompartmentRef.current;
@@ -1023,57 +1043,88 @@ const NoteMarkdownEditorImpl = forwardRef<
       if (!v || !be || !wc || !rc) {
         return;
       }
-      const at = options?.selection === 'start' ? 0 : markdown.length;
-      const hadFoldedRanges = foldedRangesPresent(v.state);
-      const curLen = v.state.doc.length;
-      const curText = v.state.doc.toString();
-      const selMatches =
-        v.state.selection.main.from === at && v.state.selection.main.empty;
-      const mergedReplace =
-        !hadFoldedRanges && (curText !== markdown || !selMatches);
-      const wikiEff = wc.reconfigure(
-        wikiLinkResolvedHighlightExtensions(wikiLinkTargetIsResolvedRef.current),
-      );
-      const relEff = rc.reconfigure(
-        markdownRelativeLinkHighlightExtensions(
-          relativeMarkdownLinkHrefIsResolvedRef.current,
-        ),
-      );
-      const roComp = readOnlyCompartmentRef.current;
-      const roEff =
-        roComp != null
-          ? roComp.reconfigure([
-              EditorState.readOnly.of(readOnlyRef.current),
-              EditorView.editable.of(!readOnlyRef.current),
-            ])
-          : null;
-      const effects =
-        roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
-      if (mergedReplace) {
-        v.dispatch({
-          changes: {from: 0, to: curLen, insert: markdown},
-          selection: EditorSelection.cursor(at),
-          annotations: Transaction.addToHistory.of(false),
-          effects,
+      beginProgrammaticMarkdownLoad(v);
+      try {
+        const hadFoldedRanges = foldedRangesPresent(v.state);
+        const curLen = v.state.doc.length;
+        const curText = v.state.doc.toString();
+        const preserve = selectionIsPreserve(options);
+        const forced = explicitCursorForMarkdownLoadDispatch(
+          options,
+          markdown.length,
+        );
+        const selMatchesForced =
+          forced !== undefined && selMatchesForcedCursor(v.state, forced);
+        const mergedReplace = shouldUseMergedReplaceForMarkdownLoad({
+          hadFoldedRanges,
+          curText,
+          markdown,
+          preserve,
+          selMatchesForcedCursor: selMatchesForced,
         });
-        clearEskerraTableNestedCellRegistrations(v);
-      } else if (hadFoldedRanges || curText !== markdown || !selMatches) {
-        const nextState = EditorState.create({
-          doc: markdown,
-          selection: EditorSelection.cursor(at),
-          extensions: be,
+        const useSetState = shouldUseSetStateBranchForMarkdownLoad({
+          hadFoldedRanges,
+          curText,
+          markdown,
+          preserve,
+          selMatchesForcedCursor: selMatchesForced,
         });
-        v.setState(nextState);
-        clearEskerraTableNestedCellRegistrations(v);
+        const wikiEff = wc.reconfigure(
+          wikiLinkResolvedHighlightExtensions(
+            wikiLinkTargetIsResolvedRef.current,
+          ),
+        );
+        const relEff = rc.reconfigure(
+          markdownRelativeLinkHighlightExtensions(
+            relativeMarkdownLinkHrefIsResolvedRef.current,
+          ),
+        );
+        const roComp = readOnlyCompartmentRef.current;
+        const roEff =
+          roComp != null
+            ? roComp.reconfigure([
+                EditorState.readOnly.of(readOnlyRef.current),
+                EditorView.editable.of(!readOnlyRef.current),
+              ])
+            : null;
+        const effects =
+          roEff !== null ? [wikiEff, relEff, roEff] : [wikiEff, relEff];
+        if (mergedReplace) {
+          const spec: Parameters<EditorView['dispatch']>[0] = {
+            changes: {from: 0, to: curLen, insert: markdown},
+            annotations: Transaction.addToHistory.of(false),
+            effects,
+          };
+          if (forced !== undefined) {
+            spec.selection = EditorSelection.cursor(forced);
+          }
+          v.dispatch(spec);
+          clearEskerraTableNestedCellRegistrations(v);
+        } else if (useSetState) {
+          const cursorAt = explicitCursorForMarkdownLoadSetState(
+            options,
+            markdown.length,
+            v.state.selection.main.head,
+          );
+          const nextState = EditorState.create({
+            doc: markdown,
+            selection: EditorSelection.cursor(cursorAt),
+            extensions: be,
+          });
+          v.setState(nextState);
+          clearEskerraTableNestedCellRegistrations(v);
+        }
+        if (!mergedReplace) {
+          v.dispatch({effects});
+        }
+        dispatchEskerraTableNestedCellEditors(v, {effects});
+        onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
+        onFoldableRangesPresentChangeRef.current?.(
+          foldableRangesPresent(v.state),
+        );
+      } finally {
+        endProgrammaticMarkdownLoad(v);
       }
-      if (!mergedReplace) {
-        v.dispatch({effects});
-      }
-      dispatchEskerraTableNestedCellEditors(v, {effects});
-      onFoldedRangesPresentChangeRef.current?.(foldedRangesPresent(v.state));
-      onFoldableRangesPresentChangeRef.current?.(
-        foldableRangesPresent(v.state),
-      );
     },
     [],
   );
@@ -1088,7 +1139,10 @@ const NoteMarkdownEditorImpl = forwardRef<
         }
         return view?.state.doc.toString() ?? initialMarkdownRef.current;
       },
-      loadMarkdown: (markdown: string, options?: {selection?: 'start' | 'end'}) => {
+      loadMarkdown: (
+        markdown: string,
+        options?: {selection?: 'start' | 'end' | 'preserve'},
+      ) => {
         const view = viewRef.current;
         const bootExtensions = codemirrorBootExtensionsRef.current;
         const wikiCompartment = wikiLinkCompartmentRef.current;

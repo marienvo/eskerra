@@ -48,6 +48,7 @@ import {
   resolveDocPositionForLinkPrimaryClick,
 } from './linkClickUseMousedownPosition';
 import {wikiLinkPointerActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
+import {multiCaretClickAddsSelectionRangeExtension} from './multiCaretClick';
 import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
@@ -185,6 +186,10 @@ export function buildNoteMarkdownCellExtensions(
       return false;
     }
     if (e.shiftKey) {
+      discardStoredPrimaryPointerDownForLinkClick(view);
+      return false;
+    }
+    if (e.altKey) {
       discardStoredPrimaryPointerDownForLinkClick(view);
       return false;
     }
@@ -565,6 +570,7 @@ export function buildNoteMarkdownCellExtensions(
     ...noteMarkdownEditorAppearance,
     history(),
     drawSelection(),
+    multiCaretClickAddsSelectionRangeExtension(),
     markdownSelectionAllowMultipleRanges(),
     ...markdownSmartExpandExtension(),
     markdownSelectionSurroundKeymap(),

@@ -311,6 +311,21 @@ a:focus:not(:focus-visible) {
   gap: 0.4rem;
 }
 
+/* Match `.editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active` (workspace-shell Today). */
+.today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab) {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
+  background: color-mix(in srgb, var(--color-accent) 22%, rgba(255, 255, 255, 0.04));
+}
+
+.today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab):hover {
+  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
+}
+
+.today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab)
+  .today-hub-workspace-select__main:hover {
+  background: transparent;
+}
+
 /* Fills space between workspace chrome and drag sliver; portaled editor tabs render here. */
 .window-title-editor-tabs-host {
   flex: 1 1 auto;

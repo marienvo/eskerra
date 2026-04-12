@@ -34,20 +34,28 @@ export function wikiEOLCaretPointerFixExtension(): Extension {
       if (tr.annotation(Transaction.userEvent) !== 'select.pointer') {
         continue;
       }
-      const sel = update.state.selection.main;
-      if (!sel.empty) {
+      const doc = update.state.doc;
+      let changed = false;
+      const nextRanges = update.state.selection.ranges.map(r => {
+        if (!r.empty) {
+          return r;
+        }
+        const line = doc.lineAt(r.head);
+        const fixTo = planCaretPastEOLWikiBrackets(doc, line, r.head);
+        if (fixTo == null) {
+          return r;
+        }
+        changed = true;
+        return EditorSelection.cursor(fixTo);
+      });
+      if (!changed) {
         continue;
       }
-      const head = sel.head;
-      const line = update.state.doc.lineAt(head);
-      const fixTo = planCaretPastEOLWikiBrackets(update.state.doc, line, head);
-      if (fixTo != null) {
-        update.view.dispatch({
-          selection: EditorSelection.cursor(fixTo),
-          userEvent: WIKI_EOL_BRACKET_POINTER_FIX_USER_EVENT,
-        });
-        return;
-      }
+      update.view.dispatch({
+        selection: EditorSelection.create(nextRanges),
+        userEvent: WIKI_EOL_BRACKET_POINTER_FIX_USER_EVENT,
+      });
+      return;
     }
   });
 }

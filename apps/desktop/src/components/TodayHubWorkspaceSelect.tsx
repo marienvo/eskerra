@@ -11,6 +11,8 @@ type TodayHubWorkspaceSelectProps = {
   items: readonly TodayHubWorkspaceSelectItem[];
   activeTodayNoteUri: string | null;
   activeLabel: string;
+  /** Same chrome as an active editor open-note tab pill (workspace-shell Today). */
+  mainShowsActiveTabPill?: boolean;
   onMainActivate: () => void;
   onPickHub: (todayNoteUri: string) => void;
   /** Middle-click / aux click: open hub note in a new editor tab. */
@@ -23,6 +25,7 @@ export function TodayHubWorkspaceSelect({
   items,
   activeTodayNoteUri,
   activeLabel,
+  mainShowsActiveTabPill = false,
   onMainActivate,
   onPickHub,
   onOpenHubInNewTab,
@@ -61,7 +64,12 @@ export function TodayHubWorkspaceSelect({
       <button
         ref={mainRef}
         type="button"
-        className="today-hub-workspace-select__main"
+        className={[
+          'today-hub-workspace-select__main',
+          mainShowsActiveTabPill ? 'today-hub-workspace-select__main--active-tab' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         aria-label={`Today hub: ${activeLabel}. Activate this hub.`}
         onClick={onMainActivate}
         onAuxClick={e => {

@@ -104,7 +104,7 @@ function parseStoredEditorWorkspaceTabs(
     }
     tabs.push({id, entries, index});
   }
-  return tabs.length > 0 ? tabs : undefined;
+  return tabs;
 }
 
 function parseActiveEditorTabId(raw: unknown): string | null | undefined {

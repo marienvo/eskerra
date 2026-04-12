@@ -184,6 +184,7 @@ export default function App() {
     todayHubWorkspacesForSave,
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
+    workspaceSelectShowsActiveTabPill,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -232,6 +233,7 @@ export default function App() {
       items: todayHubSelectorItems,
       activeTodayNoteUri: activeTodayHubUri,
       activeLabel,
+      mainShowsActiveTabPill: workspaceSelectShowsActiveTabPill,
       onMainActivate: focusActiveTodayHubNote,
       onPickHub: (uri: string) => {
         void switchTodayHubWorkspace(uri);
@@ -242,6 +244,7 @@ export default function App() {
     vaultRoot,
     todayHubSelectorItems,
     activeTodayHubUri,
+    workspaceSelectShowsActiveTabPill,
     focusActiveTodayHubNote,
     switchTodayHubWorkspace,
     selectNoteInNewActiveTab,
