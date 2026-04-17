@@ -99,7 +99,7 @@ export function VaultSearchScreen({navigation}: Props) {
         eskerraVaultSearch.cancel().catch(() => undefined);
         navigation.getParent()?.setOptions({
           headerLeft: undefined,
-          headerTitle: 'Vault',
+          headerTitle: 'Workspace',
         });
       };
     }, [navigation, renderHeaderLeft]),

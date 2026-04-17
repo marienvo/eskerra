@@ -219,7 +219,7 @@ export function MainTabNavigator() {
           options={{
             tabBarButton,
             tabBarIcon: vaultTabIcon,
-            title: 'Vault',
+            title: 'Workspace',
           }}
         />
         <Tabs.Screen
