@@ -256,7 +256,6 @@ describe('openOrCreateInboxWikiLinkTarget', () => {
     }
     expect(result.uri).toBe(`${vaultRoot}/Inbox/brand new page.md`);
     expect(writes.some(w => w.uri === result.uri)).toBe(true);
-    expect(writes.some(w => w.uri === `${vaultRoot}/General/Inbox.md`)).toBe(true);
   });
 
   it('strips filesystem-dangerous characters when creating files', async () => {

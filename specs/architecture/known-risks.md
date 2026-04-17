@@ -93,7 +93,6 @@ Contingency:
 - If native resolves with an **empty array** but `exists(directoryUri)` is still **true** for the SAF path, the app **does not** trust the empty native result and runs the same JS listing path (native and `react-native-saf-x` can disagree on visibility).
 - Kotlin throws instead of returning an empty array when `DocumentFile` reports the directory missing, so JS can fall back when native cannot open the tree URI reliably.
 - Keep listing rules aligned: markdown suffix, exclude filenames containing `sync-conflict`, sort by `lastModified` descending (see Kotlin `VaultListingModule`).
-- Session prepare avoids `DocumentFile.findFile` for `General/Inbox.md` when a **composed child URI** (same string pattern as JS: parent General URI + `/Inbox.md`) resolves to the file, because `findFile` on a very large `General/` directory can enumerate thousands of entries. A **slow fallback** to `findFile` remains for providers where the composed URI does not work.
 - Validate on a physical Android device after changes; iOS is unchanged and always uses the JS path.
 
 ## 8) Podcast artwork `content://` and main-thread ANRs (Medium — mitigated)

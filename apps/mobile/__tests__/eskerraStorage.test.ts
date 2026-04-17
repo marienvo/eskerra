@@ -12,7 +12,6 @@ import {
   writeFile,
 } from 'react-native-saf-x';
 
-import {buildInboxMarkdownIndexContent} from '@eskerra/core';
 import {tryListMarkdownFilesNative} from '../src/core/storage/androidVaultListing';
 import {
   clearPlaylist,
@@ -21,7 +20,6 @@ import {
   pickNextInboxMarkdownFileName,
   isNoteUriInInbox,
   listGeneralMarkdownFiles,
-  listInboxNotesAndSyncIndex,
   listNotes,
   parseEskerraSettings,
   readNote,
@@ -30,7 +28,6 @@ import {
   readPlaylistCoalesced,
   initEskerra,
   readSettings,
-  refreshInboxMarkdownIndex,
   resetPlaylistReadCoalescerForTesting,
   writePlaylist,
   writeNoteContent,
@@ -318,74 +315,6 @@ describe('eskerraStorage', () => {
     expect(listFilesMock).not.toHaveBeenCalled();
   });
 
-  test('listInboxNotesAndSyncIndex lists Inbox once and writes General/Inbox.md', async () => {
-    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
-      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
-      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
-    ]);
-    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    listFilesMock.mockResolvedValueOnce([
-      {
-        lastModified: 2,
-        name: 'b.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/b.md`,
-      },
-      {
-        lastModified: 1,
-        name: 'a.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/a.md`,
-      },
-    ] as never);
-
-    await expect(listInboxNotesAndSyncIndex(baseUri)).resolves.toEqual([
-      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
-      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
-    ]);
-
-    expect(tryListMarkdownFilesNativeMock).toHaveBeenCalledTimes(1);
-    expect(tryListMarkdownFilesNativeMock).toHaveBeenCalledWith(`${baseUri}/Inbox`);
-    expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/General`);
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/b|b]]\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
-    );
-  });
-
-  test('listInboxNotesAndSyncIndex skips Inbox.md write when content unchanged', async () => {
-    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
-      {lastModified: 2, name: 'b.md', uri: `${baseUri}/Inbox/b.md`},
-      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
-    ]);
-    const expectedIndex = '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/b|b]]\n';
-    existsMock.mockResolvedValue(true);
-    listFilesMock.mockResolvedValueOnce([
-      {
-        lastModified: 2,
-        name: 'b.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/b.md`,
-      },
-      {
-        lastModified: 1,
-        name: 'a.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/a.md`,
-      },
-    ] as never);
-    readFileMock.mockResolvedValueOnce(expectedIndex);
-
-    await expect(listInboxNotesAndSyncIndex(baseUri)).resolves.toHaveLength(2);
-
-    expect(mkdirMock).not.toHaveBeenCalled();
-    expect(writeFileMock).not.toHaveBeenCalled();
-    expect(readFileMock).toHaveBeenCalledWith(`${baseUri}/General/Inbox.md`, {
-      encoding: 'utf8',
-    });
-  });
-
   test('readNote reads markdown content by URI', async () => {
     readFileMock.mockResolvedValueOnce('# Hello');
 
@@ -504,11 +433,6 @@ describe('eskerraStorage', () => {
         encoding: 'utf8',
         mimeType: 'text/markdown',
       },
-    );
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n- [[Inbox/team-ideas|team-ideas]]\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
     );
   });
 
@@ -673,12 +597,8 @@ describe('eskerraStorage', () => {
     });
   });
 
-  test('deleteInboxNotes unlinks inbox files and refreshes General/Inbox.md', async () => {
+  test('deleteInboxNotes unlinks inbox files', async () => {
     unlinkMock.mockResolvedValue(true);
-    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
-      {lastModified: 1, name: 'left.md', uri: `${baseUri}/Inbox/left.md`},
-    ]);
-    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
 
     await deleteInboxNotes(baseUri, [
       `${baseUri}/Inbox/to-delete.md`,
@@ -687,11 +607,6 @@ describe('eskerraStorage', () => {
 
     expect(unlinkMock).toHaveBeenNthCalledWith(1, `${baseUri}/Inbox/to-delete.md`);
     expect(unlinkMock).toHaveBeenNthCalledWith(2, `${baseUri}/Inbox/another-delete.md`);
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n- [[Inbox/left|left]]\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
-    );
   });
 
   test('deleteInboxNotes rejects URIs outside Inbox', async () => {
@@ -699,12 +614,6 @@ describe('eskerraStorage', () => {
       deleteInboxNotes(baseUri, [`${baseUri}/General/not-allowed.md`]),
     ).rejects.toThrow('Could not verify that the selected entry belongs to Log.');
     expect(unlinkMock).not.toHaveBeenCalled();
-  });
-
-  test('buildInboxMarkdownIndexContent sorts stems alphabetically', () => {
-    expect(buildInboxMarkdownIndexContent(['z.md', 'a.md', 'm.md'])).toBe(
-      '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/m|m]]\n- [[Inbox/z|z]]\n',
-    );
   });
 
   test('isNoteUriInInbox returns true when note URI is under Inbox', () => {
@@ -716,68 +625,6 @@ describe('eskerraStorage', () => {
     const noteUri =
       'content://com.android.externalstorage.documents/tree/primary%3ANotebox/document/primary%3ANotebox%2FInbox%2Ffoo.md';
     expect(isNoteUriInInbox(noteUri, baseUri)).toBe(true);
-  });
-
-  test('refreshInboxMarkdownIndex writes empty index when Inbox is missing', async () => {
-    existsMock.mockResolvedValueOnce(false).mockResolvedValue(true);
-
-    await refreshInboxMarkdownIndex(baseUri);
-
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
-    );
-  });
-
-  test('refreshInboxMarkdownIndex creates General when missing', async () => {
-    tryListMarkdownFilesNativeMock.mockResolvedValueOnce([
-      {lastModified: 1, name: 'a.md', uri: `${baseUri}/Inbox/a.md`},
-    ]);
-    existsMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    listFilesMock.mockResolvedValueOnce([
-      {
-        lastModified: 1,
-        name: 'a.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/a.md`,
-      },
-    ] as never);
-
-    await refreshInboxMarkdownIndex(baseUri);
-
-    expect(mkdirMock).toHaveBeenCalledWith(`${baseUri}/General`);
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n- [[Inbox/a|a]]\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
-    );
-  });
-
-  test('refreshInboxMarkdownIndex uses JS listing when native returns null', async () => {
-    existsMock.mockResolvedValue(true);
-    listFilesMock.mockResolvedValueOnce([
-      {
-        lastModified: 2,
-        name: 'b.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/b.md`,
-      },
-      {
-        lastModified: 1,
-        name: 'a.md',
-        type: 'file',
-        uri: `${baseUri}/Inbox/a.md`,
-      },
-    ] as never);
-
-    await refreshInboxMarkdownIndex(baseUri);
-
-    expect(writeFileMock).toHaveBeenCalledWith(
-      `${baseUri}/General/Inbox.md`,
-      '# Inbox\n\n- [[Inbox/a|a]]\n- [[Inbox/b|b]]\n',
-      {encoding: 'utf8', mimeType: 'text/markdown'},
-    );
   });
 
   describe('playlist (no R2)', () => {

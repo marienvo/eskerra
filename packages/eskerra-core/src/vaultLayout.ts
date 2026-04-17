@@ -13,7 +13,6 @@ export const SETTINGS_SHARED_FILE_NAME = 'settings-shared.json';
 /** Legacy filename; read-only for migration. */
 export const SETTINGS_LEGACY_FILE_NAME = 'settings.json';
 export const SETTINGS_LOCAL_FILE_NAME = 'settings-local.json';
-export const INBOX_INDEX_FILE_NAME = 'Inbox.md';
 export const MARKDOWN_EXTENSION = '.md';
 export const SYNC_CONFLICT_MARKER = 'sync-conflict';
 
@@ -57,10 +56,6 @@ export function getAssetsDirectoryUri(baseUri: string): string {
 
 export function getAssetsAttachmentsDirectoryUri(baseUri: string): string {
   return `${getAssetsDirectoryUri(baseUri)}/${ATTACHMENTS_DIRECTORY_NAME}`;
-}
-
-export function getInboxIndexUri(baseUri: string): string {
-  return `${getGeneralDirectoryUri(baseUri)}/${INBOX_INDEX_FILE_NAME}`;
 }
 
 export function normalizeVaultBaseUri(baseUri: string): string {

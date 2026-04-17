@@ -3,14 +3,12 @@ import {desktopR2SignedTransport} from './desktopR2Transport';
 import {
   assertVaultMarkdownNoteUriForCrud,
   assertVaultTreeDirectoryUriForCrud,
-  buildInboxMarkdownIndexContent,
   defaultEskerraLocalSettings,
   deleteR2PlaylistObject,
   ensureDeviceInstanceId,
   getAssetsAttachmentsDirectoryUri,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
-  getInboxIndexUri,
   getLocalSettingsUri,
   getEskerraDirectoryUri,
   getPlaylistUri,
@@ -59,43 +57,6 @@ export async function bootstrapVaultLayout(
   if (!(await fs.exists(attachments))) {
     await fs.mkdir(attachments);
   }
-}
-
-/**
- * Rewrites `General/Inbox.md` from **top-level** `Inbox/*.md` filenames only (not nested paths).
- * Vault-wide delete/rename still calls this so **flat** inbox notes stay listed in that index; for
- * nested or non-inbox paths the scan is unchanged and the write is usually skipped (existing === body).
- */
-export async function syncInboxMarkdownIndex(
-  root: string,
-  fs: VaultFilesystem,
-): Promise<void> {
-  const base = normalizeVaultBaseUri(root);
-  const inbox = getInboxDirectoryUri(base);
-  if (!(await fs.exists(inbox))) {
-    return;
-  }
-  const rows = await fs.listFiles(inbox);
-  const names = rows
-    .filter(
-      r =>
-        (r.type === 'file' || r.type === undefined) &&
-        r.name.endsWith(MARKDOWN_EXTENSION) &&
-        !isSyncConflictFileName(r.name),
-    )
-    .map(r => r.name)
-    .sort((a, b) => a.localeCompare(b));
-  const body = buildInboxMarkdownIndexContent(names);
-  const indexUri = getInboxIndexUri(base);
-  try {
-    const existing = await fs.readFile(indexUri, {encoding: 'utf8'});
-    if (existing === body) {
-      return;
-    }
-  } catch {
-    // write fresh
-  }
-  await fs.writeFile(indexUri, body, {encoding: 'utf8', mimeType: 'text/markdown'});
 }
 
 async function migrateLegacySharedDisplayNameIfNeeded(
@@ -310,7 +271,6 @@ export async function clearPlaylistEntry(root: string, fs: VaultFilesystem): Pro
 
 /**
  * Creates a markdown note under an existing vault directory (validated for tree CRUD).
- * Updates `General/Inbox.md` when the file lives under `Inbox/`.
  */
 export async function createVaultMarkdownNoteInDirectory(
   root: string,
@@ -343,10 +303,6 @@ export async function createVaultMarkdownNoteInDirectory(
     encoding: 'utf8',
     mimeType: 'text/markdown',
   });
-  const inbox = getInboxDirectoryUri(base).replace(/\\/g, '/').replace(/\/+$/, '');
-  if (parent === inbox || parent.startsWith(`${inbox}/`)) {
-    await syncInboxMarkdownIndex(root, fs);
-  }
   return {lastModified: Date.now(), name: fileName, uri};
 }
 
@@ -368,7 +324,6 @@ export async function deleteVaultMarkdownNote(
 ): Promise<void> {
   const normalized = assertVaultMarkdownNoteUriForCrud(root, noteUri);
   await fs.unlink(normalized);
-  await syncInboxMarkdownIndex(root, fs);
 }
 
 export async function deleteVaultTreeDirectory(
@@ -378,7 +333,6 @@ export async function deleteVaultTreeDirectory(
 ): Promise<void> {
   const normalized = assertVaultTreeDirectoryUriForCrud(root, directoryUri);
   await fs.removeTree(normalized);
-  await syncInboxMarkdownIndex(root, fs);
 }
 
 export async function renameVaultTreeDirectory(
@@ -405,7 +359,6 @@ export async function renameVaultTreeDirectory(
     throw new Error('A folder or file with this name already exists.');
   }
   await fs.renameFile(normalized, nextUri);
-  await syncInboxMarkdownIndex(root, fs);
   return nextUri;
 }
 
@@ -432,7 +385,6 @@ export async function renameVaultMarkdownNote(
     throw new Error('A note with this name already exists.');
   }
   await fs.renameFile(normalized, nextUri);
-  await syncInboxMarkdownIndex(root, fs);
   return nextUri;
 }
 
@@ -494,7 +446,6 @@ export async function moveVaultTreeItemToDirectory(
   }
 
   await fs.renameFile(normalizedSource, nextUri);
-  await syncInboxMarkdownIndex(root, fs);
   return {previousUri: normalizedSource, nextUri, movedKind};
 }
 

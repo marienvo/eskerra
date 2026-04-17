@@ -1,10 +1,8 @@
 import {
-  buildInboxMarkdownIndexContent,
   deleteR2PlaylistObject,
   ensureDeviceInstanceId,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
-  getInboxIndexUri,
   getLocalSettingsUri,
   getEskerraDirectoryUri,
   getPlaylistUri,
@@ -292,27 +290,6 @@ export async function listNotes(baseUri: string): Promise<NoteSummary[]> {
   return listMarkdownFilesInDirectory(inboxDirectoryUri);
 }
 
-/**
- * Lists Inbox markdown notes and writes `General/Inbox.md` from that single directory scan.
- * Prefer this over `listNotes` + `refreshInboxMarkdownIndex` to avoid duplicate SAF work.
- */
-export async function listInboxNotesAndSyncIndex(baseUri: string): Promise<NoteSummary[]> {
-  if (isDevMockVaultBaseUri(baseUri)) {
-    const devStorage = getDevStorage();
-    return devStorage.listInboxNotesAndSyncIndex(baseUri);
-  }
-
-  const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
-  const inboxRows = await listMarkdownFilesInDirectory(
-    getInboxDirectoryUri(normalizedBaseUri),
-  );
-  await writeInboxMarkdownIndexFromMarkdownFileNames(
-    normalizedBaseUri,
-    inboxRows.map(row => row.name),
-  );
-  return inboxRows;
-}
-
 export async function listGeneralMarkdownFiles(
   baseUri: string,
 ): Promise<RootMarkdownFile[]> {
@@ -344,50 +321,6 @@ export function isNoteUriInInbox(noteUri: string, baseUri: string): boolean {
   } catch {
     return false;
   }
-}
-
-async function writeInboxMarkdownIndexFromMarkdownFileNames(
-  normalizedBaseUri: string,
-  markdownFileNames: string[],
-): Promise<void> {
-  const body = buildInboxMarkdownIndexContent(markdownFileNames);
-  const generalDirectoryUri = getGeneralDirectoryUri(normalizedBaseUri);
-
-  if (!(await vaultFs.exists(generalDirectoryUri))) {
-    await vaultFs.mkdir(generalDirectoryUri);
-  }
-
-  const inboxIndexUri = getInboxIndexUri(normalizedBaseUri);
-  try {
-    const existing = await vaultFs.readFile(inboxIndexUri, {encoding: 'utf8'});
-    if (existing === body) {
-      return;
-    }
-  } catch {
-    // Missing or unreadable: write a new index below.
-  }
-
-  await vaultFs.writeFile(inboxIndexUri, body, {
-    encoding: 'utf8',
-    mimeType: 'text/markdown',
-  });
-}
-
-export async function refreshInboxMarkdownIndex(baseUri: string): Promise<void> {
-  if (isDevMockVaultBaseUri(baseUri)) {
-    const devStorage = getDevStorage();
-    await devStorage.refreshInboxMarkdownIndex(baseUri);
-    return;
-  }
-
-  const normalizedBaseUri = normalizeVaultBaseUri(baseUri);
-  const inboxRows = await listMarkdownFilesInDirectory(
-    getInboxDirectoryUri(normalizedBaseUri),
-  );
-  await writeInboxMarkdownIndexFromMarkdownFileNames(
-    normalizedBaseUri,
-    inboxRows.map(row => row.name),
-  );
 }
 
 export async function readNote(noteUri: string): Promise<NoteDetail> {
@@ -472,8 +405,6 @@ export async function createNote(
     mimeType: 'text/markdown',
   });
 
-  await refreshInboxMarkdownIndex(normalizedBaseUri);
-
   return {
     lastModified: Date.now(),
     name: fileName,
@@ -517,8 +448,6 @@ export async function deleteInboxNotes(
     }
     await vaultFs.unlink(normalizedNoteUri);
   }
-
-  await refreshInboxMarkdownIndex(normalizedBaseUri);
 }
 
 async function persistPlaylistKnownSync(

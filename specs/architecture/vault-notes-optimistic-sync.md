@@ -14,7 +14,6 @@ The same pattern applies to:
 
 - The source of truth is the markdown files currently present in `Inbox/` under the selected vault directory.
 - The in-app notes list is a projection of that file system state.
-- `General/Inbox.md` remains a generated index file and not user-authored source of truth.
 
 ## Mutation flow
 
@@ -30,7 +29,7 @@ For create specifically:
    - then `stem-2.md`, `stem-3.md`, ...
    - never chain suffixes like `stem-1-1.md`
 2. The notes list adds or replaces the created `NoteSummary` in memory and sorts by `lastModified` descending.
-3. A silent background refresh calls `listInboxNotesAndSyncIndex(baseUri)` to reconcile with disk.
+3. A silent background refresh calls `listNotes(baseUri)` to reconcile with disk.
 
 ## Create collision strategy
 
@@ -55,5 +54,5 @@ For create specifically:
 Edit and delete should follow the same contract:
 
 - Apply a deterministic optimistic update to the in-memory list.
-- Trigger a silent background reconciliation with `listInboxNotesAndSyncIndex(baseUri)`.
+- Trigger a silent background reconciliation with `listNotes(baseUri)`.
 - Keep mutation behavior Android-specific with SAF constraints in mind.

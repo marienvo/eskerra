@@ -62,7 +62,6 @@ import {
   renameVaultMarkdownNote,
   renameVaultTreeDirectory,
   saveNoteMarkdown,
-  syncInboxMarkdownIndex,
   writeVaultLocalSettings,
 } from '../lib/vaultBootstrap';
 import {
@@ -1784,7 +1783,6 @@ export function useMainWindowWorkspace(options: {
       try {
         await setVaultSession(root);
         await bootstrapVaultLayout(root, fs);
-        await syncInboxMarkdownIndex(root, fs);
         const shared = await readVaultSettings(root, fs);
         setVaultSettings(shared);
         let local = await readVaultLocalSettings(root, fs);
@@ -2198,9 +2196,6 @@ export function useMainWindowWorkspace(options: {
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
-      void syncInboxMarkdownIndex(vaultRoot, fs).catch(() => {
-        // ignore: transient FS race
-      });
       setFsRefreshNonce(n => n + 1);
       void (async () => {
         try {
