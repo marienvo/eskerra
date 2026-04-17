@@ -13,11 +13,17 @@ import {
   type PodcastPlayerPlaybackState,
   type VaultFilesystem,
 } from '@eskerra/core';
+import {invoke} from '@tauri-apps/api/core';
 import {useMachine} from '@xstate/react';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react';
 import {waitFor} from 'xstate';
 
-import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
+import {
+  getDesktopAudioPlayer,
+  isAbortError,
+  notifyDesktopMprisArtworkReady,
+} from '../lib/htmlAudioPlayer';
+import {peekCachedArtworkUri, resolveArtworkUri} from '../lib/podcasts/artworkCacheDesktop';
 import {
   markDesktopEpisodeAsPlayed,
   markDesktopEpisodeAsPlayedAndRefreshCatalog,
@@ -35,6 +41,56 @@ const NEAR_END_SUBSTATES = new Set<PodcastPlayerPlaybackState>([
   'nearEndPaused',
   'ended',
 ]);
+
+async function cacheRemoteArtworkToFileUri(remoteUrl: string): Promise<string | null> {
+  try {
+    return await invoke<string>('media_cache_artwork', {url: remoteUrl});
+  } catch {
+    return null;
+  }
+}
+
+/** When RSS channel artwork URL is not yet in memory cache, resolve + download in the background for MPRIS. */
+function scheduleMprisChannelArtwork(episodeId: string, rssFeedUrl: string): void {
+  void (async () => {
+    let remote: string | null;
+    try {
+      remote = await resolveArtworkUri(rssFeedUrl);
+    } catch {
+      remote = null;
+    }
+    if (!remote) {
+      return;
+    }
+    const file = await cacheRemoteArtworkToFileUri(remote);
+    if (file) {
+      await notifyDesktopMprisArtworkReady(episodeId, file);
+    }
+  })();
+}
+
+/**
+ * Returns a `file://` cover URI when the feed artwork is already known (peek hit);
+ * otherwise schedules background resolve + cache and returns `undefined`.
+ */
+async function channelArtworkFileUriForMpris(
+  episodeId: string,
+  rssFeedUrl: string | undefined,
+): Promise<string | undefined> {
+  if (!rssFeedUrl) {
+    return undefined;
+  }
+  const peek = peekCachedArtworkUri(rssFeedUrl);
+  if (peek === null) {
+    return undefined;
+  }
+  if (peek === undefined) {
+    scheduleMprisChannelArtwork(episodeId, rssFeedUrl);
+    return undefined;
+  }
+  const file = await cacheRemoteArtworkToFileUri(peek);
+  return file ?? undefined;
+}
 
 function clampSeekMs(
   positionMs: number,
@@ -489,12 +545,14 @@ export function useDesktopPodcastPlayback({
       }
 
       try {
+        const artwork = await channelArtworkFileUriForMpris(catalogEp.id, catalogEp.rssFeedUrl);
         await player.primePausedAt(
           {
             artist: catalogEp.seriesName,
             id: catalogEp.id,
             title: catalogEp.title,
             url: trackUrl,
+            ...(artwork ? {artwork} : {}),
           },
           pl.positionMs,
         );
@@ -655,12 +713,14 @@ export function useDesktopPodcastPlayback({
           onError('Device id missing from local settings.');
         }
 
+        const artwork = await channelArtworkFileUriForMpris(ep.id, ep.rssFeedUrl);
         await getDesktopAudioPlayer().play(
           {
             artist: ep.seriesName,
             id: ep.id,
             title: ep.title,
             url: ep.mp3Url,
+            ...(artwork ? {artwork} : {}),
           },
           startPositionMs,
         );

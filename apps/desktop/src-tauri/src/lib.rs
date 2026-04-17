@@ -90,6 +90,7 @@ pub fn run() {
             media::media_set_metadata,
             media::media_set_playback,
             media::media_clear_session,
+            media::media_cache_artwork,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
