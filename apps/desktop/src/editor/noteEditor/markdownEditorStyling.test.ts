@@ -1,16 +1,65 @@
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
-import {codeFolding, ensureSyntaxTree, foldable} from '@codemirror/language';
+import {
+  codeFolding,
+  ensureSyntaxTree,
+  foldable,
+  LanguageDescription,
+} from '@codemirror/language';
+import {languages} from '@codemirror/language-data';
 import {EditorState} from '@codemirror/state';
 import {highlightTree} from '@lezer/highlight';
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 
 import {
   markdownEditorBlockLineClasses,
   noteMarkdownHighlightStyle,
   noteMarkdownListItemFoldService,
+  noteMarkdownNestedCodeHighlighter,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownEskerra} from './markdownEskerraLanguage';
+
+beforeAll(async () => {
+  const ts = LanguageDescription.matchLanguageName(languages, 'ts', true);
+  if (!(ts instanceof LanguageDescription)) {
+    throw new Error('Expected TypeScript in @codemirror/language-data');
+  }
+  await ts.load();
+});
+
+function classTokens(classStr: string | undefined): string[] {
+  return classStr ? classStr.trim().split(/\s+/).filter(Boolean) : [];
+}
+
+function innermostHighlightAt(
+  docText: string,
+  pos: number,
+  highlighters: Parameters<typeof highlightTree>[1],
+  useCodeLanguages: boolean,
+): string | undefined {
+  const state = EditorState.create({
+    doc: docText,
+    extensions: markdownEskerra({
+      base: commonmarkLanguage,
+      extensions: noteMarkdownParserExtensions,
+      ...(useCodeLanguages ? {codeLanguages: languages} : {}),
+    }),
+  });
+  const tree = ensureSyntaxTree(state, state.doc.length, 20_000);
+  expect(tree).not.toBeNull();
+  let bestLen = Infinity;
+  let bestCls: string | undefined;
+  highlightTree(tree!, highlighters, (from, to, classes) => {
+    if (pos >= from && pos < to) {
+      const len = to - from;
+      if (len < bestLen) {
+        bestLen = len;
+        bestCls = classes;
+      }
+    }
+  });
+  return bestCls;
+}
 
 function lineClassSets(md: string): Record<number, string[]> {
   const state = EditorState.create({
@@ -192,5 +241,53 @@ describe('noteMarkdown equal-highlight highlighting', () => {
     expect(innermostHighlightClassAt(doc, 0)).toContain('cm-md-equal-highlight-mark');
     expect(innermostHighlightClassAt(doc, 2)).toContain('cm-md-equal-highlight');
     expect(innermostHighlightClassAt(doc, doc.length - 2)).toContain('cm-md-equal-highlight-mark');
+  });
+});
+
+describe('noteMarkdown fenced CodeInfo (fence language id)', () => {
+  it('maps opening fence info to cm-md-fence-info', () => {
+    const doc = '```ts\nx\n```';
+    const pos = doc.indexOf('ts');
+    expect(pos).toBeGreaterThanOrEqual(0);
+    expect(innermostHighlightClassAt(doc, pos)).toContain('cm-md-fence-info');
+  });
+});
+
+describe('noteMarkdown code fence and inline code highlighting', () => {
+  it('inline code inner uses cm-md-code-text without nested cm-md-code', () => {
+    const doc = '`x`';
+    const pos = doc.indexOf('x');
+    const cls = innermostHighlightAt(doc, pos, noteMarkdownHighlightStyle, false);
+    expect(classTokens(cls)).toContain('cm-md-code-text');
+    expect(classTokens(cls)).not.toContain('cm-md-code');
+  });
+
+  it('fenced TypeScript highlights keywords and avoids inline-code pill class on body', () => {
+    const doc = '```ts\nconst a = 1;\n```';
+    const posConst = doc.indexOf('const');
+    const clsKeyword = innermostHighlightAt(
+      doc,
+      posConst,
+      [noteMarkdownHighlightStyle, noteMarkdownNestedCodeHighlighter],
+      true,
+    );
+    expect(
+      classTokens(clsKeyword).some(
+        c => c === 'cm-md-code-hl-keyword' || c === 'cm-md-code-hl-definition-keyword',
+      ),
+    ).toBe(true);
+    expect(classTokens(clsKeyword)).not.toContain('cm-md-code');
+
+    const posDigit = doc.indexOf('1');
+    const clsDigit = innermostHighlightAt(
+      doc,
+      posDigit,
+      [noteMarkdownHighlightStyle, noteMarkdownNestedCodeHighlighter],
+      true,
+    );
+    expect(classTokens(clsDigit).some(c => c === 'cm-md-code-text' || c.startsWith('cm-md-code-hl'))).toBe(
+      true,
+    );
+    expect(classTokens(clsDigit)).not.toContain('cm-md-code');
   });
 });

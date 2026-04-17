@@ -5,6 +5,7 @@ import {
 } from '@codemirror/autocomplete';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {languages} from '@codemirror/language-data';
 import {openSearchPanel, search, searchKeymap} from '@codemirror/search';
 import {
   Compartment,
@@ -574,6 +575,7 @@ export function buildNoteMarkdownCellExtensions(
     markdownEskerra({
       base: commonmarkLanguage,
       extensions: noteMarkdownParserExtensions,
+      codeLanguages: languages,
     }),
     ...noteMarkdownEditorAppearance,
     history(),

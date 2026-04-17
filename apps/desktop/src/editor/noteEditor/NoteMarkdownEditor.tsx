@@ -6,6 +6,7 @@ import {
   unfoldAll,
 } from '@codemirror/language';
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {languages} from '@codemirror/language-data';
 import {search, searchKeymap, searchPanelOpen} from '@codemirror/search';
 import {
   Compartment,
@@ -772,6 +773,7 @@ const NoteMarkdownEditorImpl = forwardRef<
       markdownEskerra({
         base: commonmarkLanguage,
         extensions: noteMarkdownParserExtensions,
+        codeLanguages: languages,
       }),
       noteMarkdownListItemFoldService,
       ...noteMarkdownEditorAppearance,
