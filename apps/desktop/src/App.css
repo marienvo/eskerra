@@ -205,12 +205,11 @@ a:focus:not(:focus-visible) {
   min-height: var(--window-title-bar-chrome-height);
   box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
   background: transparent;
   box-shadow: none;
   outline: none;
-  margin-inline-start: 6px;
   transition:
     border-color 0.12s ease,
     background 0.12s ease;
@@ -261,7 +260,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   justify-content: flex-start;
   border-inline-end: none;
-  border-radius: 3px 0 0 3px;
+  border-radius: 4px 0 0 4px;
 }
 
 .today-hub-workspace-select__chevron {
@@ -271,7 +270,7 @@ a:focus:not(:focus-visible) {
   max-width: 1.35rem;
   padding-inline: 0;
   justify-content: center;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 4px 4px 0;
 }
 
 .today-hub-workspace-select__icon {
@@ -1489,7 +1488,7 @@ body.editor-tab-strip--dragging {
   display: flex;
   align-items: stretch;
   max-width: 10.5rem;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid transparent;
   box-sizing: border-box;
   background: transparent;
@@ -1519,7 +1518,7 @@ body.editor-tab-strip--dragging {
   gap: 0;
   padding: 0 0.02rem 0 0.22rem;
   border: none;
-  border-radius: 3px 0 0 3px;
+  border-radius: 4px 0 0 4px;
   background: transparent;
   cursor: default;
   color: var(--color-text);
