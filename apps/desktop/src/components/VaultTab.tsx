@@ -662,6 +662,9 @@ export function VaultTab({
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const confirmDeleteNoteActionRef = useRef<HTMLButtonElement | null>(null);
+  const confirmDeleteFolderActionRef = useRef<HTMLButtonElement | null>(null);
+  const confirmBulkDeleteActionRef = useRef<HTMLButtonElement | null>(null);
   const vaultMarkdownRefsRef = useRef(vaultMarkdownRefs);
   const onMoveVaultTreeItemRef = useRef(onMoveVaultTreeItem);
   const onBulkMoveVaultTreeItemsRef = useRef(onBulkMoveVaultTreeItems);
@@ -997,7 +1000,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmDeleteNoteActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">Delete note</AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               Delete this note? This cannot be undone.
@@ -1010,6 +1021,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmDeleteNoteActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}
@@ -1037,7 +1049,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmDeleteFolderActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">Delete folder</AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               Delete this folder and everything inside it? This cannot be undone.
@@ -1050,6 +1070,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmDeleteFolderActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}
@@ -1077,7 +1098,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmBulkDeleteActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">
               Delete multiple items
             </AlertDialog.Title>
@@ -1104,6 +1133,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmBulkDeleteActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}
