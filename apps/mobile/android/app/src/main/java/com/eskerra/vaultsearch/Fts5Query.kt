@@ -16,6 +16,7 @@ object Fts5Query {
         continue
       }
       t = t.replace("\"", " ").replace("(", " ").replace(")", " ").replace("\\", " ")
+      t = t.trim().replace(Regex("\\s+"), " ")
       t = t.trimStart('-')
       if (t.isEmpty()) {
         continue

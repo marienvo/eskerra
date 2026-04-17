@@ -14,6 +14,28 @@ import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
 const DEFAULT_DEBOUNCE_MS = 300;
 const SEARCHING_STATUS_VISIBLE_DELAY_MS = 100;
 const PREVIOUS_RESULTS_HOLD_MS = 100;
+/** Dev-only: stale native events ignored (searchId / vaultInstanceId mismatch). */
+let droppedVaultSearchEvents = 0;
+
+/** @internal test helper */
+export function resetDroppedVaultSearchEventsCountForTest(): void {
+  droppedVaultSearchEvents = 0;
+}
+
+/** @internal test helper */
+export function getDroppedVaultSearchEventsCountForTest(): number {
+  return droppedVaultSearchEvents;
+}
+
+const RECONCILE_STALE_MS = 10_000;
+
+function logDroppedVaultSearchEvent(reason: 'searchId' | 'vaultInstanceId', detail: string) {
+  droppedVaultSearchEvents += 1;
+  if (__DEV__) {
+    const dbg: typeof console.debug = console.debug.bind(console);
+    dbg(`[useVaultContentSearch] dropped stale event (${reason}) #${droppedVaultSearchEvents}: ${detail}`);
+  }
+}
 
 export function isVaultSearchEventCurrent(
   payloadSearchId: string,
@@ -87,6 +109,10 @@ export type UseVaultContentSearchMobileOptions = {
   open: boolean;
   baseUri: string | null;
   vaultInstanceId: string | null;
+  /** When false, pre-search reconcile is skipped. */
+  indexReady?: boolean;
+  /** From native open/getIndexStatus; used to throttle reconcile. */
+  lastReconciledAt?: number | null;
   debounceMs?: number;
 };
 
@@ -94,6 +120,8 @@ export function useVaultContentSearch({
   open,
   baseUri,
   vaultInstanceId,
+  indexReady = false,
+  lastReconciledAt = null,
   debounceMs = DEFAULT_DEBOUNCE_MS,
 }: UseVaultContentSearchMobileOptions) {
   const [query, setQuery] = useState('');
@@ -116,6 +144,21 @@ export function useVaultContentSearch({
   const pendingFlushNotesRef = useRef<VaultSearchNoteResult[]>([]);
   const pendingProgressRef = useRef<VaultSearchProgress | null>(null);
   const notesFlushRafRef = useRef<number | null>(null);
+  /** At most one pre-search reconcile attempt per focus session (open + baseUri). */
+  const reconciledForSessionRef = useRef(false);
+  const indexReadyRef = useRef(indexReady);
+  const lastReconciledAtRef = useRef(lastReconciledAt);
+
+  useEffect(() => {
+    indexReadyRef.current = indexReady;
+    lastReconciledAtRef.current = lastReconciledAt;
+  }, [indexReady, lastReconciledAt]);
+
+  useEffect(() => {
+    if (open) {
+      reconciledForSessionRef.current = false;
+    }
+  }, [open, baseUri]);
 
   const cancelNotesFlushRaf = useCallback(() => {
     if (notesFlushRafRef.current != null) {
@@ -214,9 +257,14 @@ export function useVaultContentSearch({
 
     const onUpdate = (event: VaultSearchUpdatePayload) => {
       if (!isVaultSearchEventCurrent(event.searchId, searchIdRef.current)) {
+        logDroppedVaultSearchEvent('searchId', `payload=${event.searchId} current=${searchIdRef.current}`);
         return;
       }
       if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+        logDroppedVaultSearchEvent(
+          'vaultInstanceId',
+          `payload=${event.vaultInstanceId ?? ''} current=${vaultInstanceIdRef.current ?? ''}`,
+        );
         return;
       }
       clearResultHoldTimer();
@@ -244,9 +292,14 @@ export function useVaultContentSearch({
 
     const onDone = (event: VaultSearchDonePayload) => {
       if (!isVaultSearchEventCurrent(event.searchId, searchIdRef.current)) {
+        logDroppedVaultSearchEvent('searchId', `payload=${event.searchId} current=${searchIdRef.current}`);
         return;
       }
       if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+        logDroppedVaultSearchEvent(
+          'vaultInstanceId',
+          `payload=${event.vaultInstanceId ?? ''} current=${vaultInstanceIdRef.current ?? ''}`,
+        );
         return;
       }
       clearResultHoldTimer();
@@ -349,6 +402,18 @@ export function useVaultContentSearch({
       setScanDone(false);
       (async () => {
         await eskerraVaultSearch.cancel().catch(() => undefined);
+        if (!reconciledForSessionRef.current) {
+          reconciledForSessionRef.current = true;
+          const ready = indexReadyRef.current;
+          const lastRec = lastReconciledAtRef.current;
+          const stale =
+            lastRec == null ||
+            !Number.isFinite(lastRec) ||
+            Date.now() - lastRec > RECONCILE_STALE_MS;
+          if (ready && stale) {
+            await eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
+          }
+        }
         await eskerraVaultSearch.start(baseUri, id, q).catch(() => {
           searchIdRef.current = null;
           clearResultHoldTimer();

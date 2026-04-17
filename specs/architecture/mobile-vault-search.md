@@ -46,7 +46,15 @@ On **Vault** route focus (`VaultScreen`):
 ## Events (bridge)
 
 - `vault-search:update` / `vault-search:done` — `{ searchId, vaultInstanceId?, notes?, progress }`.
-- `vault-search:index-status` — `{ vaultInstanceId?, status, indexedNotes?, added?, updated?, removed?, … }`.
+- `vault-search:index-status` — `{ vaultInstanceId?, status, indexedNotes?, added?, updated?, removed?, reason?, skippedNotes?, … }` (`reason` e.g. `full-rebuild`, `reconcile`; `skippedNotes` on rebuild-ready after indexing).
+
+## JS search screen
+
+`VaultSearchScreen` passes **`indexReady`** and **`lastReconciledAt`** from `open()` into `useVaultContentSearch`. Before the **first** `start()` in a focus session, if the index is ready and `lastReconciledAt` is older than **10 s** (or missing), the hook runs a single best-effort **`reconcile(baseUri)`** (guarded so it does not repeat on every keystroke). Stale native events increment a dev-only dropped counter and **`console.debug`** when `searchId` or `vaultInstanceId` mismatches.
+
+## JVM / Robolectric tests
+
+Robolectric’s host SQLite build **does not load FTS5**, so unit tests avoid creating the FTS virtual table there; schema-migration / instance-id tests use **`index_meta` only**. Concurrency uses a plain table + WAL + cross-thread transaction. FTS5 behaviour is covered on-device / in integration and by pure `Fts5Query` / `SearchRanker` tests.
 
 ## `vaultInstanceId` rotation
 

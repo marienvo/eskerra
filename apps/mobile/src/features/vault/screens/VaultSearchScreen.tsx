@@ -45,6 +45,8 @@ function SearchVaultHeaderBackButton({onPress}: SearchVaultHeaderBackButtonProps
 export function VaultSearchScreen({navigation}: Props) {
   const {baseUri} = useVaultContext();
   const [vaultInstanceId, setVaultInstanceId] = useState<string | null>(null);
+  const [indexReady, setIndexReady] = useState(false);
+  const [lastReconciledAt, setLastReconciledAt] = useState<number | null>(null);
   const [hookOpen, setHookOpen] = useState(true);
 
   const goBack = useCallback(() => {
@@ -66,6 +68,8 @@ export function VaultSearchScreen({navigation}: Props) {
         const st = await eskerraVaultSearch.open(baseUri);
         if (!cancelled) {
           setVaultInstanceId(st.vaultInstanceId);
+          setIndexReady(st.indexReady);
+          setLastReconciledAt(st.lastReconciledAt);
         }
       } catch {
         if (!cancelled) {
@@ -113,6 +117,8 @@ export function VaultSearchScreen({navigation}: Props) {
     open: hookOpen,
     baseUri,
     vaultInstanceId,
+    indexReady,
+    lastReconciledAt,
   });
 
   const colorMode = useColorMode();
@@ -154,6 +160,7 @@ export function VaultSearchScreen({navigation}: Props) {
       <Box style={styles.inputRow}>
         <Input variant="outline" style={styles.input}>
           <InputField
+            testID="vault-search-input"
             autoFocus
             placeholder="Search note contents…"
             placeholderTextColor={muted}
