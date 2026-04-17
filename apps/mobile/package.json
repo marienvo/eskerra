@@ -15,11 +15,15 @@
     "lint": "eslint .",
     "postinstall": "patch-package",
     "start": "react-native start",
+    "storybook": "WITH_STORYBOOK=1 react-native start",
+    "storybook:android": "WITH_STORYBOOK=1 ENTRY_FILE=index.storybook.js react-native run-android",
     "test": "jest",
     "test:scripts": "node --test ../../scripts/bump-release-version-lib.test.mjs ../../scripts/sync-app-version-artifacts-lib.test.mjs"
   },
   "dependencies": {
     "@eskerra/core": "*",
+    "@eskerra/ds-mobile": "*",
+    "@eskerra/tokens": "*",
     "@gluestack-style/react": "^1.0.57",
     "@gluestack-ui/config": "^1.1.20",
     "@gluestack-ui/themed": "^1.1.73",
@@ -51,6 +55,10 @@
     "xstate": "^5.30.0"
   },
   "devDependencies": {
+    "@storybook/addon-ondevice-actions": "8.6.4",
+    "@storybook/addon-ondevice-controls": "8.6.4",
+    "@storybook/react": "8.6.4",
+    "@storybook/react-native": "8.6.4",
     "@babel/core": "^7.25.2",
     "@babel/preset-env": "^7.25.3",
     "@babel/runtime": "^7.25.0",

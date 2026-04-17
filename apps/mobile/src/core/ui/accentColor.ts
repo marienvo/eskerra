@@ -1,2 +1,4 @@
-/** App accent; see `specs/design/accent-colors.md`. */
-export const ACCENT_COLOR = '#4FAFE6';
+import {calmEditorial} from '@eskerra/tokens';
+
+/** App accent — canonical value from @eskerra/tokens; see specs/design/accent-colors.md */
+export const ACCENT_COLOR = calmEditorial.accent;

@@ -1,0 +1,5 @@
+.root {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 12px 0;
+}

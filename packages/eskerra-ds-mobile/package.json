@@ -1,0 +1,48 @@
+{
+  "name": "@eskerra/ds-mobile",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "storybook:web": "storybook dev -p 6007 -c .storybook-web",
+    "build-storybook-web": "storybook build -c .storybook-web -o storybook-static-web",
+    "test-storybook-web": "npm run build-storybook-web && npx playwright install chromium && concurrently -k -s first \"http-server storybook-static-web -p 6007 -c-1 --silent\" \"wait-on http://127.0.0.1:6007 && test-storybook -c .storybook-web --url http://127.0.0.1:6007\""
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-native": ">=0.76.0"
+  },
+  "dependencies": {
+    "@eskerra/tokens": "*"
+  },
+  "devDependencies": {
+    "@storybook/addon-a11y": "^8.6.14",
+    "@storybook/addon-essentials": "^8.6.14",
+    "@storybook/react": "^8.6.14",
+    "@storybook/react-vite": "^8.6.14",
+    "@storybook/test": "^8.6.14",
+    "@storybook/test-runner": "^0.23.0",
+    "concurrently": "^9.1.2",
+    "http-server": "^14.1.1",
+    "wait-on": "^8.0.1",
+    "@types/react": "^19.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.2",
+    "storybook": "^8.6.14",
+    "typescript": "~5.9.3",
+    "vite": "6.0.11",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,31 @@
+---
+description: Storybook CSF3 contracts, play functions, reference vs sandbox stories
+globs: packages/eskerra-ds-desktop/**/* packages/eskerra-ds-mobile/**/* **/__stories__/** **/__sandbox__/**
+alwaysApply: false
+---
+
+# Storybook contracts
+
+## Runtimes
+
+- **Desktop web:** stories only under `packages/eskerra-ds-desktop` (not shared with mobile).
+- **Mobile:** on-device and RN-Web share the **same** story files under `packages/eskerra-ds-mobile`.
+
+## L2 — Design-system contract stories
+
+- Location: `packages/eskerra-ds-*/**/__stories__/` (and `__stories__/reference/` for static galleries).
+- **Interactive components:** mandatory variants (Default, Disabled where applicable, Loading, LongContent, focus/pressed, A11y); use **`play`** from `@storybook/test` to assert behavior (e.g. disabled control does not fire handlers).
+- **Static reference stories:** allowed for token palettes, typography specimens, icon inventories, surface references — tag `reference` / `docs-only`; place under `__stories__/reference/`; no `play` required. Must not replace contract coverage on interactive components.
+
+## L3 — App sandbox stories
+
+- Path: `apps/*/src/**/__sandbox__/*.stories.tsx`; tag **`sandbox`**; not in official docs publish set; **`play` not required**.
+
+## Mobile-only behavior
+
+- Stories that depend on Reanimated, gesture-handler, or other native-only behavior: tag **`native-only`** so the RN-Web test-runner can skip them; on-device Storybook must still cover them.
+
+## Anti-patterns
+
+- No “visual-only” excuse for **interactive** L2 components without `play` + a11y coverage.
+- No product compositions (`EditorWorkspaceToolbar`, vault trees, …) as L2 contract stories — use L3 sandbox if needed.

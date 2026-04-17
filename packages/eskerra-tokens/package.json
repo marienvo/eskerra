@@ -1,0 +1,25 @@
+{
+  "name": "@eskerra/tokens",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./desktop-root.css": "./generated/desktop-root.css"
+  },
+  "scripts": {
+    "generate": "node --experimental-strip-types ./scripts/generate.ts",
+    "check:generated": "node --experimental-strip-types ./scripts/generate.ts --check",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

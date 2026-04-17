@@ -6,6 +6,8 @@ import {createRoot} from 'react-dom/client';
 import '@fontsource-variable/inter';
 import 'material-icons/iconfont/filled.css';
 
+import '@eskerra/tokens/desktop-root.css';
+
 import {AppRoot} from './Root.tsx';
 import {ErrorBoundary} from './ErrorBoundary';
 

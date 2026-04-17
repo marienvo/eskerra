@@ -1,0 +1,29 @@
+---
+description: Design tokens, DS package boundaries, Gluestack policy, layering L1/L2/L3
+globs: packages/eskerra-tokens/**/* packages/eskerra-ds-desktop/**/* packages/eskerra-ds-mobile/**/* apps/mobile/src/**/* apps/desktop/src/shell/**/*
+alwaysApply: false
+---
+
+# Design system
+
+Authoritative architecture: `specs/design/design-system-architecture.md`. Token generator contract: `specs/design/design-tokens-contract.md`.
+
+## Layers
+
+- **L1 `@eskerra/tokens`** — values and generators only; no React components.
+- **L2 `@eskerra/ds-desktop` / `@eskerra/ds-mobile`** — product-agnostic primitives; no vault/inbox/episode naming; no business logic.
+- **L3** — `apps/desktop/src/shell`, `apps/mobile/src/features`; composes DS + product state.
+
+## Desktop DS boundary
+
+Shell chrome (**rail `TabButton`, pane headers, title bar, splits, editor toolbar, dialogs with product copy**) stays in **`apps/desktop/src/shell`**, not in `@eskerra/ds-desktop`. DS holds **Surface, Text, Divider, IconGlyph, Button, IconButton, Toggle**, etc.
+
+## Gluestack (`apps/mobile`)
+
+- **Allowed:** direct `@gluestack-ui/*` in `apps/mobile/src/features/**` only when no `@eskerra/ds-mobile` primitive exists yet.
+- **Required promotion:** any control reused across **2+** features, or any **token-bearing** control (Button, Text, ListRow, Surface, …), must move into `@eskerra/ds-mobile`.
+- **Forbidden:** `@gluestack-ui/*` imports inside `packages/eskerra-ds-mobile`. **Forbidden:** permanent wrappers that re-export Gluestack prop shapes as the Eskerra API.
+
+## Imports
+
+- Apps depend on `@eskerra/tokens`, `@eskerra/ds-desktop`, or `@eskerra/ds-mobile`; **do not** import one app’s `src` from the other app’s UI.

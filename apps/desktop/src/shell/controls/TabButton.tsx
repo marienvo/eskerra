@@ -1,7 +1,7 @@
 import type {ButtonHTMLAttributes} from 'react';
 
-import type {DesktopMaterialIconSizePx} from '../components/MaterialIcon';
-import {MaterialIcon} from '../components/MaterialIcon';
+import type {DesktopIconGlyphSizePx} from '@eskerra/ds-desktop';
+import {IconGlyph} from '@eskerra/ds-desktop';
 
 export type TabButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -11,7 +11,7 @@ export type TabButtonProps = Omit<
   /** Selected state: white icon, no pill background (`.rail-tab.active`). */
   active: boolean;
   icon: string;
-  iconSize?: DesktopMaterialIconSizePx;
+  iconSize?: DesktopIconGlyphSizePx;
   tooltip: string;
   tooltipPlacement?: string;
   /**
@@ -50,7 +50,7 @@ export function TabButton({
       {...rest}
       {...pressedProp}
     >
-      <MaterialIcon name={icon} size={iconSize} aria-hidden />
+      <IconGlyph name={icon} size={iconSize} aria-hidden />
     </button>
   );
 }

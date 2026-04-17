@@ -88,3 +88,9 @@ yarn-error.log
 
 # Per-device vault settings (copy from settings-local.example.json locally)
 mock-vault/.eskerra/settings-local.json
+
+# Storybook
+packages/eskerra-ds-desktop/storybook-static/
+packages/eskerra-ds-mobile/storybook-static-web/
+packages/eskerra-ds-mobile/.storybook/storybook.requires.ts
+packages/eskerra-ds-mobile/.storybook/storybook.requires.js

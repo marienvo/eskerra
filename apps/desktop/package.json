@@ -20,6 +20,8 @@
     "generate-emoji-variation-bases": "node scripts/generate-emoji-variation-bases.mjs"
   },
   "dependencies": {
+    "@eskerra/ds-desktop": "*",
+    "@eskerra/tokens": "*",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-angular": "^0.1.4",

@@ -1,0 +1,8 @@
+.root {
+  box-sizing: border-box;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}

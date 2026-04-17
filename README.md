@@ -27,7 +27,11 @@ Both apps use the same **vault layout** on disk: user-chosen root folder, then `
 | `npm run mobile:android` | Build/run the Android app on a device or emulator |
 | `npm run desktop` | **Desktop:** `tauri dev` (Vite + native window) |
 | `npm run desktop:build` | **Desktop:** release semver bump (same rules as APK) + production web build + `tauri build` |
-| `npm test` | `@eskerra/core` (Vitest) + mobile (Jest) + release helper tests |
+| `npm test` | `@eskerra/core` (Vitest) + `@eskerra/tokens` + `@eskerra/ds-desktop` + `@eskerra/ds-mobile` + mobile RN-Web Storybook **build** + mobile (Jest) + release helper tests |
+| `npm run storybook:desktop -w @eskerra/ds-desktop` | Desktop design system Storybook (web, Vite) |
+| `npm run storybook:android -w @eskerra/mobile` | Mobile design system Storybook **on-device** (separate Metro entry) |
+| `npm run storybook:web -w @eskerra/ds-mobile` | Mobile DS Storybook **RN-Web** (docs / fast review, port 6007) |
+| `npm run test:storybook-web` | Playwright + test-runner against static RN-Web Storybook (downloads Chromium on first run) |
 | `npm run lint` | ESLint for mobile + desktop |
 
 Workspace-scoped scripts (same as above, explicit):
