@@ -1,6 +1,7 @@
 package com.eskerra.vaultsearch
 
-import android.database.sqlite.SQLiteDatabase
+/** Bundled SQLite (requery) — platform SQLite does not compile the fts5 module. */
+import io.requery.android.database.sqlite.SQLiteDatabase
 
 object VaultSearchSchema {
   const val SCHEMA_VERSION = 1

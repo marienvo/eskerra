@@ -1,8 +1,9 @@
 package com.eskerra.vaultsearch
 
 import android.content.ContentResolver
-import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
+/** Bundled SQLite (requery) — platform SQLite does not compile the fts5 module on any Android version. */
+import io.requery.android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import com.facebook.react.bridge.Arguments
@@ -205,7 +206,9 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
           null,
         )
       db.enableWriteAheadLogging()
-      db.execSQL("PRAGMA journal_mode=WAL;")
+      /** [enableWriteAheadLogging] already sets journal_mode=WAL. Running `execSQL("PRAGMA journal_mode=WAL")`
+       *  throws "Queries can be performed using SQLiteDatabase query or rawQuery methods only" because the
+       *  PRAGMA returns a row and execSQL rejects result-producing statements. */
       db.execSQL("PRAGMA synchronous=NORMAL;")
       writeDb = db
       dbPath = path
