@@ -1,7 +1,7 @@
 import {useFocusEffect} from '@react-navigation/native';
 import type {StackHeaderRightProps} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
-import {type ReactNode, useCallback, useEffect, useRef, useState} from 'react';
+import {type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {Pressable, StyleSheet} from 'react-native';
 import Markdown from 'react-native-markdown-display';
@@ -13,6 +13,7 @@ import {normalizeNoteUri} from '../../../core/storage/noteUriNormalize';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {isNavigateToAddNoteAction} from '../../../navigation/navigationActionGuards';
 import {VaultStackParamList} from '../../../navigation/types';
+import {createCalloutMarkdownRules} from '../markdown/calloutRule';
 import {useNotes} from '../hooks/useNotes';
 
 type NoteDetailScreenProps = StackScreenProps<VaultStackParamList, 'NoteDetail'>;
@@ -76,6 +77,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
   );
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const calloutRules = useMemo(() => createCalloutMarkdownRules(colorMode), [colorMode]);
 
   const noteText = content || '';
   const {frontmatter, body} = splitYamlFrontmatter(noteText);
@@ -241,6 +243,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       {!isLoading && !error ? (
         <ScrollView contentContainerStyle={styles.content}>
           <Markdown
+            rules={calloutRules}
             style={{
               body: {color: markdownTextColor},
               code_block: {color: markdownTextColor},

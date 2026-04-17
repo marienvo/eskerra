@@ -26,6 +26,7 @@ The following are **identical on disk** once a vault root is chosen:
 | ---------- | ------- | --------------------------- |
 | Choose vault folder | Yes (SAF) | Yes (native folder dialog) |
 | Read/write Inbox markdown | Yes | Yes |
+| Callout / alert markdown (`> [!type]`) | Yes (vault note detail reader) | Yes (CodeMirror vault editor + hub/table static rich) |
 | Edit vault display name (`settings-local.json`) | Yes | Yes |
 | Stream MP3 / resume from `playlist.json` | Yes (`react-native-track-player`) | Yes (`HTMLAudioElement` + Linux MPRIS via souvlaki) |
 | Episodes list from vault `General/` podcast markdown | Yes (sectioned list) | Yes (desktop parses the same `*- podcasts.md` / RSS pie rules via TypeScript under `apps/desktop/src/lib/podcasts/`) |

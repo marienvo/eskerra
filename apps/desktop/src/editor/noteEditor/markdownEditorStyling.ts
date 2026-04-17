@@ -20,6 +20,7 @@ import {
 } from '@codemirror/view';
 import {tags, styleTags, Tag, tagHighlighter} from '@lezer/highlight';
 
+import {markdownCalloutsPlugin} from './markdownCallouts';
 import {markdownMarkerFocusLineExtension} from './markdownMarkerFocusLine';
 
 const SYNTAX_TREE_BUDGET_MS = 200;
@@ -530,6 +531,7 @@ export const noteMarkdownEditorAppearance: Extension[] = [
   syntaxHighlighting(markdownHighlightStyle),
   syntaxHighlighting(noteMarkdownNestedCodeHighlighter),
   markdownBlockLineStyle,
+  markdownCalloutsPlugin,
   markdownMarkerFocusLineExtension,
 ];
 

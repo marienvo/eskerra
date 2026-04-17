@@ -2878,6 +2878,170 @@ button.primary.destructive {
   padding: 0;
 }
 
+/* Callout palette (Obsidian-style `> [!type]`); used by `.cm-eskerra-callout-line--color-*`. */
+[data-app-surface='capture'] .note-markdown-editor-host {
+  --nb-callout-blue: #448aff;
+  --nb-callout-cyan: #00bcd4;
+  --nb-callout-teal: #009688;
+  --nb-callout-green: #43a047;
+  --nb-callout-yellow: #fbc02d;
+  --nb-callout-orange: #fb8c00;
+  --nb-callout-red: #e53935;
+  --nb-callout-purple: #8e24aa;
+  --nb-callout-grey: #78909c;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line {
+  --nb-callout-color: var(--nb-callout-grey);
+  border-inline-start: 3px solid var(--nb-callout-color);
+  padding-inline-start: 0.45rem;
+  padding-block: 0.12rem;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--nb-callout-color) 11%, transparent);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-blue,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-blue,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-blue {
+  --nb-callout-color: var(--nb-callout-blue);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-cyan,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-cyan,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-cyan {
+  --nb-callout-color: var(--nb-callout-cyan);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-teal,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-teal,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-teal {
+  --nb-callout-color: var(--nb-callout-teal);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-green,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-green,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-green {
+  --nb-callout-color: var(--nb-callout-green);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-yellow,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-yellow,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-yellow {
+  --nb-callout-color: var(--nb-callout-yellow);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-orange,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-orange,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-orange {
+  --nb-callout-color: var(--nb-callout-orange);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-red,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-red,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-red {
+  --nb-callout-color: var(--nb-callout-red);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-purple,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-purple,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-purple {
+  --nb-callout-color: var(--nb-callout-purple);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--color-grey,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--color-grey,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--color-grey {
+  --nb-callout-color: var(--nb-callout-grey);
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--first,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--first,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--first {
+  padding-block-start: 0.22rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--last,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--last,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--last {
+  padding-block-end: 0.22rem;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-line.cm-eskerra-callout-line--first::before,
+[data-app-surface='capture'] .today-hub-canvas__cell-static-rich .cm-line.cm-eskerra-callout-line--first::before,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--first::before {
+  display: inline-block;
+  font-family: 'Material Icons', sans-serif;
+  font-size: 1.125em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  margin-inline-end: 0.35rem;
+  vertical-align: -0.12em;
+  color: var(--nb-callout-color);
+  content: attr(data-eskerra-callout-icon);
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-eskerra-callout-line--first:not(.cm-eskerra-callout-line--has-custom-title)::after,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--first:not(.cm-eskerra-callout-line--has-custom-title)::after,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line.cm-eskerra-callout-line--first:not(.cm-eskerra-callout-line--has-custom-title)::after {
+  display: inline;
+  margin-inline-start: 0.15rem;
+  font-size: 0.92em;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--nb-callout-color) 72%, var(--nb-editor-text) 28%);
+  content: attr(data-eskerra-callout-default-label);
+}
+
 /*
  * List items: long bare URLs / paths are one unbreakable inline otherwise; the line can wrap
  * immediately after `.cm-md-list-mark` and leave the bullet alone. Let the whole list line
@@ -2898,7 +3062,7 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-md-heading-line):not(.cm-md-list-line):not(.cm-md-hr-line):not(
     .cm-eskerra-table-line
-  ):not(.cm-eskerra-table-line--alt):not([class*='cm-md-fence-line']) {
+  ):not(.cm-eskerra-table-line--alt):not([class*='cm-md-fence-line']):not([class*='cm-eskerra-callout-line']) {
   max-width: 728px;
 }
 
@@ -2950,6 +3114,13 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-fence-info {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-eskerra-callout-label {
   display: none;
 }
 
@@ -3728,6 +3899,16 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell-static-rich {
+  /* Callout palette (parity with `.note-markdown-editor-host`). */
+  --nb-callout-blue: #448aff;
+  --nb-callout-cyan: #00bcd4;
+  --nb-callout-teal: #009688;
+  --nb-callout-green: #43a047;
+  --nb-callout-yellow: #fbc02d;
+  --nb-callout-orange: #fb8c00;
+  --nb-callout-red: #e53935;
+  --nb-callout-purple: #8e24aa;
+  --nb-callout-grey: #78909c;
   display: block;
   box-sizing: border-box;
   min-inline-size: 0;
@@ -3802,6 +3983,13 @@ button.primary.destructive {
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
   .cm-md-external-href {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-eskerra-callout-label {
   display: none;
 }
 
@@ -4358,6 +4546,14 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-fence-info {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-eskerra-callout-label {
   display: none;
 }
 
