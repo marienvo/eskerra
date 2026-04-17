@@ -32,14 +32,6 @@
   },
   "overrides": {
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@eskerra/ds-desktop": {
-      "vite": "6.0.11",
-      "@vitejs/plugin-react": "4.3.4"
-    },
-    "@eskerra/ds-mobile": {
-      "vite": "6.0.11",
-      "@vitejs/plugin-react": "4.3.4"
-    }
+    "react-dom": "19.2.3"
   }
 }

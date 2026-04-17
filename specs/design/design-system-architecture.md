@@ -10,9 +10,11 @@ This document is the normative architecture for Eskerra’s design tokens, deskt
 
 ### Three Storybook runtimes (not “two Storybooks”)
 
+All three runtimes use **Storybook 10.x** (aligned on the `10.3.x` line; `@storybook/react-native` may trail patch behind web packages).
+
 1. **Desktop web Storybook** — `@storybook/react-vite`, only for `eskerra-ds-desktop`. Own story files under that package.
 2. **Mobile on-device Storybook** — `@storybook/react-native`, Android truth for gestures, Reanimated, keyboard, lists, TrackPlayer, etc.
-3. **Mobile RN-Web Storybook** — `@storybook/react-native-web-vite`, same mobile story files as on-device; docs/review + fast CI.
+3. **Mobile RN-Web Storybook** — `@storybook/react-native-web-vite` (official framework; **no** hand-rolled `react-native` → `react-native-web` Vite alias), same mobile story files as on-device; docs/review + fast CI.
 
 **Story sharing:** only **mobile** on-device and mobile RN-Web share stories. **Desktop does not share story files with mobile** — shared are CSF3 conventions and `@eskerra/tokens` values only.
 

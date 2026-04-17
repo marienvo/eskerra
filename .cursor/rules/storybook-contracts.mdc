@@ -14,7 +14,7 @@ alwaysApply: false
 ## L2 — Design-system contract stories
 
 - Location: `packages/eskerra-ds-*/**/__stories__/` (and `__stories__/reference/` for static galleries).
-- **Interactive components:** mandatory variants (Default, Disabled where applicable, Loading, LongContent, focus/pressed, A11y); use **`play`** from `@storybook/test` to assert behavior (e.g. disabled control does not fire handlers).
+- **Interactive components:** mandatory variants (Default, Disabled where applicable, Loading, LongContent, focus/pressed, A11y); use **`play`** from `storybook/test` to assert behavior (e.g. disabled control does not fire handlers).
 - **Static reference stories:** allowed for token palettes, typography specimens, icon inventories, surface references — tag `reference` / `docs-only`; place under `__stories__/reference/`; no `play` required. Must not replace contract coverage on interactive components.
 
 ## L3 — App sandbox stories
