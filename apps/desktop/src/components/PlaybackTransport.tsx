@@ -3,10 +3,11 @@ import {
   DoubleArrowRightIcon,
   PauseIcon,
   PlayIcon,
-  ReloadIcon,
 } from '@radix-ui/react-icons';
 
-export type PlaybackTransportPlayControl = 'loading' | 'paused' | 'playing';
+import type {PlaybackTransportPlayControl} from '@eskerra/core';
+
+export type {PlaybackTransportPlayControl};
 
 export type PlaybackTransportProps = {
   positionLabel: string;
@@ -23,6 +24,73 @@ export type PlaybackTransportProps = {
 /** Radix icons in the playback row (15×15 viewBox, matches editor toolbar chrome). */
 const PLAYBACK_ICON_DIM = {width: 15, height: 15} as const;
 
+const OUTER_R = 6.25;
+const INNER_R = 4;
+const RING_R = 10;
+
+function DualArcSpinner() {
+  const outerLen = 2 * Math.PI * OUTER_R * 0.7;
+  const outerGap = 2 * Math.PI * OUTER_R * 0.3;
+  const innerLen = 2 * Math.PI * INNER_R * 0.55;
+  const innerGap = 2 * Math.PI * INNER_R * 0.45;
+  return (
+    <svg
+      aria-hidden
+      className="app-playback-spinner"
+      height={15}
+      viewBox="0 0 15 15"
+      width={15}
+    >
+      <circle
+        className="app-playback-spinner__arc app-playback-spinner__arc--outer"
+        cx={7.5}
+        cy={7.5}
+        fill="none"
+        r={OUTER_R}
+        stroke="currentColor"
+        strokeDasharray={`${outerLen} ${outerGap}`}
+        strokeLinecap="round"
+        strokeWidth={1.15}
+      />
+      <circle
+        className="app-playback-spinner__arc app-playback-spinner__arc--inner"
+        cx={7.5}
+        cy={7.5}
+        fill="none"
+        r={INNER_R}
+        stroke="currentColor"
+        strokeDasharray={`${innerLen} ${innerGap}`}
+        strokeLinecap="round"
+        strokeWidth={1}
+      />
+    </svg>
+  );
+}
+
+function BufferRingSpinner() {
+  const c = 2 * Math.PI * RING_R;
+  const dash = c * 0.65;
+  return (
+    <svg
+      aria-hidden
+      className="app-playback-chrome-btn__buffer-ring"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="app-playback-spinner__arc app-playback-spinner__arc--outer"
+        cx={12}
+        cy={12}
+        fill="none"
+        r={RING_R}
+        stroke="currentColor"
+        strokeDasharray={`${dash} ${c - dash}`}
+        strokeLinecap="round"
+        strokeWidth={1.25}
+      />
+    </svg>
+  );
+}
+
 /**
  * Playback row: elapsed, skip back, play/pause or loading, skip forward, duration.
  */
@@ -36,9 +104,10 @@ export function PlaybackTransport({
   onTogglePlay,
   variant = 'default',
 }: PlaybackTransportProps) {
-  const isPlaying = playControl === 'playing';
   const isLoading = playControl === 'loading';
-  const playLabel = isLoading ? 'Loading' : isPlaying ? 'Pause' : 'Play';
+  const isBuffering = playControl === 'buffering';
+  const showPauseIcon = playControl === 'playing' || playControl === 'buffering';
+  const playLabel = isLoading ? 'Loading' : isBuffering ? 'Buffering, pause' : showPauseIcon ? 'Pause' : 'Play';
   const isToolbar = variant === 'toolbar';
 
   return (
@@ -70,18 +139,19 @@ export function PlaybackTransport({
       <button
         type="button"
         className="app-playback-chrome-btn app-playback-chrome-btn--play"
-        aria-busy={isLoading}
+        aria-busy={isLoading || isBuffering}
         aria-label={playLabel}
         disabled={isLoading}
         onClick={() => void onTogglePlay()}
       >
         {isLoading ? (
-          <ReloadIcon
-            aria-hidden
-            className="app-playback-chrome-btn__spin"
-            {...PLAYBACK_ICON_DIM}
-          />
-        ) : isPlaying ? (
+          <DualArcSpinner />
+        ) : isBuffering ? (
+          <span className="app-playback-chrome-btn__play-inner">
+            <BufferRingSpinner />
+            <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
+          </span>
+        ) : showPauseIcon ? (
           <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
         ) : (
           <PlayIcon {...PLAYBACK_ICON_DIM} aria-hidden />

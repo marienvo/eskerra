@@ -121,6 +121,12 @@ export class TrackPlayerAdapter implements AudioPlayer {
     return mapPlaybackState(state);
   }
 
+  public addBufferingListener(_callback: (buffering: boolean) => void): Unsubscribe {
+    return () => {
+      // Desktop-only: HtmlAudioPlayer drives buffering; mobile uses native loading state.
+    };
+  }
+
   public addProgressListener(
     callback: (progress: PlayerProgress) => void,
   ): Unsubscribe {

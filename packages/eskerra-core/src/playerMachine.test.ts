@@ -3,7 +3,12 @@ import {createActor} from 'xstate';
 
 import type {PlaylistEntry} from './playlist';
 import {NEAR_END_WINDOW_MS} from './playlist';
-import {getPlaybackSubstate, podcastPlayerMachine} from './playerMachine';
+import {
+  getPlaybackSubstate,
+  getPlaybackTransportPlayControl,
+  isPlaybackTransportBuffering,
+  podcastPlayerMachine,
+} from './playerMachine';
 
 function makePlaylistEntry(
   partial: Pick<PlaylistEntry, 'episodeId' | 'mp3Url' | 'positionMs'> &
@@ -198,5 +203,120 @@ describe('podcastPlayerMachine', () => {
     expect(getPlaybackSubstate(actor.getSnapshot())).toBe('paused');
     expect(actor.getSnapshot().context.positionMs).toBe(99_000);
     expect(actor.getSnapshot().context.playlistBaseline?.controlRevision).toBe(7);
+  });
+
+  it('getPlaybackTransportPlayControl returns loading when native is loading and not seeking', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    expect(
+      getPlaybackTransportPlayControl({
+        context: actor.getSnapshot().context,
+        value: actor.getSnapshot().value,
+      }),
+    ).toBe('loading');
+  });
+
+  it('getPlaybackTransportPlayControl returns buffering only while playing and context.buffering', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'playing'});
+
+    expect(
+      getPlaybackTransportPlayControl({
+        context: actor.getSnapshot().context,
+        value: actor.getSnapshot().value,
+      }),
+    ).toBe('playing');
+
+    actor.send({type: 'BUFFERING', buffering: true});
+    expect(actor.getSnapshot().context.buffering).toBe(true);
+    const buf = getPlaybackTransportPlayControl({
+      context: actor.getSnapshot().context,
+      value: actor.getSnapshot().value,
+    });
+    expect(buf).toBe('buffering');
+    expect(isPlaybackTransportBuffering(buf)).toBe(true);
+
+    actor.send({type: 'BUFFERING', buffering: false});
+    expect(
+      getPlaybackTransportPlayControl({
+        context: actor.getSnapshot().context,
+        value: actor.getSnapshot().value,
+      }),
+    ).toBe('playing');
+  });
+
+  it('getPlaybackTransportPlayControl stays paused when buffering is true but playback is paused', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'paused'});
+    actor.send({type: 'BUFFERING', buffering: true});
+
+    expect(actor.getSnapshot().context.buffering).toBe(true);
+    expect(
+      getPlaybackTransportPlayControl({
+        context: actor.getSnapshot().context,
+        value: actor.getSnapshot().value,
+      }),
+    ).toBe('paused');
+  });
+
+  it('RESET clears buffering flag', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'playing'});
+    actor.send({type: 'BUFFERING', buffering: true});
+    expect(actor.getSnapshot().context.buffering).toBe(true);
+
+    actor.send({type: 'RESET'});
+    expect(actor.getSnapshot().context.buffering).toBe(false);
   });
 });

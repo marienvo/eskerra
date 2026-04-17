@@ -292,6 +292,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(() => () => undefined),
       addStateListener: jest.fn(() => () => undefined),
       destroy: jest.fn(async () => undefined),
@@ -480,6 +481,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(() => () => undefined),
       addStateListener: jest.fn(() => () => undefined),
       destroy: jest.fn(async () => undefined),
@@ -539,6 +541,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(() => () => undefined),
       addStateListener: jest.fn(() => () => undefined),
       destroy: jest.fn(async () => undefined),
@@ -608,6 +611,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(cb => {
         progressCb = cb;
         return () => {
@@ -940,6 +944,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(cb => {
         progressCb = cb;
         return () => {
@@ -1047,6 +1052,7 @@ describe('usePlayer restore state', () => {
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
+      addBufferingListener: jest.fn(() => () => undefined),
       addProgressListener: jest.fn(() => () => undefined),
       addStateListener: jest.fn(cb => {
         stateListener = cb;

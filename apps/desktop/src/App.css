@@ -490,7 +490,41 @@ a:focus:not(:focus-visible) {
   margin-inline-start: 3px;
 }
 
-@keyframes app-playback-chrome-spin {
+.app-playback-chrome-btn--play {
+  position: relative;
+  overflow: visible;
+}
+
+.app-playback-chrome-btn__play-inner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-playback-chrome-btn__buffer-ring {
+  position: absolute;
+  inset: -3px;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+  display: block;
+}
+
+.app-playback-transport--toolbar .app-playback-chrome-btn__buffer-ring {
+  inset: -2px;
+}
+
+.app-playback-spinner {
+  display: block;
+  flex-shrink: 0;
+}
+
+.app-playback-spinner__arc {
+  transform-origin: center;
+}
+
+@keyframes app-playback-spinner-rotate-cw {
   from {
     transform: rotate(0deg);
   }
@@ -499,8 +533,32 @@ a:focus:not(:focus-visible) {
   }
 }
 
-.app-playback-chrome-btn__spin {
-  animation: app-playback-chrome-spin 0.85s linear infinite;
+@keyframes app-playback-spinner-rotate-ccw {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.app-playback-spinner__arc--outer {
+  animation: app-playback-spinner-rotate-cw 0.9s linear infinite;
+}
+
+.app-playback-spinner__arc--inner {
+  animation: app-playback-spinner-rotate-ccw 0.75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-playback-spinner__arc--outer,
+  .app-playback-spinner__arc--inner {
+    animation: none;
+  }
+
+  .app-playback-chrome-btn__buffer-ring {
+    display: none;
+  }
 }
 
 .app-playback-chrome-btn:disabled {

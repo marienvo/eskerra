@@ -259,6 +259,16 @@ export function useDesktopPodcastPlayback({
   }, [send]);
 
   useEffect(() => {
+    const player = getDesktopAudioPlayer();
+    const unsub = player.addBufferingListener(buffering => {
+      send({type: 'BUFFERING', buffering});
+    });
+    return () => {
+      unsub();
+    };
+  }, [send]);
+
+  useEffect(() => {
     let cancelled = false;
     if (!vaultRoot) {
       queueMicrotask(() => {

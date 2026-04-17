@@ -129,8 +129,10 @@ export {
 export {
   getPlaybackSubstate,
   getPlaybackTransportPlayControl,
+  isPlaybackTransportBuffering,
   isPlaybackTransportBusy,
   podcastPlayerMachine,
+  type PlaybackTransportPlayControl,
   type PodcastPlayerDeps,
   type PodcastPlayerMachineEvent,
   type PodcastPlayerMachineInput,

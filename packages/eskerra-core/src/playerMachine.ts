@@ -60,6 +60,7 @@ export type PodcastPlayerMachineEvent =
       baseline: PlaylistEntry | null;
     }
   | {type: 'NATIVE'; state: PlayerState}
+  | {type: 'BUFFERING'; buffering: boolean}
   | {type: 'PROGRESS'; positionMs: number; durationMs: number | null}
   | {
       type: 'EPISODE_PLAY';
@@ -80,6 +81,8 @@ type MachineContext = {
   durationMs: number | null;
   native: PlayerState;
   seeking: boolean;
+  /** Desktop: HTMLMediaElement buffering while native is still "playing". */
+  buffering: boolean;
   inNearEndZone: boolean;
   /** Hook watches increments to persist position after leaving the near-end zone. */
   nearEndResyncNonce: number;
@@ -141,6 +144,7 @@ export const podcastPlayerMachine = setup({
       durationMs: null,
       native: 'idle' as PlayerState,
       seeking: false,
+      buffering: false,
       inNearEndZone: false,
       nearEndResyncNonce: 0,
       errorMessage: null,
@@ -154,6 +158,7 @@ export const podcastPlayerMachine = setup({
         playlistBaseline: event.baseline ?? event.entry,
         positionMs: event.entry.positionMs,
         durationMs: event.entry.durationMs,
+        buffering: false,
         errorMessage: null,
       };
     }),
@@ -168,6 +173,7 @@ export const podcastPlayerMachine = setup({
         positionMs: event.entry.positionMs,
         durationMs: event.entry.durationMs,
         native: 'paused' as const,
+        buffering: false,
         inNearEndZone: false,
         errorMessage: null,
       };
@@ -237,11 +243,19 @@ export const podcastPlayerMachine = setup({
     durationMs: null,
     native: 'idle' as PlayerState,
     seeking: false,
+    buffering: false,
     inNearEndZone: false,
     nearEndResyncNonce: 0,
     pendingPersistEntry: null,
     errorMessage: null,
   }),
+  on: {
+    BUFFERING: {
+      actions: assign(({event}) =>
+        event.type === 'BUFFERING' ? {buffering: event.buffering} : {},
+      ),
+    },
+  },
   states: {
     playback: {
       initial: 'idle',
@@ -264,6 +278,7 @@ export const podcastPlayerMachine = setup({
                     positionMs: event.entry.positionMs,
                     durationMs: event.entry.durationMs,
                     native: 'paused' as const,
+                    buffering: false,
                     inNearEndZone: false,
                     errorMessage: null,
                   };
@@ -291,6 +306,7 @@ export const podcastPlayerMachine = setup({
                   positionMs: 0,
                   durationMs: null,
                   native: 'loading' as const,
+                  buffering: false,
                   inNearEndZone: false,
                   errorMessage: null,
                 };
@@ -368,6 +384,7 @@ export const podcastPlayerMachine = setup({
                   episode: event.episode,
                   playlistBaseline: event.baseline,
                   native: 'loading' as const,
+                  buffering: false,
                   inNearEndZone: false,
                 };
               }),
@@ -802,13 +819,19 @@ export function isPlaybackTransportBusy(context: {
   return context.native === 'loading' && !context.seeking;
 }
 
+export type PlaybackTransportPlayControl = 'buffering' | 'loading' | 'paused' | 'playing';
+
+export function isPlaybackTransportBuffering(control: PlaybackTransportPlayControl): boolean {
+  return control === 'buffering';
+}
+
 /**
  * Map machine + native state to play button chrome (`PlaybackTransport` on desktop).
  */
 export function getPlaybackTransportPlayControl(snapshot: {
-  context: Pick<MachineContext, 'native' | 'seeking'>;
+  context: Pick<MachineContext, 'buffering' | 'native' | 'seeking'>;
   value: unknown;
-}): 'loading' | 'playing' | 'paused' {
+}): PlaybackTransportPlayControl {
   if (isPlaybackTransportBusy(snapshot.context)) {
     return 'loading';
   }
@@ -817,6 +840,13 @@ export function getPlaybackTransportPlayControl(snapshot: {
     return 'paused';
   }
   if (sub === 'playing' || sub === 'nearEndPlaying' || sub === 'loading') {
+    if (
+      snapshot.context.buffering &&
+      snapshot.context.native === 'playing' &&
+      (sub === 'playing' || sub === 'nearEndPlaying')
+    ) {
+      return 'buffering';
+    }
     return snapshot.context.native === 'playing' ? 'playing' : 'paused';
   }
   return 'paused';
