@@ -26,6 +26,12 @@ function toSeconds(milliseconds: number): number {
   return Math.max(0, milliseconds) / 1000;
 }
 
+function isAlreadyInitializedError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return /already.*initialized/i.test(message);
+}
+
 function mapPlaybackState(playbackState: PlaybackState): PlayerState {
   switch (playbackState.state) {
     case State.Loading:
@@ -49,19 +55,45 @@ function mapPlaybackState(playbackState: PlaybackState): PlayerState {
 
 export class TrackPlayerAdapter implements AudioPlayer {
   private isSetup = false;
+  private setupPromise: Promise<void> | null = null;
 
   public async ensureSetup(): Promise<void> {
     if (this.isSetup) {
       return;
     }
 
-    await TrackPlayer.setupPlayer();
-    await TrackPlayer.updateOptions({
-      capabilities: [Capability.Play, Capability.Pause, Capability.SeekTo, Capability.Stop],
-      notificationCapabilities: [Capability.Play, Capability.Pause, Capability.SeekTo, Capability.Stop],
-      progressUpdateEventInterval: 1,
+    if (this.setupPromise) {
+      await this.setupPromise;
+      return;
+    }
+
+    this.setupPromise = this.runEnsureSetupChain().finally(() => {
+      this.setupPromise = null;
     });
-    this.isSetup = true;
+
+    await this.setupPromise;
+  }
+
+  private async runEnsureSetupChain(): Promise<void> {
+    try {
+      try {
+        await TrackPlayer.setupPlayer();
+      } catch (error) {
+        if (!isAlreadyInitializedError(error)) {
+          throw error;
+        }
+      }
+
+      await TrackPlayer.updateOptions({
+        capabilities: [Capability.Play, Capability.Pause, Capability.SeekTo, Capability.Stop],
+        notificationCapabilities: [Capability.Play, Capability.Pause, Capability.SeekTo, Capability.Stop],
+        progressUpdateEventInterval: 1,
+      });
+      this.isSetup = true;
+    } catch (error) {
+      this.isSetup = false;
+      throw error;
+    }
   }
 
   public async play(track: AudioTrack, positionMs = 0): Promise<void> {
@@ -121,6 +153,12 @@ export class TrackPlayerAdapter implements AudioPlayer {
     return mapPlaybackState(state);
   }
 
+  public addBufferingListener(_callback: (buffering: boolean) => void): Unsubscribe {
+    return () => {
+      // Desktop-only: HtmlAudioPlayer drives buffering; mobile uses native loading state.
+    };
+  }
+
   public addProgressListener(
     callback: (progress: PlayerProgress) => void,
   ): Unsubscribe {
@@ -166,6 +204,15 @@ export class TrackPlayerAdapter implements AudioPlayer {
   }
 
   public async destroy(): Promise<void> {
+    if (this.setupPromise) {
+      try {
+        await this.setupPromise;
+      } catch {
+        // Ignore failed or racing setup so teardown can continue.
+      }
+    }
+    this.setupPromise = null;
+
     if (!this.isSetup) {
       return;
     }

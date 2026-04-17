@@ -205,12 +205,11 @@ a:focus:not(:focus-visible) {
   min-height: var(--window-title-bar-chrome-height);
   box-sizing: border-box;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
   background: transparent;
   box-shadow: none;
   outline: none;
-  margin-inline-start: 6px;
   transition:
     border-color 0.12s ease,
     background 0.12s ease;
@@ -261,7 +260,7 @@ a:focus:not(:focus-visible) {
   min-width: 0;
   justify-content: flex-start;
   border-inline-end: none;
-  border-radius: 3px 0 0 3px;
+  border-radius: 4px 0 0 4px;
 }
 
 .today-hub-workspace-select__chevron {
@@ -271,7 +270,7 @@ a:focus:not(:focus-visible) {
   max-width: 1.35rem;
   padding-inline: 0;
   justify-content: center;
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 4px 4px 0;
 }
 
 .today-hub-workspace-select__icon {
@@ -491,7 +490,41 @@ a:focus:not(:focus-visible) {
   margin-inline-start: 3px;
 }
 
-@keyframes app-playback-chrome-spin {
+.app-playback-chrome-btn--play {
+  position: relative;
+  overflow: visible;
+}
+
+.app-playback-chrome-btn__play-inner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-playback-chrome-btn__buffer-ring {
+  position: absolute;
+  inset: -3px;
+  width: auto;
+  height: auto;
+  pointer-events: none;
+  display: block;
+}
+
+.app-playback-transport--toolbar .app-playback-chrome-btn__buffer-ring {
+  inset: -2px;
+}
+
+.app-playback-spinner {
+  display: block;
+  flex-shrink: 0;
+}
+
+.app-playback-spinner__arc {
+  transform-origin: center;
+}
+
+@keyframes app-playback-spinner-rotate-cw {
   from {
     transform: rotate(0deg);
   }
@@ -500,8 +533,32 @@ a:focus:not(:focus-visible) {
   }
 }
 
-.app-playback-chrome-btn__spin {
-  animation: app-playback-chrome-spin 0.85s linear infinite;
+@keyframes app-playback-spinner-rotate-ccw {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.app-playback-spinner__arc--outer {
+  animation: app-playback-spinner-rotate-cw 0.9s linear infinite;
+}
+
+.app-playback-spinner__arc--inner {
+  animation: app-playback-spinner-rotate-ccw 0.75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-playback-spinner__arc--outer,
+  .app-playback-spinner__arc--inner {
+    animation: none;
+  }
+
+  .app-playback-chrome-btn__buffer-ring {
+    display: none;
+  }
 }
 
 .app-playback-chrome-btn:disabled {
@@ -1489,7 +1546,7 @@ body.editor-tab-strip--dragging {
   display: flex;
   align-items: stretch;
   max-width: 10.5rem;
-  border-radius: 3px;
+  border-radius: 4px;
   border: 1px solid transparent;
   box-sizing: border-box;
   background: transparent;
@@ -1519,7 +1576,7 @@ body.editor-tab-strip--dragging {
   gap: 0;
   padding: 0 0.02rem 0 0.22rem;
   border: none;
-  border-radius: 3px 0 0 3px;
+  border-radius: 4px 0 0 4px;
   background: transparent;
   cursor: default;
   color: var(--color-text);
@@ -4946,9 +5003,13 @@ button:disabled {
   margin: 0;
 }
 
+.episode-row-outer {
+  width: 100%;
+}
+
 .episode-row {
   display: grid;
-  grid-template-columns: 5.5rem 1fr;
+  grid-template-columns: 2.25rem 1fr;
   grid-template-rows: auto auto;
   gap: 0.1rem 0.5rem;
   width: 100%;
@@ -4978,21 +5039,169 @@ button:disabled {
   background: var(--color-consume-surface);
 }
 
-.ep-date {
-  grid-row: 1 / span 2;
-  font-size: 0.75rem;
-  color: var(--color-muted);
+.episode-row[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.episode-row[aria-disabled='true']:hover {
+  background: var(--color-consume-surface);
+}
+
+.episode-row--active {
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+
+.episode-row--active .ep-artwork:not(.ep-artwork--placeholder),
+.episode-row--active .ep-artwork--placeholder {
+  filter: brightness(0.72);
+}
+
+.episode-row--active .ep-title {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.ep-artwork-wrap {
+  position: relative;
+  grid-row: 1 / -1;
+  grid-column: 1;
+  width: 2.25rem;
+  height: 2.25rem;
   align-self: start;
 }
 
+.ep-artwork {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 3px;
+  object-fit: cover;
+  background: var(--color-row-hover);
+}
+
+.ep-artwork--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-muted);
+}
+
+.ep-artwork--loading {
+  opacity: 0.55;
+}
+
+.ep-artwork__note-icon {
+  flex-shrink: 0;
+}
+
+.ep-artwork-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  pointer-events: none;
+  background: rgb(0 0 0 / 35%);
+}
+
+.ep-artwork-overlay--eq {
+  background: rgb(0 0 0 / 42%);
+}
+
+.ep-eq {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 14px;
+}
+
+.ep-eq__bar {
+  width: 3px;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--color-text-on-accent, var(--color-text));
+  animation: ep-eq-pulse 0.55s ease-in-out infinite alternate;
+}
+
+.ep-eq__bar:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.ep-eq__bar:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes ep-eq-pulse {
+  from {
+    height: 4px;
+    opacity: 0.65;
+  }
+
+  to {
+    height: 12px;
+    opacity: 1;
+  }
+}
+
+.ep-artwork-overlay--spinner {
+  background: rgb(0 0 0 / 45%);
+}
+
+.ep-artwork-overlay--spinner::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / 28%);
+  border-top-color: var(--color-text-on-accent, var(--color-text));
+  border-radius: 50%;
+  animation: ep-spin 0.7s linear infinite;
+}
+
+@keyframes ep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ep-pause-icon {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ep-pause-icon::before,
+.ep-pause-icon::after {
+  content: '';
+  width: 3px;
+  height: 11px;
+  border-radius: 1px;
+  background: var(--color-text-on-accent, var(--color-text));
+}
+
 .ep-title {
+  grid-column: 2;
+  grid-row: 1;
   font-weight: 400;
   font-size: 0.88rem;
   font-synthesis: none;
 }
 
-.ep-series {
+.ep-meta {
   grid-column: 2;
+  grid-row: 2;
+  font-size: 0.8125rem;
+  font-synthesis: none;
+}
+
+.ep-status {
+  grid-column: 2;
+  grid-row: 3;
+  font-size: 0.8125rem;
+  font-synthesis: none;
 }
 
 .player-chrome {

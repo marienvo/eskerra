@@ -11,18 +11,29 @@ export type PlaylistEntry = {
    */
   playbackOwnerId: string;
   /**
-   * Increments on control intents (play, pause, seek, episode change, resume).
-   * Progress-only writes must not bump this.
+   * Increments on each persisted playlist write (play, pause, seek, episode change, resume, natural end).
+   * Devices merge with {@link pickNewerPlaylistEntry}.
    */
   controlRevision: number;
 };
 
 export type PlaylistWriteResult =
   | {kind: 'saved'; entry: PlaylistEntry}
-  | {kind: 'superseded'; entry: PlaylistEntry};
+  | {kind: 'superseded'; entry: PlaylistEntry}
+  /** No R2 configured — caller keeps in-memory playback only. */
+  | {kind: 'skipped'};
 
 /** Minimum playback position (ms) before persisting playlist on pause; below this clears playlist instead. */
-export const MIN_PLAYLIST_PERSIST_POSITION_MS = 10_000;
+export const MIN_PROGRESS_MS = 10_000;
+
+/** @deprecated use {@link MIN_PROGRESS_MS} */
+export const MIN_PLAYLIST_PERSIST_POSITION_MS = MIN_PROGRESS_MS;
+
+/** Last N ms of an episode are treated as the “near end” zone (mark listened + clear R2 once). */
+export const NEAR_END_WINDOW_MS = 10_000;
+
+/** Do not enter the near-end zone until duration exceeds this (avoids tiny episodes flipping immediately). */
+export const NEAR_END_MIN_DURATION_MS = NEAR_END_WINDOW_MS * 2;
 
 function isDurationFieldValid(durationMs: unknown): boolean {
   return durationMs === null || typeof durationMs === 'number';
@@ -143,8 +154,6 @@ export function pickNewerPlaylistEntry(
   return second;
 }
 
-export type PlaylistWriteMode = 'progress' | 'control';
-
 /**
  * True when an R2 `playlist.json` row was last updated by this install (`playbackOwnerId` matches
  * `deviceInstanceId`). ETag polls that only reflect our own PUTs can be ignored so we do not
@@ -176,14 +185,12 @@ export function isRemotePlaylistNewerThanKnown(
 }
 
 /**
- * Merges remote baseline with caller fields and applies control or progress semantics.
- * For `control`, bumps `controlRevision` and sets `playbackOwnerId`.
+ * Merges remote baseline with caller fields and applies a **control** write (bumps `controlRevision`).
  */
 export function buildPlaylistEntryForWrite(
   base: PlaylistEntry,
   patch: Partial<Pick<PlaylistEntry, 'durationMs' | 'positionMs' | 'episodeId' | 'mp3Url'>>,
   deviceInstanceId: string,
-  mode: PlaylistWriteMode,
   nowMs: number,
 ): PlaylistEntry {
   const merged: PlaylistEntry = {
@@ -191,17 +198,10 @@ export function buildPlaylistEntryForWrite(
     ...patch,
   };
 
-  if (mode === 'control') {
-    return {
-      ...merged,
-      playbackOwnerId: deviceInstanceId,
-      controlRevision: merged.controlRevision + 1,
-      updatedAt: Math.max(nowMs, merged.updatedAt),
-    };
-  }
-
   return {
     ...merged,
+    playbackOwnerId: deviceInstanceId,
+    controlRevision: merged.controlRevision + 1,
     updatedAt: Math.max(nowMs, merged.updatedAt),
   };
 }

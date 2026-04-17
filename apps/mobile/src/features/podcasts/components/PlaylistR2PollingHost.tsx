@@ -15,6 +15,7 @@ export function PlaylistR2PollingHost(): null {
     allowPolling,
     baseUri,
     onRemotePlaylistUpdated: notifyPlaylistSyncAfterVaultRefresh,
+    onRemotePlaylistCleared: notifyPlaylistSyncAfterVaultRefresh,
     settings,
   });
 

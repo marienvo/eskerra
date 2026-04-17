@@ -23,6 +23,7 @@ export type Unsubscribe = () => void;
 
 export interface AudioPlayer {
   addEndedListener(callback: () => void): Unsubscribe;
+  addBufferingListener(callback: (buffering: boolean) => void): Unsubscribe;
   addProgressListener(callback: (progress: PlayerProgress) => void): Unsubscribe;
   addStateListener(callback: (state: PlayerState) => void): Unsubscribe;
   destroy(): Promise<void>;

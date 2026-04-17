@@ -796,11 +796,11 @@ describe('eskerraStorage', () => {
       });
     }
 
-    test('writePlaylist writes playlist.json', async () => {
+    test('writePlaylist skips persistence when R2 playlist sync is not configured', async () => {
       mockNoR2VaultLayoutForPlaylistLocalReadOrder();
-      readFileMock.mockResolvedValueOnce('{}');
+      readFileMock.mockResolvedValue('{}');
 
-      await writePlaylist(baseUri, {
+      const result = await writePlaylist(baseUri, {
         controlRevision: 0,
         durationMs: 1000,
         episodeId: 'episode-a',
@@ -810,75 +810,59 @@ describe('eskerraStorage', () => {
         updatedAt: 0,
       });
 
+      expect(result).toEqual({kind: 'skipped'});
       const playlistWrite = writeFileMock.mock.calls.find(
         call => call[0] === `${baseUri}/.eskerra/playlist.json`,
       );
-      expect(playlistWrite).toBeDefined();
-      const body = playlistWrite![1] as string;
-      const parsed = JSON.parse(body) as Record<string, unknown>;
-      expect(parsed.durationMs).toBe(1000);
-      expect(parsed.episodeId).toBe('episode-a');
-      expect(parsed.mp3Url).toBe('https://example.com/episode-a.mp3');
-      expect(parsed.positionMs).toBe(250);
-      expect(typeof parsed.updatedAt).toBe('number');
+      expect(playlistWrite).toBeUndefined();
     });
 
-    test('readPlaylist returns parsed playlist entry', async () => {
+    test('readPlaylist returns null when R2 playlist sync is not configured', async () => {
       mockNoR2VaultLayoutForPlaylistLocalReadOrder();
-      readFileMock
-        .mockResolvedValueOnce('{}')
-        .mockResolvedValueOnce(
-          '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
-        );
+      readFileMock.mockResolvedValue('{}');
 
-      await expect(readPlaylist(baseUri)).resolves.toEqual({
-        controlRevision: 0,
-        durationMs: 1000,
-        episodeId: 'episode-a',
-        mp3Url: 'https://example.com/episode-a.mp3',
-        playbackOwnerId: '',
-        positionMs: 250,
-        updatedAt: 0,
-      });
+      await expect(readPlaylist(baseUri)).resolves.toBeNull();
+      expect(
+        readFileMock.mock.calls.some(
+          call => typeof call[0] === 'string' && call[0].includes('playlist.json'),
+        ),
+      ).toBe(false);
     });
 
     test('readPlaylistCoalesces concurrent reads', async () => {
       mockNoR2VaultLayoutForPlaylistLocalReadOrder();
-      readFileMock
-        .mockResolvedValueOnce('{}')
-        .mockResolvedValueOnce(
-          '{"durationMs":1000,"episodeId":"episode-a","mp3Url":"https://example.com/episode-a.mp3","positionMs":250}',
-        );
+      readFileMock.mockResolvedValue('{}');
 
       const [a, b] = await Promise.all([
         readPlaylistCoalesced(baseUri),
         readPlaylistCoalesced(baseUri),
       ]);
 
-      expect(readFileMock).toHaveBeenCalledTimes(2);
-      expect(a).toEqual({
-        controlRevision: 0,
-        durationMs: 1000,
-        episodeId: 'episode-a',
-        mp3Url: 'https://example.com/episode-a.mp3',
-        playbackOwnerId: '',
-        positionMs: 250,
-        updatedAt: 0,
-      });
-      expect(b).toEqual(a);
+      expect(a).toBeNull();
+      expect(b).toBeNull();
+      expect(a).toBe(b);
     });
 
-    test('clearPlaylist empties existing playlist file', async () => {
+    test('readPlaylistCoalesced reuses settled result without a second vault read', async () => {
       mockNoR2VaultLayoutForPlaylistLocalReadOrder();
-      readFileMock.mockResolvedValueOnce('{}');
+      readFileMock.mockResolvedValue('{}');
+      await readPlaylistCoalesced(baseUri);
+      const readCallsAfterFirst = readFileMock.mock.calls.length;
+      await readPlaylistCoalesced(baseUri);
+      expect(readFileMock.mock.calls.length).toBe(readCallsAfterFirst);
+    });
+
+    test('clearPlaylist removes legacy local playlist file when present', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock.mockResolvedValue('{}');
 
       await clearPlaylist(baseUri);
 
-      expect(writeFileMock).toHaveBeenCalledWith(
-        `${baseUri}/.eskerra/playlist.json`,
-        '',
-        {encoding: 'utf8', mimeType: 'application/json'},
+      expect(unlinkMock).toHaveBeenCalledWith(`${baseUri}/.eskerra/playlist.json`);
+      const playlistWrite = writeFileMock.mock.calls.find(
+        call => call[0] === `${baseUri}/.eskerra/playlist.json`,
       );
+      expect(playlistWrite).toBeUndefined();
     });
   });
 

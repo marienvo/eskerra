@@ -2,11 +2,12 @@
   "name": "@eskerra/desktop",
   "private": true,
   "license": "AGPL-3.0-only",
-  "version": "0.9.0",
+  "version": "0.10.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:analyze": "tsc -b && ANALYZE=1 vite build",
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -43,6 +44,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-store": "^2",
     "@tauri-apps/plugin-window-state": "^2.4.1",
+    "@xstate/react": "^5.0.5",
     "cmdk": "^1.1.1",
     "material-icons": "^1.13.14",
     "mdast-util-to-markdown": "^2.1.2",
@@ -54,7 +56,8 @@
     "remark-stringify": "^11.0.0",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "xstate": "^5.30.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
@@ -73,6 +76,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "happy-dom": "^20.0.2",
+    "rollup-plugin-visualizer": "^6.0.5",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
     "unist-util-visit": "^5.0.0",

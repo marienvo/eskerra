@@ -1,13 +1,25 @@
-import {buildPlaylistEntryForWrite, MIN_PLAYLIST_PERSIST_POSITION_MS} from '@eskerra/core';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  buildPlaylistEntryForWrite,
+  defaultEskerraSettings,
+  isVaultR2PlaylistConfigured,
+  MIN_PROGRESS_MS,
+  type PlayerEpisodeSnapshot,
+  type PlaylistEntry,
+  podcastPlayerMachine,
+  type PodcastPlayerDeps,
+  type PodcastPlayerPlaybackState,
+  getPlaybackSubstate,
+} from '@eskerra/core';
+import {useMachine} from '@xstate/react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 
 import {
   clearPlaylist,
   readPlaylistCoalesced,
   writePlaylist,
 } from '../../../core/storage/eskerraStorage';
-import {PlaylistEntry, PodcastEpisode} from '../../../types';
 import {useVaultContext} from '../../../core/vault/VaultContext';
+import type {PodcastEpisode} from '../../../types';
 import {getAudioPlayer, PlayerProgress, PlayerState} from '../services/audioPlayer';
 import {
   getCachedPodcastArtworkUri,
@@ -19,8 +31,11 @@ type UsePlayerResult = {
   clearNowPlayingIfMatchesEpisode: (episodeId: string) => Promise<void>;
   error: string | null;
   isLoading: boolean;
-  /** True while a user-triggered playback action runs or native player reports loading/buffering. */
+  /** XState playback sub-state (near-end zone, etc.). */
+  playbackPhase: PodcastPlayerPlaybackState;
+  /** True while a user-triggered playback action runs or native player reports loading/buffering (not during seek). */
   playbackTransportBusy: boolean;
+  playbackSeeking: boolean;
   playEpisode: (episode: PodcastEpisode) => Promise<void>;
   progress: PlayerProgress;
   resyncPlaylistFromDisk: () => Promise<void>;
@@ -30,7 +45,6 @@ type UsePlayerResult = {
 };
 
 export type MarkEpisodeAsPlayedOptions = {
-  /** When false, vault/files still update but the mini player stays open (e.g. pause past 80%). */
   dismissNowPlaying?: boolean;
 };
 
@@ -43,104 +57,403 @@ type UsePlayerOptions = {
   podcastsLoading: boolean;
 };
 
-function toPlaylistEntry(
-  episode: PodcastEpisode,
-  progress: PlayerProgress,
-  prior: PlaylistEntry | null,
-  deviceInstanceId: string,
-  nowMs: number,
-): PlaylistEntry {
-  const base: PlaylistEntry =
-    prior?.episodeId === episode.id
-      ? prior
-      : {
-          durationMs: progress.durationMs,
-          episodeId: episode.id,
-          mp3Url: episode.mp3Url,
-          positionMs: 0,
-          updatedAt: 0,
-          playbackOwnerId: '',
-          controlRevision: 0,
-        };
-  return buildPlaylistEntryForWrite(
-    base,
-    {
-      durationMs: progress.durationMs,
-      episodeId: episode.id,
-      mp3Url: episode.mp3Url,
-      positionMs: progress.positionMs,
-    },
-    deviceInstanceId,
-    'control',
-    nowMs,
-  );
+function toSnapshot(ep: PodcastEpisode): PlayerEpisodeSnapshot {
+  return {
+    id: ep.id,
+    mp3Url: ep.mp3Url,
+    title: ep.title,
+    artist: ep.seriesName,
+  };
 }
-
-const emptyProgress: PlayerProgress = {
-  durationMs: null,
-  positionMs: 0,
-};
 
 export function usePlayer(
   episodesById: Map<string, PodcastEpisode>,
   {onMarkAsPlayed, podcastsCatalogReady, podcastsLoading}: UsePlayerOptions,
 ): UsePlayerResult {
-  const {baseUri, localSettings, playlistSyncGeneration} = useVaultContext();
+  const {baseUri, localSettings, settings, playlistSyncGeneration} = useVaultContext();
   const player = useMemo(() => getAudioPlayer(), []);
-  const activeEpisodeRef = useRef<PodcastEpisode | null>(null);
-  const loadedEpisodeIdRef = useRef<string | null>(null);
   const baseUriRef = useRef<string | null>(null);
+  const episodesByIdRef = useRef(episodesById);
+  const onMarkAsPlayedRef = useRef(onMarkAsPlayed);
+  const nearEndNonceHandledRef = useRef(0);
+  const userPlaybackDepthRef = useRef(0);
+  const loadedEpisodeIdRef = useRef<string | null>(null);
+  /** One cold restore per vault; transient R2 null must not clear an already-hydrated episode. */
+  const hasRestoredForBaseUriRef = useRef<string | null>(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
-  const [activeEpisode, setActiveEpisode] = useState<PodcastEpisode | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState<PlayerProgress>(emptyProgress);
-  const [savedPlaylistEntry, setSavedPlaylistEntry] = useState<PlaylistEntry | null>(null);
-  const savedPlaylistEntryRef = useRef<PlaylistEntry | null>(null);
-  /** True when `savedPlaylistEntry` reflects `playlist.json` on disk (restore / resync / normal pause persist). */
-  const playlistEntryPersistedToDiskRef = useRef(false);
-  const [state, setState] = useState<PlayerState>('idle');
-
-  useEffect(() => {
-    savedPlaylistEntryRef.current = savedPlaylistEntry;
-  }, [savedPlaylistEntry]);
-
-  useEffect(() => {
-    activeEpisodeRef.current = activeEpisode;
-  }, [activeEpisode]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
+    episodesByIdRef.current = episodesById;
+  }, [episodesById]);
+  useLayoutEffect(() => {
+    onMarkAsPlayedRef.current = onMarkAsPlayed;
+  }, [onMarkAsPlayed]);
+  useLayoutEffect(() => {
     baseUriRef.current = baseUri ?? null;
   }, [baseUri]);
 
+  useLayoutEffect(() => {
+    hasRestoredForBaseUriRef.current = null;
+  }, [baseUri]);
+
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const deps = useMemo<PodcastPlayerDeps>(
+    () => ({
+      hasR2: () =>
+        Boolean(
+          baseUriRef.current &&
+            isVaultR2PlaylistConfigured(
+              settingsRef.current ?? defaultEskerraSettings,
+            ),
+        ),
+      persist: async entry => {
+        const uri = baseUriRef.current;
+        if (!uri) {
+          return {kind: 'skipped'};
+        }
+        return writePlaylist(uri, entry);
+      },
+      clearRemotePlaylist: async () => {
+        const uri = baseUriRef.current;
+        if (!uri) {
+          return;
+        }
+        await clearPlaylist(uri);
+      },
+      markEpisodeListened: async (episodeId, dismissNowPlaying) => {
+        const ep = episodesByIdRef.current.get(episodeId);
+        if (!ep) {
+          return;
+        }
+        await onMarkAsPlayedRef.current(ep, {dismissNowPlaying});
+      },
+    }),
+    [],
+  );
+
+  const [snapshot, send] = useMachine(podcastPlayerMachine, {
+    input: {deps},
+  });
+
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+  const snapCtx = snapshot.context;
+  const playbackSub = getPlaybackSubstate(snapshot);
+
+  const activeEpisode =
+    snapCtx.episode != null ? episodesById.get(snapCtx.episode.id) ?? null : null;
+
   useEffect(() => {
-    const removeProgressListener = player.addProgressListener(nextProgress => {
-      setProgress(nextProgress);
-    });
-    const removeStateListener = player.addStateListener(nextState => {
-      setState(nextState);
-    });
-    const removeEndedListener = player.addEndedListener(() => {
-      setState('ended');
-      const activeEpisodeAtEnd = activeEpisodeRef.current;
-      if (!activeEpisodeAtEnd) {
+    if (!snapCtx.episode) {
+      loadedEpisodeIdRef.current = null;
+    }
+  }, [snapCtx.episode]);
+
+  const progress: PlayerProgress = useMemo(
+    () => ({
+      durationMs: snapCtx.durationMs,
+      positionMs: snapCtx.positionMs,
+    }),
+    [snapCtx.durationMs, snapCtx.positionMs],
+  );
+
+  const state: PlayerState = snapCtx.native;
+
+  useEffect(() => {
+    if (!podcastsCatalogReady || podcastsLoading) {
+      return;
+    }
+    if (episodesById.size === 0) {
+      return;
+    }
+    const id = snapCtx.episode?.id;
+    if (!id) {
+      return;
+    }
+    if (!episodesById.has(id)) {
+      send({type: 'RESET'});
+    }
+  }, [episodesById, podcastsCatalogReady, podcastsLoading, send, snapCtx.episode]);
+
+  useEffect(() => {
+    if (!baseUri) {
+      send({type: 'RESET'});
+      return;
+    }
+
+    let isMounted = true;
+
+    const restore = async () => {
+      try {
+        if (!podcastsCatalogReady || podcastsLoading) {
+          return;
+        }
+        if (hasRestoredForBaseUriRef.current === baseUri) {
+          return;
+        }
+        if (snapshotRef.current.context.episode != null) {
+          hasRestoredForBaseUriRef.current = baseUri;
+          return;
+        }
+
+        const savedPromise = readPlaylistCoalesced(baseUri);
+        const setupPromise = player.ensureSetup();
+
+        const saved = await savedPromise;
+        if (!isMounted) {
+          return;
+        }
+        if (!saved) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
+          if (snapshotRef.current.context.episode == null) {
+            send({type: 'RESET'});
+            hasRestoredForBaseUriRef.current = baseUri;
+          }
+          return;
+        }
+        const catalogEp = episodesByIdRef.current.get(saved.episodeId);
+        if (!catalogEp) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
+          try {
+            await player.stop();
+          } catch {
+            // ignore stop errors during invalid-restore cleanup
+          }
+          await clearPlaylist(baseUri);
+          send({type: 'RESET'});
+          hasRestoredForBaseUriRef.current = baseUri;
+          return;
+        }
+        if (catalogEp.isListened) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
+          try {
+            await player.stop();
+          } catch {
+            // ignore stop errors during invalid-restore cleanup
+          }
+          await clearPlaylist(baseUri);
+          send({type: 'RESET'});
+          hasRestoredForBaseUriRef.current = baseUri;
+          return;
+        }
+        send({
+          type: 'HYDRATE',
+          episode: toSnapshot(catalogEp),
+          entry: saved,
+          baseline: saved,
+        });
+        hasRestoredForBaseUriRef.current = baseUri;
+
+        await setupPromise;
+        if (!isMounted) {
+          return;
+        }
+        const st = await player.getState();
+        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+          return;
+        }
+      } catch (restoreError) {
+        if (!isMounted) {
+          return;
+        }
+        setError(
+          restoreError instanceof Error ? restoreError.message : 'Could not restore player state.',
+        );
+      }
+    };
+
+    restore().catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [baseUri, player, podcastsCatalogReady, podcastsLoading, send]);
+
+  useEffect(() => {
+    if (!baseUri || !podcastsCatalogReady || podcastsLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncRemotePlaylist = async () => {
+      const ctx = snapshotRef.current.context;
+      if (ctx.native === 'playing') {
         return;
       }
+      try {
+        const savedPromise = readPlaylistCoalesced(baseUri);
+        const setupPromise = player.ensureSetup();
 
-      const uri = baseUriRef.current;
-      playlistEntryPersistedToDiskRef.current = false;
-      setSavedPlaylistEntry(null);
-      (async () => {
-        try {
-          if (uri) {
-            await clearPlaylist(uri);
-          }
-          await onMarkAsPlayed(activeEpisodeAtEnd, {dismissNowPlaying: true});
-        } catch (markError) {
-          const fallbackMessage = 'Could not mark episode as played.';
-          setError(markError instanceof Error ? markError.message : fallbackMessage);
+        await setupPromise;
+        if (cancelled) {
+          return;
         }
-      })().catch(() => undefined);
+        const st = await player.getState();
+        if (cancelled) {
+          return;
+        }
+        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+          return;
+        }
+
+        const saved = await savedPromise;
+        if (cancelled) {
+          return;
+        }
+
+        const currentCtx = snapshotRef.current.context;
+
+        if (!saved) {
+          // Another device cleared R2 `playlist.json`; skip while we are in our own near-end flow.
+          if (currentCtx.inNearEndZone) {
+            return;
+          }
+          send({type: 'RESET'});
+          return;
+        }
+
+        const catalogEp = episodesByIdRef.current.get(saved.episodeId);
+        if (!catalogEp || catalogEp.isListened) {
+          try {
+            await player.stop();
+          } catch {
+            // ignore stop errors during invalid-remote cleanup
+          }
+          await clearPlaylist(baseUri);
+          send({type: 'RESET'});
+          return;
+        }
+
+        const snapEpId = currentCtx.episode?.id;
+        if (saved.episodeId === snapEpId) {
+          send({
+            type: 'HYDRATE',
+            episode: toSnapshot(catalogEp),
+            entry: saved,
+            baseline: saved,
+          });
+          return;
+        }
+
+        if (!snapEpId) {
+          send({
+            type: 'HYDRATE',
+            episode: toSnapshot(catalogEp),
+            entry: saved,
+            baseline: saved,
+          });
+          return;
+        }
+
+        send({type: 'RESET'});
+        send({
+          type: 'HYDRATE',
+          episode: toSnapshot(catalogEp),
+          entry: saved,
+          baseline: saved,
+        });
+      } catch (syncError) {
+        if (!cancelled) {
+          setError(
+            syncError instanceof Error ? syncError.message : 'Could not sync playlist from remote.',
+          );
+        }
+      }
+    };
+
+    syncRemotePlaylist().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUri, playlistSyncGeneration, podcastsCatalogReady, podcastsLoading, player, send]);
+
+  useEffect(() => {
+    if (snapCtx.nearEndResyncNonce === nearEndNonceHandledRef.current) {
+      return;
+    }
+    if (snapCtx.inNearEndZone || !snapCtx.episode || !baseUri) {
+      nearEndNonceHandledRef.current = snapCtx.nearEndResyncNonce;
+      return;
+    }
+    const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+    if (!deviceId) {
+      nearEndNonceHandledRef.current = snapCtx.nearEndResyncNonce;
+      return;
+    }
+    const ep = episodesById.get(snapCtx.episode.id);
+    if (!ep) {
+      nearEndNonceHandledRef.current = snapCtx.nearEndResyncNonce;
+      return;
+    }
+    nearEndNonceHandledRef.current = snapCtx.nearEndResyncNonce;
+    const ctx = snapshotRef.current.context;
+    const base: PlaylistEntry =
+      ctx.playlistBaseline?.episodeId === ep.id
+        ? ctx.playlistBaseline
+        : {
+            durationMs: ctx.durationMs,
+            episodeId: ep.id,
+            mp3Url: ep.mp3Url,
+            positionMs: 0,
+            updatedAt: 0,
+            playbackOwnerId: '',
+            controlRevision: 0,
+          };
+    const entry = buildPlaylistEntryForWrite(
+      base,
+      {
+        durationMs: ctx.durationMs,
+        episodeId: ep.id,
+        mp3Url: ep.mp3Url,
+        positionMs: ctx.positionMs,
+      },
+      deviceId,
+      Date.now(),
+    );
+    send({type: 'QUEUE_PERSIST', entry});
+  }, [
+    baseUri,
+    episodesById,
+    localSettings?.deviceInstanceId,
+    send,
+    snapCtx.episode,
+    snapCtx.durationMs,
+    snapCtx.inNearEndZone,
+    snapCtx.nearEndResyncNonce,
+    snapCtx.positionMs,
+  ]);
+
+  useEffect(() => {
+    const removeProgressListener = player.addProgressListener(nextProgress => {
+      send({
+        type: 'PROGRESS',
+        positionMs: nextProgress.positionMs,
+        durationMs: nextProgress.durationMs,
+      });
+    });
+    const removeStateListener = player.addStateListener(nextState => {
+      const sub = getPlaybackSubstate(snapshotRef.current);
+      if (sub === 'primed' && nextState === 'idle') {
+        return;
+      }
+      send({type: 'NATIVE', state: nextState});
+    });
+    const removeEndedListener = player.addEndedListener(() => {
+      send({type: 'NATIVE', state: 'ended'});
     });
 
     return () => {
@@ -148,123 +461,117 @@ export function usePlayer(
       removeStateListener();
       removeEndedListener();
     };
-  }, [onMarkAsPlayed, player]);
+  }, [player, send]);
 
   useEffect(() => {
     if (!baseUri) {
-      playlistEntryPersistedToDiskRef.current = false;
-      setSavedPlaylistEntry(null);
-      setActiveEpisode(null);
-      setProgress(emptyProgress);
-      setState('idle');
+      send({type: 'RESET'});
       setError(null);
       return;
     }
+  }, [baseUri, send]);
 
-    let isMounted = true;
-
-    const restorePlayerState = async () => {
-      try {
-        await player.ensureSetup();
-        const saved = await readPlaylistCoalesced(baseUri);
-        if (!isMounted) {
-          return;
-        }
-        playlistEntryPersistedToDiskRef.current = saved != null;
-        setSavedPlaylistEntry(saved);
-      } catch (restoreError) {
-        if (!isMounted) {
-          return;
-        }
-
-        playlistEntryPersistedToDiskRef.current = false;
-
-        const fallbackMessage = 'Could not restore player state.';
-        setError(
-          restoreError instanceof Error ? restoreError.message : fallbackMessage,
-        );
+  const queuePersist = useCallback(
+    (episode: PodcastEpisode, positionMs: number, durationMs: number | null) => {
+      const uri = baseUriRef.current;
+      const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+      if (!uri || !deviceId) {
+        return;
       }
-    };
-
-    restorePlayerState().catch(() => undefined);
-
-    return () => {
-      isMounted = false;
-    };
-  }, [baseUri, player, playlistSyncGeneration]);
-
-  useEffect(() => {
-    if (!savedPlaylistEntry) {
-      return;
-    }
-
-    const matchingEpisode = episodesById.get(savedPlaylistEntry.episodeId);
-    if (!matchingEpisode || matchingEpisode.isListened) {
-      return;
-    }
-
-    setActiveEpisode(matchingEpisode);
-    setProgress({
-      durationMs: savedPlaylistEntry.durationMs,
-      positionMs: savedPlaylistEntry.positionMs,
-    });
-    setState(previousState => (previousState === 'idle' ? 'paused' : previousState));
-  }, [episodesById, savedPlaylistEntry]);
-
-  useEffect(() => {
-    if (!baseUri || !savedPlaylistEntry || podcastsLoading || !podcastsCatalogReady) {
-      return;
-    }
-
-    const catalogEpisode = episodesById.get(savedPlaylistEntry.episodeId);
-    const missingFromCatalog = !catalogEpisode;
-    const staleListened =
-      Boolean(catalogEpisode?.isListened) && playlistEntryPersistedToDiskRef.current;
-    if (!missingFromCatalog && !staleListened) {
-      return;
-    }
-
-    playlistEntryPersistedToDiskRef.current = false;
-    setSavedPlaylistEntry(null);
-    setActiveEpisode(null);
-    setProgress(emptyProgress);
-    setState('idle');
-    loadedEpisodeIdRef.current = null;
-
-    (async () => {
-      try {
-        await player.stop();
-        await clearPlaylist(baseUri);
-      } catch (cleanupError) {
-        const fallbackMessage = 'Could not clear stale playlist.';
-        setError(
-          cleanupError instanceof Error ? cleanupError.message : fallbackMessage,
-        );
-      }
-    })().catch(() => undefined);
-  }, [baseUri, episodesById, player, podcastsCatalogReady, podcastsLoading, savedPlaylistEntry]);
+      const ctx = snapshotRef.current.context;
+      const base: PlaylistEntry =
+        ctx.playlistBaseline?.episodeId === episode.id
+          ? ctx.playlistBaseline
+          : {
+              durationMs,
+              episodeId: episode.id,
+              mp3Url: episode.mp3Url,
+              positionMs: 0,
+              updatedAt: 0,
+              playbackOwnerId: '',
+              controlRevision: 0,
+            };
+      const entry = buildPlaylistEntryForWrite(
+        base,
+        {
+          durationMs,
+          episodeId: episode.id,
+          mp3Url: episode.mp3Url,
+          positionMs,
+        },
+        deviceId,
+        Date.now(),
+      );
+      send({type: 'QUEUE_PERSIST', entry});
+    },
+    [localSettings?.deviceInstanceId, send],
+  );
 
   const playEpisode = useCallback(
     async (episode: PodcastEpisode) => {
-      const currentState = await player.getState();
-      if (currentState === 'playing') {
-        return;
-      }
-
       setError(null);
       setIsLoading(true);
+      userPlaybackDepthRef.current += 1;
       try {
+        const stEarly = await player.getState();
+        if (stEarly === 'playing' && loadedEpisodeIdRef.current === episode.id) {
+          return;
+        }
+        const ctx = snapshotRef.current.context;
+        const uri = baseUriRef.current;
+        const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+
         let startPositionMs = 0;
+        let prior: PlaylistEntry | null = null;
+        if (uri) {
+          prior = await readPlaylistCoalesced(uri);
+          if (prior?.episodeId === episode.id) {
+            startPositionMs = prior.positionMs;
+          }
+        }
+        if (ctx.episode != null && ctx.episode.id !== episode.id) {
+          startPositionMs = 0;
+        }
+
         let artwork: string | undefined;
-        if (baseUri) {
-          const saved = await readPlaylistCoalesced(baseUri);
-          if (saved && saved.episodeId === episode.id) {
-            startPositionMs = saved.positionMs;
-          }
-          if (episode.rssFeedUrl) {
-            artwork = (await getCachedPodcastArtworkUri(baseUri, episode.rssFeedUrl)) ?? undefined;
-            warmPodcastArtworkCache(baseUri, episode.rssFeedUrl);
-          }
+        if (uri && episode.rssFeedUrl) {
+          artwork = (await getCachedPodcastArtworkUri(uri, episode.rssFeedUrl)) ?? undefined;
+          warmPodcastArtworkCache(uri, episode.rssFeedUrl);
+        }
+
+        send({
+          type: 'EPISODE_PLAY',
+          episode: toSnapshot(episode),
+          baseline: ctx.playlistBaseline,
+        });
+
+        if (deviceId && uri) {
+          const base: PlaylistEntry =
+            prior?.episodeId === episode.id
+              ? prior
+              : {
+                  durationMs: null,
+                  episodeId: episode.id,
+                  mp3Url: episode.mp3Url,
+                  positionMs: 0,
+                  updatedAt: 0,
+                  playbackOwnerId: '',
+                  controlRevision: 0,
+                };
+          const entry = buildPlaylistEntryForWrite(
+            base,
+            {
+              durationMs: null,
+              episodeId: episode.id,
+              mp3Url: episode.mp3Url,
+              positionMs: startPositionMs,
+            },
+            deviceId,
+            Date.now(),
+          );
+          send({type: 'QUEUE_PERSIST', entry});
+        } else if (uri && !deviceId) {
+          setError('Device id missing from local settings.');
         }
 
         await player.play(
@@ -277,243 +584,190 @@ export function usePlayer(
           },
           startPositionMs,
         );
-
         loadedEpisodeIdRef.current = episode.id;
-        setActiveEpisode(episode);
-        setState(await player.getState());
-
-        const uriForPlay = baseUriRef.current;
-        const deviceIdForPlay = localSettings?.deviceInstanceId?.trim() ?? '';
-        if (uriForPlay && deviceIdForPlay) {
-          (async () => {
-            try {
-              const latestProgress = await player.getProgress();
-              const entry = toPlaylistEntry(
-                episode,
-                latestProgress,
-                savedPlaylistEntryRef.current,
-                deviceIdForPlay,
-                Date.now(),
-              );
-              const writeResult = await writePlaylist(uriForPlay, entry, {
-                mode: 'control',
-              });
-              setSavedPlaylistEntry(writeResult.entry);
-              playlistEntryPersistedToDiskRef.current = true;
-            } catch (persistError) {
-              const fallbackMessage = 'Could not save playback position.';
-              setError(
-                persistError instanceof Error ? persistError.message : fallbackMessage,
-              );
-            }
-          })().catch(() => undefined);
-        } else if (uriForPlay && !deviceIdForPlay) {
-          setError('Device id missing from local settings.');
-        }
       } catch (playError) {
-        const fallbackMessage = 'Could not start playback.';
-        setError(playError instanceof Error ? playError.message : fallbackMessage);
+        setError(playError instanceof Error ? playError.message : 'Could not start playback.');
+        send({type: 'ERROR', message: playError instanceof Error ? playError.message : String(playError)});
       } finally {
         setIsLoading(false);
+        userPlaybackDepthRef.current -= 1;
       }
     },
-    [baseUri, localSettings?.deviceInstanceId, player],
+    [localSettings?.deviceInstanceId, player, send],
   );
 
+  const playEpisodeRef = useRef(playEpisode);
+  playEpisodeRef.current = playEpisode;
+
   const togglePlayback = useCallback(async () => {
-    if (!activeEpisodeRef.current) {
+    const epSnap = snapshotRef.current.context.episode;
+    if (!epSnap) {
+      return;
+    }
+    const ep = episodesByIdRef.current.get(epSnap.id);
+    if (!ep) {
       return;
     }
 
     setError(null);
     setIsLoading(true);
     try {
-      if (state === 'playing') {
+      const st = await player.getState();
+      if (st === 'playing') {
         await player.pause();
         const latestProgress = await player.getProgress();
-        setProgress(latestProgress);
-        setState('paused');
+        send({
+          type: 'PROGRESS',
+          positionMs: latestProgress.positionMs,
+          durationMs: latestProgress.durationMs,
+        });
+        send({type: 'NATIVE', state: 'paused'});
 
-        const activeEpisodeForMarking = activeEpisodeRef.current;
-        const playbackRatio =
-          latestProgress.durationMs && latestProgress.durationMs > 0
-            ? latestProgress.positionMs / latestProgress.durationMs
-            : 0;
         const uri = baseUriRef.current;
-
-        (async () => {
-          try {
-            if (!uri || !activeEpisodeForMarking) {
-              return;
-            }
-            const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
-            if (!deviceId) {
-              setError('Device id missing from local settings.');
-              return;
-            }
-            if (latestProgress.positionMs < MIN_PLAYLIST_PERSIST_POSITION_MS) {
-              playlistEntryPersistedToDiskRef.current = false;
-              await clearPlaylist(uri);
-              setSavedPlaylistEntry(null);
-              return;
-            }
-            const shouldMarkPastThresholdKeepingPlayer =
-              playbackRatio >= 0.8 &&
-              latestProgress.positionMs >= MIN_PLAYLIST_PERSIST_POSITION_MS &&
-              Boolean(activeEpisodeForMarking);
-            if (shouldMarkPastThresholdKeepingPlayer) {
-              await onMarkAsPlayed(activeEpisodeForMarking!, {
-                dismissNowPlaying: false,
-              });
-            }
-            const entry = toPlaylistEntry(
-              activeEpisodeForMarking,
-              latestProgress,
-              savedPlaylistEntryRef.current,
-              deviceId,
-              Date.now(),
-            );
-            if (shouldMarkPastThresholdKeepingPlayer) {
-              await clearPlaylist(uri);
-              setSavedPlaylistEntry(entry);
-              playlistEntryPersistedToDiskRef.current = false;
-            } else {
-              const writeResult = await writePlaylist(uri, entry, {mode: 'control'});
-              setSavedPlaylistEntry(writeResult.entry);
-              playlistEntryPersistedToDiskRef.current = true;
-            }
-          } catch (persistError) {
-            const fallbackMessage = 'Could not save playback position.';
-            setError(
-              persistError instanceof Error ? persistError.message : fallbackMessage,
-            );
-          }
-        })().catch(() => undefined);
-
+        if (!uri) {
+          return;
+        }
+        const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+        if (!deviceId) {
+          setError('Device id missing from local settings.');
+          return;
+        }
+        if (latestProgress.positionMs < MIN_PROGRESS_MS) {
+          await clearPlaylist(uri);
+          return;
+        }
+        queuePersist(ep, latestProgress.positionMs, latestProgress.durationMs);
         return;
       }
 
-      const loadedEpisodeId = loadedEpisodeIdRef.current;
-      const active = activeEpisodeRef.current;
-      if (loadedEpisodeId !== active.id) {
-        await playEpisode(active);
+      if (loadedEpisodeIdRef.current !== ep.id) {
+        await playEpisodeRef.current(ep);
         return;
       }
 
       await player.resume();
-      setState(await player.getState());
+      const resumeProgress = await player.getProgress();
+      send({
+        type: 'PROGRESS',
+        positionMs: resumeProgress.positionMs,
+        durationMs: resumeProgress.durationMs,
+      });
+      send({type: 'NATIVE', state: await player.getState()});
 
       const uriResume = baseUriRef.current;
       const deviceIdResume = localSettings?.deviceInstanceId?.trim() ?? '';
       if (uriResume && deviceIdResume) {
-        (async () => {
-          try {
-            const latestProgress = await player.getProgress();
-            setProgress(latestProgress);
-            const entry = toPlaylistEntry(
-              active,
-              latestProgress,
-              savedPlaylistEntryRef.current,
-              deviceIdResume,
-              Date.now(),
-            );
-            const writeResult = await writePlaylist(uriResume, entry, {
-              mode: 'control',
-            });
-            setSavedPlaylistEntry(writeResult.entry);
-            playlistEntryPersistedToDiskRef.current = true;
-          } catch (persistError) {
-            const fallbackMessage = 'Could not save playback position.';
-            setError(
-              persistError instanceof Error ? persistError.message : fallbackMessage,
-            );
-          }
-        })().catch(() => undefined);
+        queuePersist(ep, resumeProgress.positionMs, resumeProgress.durationMs);
       } else if (uriResume && !deviceIdResume) {
         setError('Device id missing from local settings.');
       }
     } catch (toggleError) {
-      const fallbackMessage = 'Could not change playback state.';
-      setError(toggleError instanceof Error ? toggleError.message : fallbackMessage);
+      setError(toggleError instanceof Error ? toggleError.message : 'Could not change playback state.');
     } finally {
       setIsLoading(false);
     }
-  }, [localSettings?.deviceInstanceId, onMarkAsPlayed, playEpisode, player, state]);
+  }, [localSettings?.deviceInstanceId, player, queuePersist, send]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {
-      if (!activeEpisodeRef.current) {
+      const epSnap = snapshotRef.current.context.episode;
+      const ep = epSnap ? episodesByIdRef.current.get(epSnap.id) ?? null : null;
+      if (!ep) {
         return;
       }
-
-      await player.seekTo(positionMs);
-      const nextProgress = await player.getProgress();
-      setProgress(nextProgress);
+      send({type: 'SEEK_START'});
+      try {
+        await player.seekTo(positionMs);
+        const nextProgress = await player.getProgress();
+        send({
+          type: 'PROGRESS',
+          positionMs: nextProgress.positionMs,
+          durationMs: nextProgress.durationMs,
+        });
+        const uri = baseUriRef.current;
+        const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+        if (uri && deviceId) {
+          queuePersist(ep, nextProgress.positionMs, nextProgress.durationMs);
+        }
+      } finally {
+        send({type: 'SEEK_END'});
+      }
     },
-    [player],
+    [localSettings?.deviceInstanceId, player, queuePersist, send],
   );
 
   const clearNowPlayingIfMatchesEpisode = useCallback(
     async (episodeId: string) => {
-      const uri = baseUriRef.current;
-      const matchesActive = activeEpisodeRef.current?.id === episodeId;
-      const matchesSaved = savedPlaylistEntryRef.current?.episodeId === episodeId;
-      if (!matchesActive && !matchesSaved) {
+      const matches = snapshotRef.current.context.episode?.id === episodeId;
+      if (!matches) {
         return;
       }
-
-      playlistEntryPersistedToDiskRef.current = false;
-      setSavedPlaylistEntry(null);
-      setActiveEpisode(null);
-      setProgress(emptyProgress);
-      setState('idle');
-      loadedEpisodeIdRef.current = null;
-
+      send({type: 'RESET'});
+      const uri = baseUriRef.current;
       if (!uri) {
         return;
       }
-
       try {
         await player.stop();
         await clearPlaylist(uri);
       } catch (cleanupError) {
-        const fallbackMessage = 'Could not clear playlist after marking as played.';
-        setError(cleanupError instanceof Error ? cleanupError.message : fallbackMessage);
+        setError(
+          cleanupError instanceof Error ? cleanupError.message : 'Could not clear playlist after marking as played.',
+        );
       }
     },
-    [player],
+    [player, send],
   );
 
   const resyncPlaylistFromDisk = useCallback(async () => {
     const uri = baseUriRef.current;
     if (!uri) {
-      playlistEntryPersistedToDiskRef.current = false;
-      setSavedPlaylistEntry(null);
-      setActiveEpisode(null);
-      setProgress(emptyProgress);
-      setState('idle');
-      loadedEpisodeIdRef.current = null;
+      send({type: 'RESET'});
       return;
     }
-
     try {
-      await player.ensureSetup();
-      const saved = await readPlaylistCoalesced(uri);
-      playlistEntryPersistedToDiskRef.current = saved != null;
-      setSavedPlaylistEntry(saved);
+      const savedPromise = readPlaylistCoalesced(uri);
+      const setupPromise = player.ensureSetup();
+      const saved = await savedPromise;
+      if (!saved) {
+        await setupPromise;
+        send({type: 'RESET'});
+        return;
+      }
+      const catalogEp = episodesByIdRef.current.get(saved.episodeId);
+      if (!catalogEp || catalogEp.isListened) {
+        await setupPromise;
+        try {
+          await player.stop();
+        } catch {
+          // ignore stop errors during invalid-resync cleanup
+        }
+        await clearPlaylist(uri);
+        send({type: 'RESET'});
+        return;
+      }
+      send({
+        type: 'HYDRATE',
+        episode: toSnapshot(catalogEp),
+        entry: saved,
+        baseline: saved,
+      });
+      await setupPromise;
     } catch (resyncError) {
-      const fallbackMessage = 'Could not restore player state.';
-      setError(resyncError instanceof Error ? resyncError.message : fallbackMessage);
+      setError(resyncError instanceof Error ? resyncError.message : 'Could not restore player state.');
     }
-  }, [player]);
+  }, [player, send]);
 
-  const playbackTransportBusy = isLoading || state === 'loading';
+  const playbackTransportBusy =
+    isLoading || (snapCtx.native === 'loading' && !snapCtx.seeking);
 
   return {
     activeEpisode,
     clearNowPlayingIfMatchesEpisode,
     error,
     isLoading,
+    playbackPhase: playbackSub,
+    playbackSeeking: snapCtx.seeking,
     playbackTransportBusy,
     playEpisode,
     progress,

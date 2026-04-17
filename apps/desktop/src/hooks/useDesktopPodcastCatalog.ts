@@ -16,6 +16,7 @@ export type UseDesktopPodcastCatalogResult = {
   sections: PodcastSection[];
   episodes: PodcastEpisode[];
   catalogLoading: boolean;
+  refreshPodcasts: (forceFullScan: boolean) => Promise<void>;
 };
 
 /**
@@ -70,5 +71,5 @@ export function useDesktopPodcastCatalog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid re-running when refreshPodcasts identity changes
   }, [fsRefreshNonce]);
 
-  return {sections, episodes, catalogLoading: loading};
+  return {sections, episodes, catalogLoading: loading, refreshPodcasts};
 }
