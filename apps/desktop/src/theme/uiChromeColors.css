@@ -24,13 +24,13 @@ html[data-ui-chrome='light'] .today-hub-workspace-select:hover {
 }
 
 html[data-ui-chrome='light'] .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab) {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(0, 0, 0, 0.22));
-  background: color-mix(in srgb, var(--color-accent) 18%, rgba(0, 0, 0, 0.03));
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.09);
 }
 
 html[data-ui-chrome='light']
   .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab):hover {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(0, 0, 0, 0.22));
+  border-color: transparent;
 }
 
 html[data-ui-chrome='light']
@@ -43,6 +43,6 @@ html[data-ui-chrome='light']
 }
 
 html[data-ui-chrome='light'] .editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(0, 0, 0, 0.22));
-  background: color-mix(in srgb, var(--color-accent) 20%, rgba(0, 0, 0, 0.04));
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.09);
 }

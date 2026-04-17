@@ -159,7 +159,14 @@ export {
   THEME_PALETTE_MAX,
   THEME_PALETTE_MIN,
 } from './theme/schema';
-export {BUNDLED_ESKERRA_DEFAULT, BUNDLED_THEMES, getBundledThemeById} from './theme/bundled';
+export {
+  BUNDLED_ASH,
+  BUNDLED_BLOSSOM,
+  BUNDLED_EMBER,
+  BUNDLED_ESKERRA_DEFAULT,
+  BUNDLED_THEMES,
+  getBundledThemeById,
+} from './theme/bundled';
 export {pickUniqueThemeStem, toKebabIdFromName} from './theme/identity';
 export type {VaultThemeListItem} from './theme/vaultIo';
 export {listVaultThemes, readVaultTheme, writeVaultTheme} from './theme/vaultIo';
