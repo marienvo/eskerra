@@ -1,15 +1,14 @@
-import type {NavigationProp} from '@react-navigation/native';
 import {useFocusEffect} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
 import {useCallback, useLayoutEffect, useRef} from 'react';
 import {Box, Text, useColorMode} from '@gluestack-ui/themed';
-import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {Platform, StyleSheet, TouchableOpacity} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
-import {MainTabParamList, VaultStackParamList} from '../../../navigation/types';
+import {VaultStackParamList} from '../../../navigation/types';
 import {
   canonicalizeVaultBaseUriForSearch,
   fullNeedsRebuild,
@@ -38,36 +37,17 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
     return activeRoute?.name === 'Vault';
   }, [navigation]);
 
-  const renderSettingsHeaderRight = useCallback(
+  const renderSearchHeaderRight = useCallback(
     () => (
       <TouchableOpacity
-        accessibilityLabel="Settings"
+        accessibilityLabel="Search vault"
         hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-        onPress={() => {
-          const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
-          tabNavigation?.navigate('SettingsTab');
-        }}
+        onPress={() => navigation.navigate('VaultSearch')}
         style={styles.headerIconButton}>
-        <MaterialIcons color="#ffffff" name="settings" size={24} />
+        <MaterialIcons color="#ffffff" name="search" size={24} />
       </TouchableOpacity>
     ),
     [navigation],
-  );
-
-  const renderSearchAndSettingsHeaderRight = useCallback(
-    () => (
-      <View style={styles.headerRightRow}>
-        <TouchableOpacity
-          accessibilityLabel="Search vault"
-          hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-          onPress={() => navigation.navigate('VaultSearch')}
-          style={styles.headerIconButton}>
-          <MaterialIcons color="#ffffff" name="search" size={24} />
-        </TouchableOpacity>
-        {renderSettingsHeaderRight()}
-      </View>
-    ),
-    [navigation, renderSettingsHeaderRight],
   );
 
   const renderNoteBackHeaderLeft = useCallback(
@@ -97,7 +77,7 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
     if (showingNote) {
       tabNavigation.setOptions({
         headerLeft: renderNoteBackHeaderLeft,
-        headerRight: renderSearchAndSettingsHeaderRight,
+        headerRight: renderSearchHeaderRight,
         headerTitle: noteTitle && noteTitle.length > 0 ? noteTitle : 'Note',
       });
       return () => {
@@ -111,7 +91,7 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
 
     tabNavigation.setOptions({
       headerLeft: undefined,
-      headerRight: renderSearchAndSettingsHeaderRight,
+      headerRight: renderSearchHeaderRight,
       headerTitle: 'Vault',
     });
     return () => {
@@ -126,7 +106,7 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
     navigation,
     noteTitle,
     renderNoteBackHeaderLeft,
-    renderSearchAndSettingsHeaderRight,
+    renderSearchHeaderRight,
     showingNote,
   ]);
 
@@ -144,7 +124,7 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
         tabNavigation.setOptions({
           headerShown: true,
           headerLeft: showingNote ? renderNoteBackHeaderLeft : undefined,
-          headerRight: renderSearchAndSettingsHeaderRight,
+          headerRight: renderSearchHeaderRight,
           headerTitle:
             showingNote && noteTitle && noteTitle.length > 0 ? noteTitle : 'Vault',
         });
@@ -160,7 +140,7 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
       navigation,
       noteTitle,
       renderNoteBackHeaderLeft,
-      renderSearchAndSettingsHeaderRight,
+      renderSearchHeaderRight,
       showingNote,
     ]),
   );
@@ -241,9 +221,5 @@ const styles = StyleSheet.create({
   },
   headerIconButton: {
     marginRight: 12,
-  },
-  headerRightRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
   },
 });

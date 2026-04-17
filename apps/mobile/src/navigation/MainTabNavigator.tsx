@@ -39,13 +39,13 @@ const VaultStack = createStackNavigator<VaultStackParamList>();
 const RecordStack = createStackNavigator<RecordStackParamList>();
 const SettingsStack = createStackNavigator<SettingsStackParamList>();
 const vaultTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="folder" size={size} />
+  <MaterialIcons color={color} name="grid-view" size={size} />
 );
 const newNoteTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="add" size={size} />
 );
 const inboxTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
-  <MaterialIcons color={color} name="inbox" size={size} />
+  <MaterialIcons color={color} name="move-to-inbox" size={size} />
 );
 const podcastsTabIcon: BottomTabNavigationOptions['tabBarIcon'] = ({color, size}) => (
   <MaterialIcons color={color} name="radio" size={size} />
