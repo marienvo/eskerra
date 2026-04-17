@@ -16,7 +16,6 @@ export {
 } from './attachments/imageSniff';
 export {initEskerraVault} from './initEskerraVault';
 export {
-  buildInboxMarkdownIndexContent,
   getNoteTitle,
   pickNextInboxMarkdownFileName,
   sanitizeFileName,
@@ -266,7 +265,6 @@ export {
   getAssetsDirectoryUri,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
-  getInboxIndexUri,
   ESKERRA_DIRECTORY_NAME,
   getEskerraDirectoryUri,
   getLegacySettingsUri,
@@ -276,7 +274,6 @@ export {
   getSharedSettingsUri,
   getThemesDirectoryUri,
   INBOX_DIRECTORY_NAME,
-  INBOX_INDEX_FILE_NAME,
   MARKDOWN_EXTENSION,
   normalizeVaultBaseUri,
   PLAYLIST_FILE_NAME,

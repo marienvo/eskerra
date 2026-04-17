@@ -13,16 +13,14 @@ import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.text.Collator
-import java.util.Locale
 import java.util.concurrent.Executors
 
 /**
  * Lists .md files under a SAF directory URI on a background thread, matching JS filter/sort in
  * eskerraStorage (markdown only, exclude sync-conflict names, sort by lastModified desc, then name).
  *
- * Session prepare batches settings init/read, Inbox listing, and General/Inbox.md sync in one
- * executor job to cut bridge round-trips and duplicate SAF work on cold start.
+ * Session prepare batches settings init/read and Inbox listing in one executor job to cut bridge
+ * round-trips and duplicate SAF work on cold start.
  */
 class VaultListingModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
@@ -54,9 +52,8 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
 
   /**
    * Ensures `.eskerra/settings-shared.json` (or legacy `settings.json` with migration to shared),
-   * ensures `Inbox` and `General`, lists Inbox markdown,
-   * writes `General/Inbox.md` (same body as `buildInboxMarkdownIndexContent` in `@eskerra/core`),
-   * and returns a map: `settings` (UTF-8 JSON string) and `inboxNotes` (array of uri/name/lastModified).
+   * ensures `Inbox` and `General`, lists Inbox markdown, and returns a map: `settings` (UTF-8 JSON
+   * string) and `inboxNotes` (array of uri/name/lastModified).
    */
   @ReactMethod
   fun prepareEskerraSession(baseUri: String, promise: Promise) {
@@ -404,74 +401,11 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     }
 
     val inboxRows = collectMarkdownRows(inbox)
-    writeInboxMarkdownIndex(general, inboxRows.map { it.name }, resolver)
 
     val out = Arguments.createMap()
     out.putString("settings", raw)
     out.putArray("inboxNotes", prepareRowsToWritableArray(inboxRows, resolver))
     return out
-  }
-
-  private fun stemFromMarkdownFileName(fileName: String): String {
-    return if (fileName.endsWith(MARKDOWN_SUFFIX, ignoreCase = true)) {
-      fileName.substring(0, fileName.length - MARKDOWN_SUFFIX.length)
-    } else {
-      fileName
-    }
-  }
-
-  /** Matches `buildInboxMarkdownIndexContent` in `@eskerra/core` (US locale sort for stems). */
-  private fun buildInboxMarkdownIndexContent(markdownFileNames: List<String>): String {
-    val collator = Collator.getInstance(Locale.US)
-    val stems =
-      markdownFileNames
-        .map { stemFromMarkdownFileName(it) }
-        .sortedWith(compareBy(collator) { it })
-    val lines = ArrayList<String>()
-    lines.add("# Inbox")
-    lines.add("")
-    for (stem in stems) {
-      lines.add("- [[Inbox/$stem|$stem]]")
-    }
-    return lines.joinToString("\n") + "\n"
-  }
-
-  /**
-   * Resolve `General/Inbox.md` using the already-open [generalDir] first ([findFile]), then
-   * [documentFileFromStorageUri] on the string-concat child URI, then [createFile].
-   */
-  private fun writeInboxMarkdownIndex(
-    generalDir: DocumentFile,
-    markdownFileNames: List<String>,
-    resolver: ContentResolver,
-  ) {
-    val body = buildInboxMarkdownIndexContent(markdownFileNames).toByteArray(StandardCharsets.UTF_8)
-    val byName = generalDir.findFile(INBOX_INDEX_FILE_NAME)
-    val target: DocumentFile =
-      if (byName != null && byName.exists() && byName.isFile) {
-        byName
-      } else {
-        val directUri = childDocumentUri(generalDir.uri, INBOX_INDEX_FILE_NAME)
-        val directDoc = documentFileFromStorageUri(directUri)
-        when {
-          directDoc != null && directDoc.exists() && directDoc.isFile -> directDoc
-          else ->
-            generalDir.createFile("text/markdown", INBOX_INDEX_FILE_NAME)
-              ?: throw IllegalStateException("Could not create Inbox.md.")
-        }
-      }
-
-    if (!target.isFile) {
-      throw IllegalStateException("Inbox.md is not a file.")
-    }
-
-    val existing = resolver.openInputStream(target.uri)?.use { it.readBytes() }
-    if (existing != null && existing.contentEquals(body)) {
-      return
-    }
-
-    resolver.openOutputStream(target.uri)?.use { out -> out.write(body) }
-      ?: throw IllegalStateException("Could not write Inbox.md.")
   }
 
   companion object {
@@ -487,7 +421,6 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     private const val SETTINGS_LEGACY_FILE_NAME = "settings.json"
     private const val INBOX_DIR_NAME = "Inbox"
     private const val GENERAL_DIR_NAME = "General"
-    private const val INBOX_INDEX_FILE_NAME = "Inbox.md"
     /** Skip prefetching body when longer than this (JS uses readFile instead). */
     private const val INBOX_NOTE_CONTENT_MAX_BYTES = 512 * 1024
     /** Matches `serializeEskerraSettings(defaultEskerraSettings)` in `@eskerra/core` (JSON.stringify + trailing newline). */

@@ -44,7 +44,7 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 | Area | Current milestone |
 | ---- | ----------------- |
 | **Vault root** | Native folder dialog; path persisted (store + session) |
-| **Layout / notes** | Bootstrap vault (`initEskerraVault` via `@eskerra/core`), sync `General/Inbox.md`, **list Inbox notes**, **single-column editor**, create note (`window.prompt` title), save markdown |
+| **Layout / notes** | Bootstrap vault (`initEskerraVault` via `@eskerra/core`), **list Inbox notes**, **single-column editor**, create note (`window.prompt` title), save markdown |
 | **Settings** | Display name editable in header; change folder |
 | **Audio** | Manual **MP3 URL** field; **play / pause**; **resume from** `.eskerra/playlist.json`; **MPRIS** on Linux (souvlaki) |
 | **Podcasts from vault** | **Not present** as a first-class Episodes UI (no scan of `General/` episode lists, no sectioned list, no refresh) |
@@ -69,7 +69,6 @@ The mobile app is **Android-only**. Tabs and stacks (from navigation code) map a
 **Exit criteria**
 
 - User can **create, edit, delete**, and **re-open** inbox notes against a real vault folder with the same file names/layout rules as Android.
-- `General/Inbox.md` stays consistent after note operations (same helpers as today).
 
 **Between-phase focus**
 

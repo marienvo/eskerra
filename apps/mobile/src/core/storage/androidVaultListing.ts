@@ -78,11 +78,10 @@ export async function tryListMarkdownFilesNative(
 
 /**
  * Ensures `.eskerra/settings-shared.json` (or legacy `settings.json`) and (on current Android native)
- * Inbox listing + General/Inbox.md
- * in one call. Returns `inboxPrefetch` when the native map includes `inboxNotes` so the first Vault
- * load can skip duplicate listing/index SAF work. Legacy native that returns only a string yields
- * `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android, or
- * native prepare fails (caller should fall back to initEskerra + readSettings).
+ * Inbox listing in one call. Returns `inboxPrefetch` when the native map includes `inboxNotes` so
+ * the first Vault load can skip duplicate listing SAF work. Legacy native that returns only a string
+ * yields `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android,
+ * or native prepare fails (caller should fall back to initEskerra + readSettings).
  */
 export async function tryPrepareEskerraSessionNative(
   baseUri: string,
@@ -92,7 +91,7 @@ export async function tryPrepareEskerraSessionNative(
   }
 
   // Dev mock vault lives in AsyncStorage, not SAF. Native prepare can return an empty inbox
-  // prefetch; `useNotes` treats `[]` as a hit and skips `listInboxNotesAndSyncIndex`, hiding notes.
+  // prefetch; `useNotes` treats `[]` as a hit and skips `listNotes`, hiding notes.
   if (baseUri.trim() === DEV_MOCK_VAULT_URI) {
     return null;
   }

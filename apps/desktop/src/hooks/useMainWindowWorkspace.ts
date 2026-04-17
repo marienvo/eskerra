@@ -62,7 +62,6 @@ import {
   renameVaultMarkdownNote,
   renameVaultTreeDirectory,
   saveNoteMarkdown,
-  syncInboxMarkdownIndex,
   writeVaultLocalSettings,
 } from '../lib/vaultBootstrap';
 import {
@@ -101,6 +100,7 @@ import {
   vaultUriDeletedByTreeChange,
 } from '../lib/editorDocumentHistory';
 import {
+  type ClosedEditorTabRecord,
   isEditorClosedTabReopenable,
 } from '../lib/editorClosedTabStack';
 import {
@@ -110,6 +110,8 @@ import {
   findTabById,
   findTabIdWithCurrentUri,
   firstSurvivorUriFromTabs,
+  insertTabAfterActive,
+  insertTabAtIndex,
   migrateOpenTabUrisToWorkspaceTabs,
   pickNeighborTabIdAfterRemovingTab,
   pushClosedWorkspaceTabsFromCloseAll,
@@ -349,9 +351,12 @@ export type UseMainWindowWorkspaceResult = {
   selectNote: (uri: string) => void;
   /**
    * Prefer activating an existing tab that already shows `uri`; otherwise open a new tab and focus it
-   * (e.g. file tree middle-click).
+   * (e.g. file tree middle-click). Use `insertAfterActive` for hub-dropdown opens.
    */
-  selectNoteInNewActiveTab: (uri: string) => void;
+  selectNoteInNewActiveTab: (
+    uri: string,
+    opts?: {insertAfterActive?: boolean},
+  ) => void;
   submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
@@ -567,7 +572,7 @@ export function useMainWindowWorkspace(options: {
   const activeEditorTabIdRef = useRef<string | null>(null);
   const activeTodayHubUriRef = useRef<string | null>(null);
   /** User-initiated tab closes only (for Reopen closed tab). */
-  const editorClosedTabsStackRef = useRef<string[]>([]);
+  const editorClosedTabsStackRef = useRef<ClosedEditorTabRecord[]>([]);
   const notesRef = useRef<NoteRow[]>([]);
   const editorShellScrollByUriRef = useRef(
     new Map<string, {top: number; left: number}>(),
@@ -670,7 +675,7 @@ export function useMainWindowWorkspace(options: {
     const stack = editorClosedTabsStackRef.current;
     for (let i = stack.length - 1; i >= 0; i--) {
       if (
-        isEditorClosedTabReopenable(stack[i]!, root, noteSet)
+        isEditorClosedTabReopenable(stack[i]!.uri, root, noteSet)
       ) {
         return true;
       }
@@ -1271,6 +1276,16 @@ export function useMainWindowWorkspace(options: {
         /** When `newTab` is true: default `true` (focus new tab). */
         activateNewTab?: boolean;
         /**
+         * When creating a new tab: insert at `activeIndex + 1` (or index `0` if no active tab)
+         * instead of appending at the end.
+         */
+        insertAfterActive?: boolean;
+        /**
+         * When creating a new tab: insert at this index (clamped to strip length).
+         * Takes precedence over `insertAfterActive`.
+         */
+        insertAtIndex?: number;
+        /**
          * Clear editor tabs for the active hub and open this note without a tab pill.
          * Only honored for the active workspace `Today.md` (`activeTodayHubUri`).
          */
@@ -1406,7 +1421,19 @@ export function useMainWindowWorkspace(options: {
 
       if (isBackgroundNewTab) {
         const newTab = createEditorWorkspaceTab(targetNorm);
-        const nextTabs = [...editorWorkspaceTabsRef.current, newTab];
+        const curTabs = editorWorkspaceTabsRef.current;
+        const activeId = activeEditorTabIdRef.current;
+        let nextTabs: EditorWorkspaceTab[];
+        if (
+          typeof options?.insertAtIndex === 'number'
+          && Number.isFinite(options.insertAtIndex)
+        ) {
+          nextTabs = insertTabAtIndex(curTabs, options.insertAtIndex, newTab);
+        } else if (options?.insertAfterActive) {
+          nextTabs = insertTabAfterActive(curTabs, activeId, newTab);
+        } else {
+          nextTabs = [...curTabs, newTab];
+        }
         editorWorkspaceTabsRef.current = nextTabs;
         setEditorWorkspaceTabs(nextTabs);
         if (prefetchBody !== undefined) {
@@ -1453,7 +1480,16 @@ export function useMainWindowWorkspace(options: {
         nextActiveId = null;
       } else if (options?.newTab && options?.activateNewTab !== false) {
         const newTab = createEditorWorkspaceTab(targetNorm);
-        nextTabs = [...nextTabs, newTab];
+        if (
+          typeof options?.insertAtIndex === 'number'
+          && Number.isFinite(options.insertAtIndex)
+        ) {
+          nextTabs = insertTabAtIndex(nextTabs, options.insertAtIndex, newTab);
+        } else if (options?.insertAfterActive) {
+          nextTabs = insertTabAfterActive(nextTabs, nextActiveId, newTab);
+        } else {
+          nextTabs = [...nextTabs, newTab];
+        }
         nextActiveId = newTab.id;
       } else {
         const activeId = ensureActiveTabId(nextTabs, nextActiveId);
@@ -1595,7 +1631,11 @@ export function useMainWindowWorkspace(options: {
 
         const closedUri = tabClosing ? tabCurrentUri(tabClosing) : null;
         if (closedUri) {
-          editorClosedTabsStackRef.current.push(closedUri);
+          const closedIndex = tabsBefore.findIndex(t => t.id === tabId);
+          editorClosedTabsStackRef.current.push({
+            uri: closedUri,
+            index: closedIndex >= 0 ? closedIndex : tabsBefore.length - 1,
+          });
         }
         bumpEditorClosedStack();
 
@@ -1751,13 +1791,17 @@ export function useMainWindowWorkspace(options: {
       const root = vaultRootRef.current;
       const stack = editorClosedTabsStackRef.current;
       while (stack.length > 0) {
-        const uri = stack.pop()!;
+        const rec = stack.pop()!;
         bumpEditorClosedStack();
         const noteSet = new Set(
           notesRef.current.map(n => n.uri.replace(/\\/g, '/')),
         );
-        if (isEditorClosedTabReopenable(uri, root, noteSet)) {
-          await openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
+        if (isEditorClosedTabReopenable(rec.uri, root, noteSet)) {
+          await openMarkdownInEditor(rec.uri, {
+            newTab: true,
+            activateNewTab: true,
+            insertAtIndex: rec.index,
+          });
           return;
         }
       }
@@ -1784,7 +1828,6 @@ export function useMainWindowWorkspace(options: {
       try {
         await setVaultSession(root);
         await bootstrapVaultLayout(root, fs);
-        await syncInboxMarkdownIndex(root, fs);
         const shared = await readVaultSettings(root, fs);
         setVaultSettings(shared);
         let local = await readVaultLocalSettings(root, fs);
@@ -2198,9 +2241,6 @@ export function useMainWindowWorkspace(options: {
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
-      void syncInboxMarkdownIndex(vaultRoot, fs).catch(() => {
-        // ignore: transient FS race
-      });
       setFsRefreshNonce(n => n + 1);
       void (async () => {
         try {
@@ -2545,13 +2585,17 @@ export function useMainWindowWorkspace(options: {
   );
 
   const selectNoteInNewActiveTab = useCallback(
-    (uri: string) => {
+    (uri: string, opts?: {insertAfterActive?: boolean}) => {
       const existingId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
       if (existingId != null) {
         activateOpenTab(existingId);
         return;
       }
-      void openMarkdownInEditor(uri, {newTab: true, activateNewTab: true});
+      void openMarkdownInEditor(uri, {
+        newTab: true,
+        activateNewTab: true,
+        insertAfterActive: opts?.insertAfterActive === true,
+      });
     },
     [activateOpenTab, openMarkdownInEditor],
   );
@@ -3126,6 +3170,7 @@ export function useMainWindowWorkspace(options: {
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: false,
+              insertAfterActive: true,
             });
             return;
           }
@@ -3139,6 +3184,7 @@ export function useMainWindowWorkspace(options: {
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: true,
+              insertAfterActive: true,
             });
             return;
           }
@@ -3237,6 +3283,7 @@ export function useMainWindowWorkspace(options: {
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: false,
+              insertAfterActive: true,
             });
             return;
           }
@@ -3250,6 +3297,7 @@ export function useMainWindowWorkspace(options: {
             await openMarkdownInEditor(result.uri, {
               newTab: true,
               activateNewTab: true,
+              insertAfterActive: true,
             });
             return;
           }

@@ -1884,6 +1884,13 @@ body.editor-tab-strip--dragging {
   background: var(--color-row-hover);
 }
 
+/* Pane-level drop onto tree root (empty Inbox / gaps) — mirrors row drop-target affordance. */
+.vault-tree.vault-tree-panel--drop-target {
+  outline: 1px solid var(--color-accent, #3b82f6);
+  outline-offset: -1px;
+  background: var(--color-row-hover);
+}
+
 .vault-tree-row--selected.vault-tree-row--drop-target {
   background: var(--color-row-hover);
   outline: 2px solid var(--color-focus-ring);

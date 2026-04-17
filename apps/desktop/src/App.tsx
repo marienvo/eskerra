@@ -205,6 +205,13 @@ export default function App() {
     inboxRestoreEnabled: layoutsReady,
   });
 
+  const openTodayHubInNewTabAfterActive = useCallback(
+    (uri: string) => {
+      selectNoteInNewActiveTab(uri, {insertAfterActive: true});
+    },
+    [selectNoteInNewActiveTab],
+  );
+
   const appRootClassName = useMemo(() => {
     const parts = ['app-root'];
     if (isTauri()) {
@@ -250,7 +257,7 @@ export default function App() {
       onPickHub: (uri: string) => {
         void switchTodayHubWorkspace(uri);
       },
-      onOpenHubInNewTab: selectNoteInNewActiveTab,
+      onOpenHubInNewTab: openTodayHubInNewTabAfterActive,
     };
   }, [
     vaultRoot,
@@ -259,7 +266,7 @@ export default function App() {
     workspaceSelectShowsActiveTabPill,
     focusActiveTodayHubNote,
     switchTodayHubWorkspace,
-    selectNoteInNewActiveTab,
+    openTodayHubInNewTabAfterActive,
   ]);
 
   const [vaultPaneVisible, setVaultPaneVisible] = useState(

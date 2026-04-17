@@ -47,13 +47,3 @@ export function pickNextInboxMarkdownFileName(
 
   return candidate;
 }
-
-/** Builds the full body for `General/Inbox.md` from Inbox markdown basenames (e.g. `note.md`). */
-
-export function buildInboxMarkdownIndexContent(markdownBasenames: string[]): string {
-  const stems = markdownBasenames.map(name => stemFromMarkdownFileName(name)).sort((a, b) => {
-    return a.localeCompare(b);
-  });
-  const lines = ['# Inbox', '', ...stems.map(stem => `- [[Inbox/${stem}|${stem}]]`)];
-  return `${lines.join('\n')}\n`;
-}

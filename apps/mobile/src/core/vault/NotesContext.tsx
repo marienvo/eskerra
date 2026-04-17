@@ -13,7 +13,7 @@ import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
 import {
   createNote,
   deleteInboxNotes,
-  listInboxNotesAndSyncIndex,
+  listNotes,
   readNote,
   writeNoteContent,
 } from '../storage/eskerraStorage';
@@ -126,7 +126,7 @@ export function NotesProvider({children}: NotesProviderProps) {
         }
 
         clearInboxContentCache();
-        const nextNotes = await listInboxNotesAndSyncIndex(baseUri);
+        const nextNotes = await listNotes(baseUri);
         setNotes(nextNotes);
       } catch (loadError) {
         const fallbackMessage = 'Could not load entries from Vault.';

@@ -76,6 +76,7 @@ import {MaterialIcon} from './MaterialIcon';
 import {TodayHubCanvas} from './TodayHubCanvas';
 import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
+import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -661,6 +662,9 @@ export function VaultTab({
   const [renameFolderUri, setRenameFolderUri] = useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = useState('');
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const confirmDeleteNoteActionRef = useRef<HTMLButtonElement | null>(null);
+  const confirmDeleteFolderActionRef = useRef<HTMLButtonElement | null>(null);
+  const confirmBulkDeleteActionRef = useRef<HTMLButtonElement | null>(null);
   const vaultMarkdownRefsRef = useRef(vaultMarkdownRefs);
   const onMoveVaultTreeItemRef = useRef(onMoveVaultTreeItem);
   const onBulkMoveVaultTreeItemsRef = useRef(onBulkMoveVaultTreeItems);
@@ -681,6 +685,32 @@ export function VaultTab({
     }
     setConfirmDeleteUri(selectedUri);
   }, [busy, composingNewEntry, selectedUri]);
+
+  const onDeleteNoteShortcutRef = useRef(onDeleteNoteShortcut);
+  useLayoutEffect(() => {
+    onDeleteNoteShortcutRef.current = onDeleteNoteShortcut;
+  }, [onDeleteNoteShortcut]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        !shouldHandleDeleteNoteGlobalShortcut(e, {
+          activeElement: document.activeElement,
+          eventTarget: e.target,
+        })
+      ) {
+        return;
+      }
+      onDeleteNoteShortcutRef.current();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKeyDown, false);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, false);
+    };
+  }, []);
+
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const openRenameDialog = useCallback((uri: string) => {
@@ -970,7 +1000,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmDeleteNoteActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">Delete note</AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               Delete this note? This cannot be undone.
@@ -983,6 +1021,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmDeleteNoteActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}
@@ -1010,7 +1049,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmDeleteFolderActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">Delete folder</AlertDialog.Title>
             <AlertDialog.Description className="alert-dialog-description">
               Delete this folder and everything inside it? This cannot be undone.
@@ -1023,6 +1070,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmDeleteFolderActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}
@@ -1050,7 +1098,15 @@ export function VaultTab({
       >
         <AlertDialog.Portal>
           <AlertDialog.Overlay className="alert-dialog-overlay" />
-          <AlertDialog.Content className="alert-dialog-content">
+          <AlertDialog.Content
+            className="alert-dialog-content"
+            onOpenAutoFocus={event => {
+              event.preventDefault();
+              queueMicrotask(() => {
+                confirmBulkDeleteActionRef.current?.focus();
+              });
+            }}
+          >
             <AlertDialog.Title className="alert-dialog-title">
               Delete multiple items
             </AlertDialog.Title>
@@ -1077,6 +1133,7 @@ export function VaultTab({
               </AlertDialog.Cancel>
               <AlertDialog.Action asChild>
                 <button
+                  ref={confirmBulkDeleteActionRef}
                   type="button"
                   className="primary destructive"
                   disabled={busy}

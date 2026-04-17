@@ -2,7 +2,7 @@ import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import {tryPrepareEskerraSessionNative} from '../src/core/storage/androidVaultListing';
-import {listInboxNotesAndSyncIndex} from '../src/core/storage/eskerraStorage';
+import {listNotes} from '../src/core/storage/eskerraStorage';
 import {NotesProvider, useNotesContext} from '../src/core/vault/NotesContext';
 import {VaultProvider, useVaultContext} from '../src/core/vault/VaultContext';
 
@@ -13,7 +13,7 @@ jest.mock('../src/core/storage/androidVaultListing', () => ({
 jest.mock('../src/core/storage/eskerraStorage', () => ({
   createNote: jest.fn(),
   deleteInboxNotes: jest.fn(),
-  listInboxNotesAndSyncIndex: jest.fn(),
+  listNotes: jest.fn(),
   readNote: jest.fn(),
   writeNoteContent: jest.fn(),
 }));
@@ -25,9 +25,7 @@ jest.mock('../src/core/storage/appStorage', () => ({
 const tryPrepareMock = tryPrepareEskerraSessionNative as jest.MockedFunction<
   typeof tryPrepareEskerraSessionNative
 >;
-const listInboxMock = listInboxNotesAndSyncIndex as jest.MockedFunction<
-  typeof listInboxNotesAndSyncIndex
->;
+const listNotesMock = listNotes as jest.MockedFunction<typeof listNotes>;
 
 function flushPromises(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
@@ -97,16 +95,16 @@ describe('NotesContext refresh', () => {
     });
 
     expect(tryPrepareMock).toHaveBeenCalledWith(vaultUri);
-    expect(listInboxMock).not.toHaveBeenCalled();
+    expect(listNotesMock).not.toHaveBeenCalled();
     const snap1 = snapshotHolder.current;
     expect(snap1).not.toBeNull();
     expect(snap1!.noteCount).toBe(1);
     expect(snap1!.getInbox(noteUri)).toBe('# Title From H1\n');
   });
 
-  test('falls back to listInboxNotesAndSyncIndex when native prepare returns null', async () => {
+  test('falls back to listNotes when native prepare returns null', async () => {
     tryPrepareMock.mockResolvedValue(null);
-    listInboxMock.mockResolvedValue([
+    listNotesMock.mockResolvedValue([
       {lastModified: 2, name: 'b.md', uri: `${vaultUri}/Inbox/b.md`},
     ]);
 
@@ -140,7 +138,7 @@ describe('NotesContext refresh', () => {
     });
 
     expect(tryPrepareMock).toHaveBeenCalledWith(vaultUri);
-    expect(listInboxMock).toHaveBeenCalledWith(vaultUri);
+    expect(listNotesMock).toHaveBeenCalledWith(vaultUri);
     const snap2 = snapshotHolder.current;
     expect(snap2).not.toBeNull();
     expect(snap2!.noteCount).toBe(1);

@@ -31,6 +31,11 @@ import {
   type VaultTreeBulkItem,
 } from '../lib/vaultTreeBulkPlan';
 import {
+  resolveVaultTreeDropFromMime,
+  serializeVaultTreeDragPayload,
+  VAULT_TREE_DND_MIME,
+} from '../lib/vaultTreeDnd';
+import {
   buildSparseLonelyExpandPlan,
   createVaultSparsePlanLoader,
   pickLonelySubfolderWhenNoMarkdown,
@@ -53,8 +58,6 @@ import {vaultTreeItemToFileTreeRowViewModel} from './fileTree/vaultTreeItemToFil
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
 const VAULT_TREE_ROW_HEIGHT_PX = FILE_TREE_ROW_HEIGHT_PX;
-
-const VAULT_TREE_DND_MIME = 'application/x-eskerra-vault-tree';
 
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
 
@@ -99,6 +102,10 @@ function isVaultTreeRowDirectoryDropTarget(data: VaultTreeItemData): boolean {
   return data.kind === 'folder' || data.kind === 'todayHub';
 }
 
+function dataTransferListsVaultTreeMime(dt: DataTransfer): boolean {
+  return [...dt.types].includes(VAULT_TREE_DND_MIME);
+}
+
 function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | null>): void {
   const el = hostRef.current;
   if (el?.parentNode) {
@@ -113,6 +120,8 @@ function teardownVaultTreeDragGhost(hostRef: MutableRefObject<HTMLDivElement | n
 function mountVaultTreeDragGhost(options: {
   icon: VaultTreeDragGhostIcon;
   label: string;
+  /** When dragging a multi-selection, number of additional items after the primary label. */
+  multiExtraCount?: number;
   dataTransfer: DataTransfer;
   pointerClientX: number;
   pointerClientY: number;
@@ -122,6 +131,7 @@ function mountVaultTreeDragGhost(options: {
   const {
     icon: dragIcon,
     label,
+    multiExtraCount,
     dataTransfer,
     pointerClientX,
     pointerClientY,
@@ -140,7 +150,11 @@ function mountVaultTreeDragGhost(options: {
 
   const text = document.createElement('span');
   text.className = 'vault-tree-drag-ghost__label';
-  text.textContent = label;
+  const displayLabel =
+    multiExtraCount !== undefined && multiExtraCount > 0
+      ? `${label} +${multiExtraCount}`
+      : label;
+  text.textContent = displayLabel;
 
   ghost.appendChild(icon);
   ghost.appendChild(text);
@@ -682,13 +696,82 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     && !vaultRootInMultiSelection
     && bulkDeletePlannedCount > 0;
 
+  const applyVaultTreeDrop = useCallback(
+    (raw: string | undefined, targetDirectoryUri: string) => {
+      if (!raw) {
+        return;
+      }
+      const resolved = resolveVaultTreeDropFromMime(raw);
+      if (!resolved.ok) {
+        return;
+      }
+      if (resolved.mode === 'bulk') {
+        void Promise.resolve(
+          onBulkMoveVaultTreeItems(resolved.items, targetDirectoryUri),
+        );
+        return;
+      }
+      void Promise.resolve(
+        onMoveVaultTreeItem(
+          resolved.sourceUri,
+          resolved.sourceKind,
+          targetDirectoryUri,
+        ),
+      );
+    },
+    [onBulkMoveVaultTreeItems, onMoveVaultTreeItem],
+  );
+
   return (
     <>
       <AssistiveTreeDescription tree={tree} className="visually-hidden" />
       <div
         {...containerProps}
         aria-multiselectable="true"
-        className="vault-tree"
+        className={[
+          'vault-tree',
+          (containerProps as {className?: string}).className,
+          dropTargetUri === rootId ? 'vault-tree--root-drop-target vault-tree-panel--drop-target' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        onDragEnter={e => {
+          if (busy) {
+            return;
+          }
+          if (!dataTransferListsVaultTreeMime(e.dataTransfer)) {
+            return;
+          }
+          e.preventDefault();
+        }}
+        onDragOver={e => {
+          if (busy) {
+            return;
+          }
+          if (!dataTransferListsVaultTreeMime(e.dataTransfer)) {
+            return;
+          }
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setDropTargetUri(rootId);
+        }}
+        onDragLeave={e => {
+          if (!scrollRef.current?.contains(e.relatedTarget as Node | null)) {
+            clearDropTarget();
+          }
+        }}
+        onDrop={e => {
+          if (busy) {
+            return;
+          }
+          if (!dataTransferListsVaultTreeMime(e.dataTransfer)) {
+            return;
+          }
+          e.preventDefault();
+          const raw = e.dataTransfer.getData(VAULT_TREE_DND_MIME);
+          clearDropTarget();
+          applyVaultTreeDrop(raw, rootId);
+        }}
         ref={el => {
           scrollRef.current = el;
           const r = (containerProps as {ref?: (node: HTMLDivElement | null) => void}).ref;
@@ -824,9 +907,20 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     return;
                   }
                   setDraggingSourceUri(data.uri);
+                  const selectedIds = tree.getState().selectedItems;
+                  let multiExtraCount = 0;
+                  if (selectedIds.length > 1 && selectedIds.includes(data.uri)) {
+                    const movable = selectedIds.filter(
+                      id => id !== rootId && itemStoreRef.current[id]?.uri,
+                    );
+                    if (movable.length > 1) {
+                      multiExtraCount = movable.length - 1;
+                    }
+                  }
                   mountVaultTreeDragGhost({
                     icon: vaultTreeDragGhostIconForRow(data),
                     label: vaultTreeRowLabel(data),
+                    multiExtraCount: multiExtraCount > 0 ? multiExtraCount : undefined,
                     dataTransfer: e.dataTransfer,
                     pointerClientX: e.clientX,
                     pointerClientY: e.clientY,
@@ -835,7 +929,13 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   });
                   e.dataTransfer.setData(
                     VAULT_TREE_DND_MIME,
-                    JSON.stringify({uri: data.uri, kind: data.kind}),
+                    serializeVaultTreeDragPayload({
+                      draggedUri: data.uri,
+                      draggedKind: data.kind,
+                      selectedItemIds: selectedIds,
+                      rootId,
+                      getRow: id => itemStoreRef.current[id],
+                    }),
                   );
                   e.dataTransfer.effectAllowed = 'move';
                 }}
@@ -846,6 +946,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
                         setDropTargetUri(data.uri);
+                        e.stopPropagation();
                       }
                     : undefined
                 }
@@ -862,49 +963,13 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   isDropTargetDir
                     ? e => {
                         e.preventDefault();
+                        e.stopPropagation();
                         clearDropTarget();
                         if (busy) {
                           return;
                         }
                         const raw = e.dataTransfer.getData(VAULT_TREE_DND_MIME);
-                        if (!raw) {
-                          return;
-                        }
-                        let parsed: {uri?: string; kind?: string};
-                        try {
-                          parsed = JSON.parse(raw) as {uri?: string; kind?: string};
-                        } catch {
-                          return;
-                        }
-                        const kindOk =
-                          parsed.kind === 'folder'
-                          || parsed.kind === 'article'
-                          || parsed.kind === 'todayHub';
-                        if (typeof parsed.uri !== 'string' || !kindOk) {
-                          return;
-                        }
-                        const moveSourceKind: 'folder' | 'article' =
-                          parsed.kind === 'article' ? 'article' : 'folder';
-                        const selectedIds = tree.getState().selectedItems;
-                        const dragIsInMulti =
-                          selectedIds.length > 1 && selectedIds.includes(parsed.uri);
-                        if (dragIsInMulti) {
-                          const payload: VaultTreeBulkItem[] = [];
-                          for (const id of selectedIds) {
-                            if (id === rootId) {
-                              continue;
-                            }
-                            const row = itemStoreRef.current[id];
-                            if (row?.uri) {
-                              payload.push({uri: row.uri, kind: row.kind});
-                            }
-                          }
-                          void Promise.resolve(
-                            onBulkMoveVaultTreeItems(payload, data.uri),
-                          );
-                          return;
-                        }
-                        onMoveVaultTreeItem(parsed.uri, moveSourceKind, data.uri);
+                        applyVaultTreeDrop(raw, data.uri);
                       }
                     : undefined
                 }
