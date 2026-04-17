@@ -95,10 +95,13 @@ function inlineCodeBackgroundMarkers(view: EditorView, from: number, to: number)
  * `drawSelection()`'s `.cm-selectionLayer` so opaque fills never hide selection.
  */
 export class MarkdownFenceBlockBackgroundMarker implements LayerMarker {
-  constructor(
-    readonly top: number,
-    readonly height: number,
-  ) {}
+  readonly top: number;
+  readonly height: number;
+
+  constructor(top: number, height: number) {
+    this.top = top;
+    this.height = height;
+  }
 
   draw(): HTMLElement {
     const el = document.createElement('div');

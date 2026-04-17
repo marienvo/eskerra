@@ -1,0 +1,23 @@
+---
+description: Add or update Storybook when changing UI components, where it makes sense
+globs: apps/**/*.tsx packages/eskerra-ds-desktop/**/*.tsx packages/eskerra-ds-mobile/**/*.tsx **/__stories__/** **/__sandbox__/**
+alwaysApply: false
+---
+
+# Storybook for touched or new components
+
+When you **modify** existing React components or **add** new presentational components under `apps/` or `packages/eskerra-ds-*`, decide whether Storybook coverage is needed or useful, and do it **in the same change** (or briefly state why not).
+
+## Do this
+
+- **Design system (L2):** new or changed exports in `packages/eskerra-ds-*` with user-visible behavior or variants: extend stories under `src/__stories__/` or add `*.stories.tsx`. Follow **Storybook contracts** (`.cursor/rules/storybook-contracts.mdc`) — required variants, `play` where required, tags.
+- **App UI:** reusable or reasonably isolatable components (shell, panels, lists, form pieces): consider **L3 sandbox** stories (`apps/*/src/**/__sandbox__/*.stories.tsx`, tag `sandbox`) when Storybook isolation helps review; do not add L2 contract stories for full product compositions.
+- Update existing stories when props, states, or interactions of the component change.
+
+## Exceptions (no new story required)
+
+- Logic-only changes (hooks, stores, pure utils) with no visual surface.
+- Minor styling tweaks without new interaction variants, when existing stories still represent the component.
+- Generated or third-party code.
+
+If you skip adding or updating a story, add **one short sentence** in your reply to the user explaining why that is appropriate here.
