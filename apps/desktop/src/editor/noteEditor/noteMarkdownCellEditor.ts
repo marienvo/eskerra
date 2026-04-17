@@ -30,6 +30,7 @@ import {cleanPastedMarkdownFragment} from '../../lib/cleanNoteMarkdown';
 import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdown';
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
+import {markdownCodeBackgroundLayer} from './markdownCodeBackgroundLayer';
 import {
   noteMarkdownEditorAppearance,
   noteMarkdownIndentUnit,
@@ -580,6 +581,7 @@ export function buildNoteMarkdownCellExtensions(
     ...noteMarkdownEditorAppearance,
     history(),
     drawSelection(),
+    markdownCodeBackgroundLayer,
     multiCaretClickAddsSelectionRangeExtension(),
     markdownSelectionAllowMultipleRanges(),
     ...markdownSmartExpandExtension(),

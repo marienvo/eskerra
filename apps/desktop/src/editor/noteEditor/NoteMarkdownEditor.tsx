@@ -53,6 +53,7 @@ import {
   isNoteAttachmentImageFilePath,
   type NoteInboxAttachmentHost,
 } from '../../lib/noteInboxAttachmentHost';
+import {markdownCodeBackgroundLayer} from './markdownCodeBackgroundLayer';
 import {
   noteMarkdownEditorAppearance,
   noteMarkdownIndentUnit,
@@ -788,6 +789,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         : []),
       history(),
       drawSelection(),
+      markdownCodeBackgroundLayer,
       multiCaretClickAddsSelectionRangeExtension(),
       markdownSelectionAllowMultipleRanges(),
       ...markdownSmartExpandExtension(),

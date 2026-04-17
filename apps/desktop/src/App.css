@@ -4543,6 +4543,14 @@ button.primary.destructive {
   padding: 0;
 }
 
+/* Narrow cell: hide full-width fenced block layer fill (inline `pill` layer may still show). */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cm-host
+  .cm-md-fence-bg {
+  display: none;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__idle-text {
@@ -4820,15 +4828,41 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-code {
+  /* Pill fill/border: `.cm-md-inline-code-bg` in markdownCodeBackgroundLayer.ts (below selection). */
   font-family: ui-monospace, monospace;
   font-size: 0.9em;
   padding: 0.25em 0.34em;
-  border-radius: 4px;
-  border: 1px solid var(--nb-editor-inline-code-border);
-  background: var(--nb-editor-inline-code-bg);
   color: var(--nb-editor-inline-code-text);
   font-weight: 600;
   box-decoration-break: clone;
+}
+
+/*
+ * CodeMirror draws `.cm-selectionLayer` below `.cm-content`; opaque backgrounds on tokens/lines
+ * hide selection. Fence + inline code fills render here (z-index under selection).
+ */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-codeBackgroundLayer {
+  z-index: -2 !important;
+  contain: strict;
+  pointer-events: none;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-bg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  background: var(--nb-editor-code-block-bg);
+  border: 1px solid var(--nb-editor-code-block-border);
+  border-radius: 4px;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-inline-code-bg {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--nb-editor-inline-code-bg);
+  border: 1px solid var(--nb-editor-inline-code-border);
+  border-radius: 4px;
 }
 
 /* Monospace body only (fenced lines + inner of inline code); no second pill inside `.cm-md-code`. */
@@ -5092,34 +5126,27 @@ button.primary.destructive {
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line {
+  /* Block fill/border: `.cm-md-fence-bg` layer (see `.cm-md-codeBackgroundLayer`). */
   font-family: ui-monospace, monospace;
   font-size: 0.92em;
   line-height: 1.55;
-  background: var(--nb-editor-code-block-bg);
   color: var(--nb-editor-inline-code-text);
-  border-left: 1px solid var(--nb-editor-code-block-border);
-  border-right: 1px solid var(--nb-editor-code-block-border);
   padding-inline: 0.55rem;
   /* Replaces former margin-block: 0.06rem; padding is included in line height measurements. */
   padding-block: 0.03rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--first {
-  border-top: 1px solid var(--nb-editor-code-block-border);
-  border-radius: 4px 4px 0 0;
   /* Former margin-top 0.35rem merged into padding (margin is not measured by CodeMirror). */
   padding-top: 0.7rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--last {
-  border-bottom: 1px solid var(--nb-editor-code-block-border);
-  border-radius: 0 0 4px 4px;
   /* Former margin-bottom 0.35rem merged into padding. */
   padding-bottom: 0.75rem;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-fence-line--first.cm-md-fence-line--last {
-  border-radius: 4px;
   /* Single-line fence: former margin-block 0.35rem + padding-block 0.4rem, no vertical margin. */
   padding: 0.75rem 0.55rem;
 }

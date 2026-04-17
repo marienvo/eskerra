@@ -4,14 +4,22 @@ import {
   ensureSyntaxTree,
   foldable,
   LanguageDescription,
+  syntaxTree,
 } from '@codemirror/language';
 import {languages} from '@codemirror/language-data';
 import {EditorState} from '@codemirror/state';
+import {EditorView, drawSelection} from '@codemirror/view';
 import {highlightTree} from '@lezer/highlight';
-import {beforeAll, describe, expect, it} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
 import {
+  MarkdownFenceBlockBackgroundMarker,
+  collectMarkdownCodeBackgroundMarkers,
+  markdownCodeBackgroundLayer,
+} from './markdownCodeBackgroundLayer';
+import {
   markdownEditorBlockLineClasses,
+  noteMarkdownEditorAppearance,
   noteMarkdownHighlightStyle,
   noteMarkdownListItemFoldService,
   noteMarkdownNestedCodeHighlighter,
@@ -250,6 +258,90 @@ describe('noteMarkdown fenced CodeInfo (fence language id)', () => {
     const pos = doc.indexOf('ts');
     expect(pos).toBeGreaterThanOrEqual(0);
     expect(innermostHighlightClassAt(doc, pos)).toContain('cm-md-fence-info');
+  });
+});
+
+describe('markdownCodeBackgroundLayer markers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('emits one fence marker per fenced block and at least one inline marker per inline code', async () => {
+    const doc = '`foo`\n\n```ts\nconst x = 1\n```';
+    const parent = document.createElement('div');
+    parent.style.width = '800px';
+    parent.style.height = '600px';
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdownEskerra({
+          base: commonmarkLanguage,
+          extensions: noteMarkdownParserExtensions,
+          codeLanguages: languages,
+        }),
+        ...noteMarkdownEditorAppearance,
+        drawSelection(),
+        markdownCodeBackgroundLayer,
+      ],
+    });
+    const view = new EditorView({state, parent});
+    try {
+      const stubRect = {
+        top: 20,
+        bottom: 36,
+        left: 40,
+        right: 120,
+        width: 80,
+        height: 16,
+        x: 40,
+        y: 20,
+        toJSON: () => '',
+      };
+      vi.spyOn(view, 'coordsAtPos').mockReturnValue(stubRect as DOMRect);
+
+      ensureSyntaxTree(view.state, view.state.doc.length, 20_000);
+      let inlineCodeNodes = 0;
+      syntaxTree(view.state).iterate({
+        enter(c) {
+          if (c.name === 'InlineCode') {
+            inlineCodeNodes++;
+          }
+        },
+      });
+      expect(inlineCodeNodes, 'syntax tree should contain InlineCode').toBeGreaterThan(0);
+
+      expect(
+        view.viewport,
+        `viewport should cover inline code at start of doc; got ${JSON.stringify(view.viewport)}`,
+      ).toMatchObject({from: 0});
+      expect(view.viewport.to).toBeGreaterThan(0);
+
+      const markers = collectMarkdownCodeBackgroundMarkers(view);
+      const fence = markers.filter(m => m instanceof MarkdownFenceBlockBackgroundMarker);
+      const nonFence = markers.filter(m => !(m instanceof MarkdownFenceBlockBackgroundMarker));
+      expect(fence.length).toBe(1);
+      expect(nonFence.length).toBeGreaterThanOrEqual(1);
+
+      expect(view.dom.querySelector('.cm-md-codeBackgroundLayer')).not.toBeNull();
+      await vi.waitFor(
+        () =>
+          (view.dom.querySelector('.cm-md-codeBackgroundLayer')?.querySelectorAll('.cm-md-fence-bg').length
+            ?? 0)
+          >= 1,
+        {interval: 5, timeout: 3000},
+      );
+      await vi.waitFor(
+        () =>
+          (view.dom.querySelector('.cm-md-codeBackgroundLayer')?.querySelectorAll('.cm-md-inline-code-bg').length
+            ?? 0)
+          >= 1,
+        {interval: 5, timeout: 3000},
+      );
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
   });
 });
 
