@@ -1095,6 +1095,8 @@ a:focus:not(:focus-visible) {
 }
 
 .main-column {
+  /* Always-light canvas; shared by editor paper and settings page. */
+  --nb-content-bg: #fbfbfb;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -2379,7 +2381,7 @@ button.primary.destructive {
 /* Red Graphite–inspired tokens (light); scoped so Vault tree / chrome are unaffected. */
 .note-markdown-editor-wrap {
   --nb-editor-margin-bg: #eee;
-  --nb-editor-paper: #fbfbfb;
+  --nb-editor-paper: var(--nb-content-bg, #fbfbfb);
   --nb-editor-text: rgb(44, 44, 44);
   --nb-editor-header: rgb(44, 44, 44);
   --nb-editor-faint: rgb(150, 150, 150);
@@ -5940,6 +5942,8 @@ button.small {
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
+  background: var(--nb-content-bg, #fbfbfb);
+  padding-inline: 1.25rem;
 }
 
 .settings-page-header {
@@ -5947,7 +5951,7 @@ button.small {
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
-  padding: 0.35rem 0 0.75rem;
+  padding: 0.75rem 0 0.75rem;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -6004,6 +6008,7 @@ button.small {
   min-width: 0;
   overflow: auto;
   padding-bottom: 1rem;
+  padding-inline-end: 0.5rem;
 }
 
 .settings-page-panel .settings-content {
