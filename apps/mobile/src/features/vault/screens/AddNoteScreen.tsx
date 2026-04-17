@@ -22,7 +22,7 @@ import {
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
 } from '../../../core/vault/vaultComposeNote';
-import {AddNoteStackParamList, VaultStackParamList} from '../../../navigation/types';
+import {AddNoteStackParamList, InboxStackParamList} from '../../../navigation/types';
 import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
 import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/MiniPlayer';
@@ -30,44 +30,44 @@ import {usePlayerContext} from '../../podcasts/context/PlayerContext';
 import {useNotes} from '../hooks/useNotes';
 
 type AddNoteScreenProps =
-  | StackScreenProps<VaultStackParamList, 'AddNote'>
+  | StackScreenProps<InboxStackParamList, 'AddNote'>
   | StackScreenProps<AddNoteStackParamList, 'AddNote'>;
 
-type AddNoteNavigation = StackNavigationProp<VaultStackParamList, 'AddNote'> &
+type AddNoteNavigation = StackNavigationProp<InboxStackParamList, 'AddNote'> &
   StackNavigationProp<AddNoteStackParamList, 'AddNote'>;
 
-/** Home stack only registers AddNote; Vault stack includes Vault and NoteDetail. */
-function isVaultComposeStack(navigation: Pick<AddNoteNavigation, 'getState'>): boolean {
-  return navigation.getState().routeNames.includes('Vault');
+/** Home stack only registers AddNote; Inbox stack includes Inbox and NoteDetail. */
+function isInboxComposeStack(navigation: Pick<AddNoteNavigation, 'getState'>): boolean {
+  return navigation.getState().routeNames.includes('Inbox');
 }
 
-/** True when the screen under AddNote in the stack is Vault (back goes to the inbox list). */
-function isPoppingFromAddNoteToVault(stackNavigation: AddNoteNavigation): boolean {
+/** True when the screen under AddNote in the stack is Inbox (back goes to the inbox list). */
+function isPoppingFromAddNoteToInbox(stackNavigation: AddNoteNavigation): boolean {
   const state = stackNavigation.getState();
   const idx = state.index;
   if (idx < 1) {
     return false;
   }
-  return state.routes[idx - 1]?.name === 'Vault';
+  return state.routes[idx - 1]?.name === 'Inbox';
 }
 
 function leaveComposeScreen(navigation: AddNoteNavigation) {
-  if (isVaultComposeStack(navigation)) {
+  if (isInboxComposeStack(navigation)) {
     navigation.goBack();
     return;
   }
-  navigation.getParent()?.navigate('VaultTab');
+  navigation.getParent()?.navigate('InboxTab');
 }
 
 function navigateToNewNoteDetail(stackNavigation: AddNoteNavigation, created: NoteSummary) {
   const noteTitle = getNoteTitle(created.name);
   const params = {noteFileName: created.name, noteUri: created.uri, noteTitle};
-  if (isVaultComposeStack(stackNavigation)) {
+  if (isInboxComposeStack(stackNavigation)) {
     stackNavigation.replace('NoteDetail', params);
     return;
   }
   const tabNavigation = stackNavigation.getParent();
-  tabNavigation?.navigate('VaultTab', {
+  tabNavigation?.navigate('InboxTab', {
     screen: 'NoteDetail',
     params,
     initial: false,
@@ -80,7 +80,7 @@ function navigateToNewNoteDetail(stackNavigation: AddNoteNavigation, created: No
   );
 }
 
-function applyVaultComposeHeaders(stackNavigation: AddNoteNavigation, editMode: boolean) {
+function applyInboxComposeHeaders(stackNavigation: AddNoteNavigation, editMode: boolean) {
   const tabNavigation = stackNavigation.getParent();
   if (!tabNavigation) {
     return;
@@ -140,10 +140,10 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
   }, [editParams?.noteUri, read, setStatusText]);
 
   useLayoutEffect(() => {
-    if (!isVaultComposeStack(stackNavigation)) {
+    if (!isInboxComposeStack(stackNavigation)) {
       return;
     }
-    applyVaultComposeHeaders(stackNavigation, isEdit);
+    applyInboxComposeHeaders(stackNavigation, isEdit);
   }, [isEdit, stackNavigation]);
 
   useEffect(() => {
@@ -152,7 +152,7 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
       return;
     }
 
-    if (!isVaultComposeStack(stackNavigation)) {
+    if (!isInboxComposeStack(stackNavigation)) {
       stackNavigation.setOptions({headerShown: false});
 
       const showAddNoteTabHeader = () => {
@@ -176,14 +176,14 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
       };
     }
 
-    const showVaultTabHeader = () => {
+    const showInboxTabHeader = () => {
       tabNavigation.setOptions({
         headerShown: true,
-        headerTitle: 'Log',
+        headerTitle: 'Inbox',
       });
     };
 
-    const hideVaultTabHeader = () => {
+    const hideInboxTabHeader = () => {
       tabNavigation.setOptions({
         headerShown: false,
       });
@@ -200,19 +200,19 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
         return;
       }
       hideComposeStackHeader();
-      if (isPoppingFromAddNoteToVault(stackNavigation)) {
-        showVaultTabHeader();
+      if (isPoppingFromAddNoteToInbox(stackNavigation)) {
+        showInboxTabHeader();
       } else {
-        hideVaultTabHeader();
+        hideInboxTabHeader();
       }
     });
 
     const unsubscribeBeforeRemove = stackNavigation.addListener('beforeRemove', () => {
       hideComposeStackHeader();
-      if (isPoppingFromAddNoteToVault(stackNavigation)) {
-        showVaultTabHeader();
+      if (isPoppingFromAddNoteToInbox(stackNavigation)) {
+        showInboxTabHeader();
       } else {
-        hideVaultTabHeader();
+        hideInboxTabHeader();
       }
     });
 
@@ -225,7 +225,7 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isVaultComposeStack(stackNavigation)) {
+      if (!isInboxComposeStack(stackNavigation)) {
         const tabNavigation = stackNavigation.getParent();
         if (tabNavigation) {
           stackNavigation.setOptions({headerShown: false});

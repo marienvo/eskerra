@@ -4,8 +4,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
 import {quickOpenVaultRelativePath} from '../lib/quickOpenNoteFilter';
-import {vaultSearchHighlightSegments} from '../lib/vaultSearchHighlight';
-import {compareVaultSearchNotes} from '../lib/vaultSearchTypes';
+import {compareVaultSearchNotes, vaultSearchHighlightSegments} from '@eskerra/core';
 
 /** Max notes rendered as rows; full list is still sorted for ranking before slicing. */
 const VAULT_SEARCH_UI_MAX_VISIBLE_NOTES = 100;
@@ -210,8 +209,10 @@ export function VaultSearchPalette({
                     {preview.length > 0 ? (
                       <span className="quick-open-command__item-path vault-search-hit__snippet-block">
                         {preview.map(s => (
-                          <span key={`${s.lineNumber}:${s.text.slice(0, 24)}`} className="vault-search-hit__snippet">
-                            {s.lineNumber > 0 ? (
+                          <span
+                            key={`${s.lineNumber ?? 'n'}:${s.text.slice(0, 24)}`}
+                            className="vault-search-hit__snippet">
+                            {s.lineNumber != null && s.lineNumber > 0 ? (
                               <>
                                 <span
                                   className="vault-search-hit__snippet-lineno"

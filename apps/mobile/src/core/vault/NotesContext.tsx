@@ -10,6 +10,7 @@ import {
 import {InteractionManager} from 'react-native';
 
 import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
+import {touchVaultSearchNoteUris} from '../../native/eskerraVaultSearch';
 import {
   createNote,
   deleteInboxNotes,
@@ -166,6 +167,7 @@ export function NotesProvider({children}: NotesProviderProps) {
         content,
         occupiedInboxMarkdownNames,
       );
+      touchVaultSearchNoteUris(baseUri, [createdNote.uri]).catch(() => undefined);
       setNotes(previousNotes => mergeInboxNoteOptimistic(previousNotes, createdNote));
       InteractionManager.runAfterInteractions(() => {
         refresh({silent: true}).catch(() => undefined);
@@ -221,6 +223,7 @@ export function NotesProvider({children}: NotesProviderProps) {
       );
 
       await deleteInboxNotes(baseUri, canonicalDeleteUris);
+      touchVaultSearchNoteUris(baseUri, canonicalDeleteUris).catch(() => undefined);
       pruneInboxNoteContentFromCache(canonicalDeleteUris);
       const removedUris = new Set(canonicalNotes.map(note => note.uri));
       setNotes(previousNotes =>
@@ -236,10 +239,11 @@ export function NotesProvider({children}: NotesProviderProps) {
   const write = useCallback(
     async (noteUri: string, content: string) => {
       await writeNoteContent(noteUri, content);
+      touchVaultSearchNoteUris(baseUri, [noteUri]).catch(() => undefined);
       setInboxNoteContentInCache(noteUri, content);
       await refresh();
     },
-    [refresh, setInboxNoteContentInCache],
+    [baseUri, refresh, setInboxNoteContentInCache],
   );
 
   const value = useMemo(

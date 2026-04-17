@@ -1,21 +1,18 @@
-import {listen} from '@tauri-apps/api/event';
-import {useCallback, useEffect, useRef, useState} from 'react';
-
 import type {
+  VaultSearchBestField,
   VaultSearchDonePayload,
   VaultSearchNoteResult,
+  VaultSearchNoteSnippet,
   VaultSearchProgress,
   VaultSearchUpdatePayload,
 } from '@eskerra/core';
-import {vaultSearchCancel, vaultSearchStart} from '../lib/tauriVaultSearch';
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {NativeEventEmitter, NativeModules} from 'react-native';
 
-/** Trailing idle after typing before starting a search run (palette: no `Searching…` until a run actually starts). */
+import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
+
 const DEFAULT_DEBOUNCE_MS = 300;
-
-/** Hold off showing `Searching…` until a run stays active this long (avoids sub-100ms flicker). */
 const SEARCHING_STATUS_VISIBLE_DELAY_MS = 100;
-
-/** After a new run starts, keep prior notes on screen this long if the backend is still quiet (gap smoothing). */
 const PREVIOUS_RESULTS_HOLD_MS = 100;
 
 export function isVaultSearchEventCurrent(
@@ -25,44 +22,104 @@ export function isVaultSearchEventCurrent(
   return currentId != null && payloadSearchId === currentId;
 }
 
-export type UseVaultContentSearchOptions = {
+function isVaultInstanceCurrent(
+  payloadInstanceId: string | undefined,
+  currentInstanceId: string | null,
+): boolean {
+  if (payloadInstanceId == null || payloadInstanceId === '') {
+    return true;
+  }
+  return currentInstanceId != null && payloadInstanceId === currentInstanceId;
+}
+
+function normalizeNote(raw: unknown): VaultSearchNoteResult {
+  const o = raw as Record<string, unknown>;
+  const snippets: VaultSearchNoteSnippet[] = [];
+  const rawSnippets = o.snippets;
+  if (Array.isArray(rawSnippets)) {
+    for (const s of rawSnippets) {
+      if (typeof s !== 'object' || s === null) {
+        continue;
+      }
+      const sn = s as Record<string, unknown>;
+      const ln = sn.lineNumber;
+      snippets.push({
+        text: String(sn.text ?? ''),
+        lineNumber:
+          ln === null || ln === undefined ? null : typeof ln === 'number' ? ln : Number(ln),
+      });
+    }
+  }
+  const bf = o.bestField;
+  const bestField: VaultSearchBestField =
+    bf === 'title' || bf === 'path' || bf === 'body' ? bf : 'body';
+  return {
+    uri: String(o.uri ?? ''),
+    relativePath: String(o.relativePath ?? o.relPath ?? ''),
+    title: String(o.title ?? ''),
+    bestField,
+    matchCount: Number(o.matchCount ?? 1),
+    score: Number(o.score ?? 0),
+    snippets,
+  };
+}
+
+function normalizeProgress(raw: unknown): VaultSearchProgress | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const p = raw as Record<string, unknown>;
+  return {
+    scannedFiles: Number(p.scannedFiles ?? 0),
+    totalHits: Number(p.totalHits ?? 0),
+    skippedLargeFiles: Number(p.skippedLargeFiles ?? 0),
+    indexStatus: String(p.indexStatus ?? 'idle'),
+    indexReady: Boolean(p.indexReady),
+    isBuilding: p.isBuilding === true,
+    schemaVersion:
+      p.schemaVersion === undefined || p.schemaVersion === null
+        ? undefined
+        : String(p.schemaVersion),
+  };
+}
+
+export type UseVaultContentSearchMobileOptions = {
   open: boolean;
-  vaultRoot: string | null;
+  baseUri: string | null;
+  vaultInstanceId: string | null;
   debounceMs?: number;
 };
 
 export function useVaultContentSearch({
   open,
-  vaultRoot,
+  baseUri,
+  vaultInstanceId,
   debounceMs = DEFAULT_DEBOUNCE_MS,
-}: UseVaultContentSearchOptions) {
+}: UseVaultContentSearchMobileOptions) {
   const [query, setQuery] = useState('');
   const [notes, setNotes] = useState<VaultSearchNoteResult[]>([]);
   const [progress, setProgress] = useState<VaultSearchProgress | null>(null);
   const [scanDone, setScanDone] = useState(true);
-  /** True after input changed until debounce fires and a new backend run starts. */
   const [awaitingDebouncedRun, setAwaitingDebouncedRun] = useState(false);
-  /** True only after an active run (`!scanDone`) has lasted at least 100 ms (see `SEARCHING_STATUS_VISIBLE_DELAY_MS`). */
   const [searchingStatusVisible, setSearchingStatusVisible] = useState(false);
-  /** True while showing prior-query notes briefly after a new run started (until first update, done, or hold timeout). */
   const [holdingPreviousResults, setHoldingPreviousResults] = useState(false);
 
   const searchIdRef = useRef<string | null>(null);
-  const debounceTimerRef = useRef<number | null>(null);
-  const searchingStatusTimerRef = useRef<number | null>(null);
-  const resultHoldTimerRef = useRef<number | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchingStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openRef = useRef(open);
   const scanDoneRef = useRef(scanDone);
   const queryRef = useRef(query);
   const notesRef = useRef(notes);
-  /** Next `vault-search:update` replaces `notes`; flushed via `requestAnimationFrame`. */
+  const vaultInstanceIdRef = useRef(vaultInstanceId);
   const pendingFlushNotesRef = useRef<VaultSearchNoteResult[]>([]);
   const pendingProgressRef = useRef<VaultSearchProgress | null>(null);
   const notesFlushRafRef = useRef<number | null>(null);
 
   const cancelNotesFlushRaf = useCallback(() => {
     if (notesFlushRafRef.current != null) {
-      window.cancelAnimationFrame(notesFlushRafRef.current);
+      cancelAnimationFrame(notesFlushRafRef.current);
       notesFlushRafRef.current = null;
     }
   }, []);
@@ -75,7 +132,7 @@ export function useVaultContentSearch({
 
   const clearResultHoldTimer = useCallback(() => {
     if (resultHoldTimerRef.current != null) {
-      window.clearTimeout(resultHoldTimerRef.current);
+      clearTimeout(resultHoldTimerRef.current);
       resultHoldTimerRef.current = null;
     }
   }, []);
@@ -89,13 +146,17 @@ export function useVaultContentSearch({
   }, [notes]);
 
   useEffect(() => {
+    vaultInstanceIdRef.current = vaultInstanceId;
+  }, [vaultInstanceId]);
+
+  useEffect(() => {
     openRef.current = open;
     scanDoneRef.current = scanDone;
   }, [open, scanDone]);
 
   useEffect(() => {
     if (searchingStatusTimerRef.current != null) {
-      window.clearTimeout(searchingStatusTimerRef.current);
+      clearTimeout(searchingStatusTimerRef.current);
       searchingStatusTimerRef.current = null;
     }
     if (!open || scanDone) {
@@ -107,7 +168,7 @@ export function useVaultContentSearch({
     queueMicrotask(() => {
       setSearchingStatusVisible(false);
     });
-    searchingStatusTimerRef.current = window.setTimeout(() => {
+    searchingStatusTimerRef.current = setTimeout(() => {
       searchingStatusTimerRef.current = null;
       if (!openRef.current || scanDoneRef.current) {
         return;
@@ -116,7 +177,7 @@ export function useVaultContentSearch({
     }, SEARCHING_STATUS_VISIBLE_DELAY_MS);
     return () => {
       if (searchingStatusTimerRef.current != null) {
-        window.clearTimeout(searchingStatusTimerRef.current);
+        clearTimeout(searchingStatusTimerRef.current);
         searchingStatusTimerRef.current = null;
       }
     };
@@ -140,23 +201,34 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      eskerraVaultSearch.cancel().catch(() => undefined);
     }
   }, [open, resetLocal]);
 
   useEffect(() => {
-    if (!open || !vaultRoot) {
+    if (!open || !baseUri || !eskerraVaultSearch.isAvailable()) {
       return;
     }
-    let unlistenUpdate: (() => void) | undefined;
-    let unlistenDone: (() => void) | undefined;
-    let cancelled = false;
+    const mod = (NativeModules as {EskerraVaultSearch?: object}).EskerraVaultSearch;
+    const emitter = mod ? new NativeEventEmitter(mod as never) : new NativeEventEmitter();
 
-    const scheduleNotesFlush = () => {
+    const onUpdate = (event: VaultSearchUpdatePayload) => {
+      if (!isVaultSearchEventCurrent(event.searchId, searchIdRef.current)) {
+        return;
+      }
+      if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+        return;
+      }
+      clearResultHoldTimer();
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      pendingFlushNotesRef.current = (event.notes as unknown[]).map(normalizeNote);
+      pendingProgressRef.current = normalizeProgress(event.progress) ?? event.progress;
       if (notesFlushRafRef.current != null) {
         return;
       }
-      notesFlushRafRef.current = window.requestAnimationFrame(() => {
+      notesFlushRafRef.current = requestAnimationFrame(() => {
         notesFlushRafRef.current = null;
         if (searchIdRef.current == null) {
           return;
@@ -170,57 +242,44 @@ export function useVaultContentSearch({
       });
     };
 
-    void (async () => {
-      unlistenUpdate = await listen<VaultSearchUpdatePayload>(
-        'vault-search:update',
-        event => {
-          const p = event.payload;
-          if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
-            return;
-          }
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          pendingFlushNotesRef.current = [...p.notes];
-          pendingProgressRef.current = p.progress;
-          scheduleNotesFlush();
-        },
-      );
-      if (cancelled) {
-        unlistenUpdate();
+    const onDone = (event: VaultSearchDonePayload) => {
+      if (!isVaultSearchEventCurrent(event.searchId, searchIdRef.current)) {
         return;
       }
-      unlistenDone = await listen<VaultSearchDonePayload>('vault-search:done', event => {
-        const p = event.payload;
-        if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
-          return;
-        }
-        clearResultHoldTimer();
-        queueMicrotask(() => {
-          setHoldingPreviousResults(false);
-        });
-        cancelNotesFlushRaf();
-        setNotes([...pendingFlushNotesRef.current]);
-        setProgress(p.progress);
-        setScanDone(true);
+      if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+        return;
+      }
+      clearResultHoldTimer();
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
       });
-    })();
+      cancelNotesFlushRaf();
+      const rawNotes = event.notes;
+      if (Array.isArray(rawNotes)) {
+        setNotes(rawNotes.map(normalizeNote));
+      } else {
+        setNotes([]);
+      }
+      setProgress(normalizeProgress(event.progress) ?? event.progress);
+      setScanDone(true);
+    };
+
+    const subUpdate = emitter.addListener('vault-search:update', onUpdate);
+    const subDone = emitter.addListener('vault-search:done', onDone);
     return () => {
-      cancelled = true;
       clearResultHoldTimer();
       cancelNotesFlushRaf();
-      unlistenUpdate?.();
-      unlistenDone?.();
+      subUpdate.remove();
+      subDone.remove();
     };
-  }, [open, vaultRoot, cancelNotesFlushRaf, clearResultHoldTimer]);
+  }, [open, baseUri, cancelNotesFlushRaf, clearResultHoldTimer]);
 
   useEffect(() => {
-    if (!open || !vaultRoot) {
+    if (!open || !baseUri || !eskerraVaultSearch.isAvailable()) {
       return;
     }
     if (debounceTimerRef.current != null) {
-      window.clearTimeout(debounceTimerRef.current);
+      clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
     }
 
@@ -229,7 +288,7 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      eskerraVaultSearch.cancel().catch(() => undefined);
       return;
     }
 
@@ -239,13 +298,13 @@ export function useVaultContentSearch({
       setHoldingPreviousResults(false);
     });
     clearPendingSearchFlush();
-    void vaultSearchCancel().catch(() => undefined);
+    eskerraVaultSearch.cancel().catch(() => undefined);
     queueMicrotask(() => {
       setScanDone(true);
       setAwaitingDebouncedRun(true);
     });
 
-    debounceTimerRef.current = window.setTimeout(() => {
+    debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
       const q = queryRef.current.trim();
       if (!q) {
@@ -254,7 +313,10 @@ export function useVaultContentSearch({
         });
         return;
       }
-      const id = crypto.randomUUID();
+      const id =
+        globalThis.crypto && 'randomUUID' in globalThis.crypto
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`;
       searchIdRef.current = id;
       clearPendingSearchFlush();
       clearResultHoldTimer();
@@ -266,7 +328,7 @@ export function useVaultContentSearch({
         queueMicrotask(() => {
           setHoldingPreviousResults(true);
         });
-        resultHoldTimerRef.current = window.setTimeout(() => {
+        resultHoldTimerRef.current = setTimeout(() => {
           resultHoldTimerRef.current = null;
           if (searchIdRef.current !== id) {
             return;
@@ -285,9 +347,9 @@ export function useVaultContentSearch({
         setProgress(null);
       }
       setScanDone(false);
-      void (async () => {
-        await vaultSearchCancel().catch(() => undefined);
-        await vaultSearchStart({searchId: id, query: q}).catch(() => {
+      (async () => {
+        await eskerraVaultSearch.cancel().catch(() => undefined);
+        await eskerraVaultSearch.start(baseUri, id, q).catch(() => {
           searchIdRef.current = null;
           clearResultHoldTimer();
           queueMicrotask(() => {
@@ -295,24 +357,16 @@ export function useVaultContentSearch({
           });
           setScanDone(true);
         });
-      })();
+      })().catch(() => undefined);
     }, debounceMs);
 
     return () => {
       if (debounceTimerRef.current != null) {
-        window.clearTimeout(debounceTimerRef.current);
+        clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
       }
     };
-  }, [
-    query,
-    open,
-    vaultRoot,
-    debounceMs,
-    resetLocal,
-    clearPendingSearchFlush,
-    clearResultHoldTimer,
-  ]);
+  }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer]);
 
   return {
     query,

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import {Platform} from 'react-native';
 
 import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../observability';
 import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
@@ -19,6 +20,7 @@ import {
 import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
 import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
+import {eskerraVaultSearch} from '../../native/eskerraVaultSearch';
 import {prepareVaultSession} from './applyVaultSession';
 
 type InboxContentCacheSession = {
@@ -195,6 +197,10 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     setBaseUri(nextUri);
     setSettings(prepared.settings);
     setLocalSettings(prepared.localSettings);
+
+    if (Platform.OS === 'android' && eskerraVaultSearch.isAvailable()) {
+      eskerraVaultSearch.open(nextUri).catch(() => undefined);
+    }
   }, [clearSessionPrefetchRefs]);
 
   const setSessionUri = useCallback(

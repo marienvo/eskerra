@@ -98,6 +98,8 @@ jest.mock('react-native-safe-area-context', () => ({
  * registration" across workers; an incomplete mock breaks hooks that need setItem (for example
  * usePodcasts persisted-index + background reconcile).
  */
+jest.mock('react-native-quick-crypto', () => require('crypto'));
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {

@@ -1,87 +1,42 @@
 import type {NavigationProp} from '@react-navigation/native';
 import {useFocusEffect} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
-import {useCallback, useLayoutEffect, useRef, useState} from 'react';
-import {
-  Box,
-  Pressable,
-  Spinner,
-  Text,
-  useColorMode,
-} from '@gluestack-ui/themed';
-import {
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import {useCallback, useLayoutEffect, useRef} from 'react';
+import {Box, Text, useColorMode} from '@gluestack-ui/themed';
+import {Platform, StyleSheet, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {
-  LIST_DIVIDER_DARK,
-  LIST_DIVIDER_LIGHT,
-  LIST_HORIZONTAL_INSET,
-} from '../../../core/ui/listMetrics';
-import {getNoteTitle} from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {
-  extractFirstMarkdownH1,
-  formatRelativeCalendarLabel,
-  getInboxTileBackgroundColor,
-} from '@eskerra/core';
+import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
+import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
 import {MainTabParamList, VaultStackParamList} from '../../../navigation/types';
-import {useNotes} from '../hooks/useNotes';
+import {
+  canonicalizeVaultBaseUriForSearch,
+  fullNeedsRebuild,
+  parseVaultSearchIndexStatus,
+  shouldReconcile,
+  VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
+  vaultSearchBaseUriHash,
+} from '../vaultSearchLifecycle';
+import {NoteContentView} from '../components/NoteContentView';
 
 type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
-export function VaultScreen({navigation}: VaultScreenProps) {
-  const {getInboxNoteContentFromCache} = useVaultContext();
-  const {deleteNotes, error, isLoading, notes, refresh} = useNotes();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedNoteUris, setSelectedNoteUris] = useState<Set<string>>(new Set());
-  const deleteInFlightRef = useRef(false);
+export function VaultScreen({navigation, route}: VaultScreenProps) {
+  const {baseUri} = useVaultContext();
   const colorMode = useColorMode();
-  const dividerColor = colorMode === 'dark' ? LIST_DIVIDER_DARK : LIST_DIVIDER_LIGHT;
-  const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
-  const selectedCount = selectedNoteUris.size;
-  const hasSelection = selectedCount > 0;
+  const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const indexRunRef = useRef<string | null>(null);
+
+  const noteUri = route.params?.noteUri?.trim();
+  const noteTitle = route.params?.noteTitle?.trim();
+  const showingNote = Boolean(noteUri);
+
   const isVaultTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
     const activeRoute = state.routes[state.index];
     return activeRoute?.name === 'Vault';
   }, [navigation]);
-
-  const openNote = useCallback(
-    (noteUri: string, noteName: string) => {
-      const cached = getInboxNoteContentFromCache(noteUri);
-      const fromH1 =
-        cached !== undefined ? extractFirstMarkdownH1(cached) : null;
-      const noteTitle = fromH1 ?? getNoteTitle(noteName);
-      navigation.navigate('NoteDetail', {
-        noteFileName: noteName,
-        noteTitle,
-        noteUri,
-      });
-    },
-    [getInboxNoteContentFromCache, navigation],
-  );
-
-  const renderSelectionHeaderLeft = useCallback(
-    () => (
-      <TouchableOpacity
-        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-        onPress={() => {
-          setDeleteError(null);
-          setSelectedNoteUris(new Set());
-        }}
-        style={styles.headerBackButton}>
-        <MaterialIcons color="#ffffff" name="arrow-back" size={22} />
-      </TouchableOpacity>
-    ),
-    [],
-  );
 
   const renderSettingsHeaderRight = useCallback(
     () => (
@@ -99,64 +54,35 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [navigation],
   );
 
-  const toggleNoteSelection = useCallback((noteUri: string) => {
-    setDeleteError(null);
-    setSelectedNoteUris(previousSelected => {
-      const nextSelected = new Set(previousSelected);
-      if (nextSelected.has(noteUri)) {
-        nextSelected.delete(noteUri);
-      } else {
-        nextSelected.add(noteUri);
-      }
-      return nextSelected;
-    });
-  }, []);
+  const renderSearchAndSettingsHeaderRight = useCallback(
+    () => (
+      <View style={styles.headerRightRow}>
+        <TouchableOpacity
+          accessibilityLabel="Search vault"
+          hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+          onPress={() => navigation.navigate('VaultSearch')}
+          style={styles.headerIconButton}>
+          <MaterialIcons color="#ffffff" name="search" size={24} />
+        </TouchableOpacity>
+        {renderSettingsHeaderRight()}
+      </View>
+    ),
+    [navigation, renderSettingsHeaderRight],
+  );
 
-  const handleDeleteSelected = useCallback(async () => {
-    if (deleteInFlightRef.current || isDeleting) {
-      return;
-    }
-    const selectedUris = Array.from(selectedNoteUris).filter(selectedUri =>
-      notes.some(note => note.uri === selectedUri),
-    );
-    if (selectedUris.length === 0) {
-      return;
-    }
-
-    setDeleteError(null);
-    deleteInFlightRef.current = true;
-    setIsDeleting(true);
-    try {
-      await deleteNotes(selectedUris);
-      setSelectedNoteUris(new Set());
-    } catch (deleteNotesError) {
-      const fallbackMessage = 'Could not delete selected entries.';
-      setDeleteError(
-        deleteNotesError instanceof Error ? deleteNotesError.message : fallbackMessage,
-      );
-    } finally {
-      deleteInFlightRef.current = false;
-      setIsDeleting(false);
-    }
-  }, [deleteNotes, isDeleting, notes, selectedNoteUris]);
-
-  const renderSelectionHeaderRight = useCallback(
+  const renderNoteBackHeaderLeft = useCallback(
     () => (
       <TouchableOpacity
-        disabled={isDeleting}
+        accessibilityLabel="Close note"
         hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
         onPress={() => {
-          handleDeleteSelected().catch(() => undefined);
+          navigation.setParams({noteTitle: undefined, noteUri: undefined});
         }}
-        style={styles.headerIconButton}>
-        {isDeleting ? (
-          <Spinner size="small" />
-        ) : (
-          <MaterialIcons color="#ffffff" name="delete-outline" size={24} />
-        )}
+        style={styles.headerBackButton}>
+        <MaterialIcons color="#ffffff" name="arrow-back" size={22} />
       </TouchableOpacity>
     ),
-    [handleDeleteSelected, isDeleting],
+    [navigation],
   );
 
   useLayoutEffect(() => {
@@ -168,36 +94,40 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       return;
     }
 
-    if (!hasSelection) {
+    if (showingNote) {
       tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: renderSettingsHeaderRight,
-        headerTitle: 'Log',
+        headerLeft: renderNoteBackHeaderLeft,
+        headerRight: renderSearchAndSettingsHeaderRight,
+        headerTitle: noteTitle && noteTitle.length > 0 ? noteTitle : 'Note',
       });
-      return;
+      return () => {
+        tabNavigation.setOptions({
+          headerLeft: undefined,
+          headerRight: undefined,
+          headerTitle: 'Vault',
+        });
+      };
     }
 
     tabNavigation.setOptions({
-      headerLeft: renderSelectionHeaderLeft,
-      headerRight: renderSelectionHeaderRight,
-      headerTitle: `${selectedCount} selected`,
+      headerLeft: undefined,
+      headerRight: renderSearchAndSettingsHeaderRight,
+      headerTitle: 'Vault',
     });
-
     return () => {
       tabNavigation.setOptions({
         headerLeft: undefined,
         headerRight: undefined,
-        headerTitle: 'Log',
+        headerTitle: 'Vault',
       });
     };
   }, [
-    hasSelection,
     isVaultTopRoute,
     navigation,
-    renderSettingsHeaderRight,
-    renderSelectionHeaderLeft,
-    renderSelectionHeaderRight,
-    selectedCount,
+    noteTitle,
+    renderNoteBackHeaderLeft,
+    renderSearchAndSettingsHeaderRight,
+    showingNote,
   ]);
 
   useFocusEffect(
@@ -213,9 +143,10 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         }
         tabNavigation.setOptions({
           headerShown: true,
-          headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
-          headerRight: hasSelection ? renderSelectionHeaderRight : renderSettingsHeaderRight,
-          headerTitle: hasSelection ? `${selectedCount} selected` : 'Log',
+          headerLeft: showingNote ? renderNoteBackHeaderLeft : undefined,
+          headerRight: renderSearchAndSettingsHeaderRight,
+          headerTitle:
+            showingNote && noteTitle && noteTitle.length > 0 ? noteTitle : 'Vault',
         });
       };
 
@@ -225,89 +156,73 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       });
       return () => cancelAnimationFrame(frameId);
     }, [
-      hasSelection,
       isVaultTopRoute,
       navigation,
-      renderSettingsHeaderRight,
-      renderSelectionHeaderLeft,
-      renderSelectionHeaderRight,
-      selectedCount,
+      noteTitle,
+      renderNoteBackHeaderLeft,
+      renderSearchAndSettingsHeaderRight,
+      showingNote,
     ]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android' || !baseUri || !eskerraVaultSearch.isAvailable()) {
+        return;
+      }
+      if (!isVaultTopRoute()) {
+        return;
+      }
+
+      const runKey = baseUri;
+      indexRunRef.current = runKey;
+      let cancelled = false;
+
+      (async () => {
+        try {
+          await eskerraVaultSearch.open(baseUri);
+          if (cancelled || indexRunRef.current !== runKey) {
+            return;
+          }
+          const full = parseVaultSearchIndexStatus(await eskerraVaultSearch.getIndexStatus(baseUri));
+          if (cancelled || indexRunRef.current !== runKey || full == null) {
+            return;
+          }
+          const canonical = baseUri;
+          if (fullNeedsRebuild(full, canonical)) {
+            const expectedHash = vaultSearchBaseUriHash(canonicalizeVaultBaseUriForSearch(canonical));
+            let rebuildReason = 'missing';
+            if (full.baseUriHash !== '' && full.baseUriHash !== expectedHash) {
+              rebuildReason = 'base-uri-change';
+            } else if (full.schemaVersion !== VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION) {
+              rebuildReason = 'schema-mismatch';
+            }
+            await eskerraVaultSearch.scheduleFullRebuild(baseUri, rebuildReason);
+            return;
+          }
+          if (shouldReconcile(full, Date.now())) {
+            await eskerraVaultSearch.reconcile(baseUri);
+          }
+        } catch {
+          // Best-effort index maintenance; ignore failures.
+        }
+      })().catch(() => undefined);
+
+      return () => {
+        cancelled = true;
+      };
+    }, [baseUri, isVaultTopRoute]),
   );
 
   return (
     <Box style={styles.container}>
-      {isLoading && notes.length === 0 ? (
-        <Spinner style={styles.spinner} />
-      ) : null}
-      {deleteError ? <Text style={styles.status}>{deleteError}</Text> : null}
-      {error ? <Text style={styles.status}>{error}</Text> : null}
-      <FlatList
-        contentContainerStyle={styles.listContent}
-        data={notes}
-        keyExtractor={item => item.uri}
-        refreshControl={
-          <RefreshControl
-            onRefresh={refresh}
-            refreshing={isLoading && notes.length > 0}
-          />
-        }
-        renderItem={({index, item}) => {
-          const cached = getInboxNoteContentFromCache(item.uri);
-          const fromH1 =
-            cached !== undefined ? extractFirstMarkdownH1(cached) : null;
-          const listTitle = fromH1 ?? getNoteTitle(item.name);
-          const isLast = index === notes.length - 1;
-
-          return (
-            <View
-              style={[
-                styles.noteRowOuter,
-                {borderBottomColor: dividerColor},
-                isLast ? styles.noteRowOuterLast : null,
-              ]}>
-              <View style={styles.noteRowInner}>
-                <Pressable
-                  disabled={isDeleting}
-                  onPress={() => toggleNoteSelection(item.uri)}
-                  style={[
-                    styles.checkboxAvatar,
-                    {
-                      backgroundColor: getInboxTileBackgroundColor(item.lastModified),
-                    },
-                  ]}>
-                  {selectedNoteUris.has(item.uri) ? (
-                    <MaterialIcons color="#000000" name="check" size={28} />
-                  ) : null}
-                </Pressable>
-                <Pressable
-                  disabled={isDeleting}
-                  onPress={() => openNote(item.uri, item.name)}
-                  style={styles.noteContent}>
-                  <Text style={styles.noteTitle}>{listTitle}</Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.noteFileName, {color: mutedTextColor}]}>
-                    {item.name}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.noteMeta, {color: mutedTextColor}]}>
-                    {formatRelativeCalendarLabel(item.lastModified)}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          !isLoading ? (
-            <Text style={styles.status}>
-              No markdown entries found in Log. Add one via the Entry tab.
-            </Text>
-          ) : null
-        }
-      />
+      {showingNote && noteUri ? (
+        <NoteContentView noteUri={noteUri} />
+      ) : (
+        <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
+          Open search to browse notes in this vault.
+        </Text>
+      )}
     </Box>
   );
 }
@@ -315,46 +230,11 @@ export function VaultScreen({navigation}: VaultScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 24,
   },
-  listContent: {
-    paddingBottom: 20,
-    paddingHorizontal: LIST_HORIZONTAL_INSET,
-  },
-  noteMeta: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  noteFileName: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  noteContent: {
-    flex: 1,
-  },
-  noteRowOuter: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginHorizontal: -LIST_HORIZONTAL_INSET,
-  },
-  noteRowOuterLast: {
-    borderBottomWidth: 0,
-  },
-  noteRowInner: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: LIST_HORIZONTAL_INSET,
-    paddingVertical: 12,
-  },
-  noteTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  checkboxAvatar: {
-    alignItems: 'center',
-    borderRadius: 8,
-    height: 40,
-    justifyContent: 'center',
-    marginRight: 10,
-    width: 40,
+  empty: {
+    fontSize: 15,
+    textAlign: 'center',
   },
   headerBackButton: {
     marginLeft: 12,
@@ -362,12 +242,8 @@ const styles = StyleSheet.create({
   headerIconButton: {
     marginRight: 12,
   },
-  spinner: {
-    marginVertical: 10,
-  },
-  status: {
-    marginVertical: 10,
-    paddingHorizontal: 20,
-    textAlign: 'center',
+  headerRightRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
   },
 });

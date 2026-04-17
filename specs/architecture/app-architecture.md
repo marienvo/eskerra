@@ -90,13 +90,13 @@ apps/mobile/src/
 │   └── vault/{VaultContext,NotesContext}.tsx
 ├── features/
 │   ├── setup/screens/SetupScreen.tsx
-│   ├── inbox/screens/PlaylistScreen.tsx
+│   ├── inbox/screens/InboxScreen.tsx
 │   ├── podcasts/
 │   │   ├── screens/PodcastsScreen.tsx
 │   │   └── services/playbackService.ts
 │   ├── vault/
-│   │   ├── hooks/useNotes.ts
-│   │   └── screens/{VaultScreen,NoteDetailScreen}.tsx
+│   │   ├── hooks/{useNotes,useVaultContentSearch}.ts
+│   │   └── screens/{VaultScreen,VaultSearchScreen,NoteDetailScreen}.tsx
 │   └── settings/
 │       ├── hooks/useSettings.ts
 │       └── screens/SettingsScreen.tsx

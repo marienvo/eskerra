@@ -1,7 +1,7 @@
 import {act, renderHook} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
-import type {VaultSearchDonePayload, VaultSearchUpdatePayload} from '../lib/vaultSearchTypes';
+import type {VaultSearchDonePayload, VaultSearchUpdatePayload} from '@eskerra/core';
 import {useVaultContentSearch, isVaultSearchEventCurrent} from './useVaultContentSearch';
 
 function progress(partial: Partial<VaultSearchDonePayload['progress']> = {}): VaultSearchDonePayload['progress'] {

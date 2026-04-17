@@ -18,6 +18,10 @@ jest.mock('../src/core/storage/eskerraStorage', () => ({
   writeNoteContent: jest.fn(),
 }));
 
+jest.mock('../src/native/eskerraVaultSearch', () => ({
+  touchVaultSearchNoteUris: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../src/core/storage/appStorage', () => ({
   getSavedUri: jest.fn(() => Promise.resolve('content://v')),
 }));
