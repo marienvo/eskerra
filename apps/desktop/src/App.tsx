@@ -572,6 +572,7 @@ export default function App() {
     allowPolling: !desktopPlayback.episodeSelectLocked,
     deviceInstanceId,
     onRemotePlaylistChanged: bumpPlaylistDiskRevision,
+    onRemotePlaylistCleared: bumpPlaylistDiskRevision,
     vaultRoot,
     vaultSettings,
   });

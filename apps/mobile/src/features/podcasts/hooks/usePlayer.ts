@@ -66,11 +66,6 @@ function toSnapshot(ep: PodcastEpisode): PlayerEpisodeSnapshot {
   };
 }
 
-const emptyProgress: PlayerProgress = {
-  durationMs: null,
-  positionMs: 0,
-};
-
 export function usePlayer(
   episodesById: Map<string, PodcastEpisode>,
   {onMarkAsPlayed, podcastsCatalogReady, podcastsLoading}: UsePlayerOptions,
@@ -297,9 +292,11 @@ export function usePlayer(
         const currentCtx = snapshotRef.current.context;
 
         if (!saved) {
-          if (!currentCtx.episode) {
-            send({type: 'RESET'});
+          // Another device cleared R2 `playlist.json`; skip while we are in our own near-end flow.
+          if (currentCtx.inNearEndZone) {
+            return;
           }
+          send({type: 'RESET'});
           return;
         }
 

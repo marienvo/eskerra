@@ -869,7 +869,7 @@ describe('usePlayer restore state', () => {
     expect(ensureSetupMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('playlistSyncGeneration bump after hydrate does not clear episode when coalesced read returns null', async () => {
+  test('playlistSyncGeneration bump clears hydrated episode when coalesced read returns null', async () => {
     readPlaylistMock.mockResolvedValue({
       durationMs: 900000,
       episodeId: episode.id,
@@ -916,7 +916,210 @@ describe('usePlayer restore state', () => {
     });
 
     expect(readPlaylistMock.mock.calls.length).toBeGreaterThan(readsAfterHydrate);
+    expect(expectResult(latestResult).activeEpisode).toBeNull();
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('playlistSyncGeneration bump with null playlist does not reset while in near end zone', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 120_000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 60_000,
+      updatedAt: 1,
+    });
+
+    const episodesById = new Map([[episode.id, episode]]);
+    const onMarkAsPlayed = jest.fn(async () => undefined);
+    let progressCb: ((p: {durationMs: number | null; positionMs: number}) => void) | null =
+      null;
+    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+      null;
+
+    getAudioPlayerMock.mockReturnValue({
+      addEndedListener: jest.fn(() => () => undefined),
+      addProgressListener: jest.fn(cb => {
+        progressCb = cb;
+        return () => {
+          progressCb = null;
+        };
+      }),
+      addStateListener: jest.fn(cb => {
+        stateListener = cb;
+        return () => {
+          stateListener = null;
+        };
+      }),
+      destroy: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
+      getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 115_000})),
+      getState: jest.fn(async () => 'playing'),
+      pause: jest.fn(async () => undefined),
+      play: jest.fn(async () => {
+        stateListener?.('playing');
+      }),
+      resume: jest.fn(async () => undefined),
+      seekTo: jest.fn(async () => undefined),
+      stop: stopMock,
+    });
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+    let controls: {
+      playEpisode: (e: PodcastEpisode) => Promise<void>;
+    } | null = null;
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    function NearEndSyncHarness() {
+      const result = usePlayer(episodesById, {
+        onMarkAsPlayed,
+        podcastsCatalogReady: true,
+        podcastsLoading: false,
+      });
+
+      useEffect(() => {
+        handleResult({
+          activeEpisode: result.activeEpisode,
+          progress: result.progress,
+          state: result.state,
+        });
+      }, [result.activeEpisode, result.progress, result.state]);
+
+      useEffect(() => {
+        controls = {playEpisode: result.playEpisode};
+      }, [result.playEpisode]);
+
+      return null;
+    }
+
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(NearEndSyncHarness));
+      await flushPromises();
+    });
+
+    if (!controls) {
+      throw new Error('controls not ready.');
+    }
+
+    await act(async () => {
+      await controls.playEpisode(episode);
+      await flushPromises();
+    });
+
+    await act(async () => {
+      progressCb?.({durationMs: 120_000, positionMs: 115_000});
+      await flushPromises();
+    });
+
+    expect(onMarkAsPlayed).toHaveBeenCalled();
+
+    readPlaylistMock.mockResolvedValue(null);
+    playlistSyncGenRef.current = 1;
+    await act(async () => {
+      renderer?.update(React.createElement(NearEndSyncHarness));
+      await flushPromises();
+    });
+
     expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('playlistSyncGeneration bump while native playing skips sync so episode stays', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 120_000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 0,
+      updatedAt: 1,
+    });
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+      null;
+
+    getAudioPlayerMock.mockReturnValue({
+      addEndedListener: jest.fn(() => () => undefined),
+      addProgressListener: jest.fn(() => () => undefined),
+      addStateListener: jest.fn(cb => {
+        stateListener = cb;
+        return () => {
+          stateListener = null;
+        };
+      }),
+      destroy: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
+      getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 0})),
+      getState: jest.fn(async () => 'paused'),
+      pause: jest.fn(async () => undefined),
+      play: jest.fn(async () => {
+        stateListener?.('playing');
+      }),
+      resume: jest.fn(async () => undefined),
+      seekTo: jest.fn(async () => undefined),
+      stop: stopMock,
+    });
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+    let playEpisodeRef: ((e: PodcastEpisode) => Promise<void>) | null = null;
+
+    function PlayingSyncHarness() {
+      const result = usePlayer(episodesById, {
+        onMarkAsPlayed: async () => undefined,
+        podcastsCatalogReady: true,
+        podcastsLoading: false,
+      });
+
+      useEffect(() => {
+        handleResult({
+          activeEpisode: result.activeEpisode,
+          progress: result.progress,
+          state: result.state,
+        });
+      }, [result.activeEpisode, result.progress, result.state]);
+
+      useEffect(() => {
+        playEpisodeRef = result.playEpisode;
+      }, [result.playEpisode]);
+
+      return null;
+    }
+
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(PlayingSyncHarness));
+      await flushPromises();
+    });
+
+    await act(async () => {
+      await playEpisodeRef!(episode);
+      await flushPromises();
+    });
+
+    expect(expectResult(latestResult).state).toBe('playing');
+
+    const readsBeforeBump = readPlaylistMock.mock.calls.length;
+    readPlaylistMock.mockResolvedValue(null);
+    playlistSyncGenRef.current = 1;
+    await act(async () => {
+      renderer?.update(React.createElement(PlayingSyncHarness));
+      await flushPromises();
+    });
+
+    expect(readPlaylistMock.mock.calls.length).toBe(readsBeforeBump);
+    expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+
     await act(async () => {
       renderer?.unmount();
     });

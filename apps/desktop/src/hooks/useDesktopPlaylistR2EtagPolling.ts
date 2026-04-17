@@ -22,6 +22,8 @@ type UseDesktopPlaylistR2EtagPollingParams = {
   deviceInstanceId: string;
   mainWindowActive: boolean;
   onRemotePlaylistChanged: () => void;
+  /** When remote `playlist.json` is deleted after we had seen content (another device finished / cleared). */
+  onRemotePlaylistCleared?: () => void;
   /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
   allowPolling?: boolean;
 };
@@ -35,15 +37,21 @@ export function useDesktopPlaylistR2EtagPolling({
   deviceInstanceId,
   mainWindowActive,
   onRemotePlaylistChanged,
+  onRemotePlaylistCleared,
   allowPolling = true,
 }: UseDesktopPlaylistR2EtagPollingParams): void {
   const onRemoteRef = useRef(onRemotePlaylistChanged);
+  const onRemoteClearedRef = useRef(onRemotePlaylistCleared);
   const settingsRef = useRef(vaultSettings);
   const deviceIdRef = useRef(deviceInstanceId);
 
   useLayoutEffect(() => {
     onRemoteRef.current = onRemotePlaylistChanged;
   }, [onRemotePlaylistChanged]);
+
+  useLayoutEffect(() => {
+    onRemoteClearedRef.current = onRemotePlaylistCleared;
+  }, [onRemotePlaylistCleared]);
 
   useLayoutEffect(() => {
     settingsRef.current = vaultSettings;
@@ -81,6 +89,9 @@ export function useDesktopPlaylistR2EtagPolling({
         }
         onRemoteRef.current();
       },
+      onRemotePlaylistCleared: () => {
+        onRemoteClearedRef.current?.();
+      },
     });
     pollerRef.current = poller;
 
@@ -109,6 +120,7 @@ export function useDesktopPlaylistR2EtagPollingForMainWindow(params: {
   vaultSettings: EskerraSettings | null;
   deviceInstanceId: string;
   onRemotePlaylistChanged: () => void;
+  onRemotePlaylistCleared?: () => void;
   allowPolling?: boolean;
 }): void {
   const mainWindowActive = useTauriMainWindowPollActive();

@@ -23,6 +23,13 @@ import {
   writePlaylistEntry,
 } from '../lib/vaultBootstrap';
 
+const NEAR_END_SUBSTATES = new Set<PodcastPlayerPlaybackState>([
+  'markingNearEnd',
+  'nearEndPlaying',
+  'nearEndPaused',
+  'ended',
+]);
+
 function clampSeekMs(
   positionMs: number,
   durationMs: number | null,
@@ -273,6 +280,13 @@ export function useDesktopPodcastPlayback({
           return;
         }
         if (!pl) {
+          const snap = snapshotRef.current;
+          const isNearEnd =
+            snap.context.inNearEndZone ||
+            NEAR_END_SUBSTATES.has(getPlaybackSubstate(snap));
+          if (isNearEnd) {
+            return;
+          }
           send({type: 'RESET'});
           return;
         }

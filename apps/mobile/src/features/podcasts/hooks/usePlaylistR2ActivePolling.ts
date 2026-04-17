@@ -11,6 +11,8 @@ type UsePlaylistR2ActivePollingParams = {
   baseUri: string | null;
   settings: EskerraSettings | null;
   onRemotePlaylistUpdated: () => void;
+  /** When remote `playlist.json` is deleted after we had seen content (another device cleared). */
+  onRemotePlaylistCleared?: () => void;
   /** When false, polling is paused (e.g. while audio is playing). Defaults to true. */
   allowPolling?: boolean;
 };
@@ -23,6 +25,7 @@ export function usePlaylistR2ActivePolling({
   baseUri,
   settings,
   onRemotePlaylistUpdated,
+  onRemotePlaylistCleared,
   allowPolling = true,
 }: UsePlaylistR2ActivePollingParams): void {
   const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
@@ -36,6 +39,7 @@ export function usePlaylistR2ActivePolling({
 
   const settingsRef = useRef(settings);
   const onRemoteRef = useRef(onRemotePlaylistUpdated);
+  const onRemoteClearedRef = useRef(onRemotePlaylistCleared);
 
   useLayoutEffect(() => {
     settingsRef.current = settings;
@@ -44,6 +48,10 @@ export function usePlaylistR2ActivePolling({
   useLayoutEffect(() => {
     onRemoteRef.current = onRemotePlaylistUpdated;
   }, [onRemotePlaylistUpdated]);
+
+  useLayoutEffect(() => {
+    onRemoteClearedRef.current = onRemotePlaylistCleared;
+  }, [onRemotePlaylistCleared]);
 
   const pollerRef = useRef<ReturnType<typeof createPlaylistEtagPoller> | null>(null);
 
@@ -65,6 +73,9 @@ export function usePlaylistR2ActivePolling({
       },
       onDataChanged: () => {
         onRemoteRef.current();
+      },
+      onRemotePlaylistCleared: () => {
+        onRemoteClearedRef.current?.();
       },
     });
     pollerRef.current = poller;

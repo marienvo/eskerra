@@ -10,6 +10,8 @@ export type CreatePlaylistEtagPollerOptions = {
   intervalMs: number;
   fetchConditional: PlaylistEtagPollerFetch;
   onDataChanged: (entry: PlaylistEntry) => void;
+  /** Fires once when remote `playlist.json` goes from present to absent (404 / empty), not on first-boot missing. */
+  onRemotePlaylistCleared?: () => void;
   onTransientError?: (error: unknown) => void;
 };
 
@@ -35,6 +37,8 @@ function isAbortError(error: unknown): boolean {
  */
 export function createPlaylistEtagPoller(options: CreatePlaylistEtagPollerOptions): PlaylistEtagPoller {
   let etag: string | null = null;
+  /** True after we have observed a successful `updated` for this poller lifetime. */
+  let haveRemote = false;
   let active = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let inFlight = false;
@@ -70,9 +74,14 @@ export function createPlaylistEtagPoller(options: CreatePlaylistEtagPollerOption
       }
       if (result.kind === 'updated') {
         etag = result.etag;
+        haveRemote = true;
         options.onDataChanged(result.entry);
       } else if (result.kind === 'missing') {
         etag = null;
+        if (haveRemote) {
+          haveRemote = false;
+          options.onRemotePlaylistCleared?.();
+        }
       }
     } catch (error) {
       if (signal.aborted || isAbortError(error)) {

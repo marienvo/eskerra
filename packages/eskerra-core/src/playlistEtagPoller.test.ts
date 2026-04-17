@@ -105,7 +105,7 @@ describe('createPlaylistEtagPoller', () => {
     poller.dispose();
   });
 
-  it('clears etag on missing', async () => {
+  it('clears etag on missing and calls onRemotePlaylistCleared once after updated', async () => {
     const entry = {
       controlRevision: 0,
       durationMs: 0,
@@ -119,15 +119,98 @@ describe('createPlaylistEtagPoller', () => {
       .fn()
       .mockResolvedValueOnce({kind: 'updated', etag: '"a"', entry})
       .mockResolvedValueOnce({kind: 'missing'} as R2PlaylistConditionalResult);
+    const onRemotePlaylistCleared = vi.fn();
     const poller = createPlaylistEtagPoller({
       intervalMs: 10,
       fetchConditional,
       onDataChanged: () => undefined,
+      onRemotePlaylistCleared,
     });
     poller.setActive(true);
     await vi.waitFor(() => expect(poller.getEtag()).toBe('"a"'));
     await vi.advanceTimersByTimeAsync(20);
     await vi.waitFor(() => expect(poller.getEtag()).toBeNull());
+    expect(onRemotePlaylistCleared).toHaveBeenCalledTimes(1);
+    poller.dispose();
+  });
+
+  it('does not call onRemotePlaylistCleared on first tick missing', async () => {
+    const fetchConditional = vi.fn().mockResolvedValue({kind: 'missing'} as R2PlaylistConditionalResult);
+    const onRemotePlaylistCleared = vi.fn();
+    const poller = createPlaylistEtagPoller({
+      intervalMs: 1000,
+      fetchConditional,
+      onDataChanged: vi.fn(),
+      onRemotePlaylistCleared,
+    });
+    poller.setActive(true);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(1));
+    expect(onRemotePlaylistCleared).not.toHaveBeenCalled();
+    poller.dispose();
+  });
+
+  it('calls onRemotePlaylistCleared once for updated then not_modified then missing', async () => {
+    const entry = {
+      controlRevision: 0,
+      durationMs: 0,
+      episodeId: 'e',
+      mp3Url: 'u',
+      playbackOwnerId: '',
+      positionMs: 0,
+      updatedAt: 1,
+    };
+    const fetchConditional = vi
+      .fn()
+      .mockResolvedValueOnce({kind: 'updated', etag: '"a"', entry})
+      .mockResolvedValueOnce({kind: 'not_modified'} as R2PlaylistConditionalResult)
+      .mockResolvedValueOnce({kind: 'missing'} as R2PlaylistConditionalResult);
+    const onRemotePlaylistCleared = vi.fn();
+    const poller = createPlaylistEtagPoller({
+      intervalMs: 60_000,
+      fetchConditional,
+      onDataChanged: vi.fn(),
+      onRemotePlaylistCleared,
+    });
+    poller.setActive(true);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(1));
+    poller.triggerCheck();
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(2));
+    poller.triggerCheck();
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(3));
+    expect(onRemotePlaylistCleared).toHaveBeenCalledTimes(1);
+    poller.dispose();
+  });
+
+  it('calls onRemotePlaylistCleared only once for updated then missing twice', async () => {
+    const entry = {
+      controlRevision: 0,
+      durationMs: 0,
+      episodeId: 'e',
+      mp3Url: 'u',
+      playbackOwnerId: '',
+      positionMs: 0,
+      updatedAt: 1,
+    };
+    const fetchConditional = vi
+      .fn()
+      .mockResolvedValueOnce({kind: 'updated', etag: '"a"', entry})
+      .mockResolvedValueOnce({kind: 'missing'} as R2PlaylistConditionalResult)
+      .mockResolvedValue({kind: 'missing'} as R2PlaylistConditionalResult);
+    const onRemotePlaylistCleared = vi.fn();
+    const poller = createPlaylistEtagPoller({
+      intervalMs: 60_000,
+      fetchConditional,
+      onDataChanged: vi.fn(),
+      onRemotePlaylistCleared,
+    });
+    poller.setActive(true);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(1));
+    poller.triggerCheck();
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(2));
+    expect(onRemotePlaylistCleared).toHaveBeenCalledTimes(1);
+    poller.triggerCheck();
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(3));
+    expect(onRemotePlaylistCleared).toHaveBeenCalledTimes(1);
     poller.dispose();
   });
 
