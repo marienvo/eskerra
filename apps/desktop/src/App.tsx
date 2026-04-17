@@ -14,9 +14,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react';
 
-import {AppChromeBackground} from './components/AppChromeBackground';
+import {SettingsPage} from './components/SettingsPage';
 import {
   DesktopStartupSplash,
   type DesktopStartupSplashPhase,
@@ -42,7 +43,8 @@ import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
 import {useSessionNotifications} from './hooks/useSessionNotifications';
-import {openSettingsWindow} from './lib/openSettingsWindow';
+import {ThemeProvider} from './theme/ThemeProvider';
+import {ThemedChromeBackground} from './theme/ThemedChromeBackground';
 import {defaultEskerraSettings, isVaultR2PlaylistConfigured} from '@eskerra/core';
 
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
@@ -77,6 +79,8 @@ import './App.css';
 
 type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
+type AppPage = 'vault' | 'settings';
+
 const PLAYBACK_SKIP_MS = 10_000;
 /** Max time to wait for R2 playlist persist after pausing on window close (debounce + network). */
 const SHUTDOWN_PERSIST_TIMEOUT_MS = 3000;
@@ -98,6 +102,7 @@ export default function App() {
   const inboxEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
   const inboxEditorShellScrollRef = useRef<HTMLDivElement | null>(null);
   const [layoutsReady, setLayoutsReady] = useState(false);
+  const [activePage, setActivePage] = useState<AppPage>('vault');
   const [restoredInboxState, setRestoredInboxState] = useState<{
     vaultRoot: string;
     composingNewEntry: boolean;
@@ -115,6 +120,7 @@ export default function App() {
   const {
     vaultRoot,
     vaultSettings,
+    setVaultSettings,
     settingsName,
     notes,
     selectedUri,
@@ -805,6 +811,10 @@ export default function App() {
     await hydrateVault(dir);
   };
 
+  useEffect(() => {
+    setActivePage('vault');
+  }, [vaultRoot]);
+
   /** Single left-pane width (Vault, Episodes, or stack); mirrors `inbox` and `podcastsMain` in layout store. */
   const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
     setLayouts(prev => {
@@ -952,12 +962,22 @@ export default function App() {
       />
     ) : null;
 
+  const wrapInThemeShell = (node: ReactNode) => (
+    <ThemeProvider
+      vaultRoot={vaultRoot}
+      vaultSettings={vaultSettings}
+      setVaultSettings={setVaultSettings}
+      fs={fs}>
+      {node}
+    </ThemeProvider>
+  );
+
   if (!vaultRoot) {
-    return (
+    return wrapInThemeShell(
       <>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
-          <AppChromeBackground />
+          <ThemedChromeBackground />
           <div className="app-root-chrome">
             <div className="shell setup-shell">
               <h1>{settingsName}</h1>
@@ -970,16 +990,16 @@ export default function App() {
             <AppSetupTagline />
           </div>
         </div>
-      </>
+      </>,
     );
   }
 
   if (!layoutsReady) {
-    return (
+    return wrapInThemeShell(
       <>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
-          <AppChromeBackground />
+          <ThemedChromeBackground />
           <div className="app-root-chrome">
             <div className="shell setup-shell">
               <p className="muted">Loading…</p>
@@ -987,15 +1007,15 @@ export default function App() {
             <AppSetupTagline />
           </div>
         </div>
-      </>
+      </>,
     );
   }
 
-  return (
+  return wrapInThemeShell(
     <>
       {startupOverlay}
       <div ref={appRootRef} className={appRootClassName}>
-        <AppChromeBackground />
+        <ThemedChromeBackground />
         <div className="app-root-chrome">
           <WindowTitleBar
             tiling={tiling}
@@ -1007,7 +1027,19 @@ export default function App() {
             <div className="main-shell-stage panel-group fill">
               <div className="main-column">
                 <main className="main-stage">
-                  <VaultTab
+                  {activePage === 'settings' && vaultSettings ? (
+                    <SettingsPage
+                      onClose={() => setActivePage('vault')}
+                      vaultRoot={vaultRoot}
+                      fs={fs}
+                      vaultSettings={vaultSettings}
+                      setVaultSettings={setVaultSettings}
+                      onChangeVaultFolder={async () => {
+                        await pickFolder();
+                      }}
+                    />
+                  ) : (
+                    <VaultTab
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
                       fs={fs}
@@ -1142,6 +1174,7 @@ export default function App() {
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
+                  )}
                 </main>
               </div>
             </div>
@@ -1194,7 +1227,7 @@ export default function App() {
 
           <AppStatusBar
             center={statusBarCenter}
-            onOpenSettings={() => void openSettingsWindow()}
+            onOpenSettings={() => setActivePage('settings')}
             onReadMoreStatusMessage={onReadMoreStatusMessage}
           />
           <QuickOpenNotePalette
@@ -1212,6 +1245,6 @@ export default function App() {
           />
         </div>
       </div>
-    </>
+    </>,
   );
 }
