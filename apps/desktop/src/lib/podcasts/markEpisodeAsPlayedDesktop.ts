@@ -70,3 +70,20 @@ export async function markDesktopEpisodeAsPlayed(
   }
   return true;
 }
+
+/**
+ * Mark an episode as played in vault markdown, then refresh the podcast catalog.
+ * Used by the episodes context menu and by `useDesktopPodcastPlayback`.
+ */
+export async function markDesktopEpisodeAsPlayedAndRefreshCatalog(
+  root: string | null,
+  fs: VaultFilesystem,
+  episode: PodcastEpisode,
+  refreshCatalog?: () => Promise<void>,
+): Promise<void> {
+  if (!root) {
+    return;
+  }
+  await markDesktopEpisodeAsPlayed(root, fs, episode);
+  await refreshCatalog?.();
+}

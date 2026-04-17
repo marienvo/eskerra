@@ -18,7 +18,10 @@ import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react';
 import {waitFor} from 'xstate';
 
 import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
-import {markDesktopEpisodeAsPlayed} from '../lib/podcasts/markEpisodeAsPlayedDesktop';
+import {
+  markDesktopEpisodeAsPlayed,
+  markDesktopEpisodeAsPlayedAndRefreshCatalog,
+} from '../lib/podcasts/markEpisodeAsPlayedDesktop';
 import type {PodcastEpisode} from '../lib/podcasts/podcastTypes';
 import {
   clearPlaylistEntry,
@@ -82,11 +85,17 @@ export type UseDesktopPodcastPlaybackOptions = {
 
 export type UseDesktopPodcastPlaybackResult = {
   activeEpisode: PodcastEpisode | null;
+  /** Id of the episode loaded in the player (for list highlighting). */
+  activeEpisodeId: string | null;
+  /** Play button / list chrome for the active episode (from machine + native audio). */
+  activeEpisodePlayControl: PlaybackTransportPlayControl;
   /** Playback phase + native loading for status UI. */
   playerLabel: DesktopPlayerLabel;
   positionMs: number;
   durationMs: number | null;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
+  /** Mark an episode as listened in vault markdown and rescan the catalog (no audio stop). */
+  markEpisodePlayed: (ep: PodcastEpisode) => Promise<void>;
   seekBy: (deltaMs: number) => Promise<void>;
   togglePause: () => Promise<void>;
   /**
@@ -241,6 +250,17 @@ export function useDesktopPodcastPlayback({
       }),
     [snapCtx, snapshot.value],
   );
+
+  const activeEpisodeId = snapCtx.episode?.id ?? null;
+
+  const markEpisodePlayed = useCallback(async (ep: PodcastEpisode) => {
+    await markDesktopEpisodeAsPlayedAndRefreshCatalog(
+      vaultRootRef.current,
+      fsRef.current,
+      ep,
+      onCatalogRefreshRef.current,
+    );
+  }, []);
 
   const seekDisabled = isPlaybackTransportBusy(snapCtx);
 
@@ -798,8 +818,11 @@ export function useDesktopPodcastPlayback({
 
   return {
     activeEpisode,
+    activeEpisodeId,
+    activeEpisodePlayControl: playbackTransportPlayControl,
     durationMs: snapCtx.durationMs,
     episodeSelectLocked: snapCtx.native === 'playing',
+    markEpisodePlayed,
     playEpisode,
     playerLabel,
     positionMs: snapCtx.positionMs,

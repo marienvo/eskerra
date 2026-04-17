@@ -375,6 +375,54 @@ describe('usePlayer restore state', () => {
     expect(ensureSetupMock).toHaveBeenCalledTimes(2);
   });
 
+  test('restore sends HYDRATE before ensureSetup promise settles', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 123456,
+      updatedAt: 1,
+    });
+
+    let releaseSetup: (() => void) | undefined;
+    const setupBarrier = new Promise<void>(resolve => {
+      releaseSetup = resolve;
+    });
+    ensureSetupMock.mockImplementation(() => setupBarrier);
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(ensureSetupMock).toHaveBeenCalled();
+    expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+
+    await act(async () => {
+      releaseSetup?.();
+      await flushPromises();
+    });
+
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
   test('reads playlist once even when episodes map updates multiple times', async () => {
     readPlaylistMock.mockResolvedValue({
       durationMs: 900000,

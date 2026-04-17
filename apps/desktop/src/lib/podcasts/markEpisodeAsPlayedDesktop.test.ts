@@ -8,7 +8,10 @@ import {
   clearPodcastMarkdownFileContentCache,
   primePodcastMarkdownFileContentCacheEntry,
 } from './podcastPhase1Desktop';
-import {markDesktopEpisodeAsPlayed} from './markEpisodeAsPlayedDesktop';
+import {
+  markDesktopEpisodeAsPlayed,
+  markDesktopEpisodeAsPlayedAndRefreshCatalog,
+} from './markEpisodeAsPlayedDesktop';
 import type {PodcastEpisode, RootMarkdownFile} from './podcastTypes';
 
 vi.mock('@tauri-apps/plugin-store', () => ({
@@ -135,5 +138,29 @@ describe('markDesktopEpisodeAsPlayed', () => {
 
     const after = await buildPodcastSectionsFromPodcastMarkdownFiles(VAULT_ROOT, [podcastFile], fs);
     expect(after.nextSections.flatMap(s => s.episodes)).toHaveLength(0);
+  });
+});
+
+describe('markDesktopEpisodeAsPlayedAndRefreshCatalog', () => {
+  beforeEach(() => {
+    clearPodcastMarkdownFileContentCache();
+  });
+
+  it('invokes catalog refresh after marking played', async () => {
+    const fs = createPodcastMemoryFs({initialBody: `${UNPLAYED_LINE}\n`, lastModified: 9001});
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    await markDesktopEpisodeAsPlayedAndRefreshCatalog(VAULT_ROOT, fs, EPISODE, refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    const body = await fs.readFile(PODCAST_FILE_URI, {encoding: 'utf8'});
+    expect(body).toContain('- [x]');
+  });
+
+  it('skips vault write and refresh when vault root is null', async () => {
+    const fs = createPodcastMemoryFs({initialBody: `${UNPLAYED_LINE}\n`, lastModified: 9001});
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    const writeSpy = vi.spyOn(fs, 'writeFile');
+    await markDesktopEpisodeAsPlayedAndRefreshCatalog(null, fs, EPISODE, refresh);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(writeSpy).not.toHaveBeenCalled();
   });
 });

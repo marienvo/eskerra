@@ -199,16 +199,18 @@ export function usePlayer(
           return;
         }
 
-        await player.ensureSetup();
-        const st = await player.getState();
-        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
-          return;
-        }
-        const saved = await readPlaylistCoalesced(baseUri);
+        const savedPromise = readPlaylistCoalesced(baseUri);
+        const setupPromise = player.ensureSetup();
+
+        const saved = await savedPromise;
         if (!isMounted) {
           return;
         }
         if (!saved) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
           if (snapshotRef.current.context.episode == null) {
             send({type: 'RESET'});
             hasRestoredForBaseUriRef.current = baseUri;
@@ -217,6 +219,10 @@ export function usePlayer(
         }
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
         if (!catalogEp) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
           try {
             await player.stop();
           } catch {
@@ -228,6 +234,10 @@ export function usePlayer(
           return;
         }
         if (catalogEp.isListened) {
+          await setupPromise;
+          if (!isMounted) {
+            return;
+          }
           try {
             await player.stop();
           } catch {
@@ -245,6 +255,15 @@ export function usePlayer(
           baseline: saved,
         });
         hasRestoredForBaseUriRef.current = baseUri;
+
+        await setupPromise;
+        if (!isMounted) {
+          return;
+        }
+        const st = await player.getState();
+        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+          return;
+        }
       } catch (restoreError) {
         if (!isMounted) {
           return;
@@ -275,7 +294,13 @@ export function usePlayer(
         return;
       }
       try {
-        await player.ensureSetup();
+        const savedPromise = readPlaylistCoalesced(baseUri);
+        const setupPromise = player.ensureSetup();
+
+        await setupPromise;
+        if (cancelled) {
+          return;
+        }
         const st = await player.getState();
         if (cancelled) {
           return;
@@ -284,7 +309,7 @@ export function usePlayer(
           return;
         }
 
-        const saved = await readPlaylistCoalesced(baseUri);
+        const saved = await savedPromise;
         if (cancelled) {
           return;
         }
@@ -701,14 +726,17 @@ export function usePlayer(
       return;
     }
     try {
-      await player.ensureSetup();
-      const saved = await readPlaylistCoalesced(uri);
+      const savedPromise = readPlaylistCoalesced(uri);
+      const setupPromise = player.ensureSetup();
+      const saved = await savedPromise;
       if (!saved) {
+        await setupPromise;
         send({type: 'RESET'});
         return;
       }
       const catalogEp = episodesByIdRef.current.get(saved.episodeId);
       if (!catalogEp || catalogEp.isListened) {
+        await setupPromise;
         try {
           await player.stop();
         } catch {
@@ -724,6 +752,7 @@ export function usePlayer(
         entry: saved,
         baseline: saved,
       });
+      await setupPromise;
     } catch (resyncError) {
       setError(resyncError instanceof Error ? resyncError.message : 'Could not restore player state.');
     }

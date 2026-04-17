@@ -586,12 +586,13 @@ export async function readPlaylistCoalesced(
     return existing;
   }
 
-  const promise = readPlaylist(baseUri).finally(() => {
+  const promise = readPlaylist(baseUri);
+  playlistReadCoalescer.set(cacheKey, promise);
+  promise.catch(() => {
     if (playlistReadCoalescer.get(cacheKey) === promise) {
       playlistReadCoalescer.delete(cacheKey);
     }
   });
-  playlistReadCoalescer.set(cacheKey, promise);
   return promise;
 }
 

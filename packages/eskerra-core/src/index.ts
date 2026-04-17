@@ -143,6 +143,7 @@ export {
   type PlayerEpisodeSnapshot,
 } from './playerMachine';
 export {markEpisodeAsPlayedInContent} from './markPodcastEpisodePlayed';
+export {fetchRssArtworkUrl, parseRssArtworkUrl} from './rssArtwork';
 export type {
   FetchR2PlaylistConditionalOptions,
   R2PlaylistConditionalResult,

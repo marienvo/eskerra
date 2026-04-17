@@ -843,6 +843,15 @@ describe('eskerraStorage', () => {
       expect(a).toBe(b);
     });
 
+    test('readPlaylistCoalesced reuses settled result without a second vault read', async () => {
+      mockNoR2VaultLayoutForPlaylistLocalReadOrder();
+      readFileMock.mockResolvedValue('{}');
+      await readPlaylistCoalesced(baseUri);
+      const readCallsAfterFirst = readFileMock.mock.calls.length;
+      await readPlaylistCoalesced(baseUri);
+      expect(readFileMock.mock.calls.length).toBe(readCallsAfterFirst);
+    });
+
     test('clearPlaylist removes legacy local playlist file when present', async () => {
       mockNoR2VaultLayoutForPlaylistLocalReadOrder();
       readFileMock.mockResolvedValue('{}');
