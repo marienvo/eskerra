@@ -65,6 +65,8 @@ export function MiniPlayer() {
   const {
     activeEpisode,
     miniPlayerArtworkSelected,
+    playbackPhase,
+    playbackSeeking,
     playbackTransportBusy,
     playbackState,
     progress,
@@ -106,14 +108,20 @@ export function MiniPlayer() {
   const showTransportSpinner =
     playbackState === 'loading' ||
     (playbackTransportBusy && playbackState === 'paused');
+  const nearEndCopy =
+    playbackPhase === 'nearEndPlaying' || playbackPhase === 'nearEndPaused'
+      ? 'Bijna klaar'
+      : null;
   const bufferingSubtitle =
-    showTransportSpinner && playbackState === 'loading'
+    nearEndCopy ??
+    (showTransportSpinner && playbackState === 'loading'
       ? progress.positionMs >= RESUMING_COPY_THRESHOLD_MS
         ? 'Resuming…'
         : 'Buffering…'
       : showTransportSpinner && playbackState === 'paused'
         ? 'Starting…'
-        : null;
+        : null);
+  const skipDisabled = playbackState === 'loading' && !playbackSeeking;
   const durationMs = progress.durationMs ?? 0;
   const sliderMaxMs =
     durationMs > 0 ? durationMs : Math.max(progress.positionMs, 1);
@@ -188,7 +196,7 @@ export function MiniPlayer() {
         <View style={styles.transportCenter}>
           <Pressable
             accessibilityLabel="Rewind 10 seconds"
-            disabled={playbackTransportBusy}
+            disabled={skipDisabled}
             hitSlop={8}
             onPress={() => {
               handleSeekBy(-SKIP_MS);
@@ -229,7 +237,7 @@ export function MiniPlayer() {
           </Pressable>
           <Pressable
             accessibilityLabel="Forward 10 seconds"
-            disabled={playbackTransportBusy}
+            disabled={skipDisabled}
             hitSlop={8}
             onPress={() => {
               handleSeekBy(SKIP_MS);

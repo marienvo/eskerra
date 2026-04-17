@@ -470,7 +470,10 @@ describe('usePlayer restore state', () => {
 
   test('playEpisode does not call player.play when audio is already playing', async () => {
     const playMock = jest.fn(async () => undefined);
-    const getStateMock = jest.fn(async () => 'playing' as const);
+    const getStateMock = jest
+      .fn()
+      .mockResolvedValueOnce('paused' as const)
+      .mockResolvedValue('playing' as const);
 
     getAudioPlayerMock.mockReturnValue({
       addEndedListener: jest.fn(() => () => undefined),
@@ -513,6 +516,14 @@ describe('usePlayer restore state', () => {
     });
 
     expect(getStateMock).toHaveBeenCalled();
+    expect(playMock).toHaveBeenCalledTimes(1);
+    playMock.mockClear();
+
+    await act(async () => {
+      await playEpisodeRef!(episode);
+      await flushPromises();
+    });
+
     expect(playMock).not.toHaveBeenCalled();
   });
 
@@ -577,7 +588,7 @@ describe('usePlayer restore state', () => {
     expect(getHookState!()).toBe('loading');
   });
 
-  test('pause past 80% marks played without dismiss flag so UI can keep player', async () => {
+  test('near-end progress marks played without dismiss while playback continues', async () => {
     readPlaylistMock.mockResolvedValue({
       durationMs: 120_000,
       episodeId: episode.id,
@@ -587,6 +598,38 @@ describe('usePlayer restore state', () => {
 
     const episodesById = new Map([[episode.id, episode]]);
     const onMarkAsPlayed = jest.fn(async () => undefined);
+    let progressCb: ((p: {durationMs: number | null; positionMs: number}) => void) | null =
+      null;
+    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+      null;
+
+    getAudioPlayerMock.mockReturnValue({
+      addEndedListener: jest.fn(() => () => undefined),
+      addProgressListener: jest.fn(cb => {
+        progressCb = cb;
+        return () => {
+          progressCb = null;
+        };
+      }),
+      addStateListener: jest.fn(cb => {
+        stateListener = cb;
+        return () => {
+          stateListener = null;
+        };
+      }),
+      destroy: jest.fn(async () => undefined),
+      ensureSetup: ensureSetupMock,
+      getProgress: jest.fn(async () => ({durationMs: 120_000, positionMs: 115_000})),
+      getState: jest.fn(async () => 'playing'),
+      pause: jest.fn(async () => undefined),
+      play: jest.fn(async () => {
+        stateListener?.('playing');
+      }),
+      resume: jest.fn(async () => undefined),
+      seekTo: jest.fn(async () => undefined),
+      stop: stopMock,
+    });
+
     let controls: {
       playEpisode: (e: PodcastEpisode) => Promise<void>;
       togglePlayback: () => Promise<void>;
@@ -609,16 +652,6 @@ describe('usePlayer restore state', () => {
       throw new Error('controls not ready.');
     }
 
-    const audioPlayer = getAudioPlayerMock.mock.results[0]?.value as {
-      getProgress: jest.MockedFunction<
-        () => Promise<{durationMs: number; positionMs: number}>
-      >;
-    };
-    audioPlayer.getProgress.mockResolvedValue({
-      durationMs: 120_000,
-      positionMs: 100_000,
-    });
-
     await act(async () => {
       await controls!.playEpisode(episode);
       await flushPromises();
@@ -628,14 +661,13 @@ describe('usePlayer restore state', () => {
     writePlaylistMock.mockClear();
 
     await act(async () => {
-      await controls!.togglePlayback();
+      progressCb?.({durationMs: 120_000, positionMs: 115_000});
       await flushPromises();
     });
 
     expect(onMarkAsPlayed).toHaveBeenCalledTimes(1);
     expect(onMarkAsPlayed).toHaveBeenCalledWith(episode, {dismissNowPlaying: false});
     expect(clearPlaylistMock).toHaveBeenCalledWith('content://vault-root');
-    expect(writePlaylistMock).not.toHaveBeenCalled();
   });
 
   test('clears disk-backed playlist when saved episode is listened but still in catalog', async () => {
@@ -672,7 +704,7 @@ describe('usePlayer restore state', () => {
     expect(expectResult(latestResult).activeEpisode).toBeNull();
   });
 
-  test('seekTo does not persist to playlist.json', async () => {
+  test('seekTo does not call writePlaylist without R2 playlist sync', async () => {
     readPlaylistMock.mockResolvedValue({
       durationMs: 120_000,
       episodeId: episode.id,

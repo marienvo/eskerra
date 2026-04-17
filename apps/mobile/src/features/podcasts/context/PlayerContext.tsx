@@ -20,6 +20,8 @@ import {
   writePreparedMarkEpisodeAsPlayed,
 } from '../services/markEpisodeAsPlayed';
 import {RefreshPodcastsOptions, usePodcasts} from '../hooks/usePodcasts';
+import type {PodcastPlayerPlaybackState} from '@eskerra/core';
+
 import {PlayerProgress, PlayerState} from '../services/audioPlayer';
 
 export type PodcastsVaultRefreshUiPatch = {
@@ -40,6 +42,8 @@ type PlayerContextValue = {
   playbackError: string | null;
   /** True while starting/stopping playback or while the native player reports loading/buffering. */
   playbackTransportBusy: boolean;
+  playbackPhase: PodcastPlayerPlaybackState;
+  playbackSeeking: boolean;
   playbackState: PlayerState;
   podcastError: string | null;
   podcastsLoading: boolean;
@@ -109,6 +113,8 @@ export function PlayerProvider({children}: PlayerProviderProps) {
     activeEpisode,
     clearNowPlayingIfMatchesEpisode,
     error: playbackError,
+    playbackPhase,
+    playbackSeeking,
     playbackTransportBusy,
     playEpisode,
     progress,
@@ -187,6 +193,8 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       miniPlayerArtworkSelected,
       playEpisode,
       playbackError,
+      playbackPhase,
+      playbackSeeking,
       playbackTransportBusy,
       playbackState,
       podcastError,
@@ -209,6 +217,8 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       miniPlayerArtworkSelected,
       playEpisode,
       playbackError,
+      playbackPhase,
+      playbackSeeking,
       playbackTransportBusy,
       playbackState,
       podcastError,

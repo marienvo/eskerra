@@ -13,6 +13,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "aws4fetch": "^1.0.20"
+    "aws4fetch": "^1.0.20",
+    "xstate": "^5.30.0"
   }
 }

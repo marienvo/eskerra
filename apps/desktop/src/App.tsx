@@ -43,6 +43,8 @@ import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
 import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {openSettingsWindow} from './lib/openSettingsWindow';
+import {defaultEskerraSettings, isVaultR2PlaylistConfigured} from '@eskerra/core';
+
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
@@ -453,9 +455,13 @@ export default function App() {
     consumeEpisodes: podcastCatalog.episodes,
     deviceInstanceId,
     fs,
+    onCatalogRefresh: () => podcastCatalog.refreshPodcasts(false),
     onError: setErr,
     onPlaylistDiskUpdated: bumpPlaylistDiskRevision,
     playlistRevision: playlistDiskRevision,
+    r2PlaylistConfigured: isVaultR2PlaylistConfigured(
+      vaultSettings ?? defaultEskerraSettings,
+    ),
     vaultRoot,
   });
 
@@ -473,19 +479,12 @@ export default function App() {
     if (desktopPlayback.activeEpisode == null) {
       return undefined;
     }
-    const label = desktopPlayback.playerLabel;
     const seek = desktopPlayback.seekBy;
-    const playControl =
-      label === 'loading'
-        ? 'loading'
-        : label === 'playing'
-          ? 'playing'
-          : ('paused' as const);
     return {
       positionLabel: formatPlaybackMs(desktopPlayback.positionMs),
       durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
-      seekDisabled: label === 'loading',
-      playControl,
+      seekDisabled: desktopPlayback.seekDisabled,
+      playControl: desktopPlayback.playbackTransportPlayControl,
       onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
       onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
       onTogglePlay: () => void desktopPlayback.togglePause(),
@@ -494,9 +493,10 @@ export default function App() {
   }, [
     desktopPlayback.activeEpisode,
     desktopPlayback.durationMs,
-    desktopPlayback.playerLabel,
+    desktopPlayback.playbackTransportPlayControl,
     desktopPlayback.positionMs,
     desktopPlayback.seekBy,
+    desktopPlayback.seekDisabled,
     desktopPlayback.togglePause,
   ]);
 
@@ -569,7 +569,7 @@ export default function App() {
   }, [mainShellReady, maximized, tiling]);
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
-    allowPolling: desktopPlayback.playerLabel !== 'playing',
+    allowPolling: !desktopPlayback.episodeSelectLocked,
     deviceInstanceId,
     onRemotePlaylistChanged: bumpPlaylistDiskRevision,
     vaultRoot,
@@ -611,19 +611,28 @@ export default function App() {
     };
   }, []);
 
+  const desktopPlaybackRef = useRef(desktopPlayback);
+  desktopPlaybackRef.current = desktopPlayback;
+
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
     void listen<string>('media-control', event => {
       const action = event.payload;
       const p = getDesktopAudioPlayer();
-      if (action === 'pause' || action === 'stop') {
-        void p.pause();
-        return;
-      }
-      if (action === 'play' || action === 'toggle') {
-        void p.resumeOrToggleFromOs();
-      }
+      void (async () => {
+        if (action === 'pause' || action === 'stop') {
+          if ((await p.getState()) === 'playing') {
+            await desktopPlaybackRef.current.togglePause();
+          } else if (action === 'stop') {
+            await p.pause();
+          }
+          return;
+        }
+        if (action === 'play' || action === 'toggle') {
+          await desktopPlaybackRef.current.togglePause();
+        }
+      })().catch(() => undefined);
     })
       .then(fn => {
         if (cancelled) {
@@ -1022,9 +1031,8 @@ export default function App() {
                             sections={podcastCatalog.sections}
                             catalogLoading={podcastCatalog.catalogLoading}
                             playEpisode={desktopPlayback.playEpisode}
-                            resumeFromVault={desktopPlayback.resumeFromVault}
                             episodeSelectLocked={
-                              desktopPlayback.playerLabel === 'playing'
+                              desktopPlayback.episodeSelectLocked
                             }
                           />
                         ) : null

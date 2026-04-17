@@ -1,13 +1,10 @@
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
 import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
 
-import {MaterialIcon} from './MaterialIcon';
-
 export type EpisodesPaneProps = {
   sections: PodcastSection[];
   catalogLoading: boolean;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
-  resumeFromVault: () => Promise<void>;
   /** When true, episode rows do not start or switch playback (an episode is already playing). */
   episodeSelectLocked?: boolean;
 };
@@ -20,7 +17,6 @@ export function EpisodesPane({
   sections,
   catalogLoading,
   playEpisode,
-  resumeFromVault,
   episodeSelectLocked = false,
 }: EpisodesPaneProps) {
   const episodesRefreshVisible = useDeferredLoadingIndicator(catalogLoading, 100);
@@ -29,19 +25,6 @@ export function EpisodesPane({
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
       <div className="pane-header pane-header--episodes pane-header--workspace-panel">
         <span className="pane-title">Episodes</span>
-        <button
-          type="button"
-          className="pane-header-aux-btn icon-btn-ghost app-tooltip-trigger"
-          onClick={() => void resumeFromVault()}
-          aria-label="Resume from vault playlist"
-          data-tooltip="Resume from vault playlist"
-          data-tooltip-placement="inline-start"
-        >
-          <span className="pane-header-aux-btn__label">Resume</span>
-          <span className="pane-header-aux-btn__glyph" aria-hidden>
-            <MaterialIcon name="play_arrow" size={12} />
-          </span>
-        </button>
       </div>
       <div
         className={

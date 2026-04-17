@@ -25,7 +25,6 @@ import {
   normalizeVaultBaseUri,
   parseEskerraLocalSettings,
   parseEskerraSettings,
-  pickNewerPlaylistEntry,
   pickNextInboxMarkdownFileName,
   putR2PlaylistObject,
   readVaultSharedSettingsRaw,
@@ -38,7 +37,6 @@ import {
   type EskerraLocalSettings,
   type EskerraSettings,
   type PlaylistEntry,
-  type PlaylistWriteMode,
   type PlaylistWriteResult,
   type VaultFilesystem,
 } from '@eskerra/core';
@@ -278,55 +276,31 @@ export async function readPlaylistEntry(
   fs: VaultFilesystem,
 ): Promise<PlaylistEntry | null> {
   const settings = await readVaultSettings(root, fs);
-  const diskEntry = await readLocalPlaylistFileOnly(root, fs);
 
   if (!isVaultR2PlaylistConfigured(settings)) {
-    const winner = diskEntry;
-    await persistPlaylistKnownDesktop(
-      root,
-      fs,
-      winner?.updatedAt ?? null,
-      winner?.controlRevision ?? null,
-    );
-    return winner;
+    await persistPlaylistKnownDesktop(root, fs, null, null);
+    return null;
   }
 
-  let r2Entry: PlaylistEntry | null = null;
-  let r2Ok = false;
   try {
-    r2Entry = await getR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
-    r2Ok = true;
-  } catch {
-    r2Ok = false;
-  }
-
-  if (!r2Ok) {
-    const winner = diskEntry;
+    const r2Entry = await getR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
     await persistPlaylistKnownDesktop(
       root,
       fs,
-      winner?.updatedAt ?? null,
-      winner?.controlRevision ?? null,
+      r2Entry?.updatedAt ?? null,
+      r2Entry?.controlRevision ?? null,
     );
-    return winner;
+    return r2Entry;
+  } catch {
+    await persistPlaylistKnownDesktop(root, fs, null, null);
+    return null;
   }
-
-  const winner = pickNewerPlaylistEntry(diskEntry, r2Entry);
-  await persistPlaylistKnownDesktop(
-    root,
-    fs,
-    winner?.updatedAt ?? null,
-    winner?.controlRevision ?? null,
-  );
-  return winner;
 }
 
 export async function writePlaylistEntry(
   root: string,
   fs: VaultFilesystem,
   entry: PlaylistEntry,
-  // Retained for API parity (`{mode: 'progress' | 'control'}`); merge path does not branch on mode.
-  _options?: {mode?: PlaylistWriteMode},
 ): Promise<PlaylistWriteResult> {
   let localMeta = await readVaultLocalSettings(root, fs);
   const ensured = ensureDeviceInstanceId(localMeta);
@@ -342,52 +316,30 @@ export async function writePlaylistEntry(
   const hasR2 = isVaultR2PlaylistConfigured(settings);
 
   if (!hasR2) {
-    const nextTs = Math.max(Date.now(), entry.updatedAt, knownUpdated);
-    const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
-    await persistPlaylistKnownDesktop(root, fs, saved.updatedAt, saved.controlRevision);
-    await writeLocalPlaylistOnlyDesktop(root, fs, saved);
-    return {kind: 'saved', entry: saved};
+    return {kind: 'skipped'};
   }
 
-  try {
-    const remote = await getR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
-    if (remote != null && isRemotePlaylistNewerThanKnown(remote, knownUpdated, knownRev)) {
-      await persistPlaylistKnownDesktop(root, fs, remote.updatedAt, remote.controlRevision);
-      return {kind: 'superseded', entry: remote};
-    }
-
-    const nextTs = Math.max(Date.now(), remote?.updatedAt ?? 0, knownUpdated, entry.updatedAt);
-    const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
-    await putR2PlaylistObject(settings.r2, saved, DESKTOP_R2_HTTP);
-    await writeLocalPlaylistOnlyDesktop(root, fs, saved);
-    await persistPlaylistKnownDesktop(root, fs, saved.updatedAt, saved.controlRevision);
-    return {kind: 'saved', entry: saved};
-  } catch {
-    const nextTs = Math.max(Date.now(), entry.updatedAt, knownUpdated);
-    const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
-    await persistPlaylistKnownDesktop(root, fs, saved.updatedAt, saved.controlRevision);
-    const persisted = await writeLocalPlaylistOnlyDesktop(root, fs, saved);
-    return {kind: 'saved', entry: persisted};
+  const remote = await getR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
+  if (remote != null && isRemotePlaylistNewerThanKnown(remote, knownUpdated, knownRev)) {
+    await persistPlaylistKnownDesktop(root, fs, remote.updatedAt, remote.controlRevision);
+    return {kind: 'superseded', entry: remote};
   }
+
+  const nextTs = Math.max(Date.now(), remote?.updatedAt ?? 0, knownUpdated, entry.updatedAt);
+  const saved: PlaylistEntry = {...entry, updatedAt: nextTs};
+  await putR2PlaylistObject(settings.r2, saved, DESKTOP_R2_HTTP);
+  await persistPlaylistKnownDesktop(root, fs, saved.updatedAt, saved.controlRevision);
+  return {kind: 'saved', entry: saved};
 }
 
-/** Removes remote and/or local `playlist.json` when stale or cleared. */
+/** Removes remote `playlist.json` when R2 is configured; unlinks legacy local mirror if present. */
 export async function clearPlaylistEntry(root: string, fs: VaultFilesystem): Promise<void> {
   const base = normalizeVaultBaseUri(root);
   const uri = getPlaylistUri(base);
   const settings = await readVaultSettings(root, fs);
 
   if (isVaultR2PlaylistConfigured(settings)) {
-    try {
-      await deleteR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
-      await persistPlaylistKnownDesktop(root, fs, null, null);
-      if (await fs.exists(uri)) {
-        await fs.unlink(uri);
-      }
-      return;
-    } catch {
-      /* fallback local */
-    }
+    await deleteR2PlaylistObject(settings.r2, DESKTOP_R2_HTTP);
   }
 
   await persistPlaylistKnownDesktop(root, fs, null, null);

@@ -113,6 +113,9 @@ export {readVaultSharedSettingsRaw} from './readVaultSharedSettings';
 export {
   buildPlaylistEntryForWrite,
   MIN_PLAYLIST_PERSIST_POSITION_MS,
+  MIN_PROGRESS_MS,
+  NEAR_END_MIN_DURATION_MS,
+  NEAR_END_WINDOW_MS,
   isRemotePlaylistNewerThanKnown,
   isPlaylistR2PollEchoFromOwnDevice,
   isValidPlaylistEntry,
@@ -120,10 +123,22 @@ export {
   parsePlaylistEntryOrThrow,
   pickNewerPlaylistEntry,
   type PlaylistEntry,
-  type PlaylistWriteMode,
   type PlaylistWriteResult,
   serializePlaylistEntry,
 } from './playlist';
+export {
+  getPlaybackSubstate,
+  getPlaybackTransportPlayControl,
+  isPlaybackTransportBusy,
+  podcastPlayerMachine,
+  type PodcastPlayerDeps,
+  type PodcastPlayerMachineEvent,
+  type PodcastPlayerMachineInput,
+  type PodcastPlayerPersistResult,
+  type PodcastPlayerPlaybackState,
+  type PlayerEpisodeSnapshot,
+} from './playerMachine';
+export {markEpisodeAsPlayedInContent} from './markPodcastEpisodePlayed';
 export type {
   FetchR2PlaylistConditionalOptions,
   R2PlaylistConditionalResult,
