@@ -36,18 +36,34 @@ export function useDesktopPodcastArtwork(
   useEffect(() => {
     let cancelled = false;
     if (!rssFeedUrl) {
-      setState({artworkUrl: null, loading: false});
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setState({artworkUrl: null, loading: false});
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     const peek = peekCachedArtworkUri(rssFeedUrl);
     if (peek !== undefined) {
-      setState({artworkUrl: peek, loading: false});
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setState({artworkUrl: peek, loading: false});
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    setState({artworkUrl: null, loading: true});
-    void resolveArtworkUri(rssFeedUrl).then(url => {
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setState({artworkUrl: null, loading: true});
+      }
+    });
+    resolveArtworkUri(rssFeedUrl).then(url => {
       if (!cancelled) {
         setState({artworkUrl: url, loading: false});
       }

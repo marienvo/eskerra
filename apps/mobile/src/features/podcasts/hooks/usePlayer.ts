@@ -274,7 +274,7 @@ export function usePlayer(
       }
     };
 
-    void restore();
+    restore().catch(() => {});
 
     return () => {
       isMounted = false;
@@ -374,7 +374,7 @@ export function usePlayer(
       }
     };
 
-    void syncRemotePlaylist();
+    syncRemotePlaylist().catch(() => {});
 
     return () => {
       cancelled = true;
