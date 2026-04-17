@@ -2,6 +2,7 @@ import {
   buildPlaylistEntryForWrite,
   getPlaybackSubstate,
   getPlaybackTransportPlayControl,
+  isPersistIdle,
   isPlaybackTransportBusy,
   MIN_PROGRESS_MS,
   type PlaybackTransportPlayControl,
@@ -14,6 +15,7 @@ import {
 } from '@eskerra/core';
 import {useMachine} from '@xstate/react';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react';
+import {waitFor} from 'xstate';
 
 import {getDesktopAudioPlayer, isAbortError} from '../lib/htmlAudioPlayer';
 import {markDesktopEpisodeAsPlayed} from '../lib/podcasts/markEpisodeAsPlayedDesktop';
@@ -87,6 +89,13 @@ export type UseDesktopPodcastPlaybackResult = {
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
   seekBy: (deltaMs: number) => Promise<void>;
   togglePause: () => Promise<void>;
+  /**
+   * Pause native audio and queue playlist persist (same as user pause while playing).
+   * No-op when not playing. For shutdown, call then `waitForPersistFlushed`.
+   */
+  pauseIfPlaying: () => Promise<void>;
+  /** Resolves when persist is idle or after `timeoutMs` (never throws). */
+  waitForPersistFlushed: (timeoutMs: number) => Promise<void>;
   /** True while the native element is `playing` (episode list locked). */
   episodeSelectLocked: boolean;
   playbackTransportPlayControl: PlaybackTransportPlayControl;
@@ -192,7 +201,7 @@ export function useDesktopPodcastPlayback({
     [],
   );
 
-  const [snapshot, send] = useMachine(podcastPlayerMachine, {
+  const [snapshot, send, actorRef] = useMachine(podcastPlayerMachine, {
     input: {deps},
   });
 
@@ -692,6 +701,59 @@ export function useDesktopPodcastPlayback({
     [onError, queuePersistFromProgress, send],
   );
 
+  const pauseIfPlaying = useCallback(async () => {
+    const p = getDesktopAudioPlayer();
+    const st = await p.getState();
+    if (st !== 'playing') {
+      return;
+    }
+    const ep = snapshotRef.current.context.episode
+      ? episodesByIdRef.current.get(snapshotRef.current.context.episode!.id) ?? null
+      : null;
+    if (!ep) {
+      return;
+    }
+
+    await p.pause();
+    const latestProgress = await p.getProgress();
+
+    const root = vaultRootRef.current;
+    if (!root) {
+      return;
+    }
+    const deviceId = deviceIdRef.current;
+    if (!deviceId) {
+      onError('Device id missing from local settings.');
+      return;
+    }
+
+    try {
+      if (latestProgress.positionMs < MIN_PROGRESS_MS) {
+        await clearPlaylistEntry(root, fsRef.current);
+        onPlaylistDiskUpdatedRef.current?.();
+        return;
+      }
+
+      queuePersistFromProgress(
+        ep,
+        latestProgress.positionMs,
+        latestProgress.durationMs,
+      );
+    } catch (e) {
+      onError(
+        e instanceof Error ? e.message : 'Could not save playback position.',
+      );
+    }
+  }, [onError, queuePersistFromProgress]);
+
+  const waitForPersistFlushed = useCallback(async (timeoutMs: number) => {
+    try {
+      await waitFor(actorRef, snap => isPersistIdle(snap), {timeout: timeoutMs});
+    } catch {
+      /* timeout or actor stopped — continue shutdown */
+    }
+  }, [actorRef]);
+
   const togglePause = useCallback(async () => {
     const p = getDesktopAudioPlayer();
     const st = await p.getState();
@@ -703,36 +765,8 @@ export function useDesktopPodcastPlayback({
     }
 
     if (st === 'playing') {
-      await p.pause();
-      const latestProgress = await p.getProgress();
-
-      const root = vaultRootRef.current;
-      if (!root) {
-        return;
-      }
-      const deviceId = deviceIdRef.current;
-      if (!deviceId) {
-        onError('Device id missing from local settings.');
-        return;
-      }
-
-      try {
-        if (latestProgress.positionMs < MIN_PROGRESS_MS) {
-          await clearPlaylistEntry(root, fsRef.current);
-          onPlaylistDiskUpdatedRef.current?.();
-          return;
-        }
-
-        queuePersistFromProgress(
-          ep,
-          latestProgress.positionMs,
-          latestProgress.durationMs,
-        );
-      } catch (e) {
-        onError(
-          e instanceof Error ? e.message : 'Could not save playback position.',
-        );
-      }
+      await pauseIfPlaying();
+      return;
     } else if (
       st === 'paused' ||
       st === 'ended' ||
@@ -760,7 +794,7 @@ export function useDesktopPodcastPlayback({
         );
       }
     }
-  }, [onError, queuePersistFromProgress]);
+  }, [onError, queuePersistFromProgress, pauseIfPlaying]);
 
   return {
     activeEpisode,
@@ -773,5 +807,7 @@ export function useDesktopPodcastPlayback({
     seekBy,
     seekDisabled,
     togglePause,
+    pauseIfPlaying,
+    waitForPersistFlushed,
   };
 }

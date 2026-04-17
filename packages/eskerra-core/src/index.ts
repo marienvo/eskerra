@@ -129,6 +129,7 @@ export {
 export {
   getPlaybackSubstate,
   getPlaybackTransportPlayControl,
+  isPersistIdle,
   isPlaybackTransportBuffering,
   isPlaybackTransportBusy,
   podcastPlayerMachine,
@@ -138,6 +139,7 @@ export {
   type PodcastPlayerMachineInput,
   type PodcastPlayerPersistResult,
   type PodcastPlayerPlaybackState,
+  type PodcastPlayerSnapshot,
   type PlayerEpisodeSnapshot,
 } from './playerMachine';
 export {markEpisodeAsPlayedInContent} from './markPodcastEpisodePlayed';

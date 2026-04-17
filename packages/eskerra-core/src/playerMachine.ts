@@ -1,4 +1,4 @@
-import {assign, fromPromise, setup} from 'xstate';
+import {assign, fromPromise, setup, type SnapshotFrom} from 'xstate';
 
 import type {PlayerState} from './audioPlayerTypes';
 import type {PlaylistEntry} from './playlist';
@@ -796,6 +796,16 @@ export const podcastPlayerMachine = setup({
     },
   },
 });
+
+export type PodcastPlayerSnapshot = SnapshotFrom<typeof podcastPlayerMachine>;
+
+/** True when no playlist persist is debouncing or flushing (safe to quit after a pause-triggered persist). */
+export function isPersistIdle(snapshot: PodcastPlayerSnapshot): boolean {
+  return (
+    snapshot.matches({persist: 'idle'}) &&
+    snapshot.context.pendingPersistEntry == null
+  );
+}
 
 /** Extract playback sub-state value from a parallel snapshot. */
 export function getPlaybackSubstate(snapshot: {

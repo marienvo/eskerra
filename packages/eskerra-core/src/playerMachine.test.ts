@@ -1,11 +1,12 @@
 import {describe, expect, it, vi} from 'vitest';
-import {createActor} from 'xstate';
+import {createActor, waitFor} from 'xstate';
 
 import type {PlaylistEntry} from './playlist';
 import {NEAR_END_WINDOW_MS} from './playlist';
 import {
   getPlaybackSubstate,
   getPlaybackTransportPlayControl,
+  isPersistIdle,
   isPlaybackTransportBuffering,
   podcastPlayerMachine,
 } from './playerMachine';
@@ -318,5 +319,111 @@ describe('podcastPlayerMachine', () => {
 
     actor.send({type: 'RESET'});
     expect(actor.getSnapshot().context.buffering).toBe(false);
+  });
+
+  it('isPersistIdle is true on start and false while persist is debouncing or flushing', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    expect(isPersistIdle(actor.getSnapshot())).toBe(true);
+
+    actor.send({
+      type: 'QUEUE_PERSIST',
+      entry: makePlaylistEntry({
+        episodeId: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        positionMs: 100,
+      }),
+    });
+    expect(isPersistIdle(actor.getSnapshot())).toBe(false);
+  });
+
+  it('waitFor(actor, isPersistIdle) resolves after QUEUE_PERSIST completes', async () => {
+    let finishPersist!: (out: {
+      kind: 'saved';
+      entry: PlaylistEntry;
+    }) => void;
+    const persistPromise = new Promise<{
+      kind: 'saved';
+      entry: PlaylistEntry;
+    }>(resolve => {
+      finishPersist = resolve;
+    });
+    const persist = vi.fn().mockReturnValue(persistPromise);
+    const actor = createActor(podcastPlayerMachine, {
+      input: {
+        deps: {
+          hasR2: () => true,
+          persist,
+          clearRemotePlaylist: vi.fn(),
+          markEpisodeListened: vi.fn(),
+        },
+      },
+    });
+
+    vi.useFakeTimers();
+    actor.start();
+
+    const entry = makePlaylistEntry({
+      episodeId: 'e1',
+      mp3Url: 'https://x/a.mp3',
+      positionMs: 5000,
+    });
+    actor.send({type: 'QUEUE_PERSIST', entry});
+    expect(isPersistIdle(actor.getSnapshot())).toBe(false);
+
+    const done = waitFor(actor, isPersistIdle, {timeout: 20_000});
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(persist).toHaveBeenCalled();
+
+    const saved = makePlaylistEntry({
+      episodeId: 'e1',
+      mp3Url: 'https://x/a.mp3',
+      positionMs: 5000,
+      updatedAt: 99,
+    });
+    finishPersist({kind: 'saved', entry: saved});
+
+    await done;
+    expect(isPersistIdle(actor.getSnapshot())).toBe(true);
+
+    vi.useRealTimers();
+  });
+
+  it('waitFor(actor, isPersistIdle) rejects when timeout while persist is in flight', async () => {
+    const persist = vi.fn().mockReturnValue(new Promise(() => {}));
+    const actor = createActor(podcastPlayerMachine, {
+      input: {
+        deps: {
+          hasR2: () => true,
+          persist,
+          clearRemotePlaylist: vi.fn(),
+          markEpisodeListened: vi.fn(),
+        },
+      },
+    });
+
+    vi.useFakeTimers();
+    actor.start();
+    actor.send({
+      type: 'QUEUE_PERSIST',
+      entry: makePlaylistEntry({
+        episodeId: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        positionMs: 100,
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(persist).toHaveBeenCalled();
+
+    const p = waitFor(actor, isPersistIdle, {timeout: 80});
+    const assertRejected = expect(p).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(200);
+    await assertRejected;
+
+    vi.useRealTimers();
   });
 });

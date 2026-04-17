@@ -78,6 +78,8 @@ import './App.css';
 type StartupSplashPhase = DesktopStartupSplashPhase | 'done';
 
 const PLAYBACK_SKIP_MS = 10_000;
+/** Max time to wait for R2 playlist persist after pausing on window close (debounce + network). */
+const SHUTDOWN_PERSIST_TIMEOUT_MS = 3000;
 const MAIN_WINDOW_LABEL = 'main';
 
 /**
@@ -852,6 +854,16 @@ export default function App() {
       .onCloseRequested(async event => {
         event.preventDefault();
         try {
+          try {
+            await desktopPlaybackRef.current.pauseIfPlaying();
+            await desktopPlaybackRef.current.waitForPersistFlushed(
+              SHUTDOWN_PERSIST_TIMEOUT_MS,
+            );
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error('[eskerra] shutdown pause/flush failed', e);
+            }
+          }
           await flushInboxSave();
           try {
             await saveWindowState(StateFlags.ALL);
