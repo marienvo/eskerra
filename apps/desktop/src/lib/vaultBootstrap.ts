@@ -21,7 +21,6 @@ import {
   isSyncConflictFileName,
   isVaultR2PlaylistConfigured,
   MARKDOWN_EXTENSION,
-  normalizePlaylistEntryForSync,
   normalizeVaultBaseUri,
   parseEskerraLocalSettings,
   parseEskerraSettings,
@@ -32,7 +31,6 @@ import {
   sanitizeInboxNoteStem,
   serializeEskerraLocalSettings,
   serializeEskerraSettings,
-  serializePlaylistEntry,
   vaultPathDirname,
   type EskerraLocalSettings,
   type EskerraSettings,
@@ -212,27 +210,6 @@ export async function listInboxNotes(root: string, fs: VaultFilesystem) {
     });
 }
 
-async function readLocalPlaylistFileOnly(
-  root: string,
-  fs: VaultFilesystem,
-): Promise<PlaylistEntry | null> {
-  const base = normalizeVaultBaseUri(root);
-  const uri = getPlaylistUri(base);
-  if (!(await fs.exists(uri))) {
-    return null;
-  }
-  const raw = await fs.readFile(uri, {encoding: 'utf8'});
-  if (!raw.trim()) {
-    return null;
-  }
-  const parsed: unknown = JSON.parse(raw);
-  const entry = normalizePlaylistEntryForSync(parsed);
-  if (!entry) {
-    throw new Error('playlist.json has an invalid structure.');
-  }
-  return entry;
-}
-
 async function persistPlaylistKnownDesktop(
   root: string,
   fs: VaultFilesystem,
@@ -251,24 +228,6 @@ async function persistPlaylistKnownDesktop(
     playlistKnownUpdatedAtMs: nextUpdatedAtMs,
     playlistKnownControlRevision: nextControlRevision,
   });
-}
-
-async function writeLocalPlaylistOnlyDesktop(
-  root: string,
-  fs: VaultFilesystem,
-  entry: PlaylistEntry,
-): Promise<PlaylistEntry> {
-  const base = normalizeVaultBaseUri(root);
-  const uri = getPlaylistUri(base);
-  const eskerraDir = getEskerraDirectoryUri(base);
-  if (!(await fs.exists(eskerraDir))) {
-    await fs.mkdir(eskerraDir);
-  }
-  await fs.writeFile(uri, serializePlaylistEntry(entry), {
-    encoding: 'utf8',
-    mimeType: 'application/json',
-  });
-  return entry;
 }
 
 export async function readPlaylistEntry(

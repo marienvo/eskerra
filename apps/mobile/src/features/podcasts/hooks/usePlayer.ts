@@ -83,6 +83,8 @@ export function usePlayer(
   const nearEndNonceHandledRef = useRef(0);
   const userPlaybackDepthRef = useRef(0);
   const loadedEpisodeIdRef = useRef<string | null>(null);
+  /** One cold restore per vault; transient R2 null must not clear an already-hydrated episode. */
+  const hasRestoredForBaseUriRef = useRef<string | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -94,6 +96,10 @@ export function usePlayer(
   }, [onMarkAsPlayed]);
   useLayoutEffect(() => {
     baseUriRef.current = baseUri ?? null;
+  }, [baseUri]);
+
+  useLayoutEffect(() => {
+    hasRestoredForBaseUriRef.current = null;
   }, [baseUri]);
 
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +196,14 @@ export function usePlayer(
         if (!podcastsCatalogReady || podcastsLoading) {
           return;
         }
+        if (hasRestoredForBaseUriRef.current === baseUri) {
+          return;
+        }
+        if (snapshotRef.current.context.episode != null) {
+          hasRestoredForBaseUriRef.current = baseUri;
+          return;
+        }
+
         await player.ensureSetup();
         const st = await player.getState();
         if (st === 'playing' || userPlaybackDepthRef.current > 0) {
@@ -200,7 +214,10 @@ export function usePlayer(
           return;
         }
         if (!saved) {
-          send({type: 'RESET'});
+          if (snapshotRef.current.context.episode == null) {
+            send({type: 'RESET'});
+            hasRestoredForBaseUriRef.current = baseUri;
+          }
           return;
         }
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
@@ -212,6 +229,7 @@ export function usePlayer(
           }
           await clearPlaylist(baseUri);
           send({type: 'RESET'});
+          hasRestoredForBaseUriRef.current = baseUri;
           return;
         }
         if (catalogEp.isListened) {
@@ -222,6 +240,7 @@ export function usePlayer(
           }
           await clearPlaylist(baseUri);
           send({type: 'RESET'});
+          hasRestoredForBaseUriRef.current = baseUri;
           return;
         }
         send({
@@ -230,6 +249,7 @@ export function usePlayer(
           entry: saved,
           baseline: saved,
         });
+        hasRestoredForBaseUriRef.current = baseUri;
       } catch (restoreError) {
         if (!isMounted) {
           return;
@@ -245,14 +265,99 @@ export function usePlayer(
     return () => {
       isMounted = false;
     };
-  }, [
-    baseUri,
-    player,
-    playlistSyncGeneration,
-    podcastsCatalogReady,
-    podcastsLoading,
-    send,
-  ]);
+  }, [baseUri, player, podcastsCatalogReady, podcastsLoading, send]);
+
+  useEffect(() => {
+    if (!baseUri || !podcastsCatalogReady || podcastsLoading) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncRemotePlaylist = async () => {
+      const ctx = snapshotRef.current.context;
+      if (ctx.native === 'playing') {
+        return;
+      }
+      try {
+        await player.ensureSetup();
+        const st = await player.getState();
+        if (cancelled) {
+          return;
+        }
+        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+          return;
+        }
+
+        const saved = await readPlaylistCoalesced(baseUri);
+        if (cancelled) {
+          return;
+        }
+
+        const currentCtx = snapshotRef.current.context;
+
+        if (!saved) {
+          if (!currentCtx.episode) {
+            send({type: 'RESET'});
+          }
+          return;
+        }
+
+        const catalogEp = episodesByIdRef.current.get(saved.episodeId);
+        if (!catalogEp || catalogEp.isListened) {
+          try {
+            await player.stop();
+          } catch {
+            // ignore stop errors during invalid-remote cleanup
+          }
+          await clearPlaylist(baseUri);
+          send({type: 'RESET'});
+          return;
+        }
+
+        const snapEpId = currentCtx.episode?.id;
+        if (saved.episodeId === snapEpId) {
+          send({
+            type: 'HYDRATE',
+            episode: toSnapshot(catalogEp),
+            entry: saved,
+            baseline: saved,
+          });
+          return;
+        }
+
+        if (!snapEpId) {
+          send({
+            type: 'HYDRATE',
+            episode: toSnapshot(catalogEp),
+            entry: saved,
+            baseline: saved,
+          });
+          return;
+        }
+
+        send({type: 'RESET'});
+        send({
+          type: 'HYDRATE',
+          episode: toSnapshot(catalogEp),
+          entry: saved,
+          baseline: saved,
+        });
+      } catch (syncError) {
+        if (!cancelled) {
+          setError(
+            syncError instanceof Error ? syncError.message : 'Could not sync playlist from remote.',
+          );
+        }
+      }
+    };
+
+    void syncRemotePlaylist();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUri, playlistSyncGeneration, podcastsCatalogReady, podcastsLoading, player, send]);
 
   useEffect(() => {
     if (snapCtx.nearEndResyncNonce === nearEndNonceHandledRef.current) {

@@ -127,23 +127,51 @@ function patchProgress(_context: MachineContext, event: PodcastPlayerMachineEven
   };
 }
 
-const resetPlayback = assign({
-  episode: null,
-  playlistBaseline: null,
-  positionMs: 0,
-  durationMs: null,
-  native: 'idle' as PlayerState,
-  seeking: false,
-  inNearEndZone: false,
-  nearEndResyncNonce: 0,
-  errorMessage: null,
-});
-
 export const podcastPlayerMachine = setup({
   types: {
     context: {} as MachineContext,
     events: {} as PodcastPlayerMachineEvent,
     input: {} as PodcastPlayerMachineInput,
+  },
+  actions: {
+    resetPlayback: assign({
+      episode: null,
+      playlistBaseline: null,
+      positionMs: 0,
+      durationMs: null,
+      native: 'idle' as PlayerState,
+      seeking: false,
+      inNearEndZone: false,
+      nearEndResyncNonce: 0,
+      errorMessage: null,
+    }),
+    /** Remote / disk re-hydrate for the same episode: baseline + position only (no native state change). */
+    assignHydratePatchSameEpisode: assign(({event}) => {
+      if (event.type !== 'HYDRATE' || !event.episode || !event.entry) {
+        return {};
+      }
+      return {
+        playlistBaseline: event.baseline ?? event.entry,
+        positionMs: event.entry.positionMs,
+        durationMs: event.entry.durationMs,
+        errorMessage: null,
+      };
+    }),
+    /** Full episode + playlist fields from HYDRATE while staying primed (new remote episode). */
+    assignHydrateFullPrimed: assign(({event}) => {
+      if (event.type !== 'HYDRATE' || !event.episode || !event.entry) {
+        return {};
+      }
+      return {
+        episode: event.episode,
+        playlistBaseline: event.baseline ?? event.entry,
+        positionMs: event.entry.positionMs,
+        durationMs: event.entry.durationMs,
+        native: 'paused' as const,
+        inNearEndZone: false,
+        errorMessage: null,
+      };
+    }),
   },
   actors: {
     flushPersist: fromPromise(
@@ -188,6 +216,15 @@ export const podcastPlayerMachine = setup({
     crossesNearEnd: ({context, event}) => crossesNearEndThreshold(context, event),
     leftNearEnd: ({context, event}) => leftNearEndZone(context, event),
     nativeEnded: ({event}) => event.type === 'NATIVE' && event.state === 'ended',
+    hydrateClearEpisode: ({event}) => event.type === 'HYDRATE' && event.episode == null,
+    hydrateFullPayload: ({event}) =>
+      event.type === 'HYDRATE' && event.episode != null && event.entry != null,
+    hydrateSameEpisode: ({context, event}) =>
+      event.type === 'HYDRATE' &&
+      event.episode != null &&
+      event.entry != null &&
+      context.episode != null &&
+      context.episode.id === event.episode.id,
   },
 }).createMachine({
   id: 'podcastPlayer',
@@ -211,7 +248,7 @@ export const podcastPlayerMachine = setup({
       states: {
         idle: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
             HYDRATE: [
               {
                 guard: ({event}) =>
@@ -235,11 +272,11 @@ export const podcastPlayerMachine = setup({
               {
                 guard: ({event}) => event.type === 'HYDRATE' && event.episode == null,
                 target: 'idle',
-                actions: resetPlayback,
+                actions: 'resetPlayback',
               },
               {
                 target: 'idle',
-                actions: resetPlayback,
+                actions: 'resetPlayback',
               },
             ],
             EPISODE_PLAY: {
@@ -263,8 +300,26 @@ export const podcastPlayerMachine = setup({
         },
         primed: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
-            HYDRATE: {target: 'idle', actions: resetPlayback, reenter: true},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: [
+              {
+                guard: 'hydrateClearEpisode',
+                target: 'idle',
+                actions: 'resetPlayback',
+              },
+              {
+                guard: 'hydrateSameEpisode',
+                actions: 'assignHydratePatchSameEpisode',
+              },
+              {
+                guard: 'hydrateFullPayload',
+                actions: 'assignHydrateFullPrimed',
+              },
+              {
+                target: 'idle',
+                actions: 'resetPlayback',
+              },
+            ],
             NATIVE: [
               {
                 guard: 'nativeEnded',
@@ -321,7 +376,11 @@ export const podcastPlayerMachine = setup({
         },
         loading: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             NATIVE: [
               {
                 guard: 'nativeEnded',
@@ -364,7 +423,11 @@ export const podcastPlayerMachine = setup({
         },
         playing: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             SEEK_START: {
               actions: assign({seeking: true}),
             },
@@ -430,7 +493,11 @@ export const podcastPlayerMachine = setup({
         },
         paused: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             SEEK_START: {
               actions: assign({seeking: true}),
             },
@@ -522,6 +589,10 @@ export const podcastPlayerMachine = setup({
             },
           },
           on: {
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             PROGRESS: {
               actions: assign(({context, event}) => patchProgress(context, event)),
             },
@@ -529,7 +600,11 @@ export const podcastPlayerMachine = setup({
         },
         nearEndPlaying: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             SEEK_START: {actions: assign({seeking: true})},
             SEEK_END: {actions: assign({seeking: false})},
             NATIVE: [
@@ -571,7 +646,11 @@ export const podcastPlayerMachine = setup({
         },
         nearEndPaused: {
           on: {
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
+            HYDRATE: {
+              guard: 'hydrateSameEpisode',
+              actions: 'assignHydratePatchSameEpisode',
+            },
             SEEK_START: {actions: assign({seeking: true})},
             SEEK_END: {actions: assign({seeking: false})},
             NATIVE: [
@@ -622,7 +701,7 @@ export const podcastPlayerMachine = setup({
             }),
             onDone: {
               target: 'idle',
-              actions: resetPlayback,
+              actions: 'resetPlayback',
             },
             onError: {
               target: 'error',
@@ -637,9 +716,9 @@ export const podcastPlayerMachine = setup({
           on: {
             CLEAR_ERROR: {
               target: 'idle',
-              actions: resetPlayback,
+              actions: 'resetPlayback',
             },
-            RESET: {target: 'idle', actions: resetPlayback},
+            RESET: {target: 'idle', actions: 'resetPlayback'},
           },
         },
       },

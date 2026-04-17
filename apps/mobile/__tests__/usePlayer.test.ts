@@ -238,6 +238,7 @@ describe('usePlayer restore state', () => {
   let ensureSetupMock: jest.MockedFunction<() => Promise<void>>;
   let stopMock: jest.MockedFunction<() => Promise<void>>;
   let playerReportedState: string;
+  const playlistSyncGenRef = {current: 0};
 
   const episode: PodcastEpisode = {
     date: '2026-03-20',
@@ -252,13 +253,14 @@ describe('usePlayer restore state', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    playlistSyncGenRef.current = 0;
     ensureSetupMock = jest.fn(async () => undefined);
     playerReportedState = 'paused';
     stopMock = jest.fn(async () => {
       playerReportedState = 'idle';
     });
 
-    useVaultContextMock.mockReturnValue({
+    useVaultContextMock.mockImplementation(() => ({
       baseUri: 'content://vault-root',
       clearInboxContentCache: jest.fn(),
       consumeInboxPrefetch: jest.fn(() => null),
@@ -279,9 +281,9 @@ describe('usePlayer restore state', () => {
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
       setSettings: jest.fn(),
-      playlistSyncGeneration: 0,
+      playlistSyncGeneration: playlistSyncGenRef.current,
       notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
-    });
+    }));
 
     writePlaylistMock.mockImplementation(async (_uri, entry) => ({
       kind: 'saved',
@@ -367,8 +369,9 @@ describe('usePlayer restore state', () => {
       positionMs: 123456,
     });
     expect(restoredResult.state).toBe('paused');
-    expect(readPlaylistMock).toHaveBeenCalledTimes(1);
-    expect(ensureSetupMock).toHaveBeenCalledTimes(1);
+    // Cold restore + initial remote-sync effect each read coalesced playlist once.
+    expect(readPlaylistMock).toHaveBeenCalledTimes(2);
+    expect(ensureSetupMock).toHaveBeenCalledTimes(2);
   });
 
   test('reads playlist once even when episodes map updates multiple times', async () => {
@@ -427,8 +430,8 @@ describe('usePlayer restore state', () => {
       await flushPromises();
     });
 
-    expect(readPlaylistMock).toHaveBeenCalledTimes(1);
-    expect(ensureSetupMock).toHaveBeenCalledTimes(1);
+    expect(readPlaylistMock).toHaveBeenCalledTimes(2);
+    expect(ensureSetupMock).toHaveBeenCalledTimes(2);
     expect(expectResult(latestResult).activeEpisode).toEqual(enrichedEpisode);
     await act(async () => {
       renderer?.unmount();
@@ -864,5 +867,116 @@ describe('usePlayer restore state', () => {
 
     expect(readPlaylistMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(ensureSetupMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('playlistSyncGeneration bump after hydrate does not clear episode when coalesced read returns null', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 123456,
+      updatedAt: 1,
+    });
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+    const readsAfterHydrate = readPlaylistMock.mock.calls.length;
+
+    readPlaylistMock.mockResolvedValue(null);
+    playlistSyncGenRef.current = 1;
+    await act(async () => {
+      renderer?.update(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(readPlaylistMock.mock.calls.length).toBeGreaterThan(readsAfterHydrate);
+    expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+    await act(async () => {
+      renderer?.unmount();
+    });
+  });
+
+  test('playlistSyncGeneration bump with same remote entry keeps active episode and updates progress', async () => {
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 111,
+      updatedAt: 1,
+    });
+
+    let latestResult: PlayerHookSnapshot | null = null;
+    const handleResult = (result: PlayerHookSnapshot) => {
+      latestResult = result;
+    };
+
+    const episodesById = new Map([[episode.id, episode]]);
+    let renderer: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(expectResult(latestResult).progress.positionMs).toBe(111);
+
+    readPlaylistMock.mockResolvedValue({
+      durationMs: 900000,
+      episodeId: episode.id,
+      mp3Url: episode.mp3Url,
+      positionMs: 222222,
+      updatedAt: 2,
+    });
+    playlistSyncGenRef.current = 1;
+    await act(async () => {
+      renderer?.update(
+        React.createElement(HookHarness, {
+          episodesById,
+          onResult: handleResult,
+          podcastsCatalogReady: true,
+          podcastsLoading: false,
+        }),
+      );
+      await flushPromises();
+    });
+
+    expect(expectResult(latestResult).activeEpisode).toEqual(episode);
+    expect(expectResult(latestResult).progress.positionMs).toBe(222222);
+    await act(async () => {
+      renderer?.unmount();
+    });
   });
 });
