@@ -33,6 +33,25 @@ export function clearPodcastMarkdownFileContentCache(): void {
   fileContentCache.clear();
 }
 
+/** Drop cached markdown for one URI (e.g. after mark-as-played writes new content). */
+export function invalidatePodcastMarkdownFileContentCacheEntry(uri: string): void {
+  fileContentCache.delete(uri);
+}
+
+/**
+ * Seed session cache so the next `readMarkdownWithSessionCache` hit returns `content` when the
+ * catalog still carries a matching `lastModified` (stale index after local writes).
+ */
+export function primePodcastMarkdownFileContentCacheEntry(
+  uri: string,
+  lastModified: number,
+  content: string,
+): void {
+  if (lastModified > 0) {
+    fileContentCache.set(uri, {lastModified, content});
+  }
+}
+
 async function readMarkdownWithSessionCache(
   file: RootMarkdownFile,
   fs: VaultFilesystem,
