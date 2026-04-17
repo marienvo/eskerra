@@ -31,6 +31,8 @@ On **Vault** route focus (`VaultScreen`):
 3. If **`fullNeedsRebuild`** (see `apps/mobile/src/features/vault/vaultSearchLifecycle.ts`): `scheduleFullRebuild(baseUri, reason)` with `missing` | `schema-mismatch` | `base-uri-change`.
 4. Else if **`shouldReconcile`** (`lastReconciledAt` older than **60 s** default): `reconcile(baseUri)`.
 
+**Vault search screen** (`VaultSearchScreen`) repeats the same **`open` → `getIndexStatus` → `scheduleFullRebuild` when `fullNeedsRebuild`** path on mount so search works even if the user opens search before focusing the Vault root screen (deep link / fast navigation). A **Retry** control calls `scheduleFullRebuild(baseUri, 'manual-retry')` after native emits **`vault-search:index-status`** with `status: "error"`.
+
 `touchPaths(baseUri, uris[])` is invoked after successful **create / write / delete** of inbox notes from `NotesContext` so in-app edits stay indexed without waiting for reconcile.
 
 ## Search & ranking (native)
@@ -46,11 +48,17 @@ On **Vault** route focus (`VaultScreen`):
 ## Events (bridge)
 
 - `vault-search:update` / `vault-search:done` — `{ searchId, vaultInstanceId?, notes?, progress }`.
-- `vault-search:index-status` — `{ vaultInstanceId?, status, indexedNotes?, added?, updated?, removed?, reason?, skippedNotes?, … }` (`reason` e.g. `full-rebuild`, `reconcile`; `skippedNotes` on rebuild-ready after indexing).
+- `vault-search:index-status` — `{ vaultInstanceId?, status, indexedNotes?, added?, updated?, removed?, reason?, skippedNotes?, lastReconciledAt?, … }` (`status`: `building` | `ready` | `error`; `reason` e.g. `full-rebuild`, `reconcile`; `skippedNotes` on rebuild-ready after indexing; `lastReconciledAt` epoch ms on some `ready` payloads).
 
 ## JS search screen
 
 `VaultSearchScreen` passes **`indexReady`** and **`lastReconciledAt`** from `open()` into `useVaultContentSearch`. Before the **first** `start()` in a focus session, if the index is ready and `lastReconciledAt` is older than **10 s** (or missing), the hook runs a single best-effort **`reconcile(baseUri)`** (guarded so it does not repeat on every keystroke). Stale native events increment a dev-only dropped counter and **`console.debug`** when `searchId` or `vaultInstanceId` mismatches.
+
+`useVaultContentSearch` subscribes to **`vault-search:index-status`**: it keeps a small **`indexStatusLive`** slice for UI (building vs error vs ready), updates **`vaultInstanceId` ref** when the native instance id rotates on full rebuild, and **auto-retries `start()`** once when `status === "ready"` arrives after a search **`done`** with `indexReady: false` (so typing during indexing does not require another keystroke).
+
+## Native rebuild safety
+
+`scheduleFullRebuildSync` validates the SAF vault root (**`DocumentFile` exists and is directory**) **before** deleting the on-disk SQLite file or closing DB handles, so a bad URI does not wipe a good index. Failures emit **`vault-search:index-status`** with `status: "error"` and reject the `scheduleFullRebuild` promise. While the read DB is not open but a write session or `activeBaseUri` is active, **`startSearchSync`** completes with **`progress.indexStatus: "building"`** and **`isBuilding: true`** instead of a silent `idle` not-ready state.
 
 ## JVM / Robolectric tests
 

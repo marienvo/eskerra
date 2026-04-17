@@ -79,7 +79,8 @@ export type VaultSearchDonePayload = {
 
 export type VaultSearchIndexStatusPayload = {
   vaultInstanceId?: string;
-  status: 'idle' | 'building' | 'reconciling' | 'ready' | 'failed';
+  /** Native EskerraVaultSearch: `building` | `ready` | `error` | … */
+  status: 'idle' | 'building' | 'reconciling' | 'ready' | 'failed' | 'error';
   indexedNotes?: number;
   skippedNotes?: number;
   added?: number;
@@ -87,4 +88,9 @@ export type VaultSearchIndexStatusPayload = {
   removed?: number;
   reason?: string;
   message?: string;
+  /** Epoch ms from native after successful rebuild/reconcile when provided. */
+  lastReconciledAt?: number;
 };
+
+/** Device event `vault-search:index-status` (same shape as [VaultSearchIndexStatusPayload]). */
+export type VaultSearchIndexStatusEvent = VaultSearchIndexStatusPayload;

@@ -344,57 +344,71 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val canonical = VaultPath.canonicalizeUri(baseUri)
     val file = dbFileForBase(canonical)
     writeCancel.set(false)
-    emitIndexStatus(vaultInstanceId ?: "", "building", null, null, null, null, reason, null)
-    if (file.exists()) {
-      file.delete()
+    emitIndexStatus(vaultInstanceId ?: "", "building", null, null, null, null, reason, null, null)
+    val root =
+      documentFromUri(Uri.parse(canonical))
+        ?: run {
+          Log.w(TAG, "rebuild failed: could not open vault root for $canonical")
+          emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+          throw IllegalStateException("Could not open vault root")
+        }
+    if (!root.exists() || !root.isDirectory) {
+      Log.w(TAG, "rebuild failed: vault root is not a directory for $canonical")
+      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+      throw IllegalStateException("Vault root is not a directory")
     }
-    synchronized(lock) {
-      writeDb?.close()
-      readDb?.close()
-      writeDb = null
-      readDb = null
-      activeBaseUri = canonical
-    }
-    val path = file.absolutePath
-    val db = ensureWriterOpen(path)
-    var indexed = 0
-    var skipped = 0
-    db.beginTransaction()
     try {
-      VaultSearchSchema.createTables(db)
-      val newId = UUID.randomUUID().toString()
-      vaultInstanceId = newId
-      metaPut(db, VaultSearchSchema.KEY_SCHEMA_VERSION, VaultSearchSchema.SCHEMA_VERSION.toString())
-      metaPut(db, VaultSearchSchema.KEY_BASE_URI_HASH, VaultPath.baseUriHash(canonical))
-      metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, newId)
-      val root = documentFromUri(Uri.parse(canonical))
-        ?: throw IllegalStateException("Could not open vault root")
-      if (!root.exists() || !root.isDirectory) {
-        throw IllegalStateException("Vault root is not a directory")
+      if (file.exists()) {
+        file.delete()
       }
-      indexed = 0
-      skipped = 0
-      walkEligibleMarkdown(root, canonical) { doc ->
-        if (writeCancel.get()) {
-          return@walkEligibleMarkdown
-        }
-        try {
-          upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
-          indexed++
-        } catch (e: Exception) {
-          Log.w(TAG, "skip ${doc.uri}: ${e.message}")
-          skipped++
-        }
+      synchronized(lock) {
+        writeDb?.close()
+        readDb?.close()
+        writeDb = null
+        readDb = null
+        activeBaseUri = canonical
       }
-      val now = System.currentTimeMillis()
-      metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, now.toString())
-      metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, now.toString())
-      db.setTransactionSuccessful()
-    } finally {
-      db.endTransaction()
+      val path = file.absolutePath
+      val db = ensureWriterOpen(path)
+      var indexed = 0
+      var skipped = 0
+      db.beginTransaction()
+      try {
+        VaultSearchSchema.createTables(db)
+        val newId = UUID.randomUUID().toString()
+        vaultInstanceId = newId
+        metaPut(db, VaultSearchSchema.KEY_SCHEMA_VERSION, VaultSearchSchema.SCHEMA_VERSION.toString())
+        metaPut(db, VaultSearchSchema.KEY_BASE_URI_HASH, VaultPath.baseUriHash(canonical))
+        metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, newId)
+        indexed = 0
+        skipped = 0
+        walkEligibleMarkdown(root, canonical) { doc ->
+          if (writeCancel.get()) {
+            return@walkEligibleMarkdown
+          }
+          try {
+            upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
+            indexed++
+          } catch (e: Exception) {
+            Log.w(TAG, "skip ${doc.uri}: ${e.message}")
+            skipped++
+          }
+        }
+        val now = System.currentTimeMillis()
+        metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, now.toString())
+        metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, now.toString())
+        db.setTransactionSuccessful()
+      } finally {
+        db.endTransaction()
+      }
+      reopenReader()
+      val nowMs = System.currentTimeMillis()
+      emitIndexStatus(vaultInstanceId!!, "ready", indexed, null, null, null, "full-rebuild", skipped, nowMs)
+    } catch (t: Throwable) {
+      Log.w(TAG, "rebuild failed: ${t.message}", t)
+      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+      throw t
     }
-    reopenReader()
-    emitIndexStatus(vaultInstanceId!!, "ready", indexed, null, null, null, "full-rebuild", skipped)
   }
 
   private fun reconcileSync(baseUri: String) {
@@ -447,6 +461,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     }
     reopenReader()
     if (added + updated + removed > 0) {
+      val recAt = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull()
       emitIndexStatus(
         metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: "",
         "ready",
@@ -456,6 +471,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         removed,
         "reconcile",
         null,
+        recAt,
       )
     }
   }
@@ -469,6 +485,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     removed: Int?,
     reason: String? = null,
     skippedNotes: Int? = null,
+    lastReconciledAt: Long? = null,
   ) {
     val m = Arguments.createMap()
     m.putString("vaultInstanceId", instanceId)
@@ -479,6 +496,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     removed?.let { m.putInt("removed", it) }
     reason?.let { m.putString("reason", it) }
     skippedNotes?.let { m.putInt("skippedNotes", it) }
+    lastReconciledAt?.let { m.putDouble("lastReconciledAt", it.toDouble()) }
     emit("vault-search:index-status", m)
   }
 
@@ -567,16 +585,37 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val trimmed = query.trim()
     val instanceId = synchronized(lock) { vaultInstanceId }
     if (trimmed.isEmpty()) {
-      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false)
+      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false)
       return
     }
     val tokens = Fts5Query.tokenizeQuery(trimmed)
     val matchExpr = Fts5Query.buildSafeMatch(tokens) ?: run {
-      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false)
+      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false)
       return
     }
-    val rdb = synchronized(lock) { readDb } ?: run {
-      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false)
+    val (rdb, readerMissing) =
+      synchronized(lock) {
+        val rd = readDb
+        if (rd != null) {
+          return@synchronized Pair(rd, null as VaultSearchReadiness.ReaderMissingProgress?)
+        }
+        val p = VaultSearchReadiness.progressWhenReadDbMissing(writeDb != null, activeBaseUri != null)
+        Pair(null, p)
+      }
+    if (rdb == null) {
+      val p = readerMissing!!
+      emitDone(
+        searchId,
+        instanceId ?: "",
+        false,
+        emptyList(),
+        0,
+        0,
+        0,
+        p.indexStatus,
+        p.indexReady,
+        p.isBuilding,
+      )
       return
     }
     val sql =
@@ -591,7 +630,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       val iRk = c.getColumnIndex("rk")
       while (c.moveToNext()) {
         if (searchCancel.get()) {
-          emitDone(searchId, instanceId ?: "", true, emptyList(), 0, 0, 0, "ready", true)
+          emitDone(searchId, instanceId ?: "", true, emptyList(), 0, 0, 0, "ready", true, false)
           return
         }
         candidates.add(
@@ -610,7 +649,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val initial = ranked.take(INITIAL_UPDATE_MAX)
     val finalList = ranked.take(VAULT_SEARCH_FINAL_MAX)
     emitUpdate(searchId, instanceId ?: "", initial, trimmed)
-    emitDone(searchId, instanceId ?: "", false, finalList, finalList.size, 0, 0, "ready", true)
+    emitDone(searchId, instanceId ?: "", false, finalList, finalList.size, 0, 0, "ready", true, false)
   }
 
   private fun emitUpdate(searchId: String, instanceId: String, rows: List<RankedNote>, @Suppress("UNUSED_PARAMETER") query: String) {
@@ -644,6 +683,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     scanned: Int,
     indexStatus: String,
     indexReady: Boolean,
+    isBuilding: Boolean,
   ) {
     val m = Arguments.createMap()
     m.putString("searchId", searchId)
@@ -660,7 +700,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     prog.putInt("skippedLargeFiles", skipped)
     prog.putString("indexStatus", indexStatus)
     prog.putBoolean("indexReady", indexReady)
-    prog.putBoolean("isBuilding", false)
+    prog.putBoolean("isBuilding", isBuilding)
     prog.putInt("schemaVersion", VaultSearchSchema.SCHEMA_VERSION)
     m.putMap("progress", prog)
     emit("vault-search:done", m)

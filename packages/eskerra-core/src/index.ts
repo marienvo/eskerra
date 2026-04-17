@@ -260,6 +260,7 @@ export {
 export type {
   VaultSearchBestField,
   VaultSearchDonePayload,
+  VaultSearchIndexStatusEvent,
   VaultSearchIndexStatusPayload,
   VaultSearchNoteResult,
   VaultSearchNoteSnippet,

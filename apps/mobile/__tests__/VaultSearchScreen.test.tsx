@@ -9,29 +9,38 @@ import type {VaultSearchDonePayload} from '@eskerra/core';
 
 import {VaultSearchScreen} from '../src/features/vault/screens/VaultSearchScreen';
 
-jest.mock('../src/native/eskerraVaultSearch', () => ({
-  eskerraVaultSearch: {
-    isAvailable: () => true,
-    cancel: jest.fn(() => Promise.resolve()),
-    open: jest.fn(() =>
-      Promise.resolve({
-        baseUriHash: 'ab',
-        indexedNotes: 0,
-        indexReady: true,
-        isBuilding: false,
-        lastFullBuildAt: 0,
-        lastReconciledAt: Number.MAX_SAFE_INTEGER,
-        schemaVersion: 1,
-        vaultInstanceId: 'v1',
-      }),
-    ),
-    reconcile: jest.fn(() => Promise.resolve()),
-    start: jest.fn(() => Promise.resolve()),
-  },
-}));
+jest.mock('../src/native/eskerraVaultSearch', () => {
+  const defaultIndexStatus = {
+    baseUriHash: 'ab',
+    indexedNotes: 0,
+    indexReady: true,
+    isBuilding: false,
+    lastFullBuildAt: 1,
+    lastReconciledAt: Number.MAX_SAFE_INTEGER,
+    schemaVersion: 1,
+    vaultInstanceId: 'v1',
+  };
+  return {
+    eskerraVaultSearch: {
+      isAvailable: () => true,
+      cancel: jest.fn(() => Promise.resolve()),
+      getIndexStatus: jest.fn(() => Promise.resolve(defaultIndexStatus)),
+      open: jest.fn(() => Promise.resolve(defaultIndexStatus)),
+      reconcile: jest.fn(() => Promise.resolve()),
+      scheduleFullRebuild: jest.fn(() => Promise.resolve()),
+      start: jest.fn(() => Promise.resolve()),
+    },
+  };
+});
 
 const {eskerraVaultSearch} = jest.requireMock('../src/native/eskerraVaultSearch') as {
-  eskerraVaultSearch: {cancel: jest.Mock; open: jest.Mock; start: jest.Mock};
+  eskerraVaultSearch: {
+    cancel: jest.Mock;
+    getIndexStatus: jest.Mock;
+    open: jest.Mock;
+    scheduleFullRebuild: jest.Mock;
+    start: jest.Mock;
+  };
 };
 
 jest.mock('../src/core/vault/VaultContext', () => ({
@@ -74,10 +83,23 @@ function findTextContaining(root: TestRenderer.ReactTestInstance, substr: string
   });
 }
 
+const defaultIndexStatus = {
+  baseUriHash: 'ab',
+  indexedNotes: 0,
+  indexReady: true,
+  isBuilding: false,
+  lastFullBuildAt: 1,
+  lastReconciledAt: Number.MAX_SAFE_INTEGER,
+  schemaVersion: 1,
+  vaultInstanceId: 'v1',
+};
+
 describe('VaultSearchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    eskerraVaultSearch.open.mockResolvedValue(defaultIndexStatus);
+    eskerraVaultSearch.getIndexStatus.mockResolvedValue(defaultIndexStatus);
     (NativeModules as {EskerraVaultSearch?: object}).EskerraVaultSearch = {
       addListener: jest.fn(),
       removeListeners: jest.fn(),
@@ -212,5 +234,114 @@ describe('VaultSearchScreen', () => {
       inst.unmount();
     });
     expect(eskerraVaultSearch.cancel).toHaveBeenCalled();
+  });
+
+  test('schedules full rebuild when getIndexStatus reports index not ready', async () => {
+    const notReady = {
+      baseUriHash: '',
+      indexedNotes: 0,
+      indexReady: false,
+      isBuilding: false,
+      lastFullBuildAt: 0,
+      lastReconciledAt: 0,
+      schemaVersion: 1,
+      vaultInstanceId: 'v1',
+    };
+    eskerraVaultSearch.open.mockResolvedValue(notReady);
+    eskerraVaultSearch.getIndexStatus.mockResolvedValue(notReady);
+
+    const setOptions = jest.fn();
+    const navigation = {
+      getParent: () => ({setOptions}),
+      goBack: jest.fn(),
+      navigate: jest.fn(),
+    };
+
+    await act(async () => {
+      TestRenderer.create(<VaultSearchScreen navigation={navigation as never} route={{} as never} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(eskerraVaultSearch.scheduleFullRebuild).toHaveBeenCalledWith('content://tree/v', 'missing');
+  });
+
+  test('retry control calls scheduleFullRebuild after index error', async () => {
+    jest.useRealTimers();
+    try {
+    const setOptions = jest.fn();
+    const navigation = {
+      getParent: () => ({setOptions}),
+      goBack: jest.fn(),
+      navigate: jest.fn(),
+    };
+
+    let inst: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      inst = TestRenderer.create(<VaultSearchScreen navigation={navigation as never} route={{} as never} />);
+    });
+    await act(async () => {
+      await new Promise<void>(r => {
+        setImmediate(r);
+      });
+    });
+
+    const input = findByTestId(inst.root, 'vault-search-input');
+    expect(input).not.toBeNull();
+    await act(async () => {
+      input!.props.onChangeText('q');
+    });
+    await act(async () => {
+      await new Promise<void>(r => {
+        setTimeout(r, 350);
+      });
+    });
+
+    expect(eskerraVaultSearch.start).toHaveBeenCalled();
+    const searchId = (eskerraVaultSearch.start.mock.calls[0] as [string, string, string])[1];
+    await act(async () => {
+      DeviceEventEmitter.emit('vault-search:done', {
+        cancelled: false,
+        notes: [],
+        progress: {
+          indexReady: false,
+          indexStatus: 'idle',
+          scannedFiles: 0,
+          skippedLargeFiles: 0,
+          totalHits: 0,
+        },
+        searchId,
+        vaultInstanceId: 'v1',
+      } satisfies VaultSearchDonePayload);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      DeviceEventEmitter.emit('vault-search:index-status', {
+        reason: 'test',
+        status: 'error',
+        vaultInstanceId: 'v1',
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const retry = inst.root.findByProps({testID: 'vault-search-retry-indexing'});
+    expect(retry).toBeDefined();
+    eskerraVaultSearch.scheduleFullRebuild.mockClear();
+    await act(async () => {
+      retry.props.onPress();
+    });
+    expect(eskerraVaultSearch.scheduleFullRebuild).toHaveBeenCalledWith('content://tree/v', 'manual-retry');
+    await act(async () => {
+      inst.unmount();
+    });
+    } finally {
+      jest.useFakeTimers();
+    }
   });
 });

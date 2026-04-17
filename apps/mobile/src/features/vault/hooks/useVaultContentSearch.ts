@@ -1,6 +1,7 @@
 import type {
   VaultSearchBestField,
   VaultSearchDonePayload,
+  VaultSearchIndexStatusPayload,
   VaultSearchNoteResult,
   VaultSearchNoteSnippet,
   VaultSearchProgress,
@@ -105,6 +106,35 @@ function normalizeProgress(raw: unknown): VaultSearchProgress | null {
   };
 }
 
+function normalizeIndexStatusLive(raw: unknown): VaultSearchIndexStatusPayload | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const st = o.status;
+  if (st == null) {
+    return null;
+  }
+  const lastRaw = o.lastReconciledAt;
+  let lastReconciledAt: number | undefined;
+  if (typeof lastRaw === 'number' && Number.isFinite(lastRaw)) {
+    lastReconciledAt = lastRaw;
+  } else if (typeof lastRaw === 'string') {
+    const n = Number(lastRaw);
+    if (Number.isFinite(n)) {
+      lastReconciledAt = n;
+    }
+  }
+  return {
+    vaultInstanceId: typeof o.vaultInstanceId === 'string' ? o.vaultInstanceId : undefined,
+    status: String(st) as VaultSearchIndexStatusPayload['status'],
+    indexedNotes: typeof o.indexedNotes === 'number' ? o.indexedNotes : undefined,
+    skippedNotes: typeof o.skippedNotes === 'number' ? o.skippedNotes : undefined,
+    reason: typeof o.reason === 'string' ? o.reason : undefined,
+    lastReconciledAt,
+  };
+}
+
 export type UseVaultContentSearchMobileOptions = {
   open: boolean;
   baseUri: string | null;
@@ -131,6 +161,7 @@ export function useVaultContentSearch({
   const [awaitingDebouncedRun, setAwaitingDebouncedRun] = useState(false);
   const [searchingStatusVisible, setSearchingStatusVisible] = useState(false);
   const [holdingPreviousResults, setHoldingPreviousResults] = useState(false);
+  const [indexStatusLive, setIndexStatusLive] = useState<VaultSearchIndexStatusPayload | null>(null);
 
   const searchIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,6 +179,8 @@ export function useVaultContentSearch({
   const reconciledForSessionRef = useRef(false);
   const indexReadyRef = useRef(indexReady);
   const lastReconciledAtRef = useRef(lastReconciledAt);
+  /** When native returns not-ready for a query, re-run search after index-status ready. */
+  const needsSearchRetryRef = useRef(false);
 
   useEffect(() => {
     indexReadyRef.current = indexReady;
@@ -159,6 +192,19 @@ export function useVaultContentSearch({
       reconciledForSessionRef.current = false;
     }
   }, [open, baseUri]);
+
+  useEffect(() => {
+    setIndexStatusLive(null);
+  }, [baseUri]);
+
+  useEffect(() => {
+    if (!open) {
+      queueMicrotask(() => {
+        setIndexStatusLive(null);
+        needsSearchRetryRef.current = false;
+      });
+    }
+  }, [open]);
 
   const cancelNotesFlushRaf = useCallback(() => {
     if (notesFlushRafRef.current != null) {
@@ -189,7 +235,16 @@ export function useVaultContentSearch({
   }, [notes]);
 
   useEffect(() => {
-    vaultInstanceIdRef.current = vaultInstanceId;
+    vaultInstanceIdRef.current = null;
+  }, [baseUri]);
+
+  useEffect(() => {
+    if (vaultInstanceId != null && vaultInstanceId !== '') {
+      const cur = vaultInstanceIdRef.current;
+      if (cur == null || cur === '' || cur === vaultInstanceId) {
+        vaultInstanceIdRef.current = vaultInstanceId;
+      }
+    }
   }, [vaultInstanceId]);
 
   useEffect(() => {
@@ -228,6 +283,7 @@ export function useVaultContentSearch({
 
   const resetLocal = useCallback(() => {
     searchIdRef.current = null;
+    needsSearchRetryRef.current = false;
     clearResultHoldTimer();
     clearPendingSearchFlush();
     queueMicrotask(() => {
@@ -313,17 +369,72 @@ export function useVaultContentSearch({
       } else {
         setNotes([]);
       }
-      setProgress(normalizeProgress(event.progress) ?? event.progress);
+      const prog = normalizeProgress(event.progress) ?? event.progress;
+      setProgress(prog);
       setScanDone(true);
+      if (
+        !event.cancelled &&
+        prog != null &&
+        !prog.indexReady &&
+        queryRef.current.trim().length > 0
+      ) {
+        needsSearchRetryRef.current = true;
+      }
+    };
+
+    const onIndexStatus = (raw: unknown) => {
+      const live = normalizeIndexStatusLive(raw);
+      if (live == null) {
+        return;
+      }
+      if (live.vaultInstanceId != null && live.vaultInstanceId !== '') {
+        vaultInstanceIdRef.current = live.vaultInstanceId;
+      }
+      const st = live.status;
+      if (st === 'ready') {
+        indexReadyRef.current = true;
+        if (live.lastReconciledAt != null && Number.isFinite(live.lastReconciledAt)) {
+          lastReconciledAtRef.current = live.lastReconciledAt;
+        }
+      } else if (st === 'building' || st === 'error') {
+        indexReadyRef.current = false;
+      }
+      queueMicrotask(() => {
+        setIndexStatusLive(live);
+      });
+      if (st === 'ready' && needsSearchRetryRef.current && openRef.current && baseUri != null) {
+        const q = queryRef.current.trim();
+        if (q.length > 0) {
+          needsSearchRetryRef.current = false;
+          const id =
+            globalThis.crypto && 'randomUUID' in globalThis.crypto
+              ? globalThis.crypto.randomUUID()
+              : `${Date.now()}-${Math.random()}`;
+          searchIdRef.current = id;
+          clearResultHoldTimer();
+          queueMicrotask(() => {
+            setHoldingPreviousResults(false);
+          });
+          setScanDone(false);
+          eskerraVaultSearch.start(baseUri, id, q).catch(() => {
+            searchIdRef.current = null;
+            queueMicrotask(() => {
+              setScanDone(true);
+            });
+          });
+        }
+      }
     };
 
     const subUpdate = emitter.addListener('vault-search:update', onUpdate);
     const subDone = emitter.addListener('vault-search:done', onDone);
+    const subIndex = emitter.addListener('vault-search:index-status', onIndexStatus);
     return () => {
       clearResultHoldTimer();
       cancelNotesFlushRaf();
       subUpdate.remove();
       subDone.remove();
+      subIndex.remove();
     };
   }, [open, baseUri, cancelNotesFlushRaf, clearResultHoldTimer]);
 
@@ -442,5 +553,6 @@ export function useVaultContentSearch({
     awaitingDebouncedRun,
     searchingStatusVisible,
     holdingPreviousResults,
+    indexStatusLive,
   };
 }

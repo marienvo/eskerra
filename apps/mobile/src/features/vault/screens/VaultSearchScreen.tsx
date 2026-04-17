@@ -23,6 +23,13 @@ import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
+import {
+  canonicalizeVaultBaseUriForSearch,
+  fullNeedsRebuild,
+  parseVaultSearchIndexStatus,
+  VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
+  vaultSearchBaseUriHash,
+} from '../vaultSearchLifecycle';
 
 type Props = StackScreenProps<VaultStackParamList, 'VaultSearch'>;
 
@@ -66,10 +73,26 @@ export function VaultSearchScreen({navigation}: Props) {
           return;
         }
         const st = await eskerraVaultSearch.open(baseUri);
-        if (!cancelled) {
-          setVaultInstanceId(st.vaultInstanceId);
-          setIndexReady(st.indexReady);
-          setLastReconciledAt(st.lastReconciledAt);
+        if (cancelled) {
+          return;
+        }
+        setVaultInstanceId(st.vaultInstanceId);
+        setIndexReady(st.indexReady);
+        setLastReconciledAt(st.lastReconciledAt);
+        const full = parseVaultSearchIndexStatus(await eskerraVaultSearch.getIndexStatus(baseUri));
+        if (cancelled || full == null) {
+          return;
+        }
+        if (fullNeedsRebuild(full, baseUri)) {
+          const canonical = canonicalizeVaultBaseUriForSearch(baseUri);
+          const expectedHash = vaultSearchBaseUriHash(canonical);
+          let rebuildReason = 'missing';
+          if (full.baseUriHash !== '' && full.baseUriHash !== expectedHash) {
+            rebuildReason = 'base-uri-change';
+          } else if (full.schemaVersion !== VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION) {
+            rebuildReason = 'schema-mismatch';
+          }
+          await eskerraVaultSearch.scheduleFullRebuild(baseUri, rebuildReason).catch(() => undefined);
         }
       } catch {
         if (!cancelled) {
@@ -80,6 +103,13 @@ export function VaultSearchScreen({navigation}: Props) {
     return () => {
       cancelled = true;
     };
+  }, [baseUri]);
+
+  const retryFullRebuild = useCallback(() => {
+    if (!baseUri || !eskerraVaultSearch.isAvailable()) {
+      return;
+    }
+    eskerraVaultSearch.scheduleFullRebuild(baseUri, 'manual-retry').catch(() => undefined);
   }, [baseUri]);
 
   useFocusEffect(
@@ -113,6 +143,7 @@ export function VaultSearchScreen({navigation}: Props) {
     scanDone,
     awaitingDebouncedRun,
     searchingStatusVisible,
+    indexStatusLive,
   } = useVaultContentSearch({
     open: hookOpen,
     baseUri,
@@ -140,6 +171,10 @@ export function VaultSearchScreen({navigation}: Props) {
     progress != null && !progress.indexReady
       ? ` · index ${progress.indexStatus}`
       : '';
+  const indexingHint =
+    indexStatusLive?.status === 'building' ||
+    (progress?.isBuilding === true && progress.indexReady !== true);
+
   const statusLine =
     trimmed.length === 0
       ? null
@@ -183,11 +218,29 @@ export function VaultSearchScreen({navigation}: Props) {
           trimmed.length === 0 ? (
             <Text style={[styles.hint, {color: muted}]}>Type to search markdown in the vault.</Text>
           ) : scanDone && !awaitingDebouncedRun && notes.length === 0 ? (
-            <Text style={[styles.hint, {color: muted}]}>
-              {progress != null && !progress.indexReady
-                ? 'Index not ready yet — try again in a moment.'
-                : 'No matches.'}
-            </Text>
+            indexStatusLive?.status === 'error' ? (
+              <Box style={styles.hintCol}>
+                <Text style={[styles.hint, {color: muted}]}>Indexing failed.</Text>
+                <Pressable
+                  accessibilityLabel="Retry indexing"
+                  onPress={retryFullRebuild}
+                  testID="vault-search-retry-indexing">
+                  <Text style={[styles.retryLink, {color: muted}]}>Retry</Text>
+                </Pressable>
+              </Box>
+            ) : indexingHint ? (
+              <Text style={[styles.hint, {color: muted}]}>
+                {indexStatusLive?.indexedNotes != null
+                  ? `Indexing vault… (${indexStatusLive.indexedNotes} notes)`
+                  : 'Indexing vault…'}
+              </Text>
+            ) : (
+              <Text style={[styles.hint, {color: muted}]}>
+                {progress != null && !progress.indexReady
+                  ? 'Index not ready yet — try again in a moment.'
+                  : 'No matches.'}
+              </Text>
+            )
           ) : !scanDone ? (
             <Spinner style={styles.spinner} />
           ) : null
@@ -268,6 +321,16 @@ const styles = StyleSheet.create({
   hint: {
     marginTop: 24,
     textAlign: 'center',
+  },
+  hintCol: {
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  retryLink: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+    textDecorationLine: 'underline',
   },
   spinner: {
     marginTop: 24,
