@@ -6,6 +6,9 @@ export const INBOX_DIRECTORY_NAME = 'Inbox';
 export const ASSETS_DIRECTORY_NAME = 'Assets';
 export const ATTACHMENTS_DIRECTORY_NAME = 'Attachments';
 export const PLAYLIST_FILE_NAME = 'playlist.json';
+/** R2 object key and optional shared-settings mirror filename for theme selection (light/dark/auto + theme id). */
+export const THEME_PREFERENCE_FILE_NAME = 'theme-preference.json';
+export const THEMES_DIRECTORY_NAME = 'themes';
 export const SETTINGS_SHARED_FILE_NAME = 'settings-shared.json';
 /** Legacy filename; read-only for migration. */
 export const SETTINGS_LEGACY_FILE_NAME = 'settings.json';
@@ -34,6 +37,10 @@ export function getLocalSettingsUri(baseUri: string): string {
 
 export function getPlaylistUri(baseUri: string): string {
   return `${getEskerraDirectoryUri(baseUri)}/${PLAYLIST_FILE_NAME}`;
+}
+
+export function getThemesDirectoryUri(baseUri: string): string {
+  return `${getEskerraDirectoryUri(baseUri)}/${THEMES_DIRECTORY_NAME}`;
 }
 
 export function getInboxDirectoryUri(baseUri: string): string {

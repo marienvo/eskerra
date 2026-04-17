@@ -1,3 +1,6 @@
+import {parseThemePreference} from './themePreference';
+import type {ThemePreference} from './themePreference';
+
 /** R2 bucket jurisdiction; EU/FedRAMP buckets must use the matching S3 API hostname. */
 export type R2Jurisdiction = 'default' | 'eu' | 'fedramp';
 
@@ -13,6 +16,11 @@ export type EskerraR2Config = {
 /** Shared vault JSON: optional R2 only. Display name lives in `settings-local.json`. */
 export type EskerraSettings = {
   r2?: EskerraR2Config;
+  /**
+   * Theme selection when R2 is not configured (same shape as R2 `theme-preference.json`).
+   * Omitted from disk when R2 playlist sync is active (preference lives in the bucket).
+   */
+  themePreference?: ThemePreference;
 };
 
 function parseR2Block(value: unknown): EskerraR2Config {
@@ -153,9 +161,13 @@ export type R2FormFields = {
 /**
  * Builds shared vault settings from R2 form fields. R2 is optional: if any field is non-empty,
  * all four must be non-empty after trim.
+ *
+ * When `previousShared` is passed and includes `themePreference`, it is copied into the result so
+ * saving the R2 form does not drop theme state before the desktop app migrates it to R2.
  */
 export function buildEskerraSettingsFromForm(
   r2: R2FormFields,
+  previousShared?: EskerraSettings,
 ):
   | {ok: true; settings: EskerraSettings}
   | {ok: false; message: string} {
@@ -183,6 +195,10 @@ export function buildEskerraSettingsFromForm(
     settings.r2 = block;
   }
 
+  if (previousShared?.themePreference) {
+    settings.themePreference = previousShared.themePreference;
+  }
+
   return {ok: true, settings};
 }
 
@@ -200,6 +216,14 @@ export function parseEskerraSettings(rawSettings: string): EskerraSettings {
 
   if (parsed.r2 !== undefined) {
     out.r2 = parseR2Block(parsed.r2);
+  }
+
+  if (parsed.themePreference !== undefined) {
+    const tp = parseThemePreference(parsed.themePreference);
+    if (!tp) {
+      throw new Error('settings-shared.json has an invalid themePreference.');
+    }
+    out.themePreference = tp;
   }
 
   return out;

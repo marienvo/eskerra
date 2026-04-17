@@ -17,6 +17,11 @@ import {groupBySection, isPodcastFile, parsePodcastFile} from './podcastParser';
 import type {PodcastEpisode, PodcastSection, RootMarkdownFile} from './podcastTypes';
 import {extractRssFeedUrl, extractRssPodcastTitle} from './rssParser';
 import {
+  clearPodcastNoteUriCacheForVault,
+  persistPodcastNoteUri,
+  resolveCachedPodcastNoteUri,
+} from './podcastNoteUriCacheDesktop';
+import {
   hydrateRssFeedUrlCacheFromStore,
   persistRssFeedUrl,
   resolveCachedRssFeedUrl,
@@ -78,6 +83,10 @@ export function enrichEpisodesWithCachedRss(
       episode.rssFeedUrl ??
       resolveCachedRssFeedUrl(baseUri, episode.seriesName) ??
       resolveCachedRssFeedUrl(baseUri, episode.sectionTitle),
+    podcastNoteUri:
+      episode.podcastNoteUri ??
+      resolveCachedPodcastNoteUri(baseUri, episode.seriesName) ??
+      resolveCachedPodcastNoteUri(baseUri, episode.sectionTitle),
   }));
 }
 
@@ -185,6 +194,7 @@ async function runRssMarkdownEnrichment(
     }
     const sectionTitle = extractRssPodcastTitle(file.name, content);
     persistRssFeedUrl(baseUri, sectionTitle, rssFeedUrl);
+    persistPodcastNoteUri(baseUri, sectionTitle, file.uri);
   }
 
   const enrichedEpisodes = enrichEpisodesWithCachedRss(baseUri, renderedEpisodes);
@@ -229,6 +239,8 @@ export async function runPodcastPhase1Desktop(
     const {podcastFiles, rssFeedFiles: rssMarkdownFiles} =
       splitPodcastAndRssMarkdownFiles(podcastRelevantFiles);
     rssFeedFiles = rssMarkdownFiles;
+
+    clearPodcastNoteUriCacheForVault(baseUri);
 
     let {nextAllEpisodes, nextSections} = await buildPodcastSectionsFromPodcastMarkdownFiles(
       baseUri,

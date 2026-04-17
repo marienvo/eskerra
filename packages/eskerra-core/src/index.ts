@@ -120,6 +120,56 @@ export {
   parseEskerraSettings,
   serializeEskerraSettings,
 } from './eskerraSettings';
+export type {ThemeMode, ThemePreference} from './themePreference';
+export {
+  DEFAULT_THEME_PREFERENCE,
+  parseThemePreference,
+  parseThemePreferenceOrThrow,
+  serializeThemePreference,
+} from './themePreference';
+export type {
+  FetchR2ThemePreferenceConditionalOptions,
+  R2ThemePreferenceConditionalResult,
+} from './r2ThemePreferenceConditional';
+export {fetchR2ThemePreferenceConditional} from './r2ThemePreferenceConditional';
+export type {R2PlaylistObjectOptions, R2SignedRequestTransport} from './r2PlaylistObject';
+export {
+  buildR2ObjectUrl,
+  deleteR2PlaylistObject,
+  getR2PlaylistObject,
+  putR2PlaylistObject,
+  r2SignedObjectRequest,
+} from './r2PlaylistObject';
+export {
+  deleteR2ThemePreferenceObject,
+  getR2ThemePreferenceObject,
+  putR2ThemePreferenceObject,
+} from './r2ThemePreferenceObject';
+export type {
+  CreateThemePreferenceEtagPollerOptions,
+  ThemePreferenceEtagPoller,
+  ThemePreferenceEtagPollerFetch,
+} from './themePreferenceEtagPoller';
+export {createThemePreferenceEtagPoller} from './themePreferenceEtagPoller';
+export type {ThemeDefinition, ThemePalette, ThemeSource} from './theme/schema';
+export {
+  parseThemeJson,
+  serializeVaultThemeJson,
+  ThemeLoadError,
+  THEME_PALETTE_MAX,
+  THEME_PALETTE_MIN,
+} from './theme/schema';
+export {
+  BUNDLED_ASH,
+  BUNDLED_BLOSSOM,
+  BUNDLED_EMBER,
+  BUNDLED_ESKERRA_DEFAULT,
+  BUNDLED_THEMES,
+  getBundledThemeById,
+} from './theme/bundled';
+export {pickUniqueThemeStem, toKebabIdFromName} from './theme/identity';
+export type {VaultThemeListItem} from './theme/vaultIo';
+export {listVaultThemes, readVaultTheme, writeVaultTheme} from './theme/vaultIo';
 export {readVaultSharedSettingsRaw} from './readVaultSharedSettings';
 export {
   buildPlaylistEntryForWrite,
@@ -166,14 +216,6 @@ export type {
   PlaylistEtagPollerFetch,
 } from './playlistEtagPoller';
 export {createPlaylistEtagPoller} from './playlistEtagPoller';
-export type {R2PlaylistObjectOptions, R2SignedRequestTransport} from './r2PlaylistObject';
-export {
-  buildR2ObjectUrl,
-  deleteR2PlaylistObject,
-  getR2PlaylistObject,
-  putR2PlaylistObject,
-  r2SignedObjectRequest,
-} from './r2PlaylistObject';
 export {isVaultR2PlaylistConfigured} from './r2Settings';
 export type {VaultDirEntry, VaultFilesystem, VaultReadOptions, VaultWriteOptions} from './vaultFilesystem';
 export {
@@ -232,12 +274,15 @@ export {
   LEGACY_NOTEBOX_DIRECTORY_NAME,
   getPlaylistUri,
   getSharedSettingsUri,
+  getThemesDirectoryUri,
   INBOX_DIRECTORY_NAME,
   INBOX_INDEX_FILE_NAME,
   MARKDOWN_EXTENSION,
   normalizeVaultBaseUri,
   PLAYLIST_FILE_NAME,
   SETTINGS_LEGACY_FILE_NAME,
+  THEME_PREFERENCE_FILE_NAME,
+  THEMES_DIRECTORY_NAME,
   SETTINGS_LOCAL_FILE_NAME,
   SETTINGS_SHARED_FILE_NAME,
   isSyncConflictFileName,

@@ -14,8 +14,6 @@ type SettingsContentProps = {
   onChangeFolder: () => void;
   onRefreshVault: () => void;
   busy: boolean;
-  /** When true, show an in-page "Settings" heading (in-app surfaces). Native settings window omits this. */
-  showHeading?: boolean;
 };
 
 export function SettingsContent({
@@ -25,7 +23,6 @@ export function SettingsContent({
   onChangeFolder,
   onRefreshVault,
   busy,
-  showHeading = false,
 }: SettingsContentProps) {
   const sharedId = useId();
   const deviceId = useId();
@@ -65,13 +62,16 @@ export function SettingsContent({
 
   const handleSave = async () => {
     setSaveOk(null);
-    const shared = buildEskerraSettingsFromForm({
-      endpoint: r2Endpoint,
-      bucket: r2Bucket,
-      accessKeyId: r2AccessKeyId,
-      secretAccessKey: r2SecretAccessKey,
-      jurisdiction: r2Jurisdiction,
-    });
+    const shared = buildEskerraSettingsFromForm(
+      {
+        endpoint: r2Endpoint,
+        bucket: r2Bucket,
+        accessKeyId: r2AccessKeyId,
+        secretAccessKey: r2SecretAccessKey,
+        jurisdiction: r2Jurisdiction,
+      },
+      vaultSettings,
+    );
     if (!shared.ok) {
       setInlineError(shared.message);
       return;
@@ -94,11 +94,6 @@ export function SettingsContent({
 
   return (
     <div className="settings-content">
-      {showHeading ? (
-        <h2 className="settings-content-heading" id="settings-title">
-          Settings
-        </h2>
-      ) : null}
       {inlineError ? (
         <div className="error-banner" role="alert">
           {inlineError}

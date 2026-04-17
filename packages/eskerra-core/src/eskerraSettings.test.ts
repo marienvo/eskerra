@@ -83,6 +83,24 @@ describe('buildEskerraSettingsFromForm', () => {
     const r = buildEskerraSettingsFromForm({...validR2, jurisdiction: 'default'});
     expect(r).toEqual({ok: true, settings: {r2: validR2}});
   });
+
+  it('preserves themePreference when R2 incomplete and previous has it', () => {
+    const prev = {themePreference: {themeId: 'eskerra-default', mode: 'dark' as const}};
+    const r = buildEskerraSettingsFromForm(
+      {endpoint: '', bucket: '', accessKeyId: '', secretAccessKey: ''},
+      prev,
+    );
+    expect(r).toEqual({ok: true, settings: {themePreference: prev.themePreference}});
+  });
+
+  it('preserves themePreference when R2 is complete until migrated to R2', () => {
+    const prev = {themePreference: {themeId: 'eskerra-default', mode: 'dark' as const}};
+    const r = buildEskerraSettingsFromForm({...validR2}, prev);
+    expect(r).toEqual({
+      ok: true,
+      settings: {r2: validR2, themePreference: prev.themePreference},
+    });
+  });
 });
 
 describe('effectiveR2Endpoint', () => {
@@ -145,5 +163,22 @@ describe('serializeEskerraSettings', () => {
   it('round-trips with r2', () => {
     const s = {r2: validR2};
     expect(parseEskerraSettings(serializeEskerraSettings(s))).toEqual(s);
+  });
+
+  it('parses themePreference', () => {
+    const raw = JSON.stringify(
+      {r2: validR2, themePreference: {themeId: 'eskerra-default', mode: 'light'}},
+      null,
+      2,
+    );
+    expect(parseEskerraSettings(raw)).toEqual({
+      r2: validR2,
+      themePreference: {themeId: 'eskerra-default', mode: 'light'},
+    });
+  });
+
+  it('rejects invalid themePreference', () => {
+    const raw = JSON.stringify({themePreference: {themeId: '', mode: 'auto'}}, null, 2);
+    expect(() => parseEskerraSettings(raw)).toThrow(/themePreference/);
   });
 });

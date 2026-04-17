@@ -7,8 +7,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
   type MutableRefObject,
   type RefObject,
+  type SetStateAction,
 } from 'react';
 
 import {
@@ -307,6 +309,7 @@ async function loadMarkdownBodiesForWikiMaintenance(
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
   vaultSettings: EskerraSettings | null;
+  setVaultSettings: Dispatch<SetStateAction<EskerraSettings | null>>;
   settingsName: string;
   notes: NoteRow[];
   selectedUri: string | null;
@@ -4125,6 +4128,7 @@ export function useMainWindowWorkspace(options: {
   return {
     vaultRoot,
     vaultSettings,
+    setVaultSettings,
     settingsName,
     notes,
     selectedUri,

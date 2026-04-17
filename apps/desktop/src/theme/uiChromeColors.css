@@ -1,0 +1,48 @@
+/**
+ * On light chroma, title bar and status bar need dark shell foreground (tokens assume dark chrome).
+ * Scoped overrides so panel/editor `--color-text` elsewhere is unchanged.
+ */
+html[data-ui-chrome='light'] .app-status-bar {
+  --color-shell-icon-muted: rgba(15, 23, 42, 0.52);
+  --color-shell-icon: rgba(15, 23, 42, 0.92);
+  --color-shell-hover-bg: rgba(15, 23, 42, 0.07);
+  /* Tagline sits on light gradient; was color-mix toward white for dark chrome. */
+  --color-shell-tagline: rgba(15, 23, 42, 0.58);
+}
+
+html[data-ui-chrome='light'] .window-title-bar {
+  --color-shell-icon-muted: rgba(15, 23, 42, 0.52);
+  --color-shell-icon: rgba(15, 23, 42, 0.92);
+  --color-shell-icon-disabled: rgba(15, 23, 42, 0.35);
+  --color-shell-hover-bg: rgba(15, 23, 42, 0.07);
+  --color-titlebar-close-hover: #c62828;
+  --color-titlebar-close-fg: #ffffff;
+}
+
+html[data-ui-chrome='light'] .today-hub-workspace-select:hover {
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(0, 0, 0, 0.14));
+}
+
+html[data-ui-chrome='light'] .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab) {
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.09);
+}
+
+html[data-ui-chrome='light']
+  .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab):hover {
+  border-color: transparent;
+}
+
+html[data-ui-chrome='light']
+  .editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):hover:not([data-disabled]),
+html[data-ui-chrome='light']
+  .editor-open-tabs-scroll--titlebar
+  .editor-open-tab-pill:not(.editor-open-tab-pill--active):focus-within:not([data-disabled]) {
+  border-color: color-mix(in srgb, var(--color-shell-icon-muted) 65%, rgba(0, 0, 0, 0.14));
+}
+
+html[data-ui-chrome='light'] .editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.09);
+}

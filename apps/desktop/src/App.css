@@ -1,3 +1,5 @@
+@import './theme/uiChromeColors.css';
+
 .shell {
   padding: 1.5rem;
   box-sizing: border-box;
@@ -312,12 +314,12 @@ a:focus:not(:focus-visible) {
 
 /* Match `.editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active` (workspace-shell Today). */
 .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab) {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
-  background: color-mix(in srgb, var(--color-accent) 22%, rgba(255, 255, 255, 0.04));
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab):hover {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
+  border-color: transparent;
 }
 
 .today-hub-workspace-select:has(.today-hub-workspace-select__main--active-tab)
@@ -1093,6 +1095,8 @@ a:focus:not(:focus-visible) {
 }
 
 .main-column {
+  /* Always-light canvas; shared by editor paper and settings page. */
+  --nb-content-bg: #fbfbfb;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -1100,6 +1104,12 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   overflow: hidden;
   background: transparent;
+  box-sizing: border-box;
+  border-radius: var(--window-radius);
+  border: 1px solid color-mix(in srgb, #000 12%, var(--color-bg));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-text) 6%, transparent),
+    0 6px 20px color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
 .main-stage {
@@ -1520,8 +1530,8 @@ body.editor-tab-strip--dragging {
 }
 
 .editor-open-tabs-scroll--titlebar .editor-open-tab-pill--active {
-  border-color: color-mix(in srgb, var(--color-accent) 52%, rgba(255, 255, 255, 0.28));
-  background: color-mix(in srgb, var(--color-accent) 22%, rgba(255, 255, 255, 0.04));
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .editor-open-tabs-scroll--titlebar .editor-open-tab-pill__main {
@@ -1563,8 +1573,8 @@ body.editor-tab-strip--dragging {
 }
 
 .editor-open-tab-pill--active {
-  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--color-text) 12%, transparent);
 }
 
 .editor-open-tab-pill__main {
@@ -2371,7 +2381,7 @@ button.primary.destructive {
 /* Red Graphite–inspired tokens (light); scoped so Vault tree / chrome are unaffected. */
 .note-markdown-editor-wrap {
   --nb-editor-margin-bg: #eee;
-  --nb-editor-paper: #fbfbfb;
+  --nb-editor-paper: var(--nb-content-bg, #fbfbfb);
   --nb-editor-text: rgb(44, 44, 44);
   --nb-editor-header: rgb(44, 44, 44);
   --nb-editor-faint: rgb(150, 150, 150);
@@ -5690,7 +5700,7 @@ button:disabled {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-radius: var(--window-radius);
+  border-radius: 6px;
   overflow: hidden;
   box-sizing: border-box;
   background: var(--color-capture-panel);
@@ -5923,4 +5933,252 @@ button.small {
   font-size: 0.78rem;
   padding: 0.2rem 0.45rem;
   flex-shrink: 0;
+}
+
+/* —— Full-screen in-app settings (replaces editor shell) —— */
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  background: var(--nb-content-bg, #fbfbfb);
+  padding-inline: 1.25rem;
+}
+
+.settings-page-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  padding: 0.75rem 0 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-page-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
+}
+
+.settings-page-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.settings-page-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 1rem;
+  padding-top: 0.75rem;
+}
+
+.settings-page-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  width: 8.5rem;
+}
+
+.settings-page-nav button {
+  text-align: start;
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text);
+  cursor: default;
+  font: inherit;
+}
+
+.settings-page-nav button.is-active {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
+.settings-page-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding-bottom: 1rem;
+  padding-inline-end: 0.5rem;
+}
+
+.settings-page-panel .settings-content {
+  max-width: 40rem;
+}
+
+/* Themes tab */
+.themes-tab {
+  position: relative;
+  max-width: 48rem;
+}
+
+.themes-tab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.themes-tab-toolbar-label {
+  font-weight: 600;
+}
+
+.themes-tab-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.themes-tab-mode-toggle__btn {
+  padding: 0.35rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  cursor: default;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.themes-tab-mode-toggle__btn.is-active {
+  background: var(--color-surface);
+  font-weight: 600;
+}
+
+.themes-tab-hint {
+  margin: 0 0 1rem;
+}
+
+.themes-tab-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.themes-tab-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: start;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-surface);
+  cursor: default;
+  font: inherit;
+  color: inherit;
+}
+
+.themes-tab-card--static {
+  padding: 0.5rem;
+  cursor: default;
+}
+
+.themes-tab-card--active {
+  border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+.themes-tab-card--error {
+  border-color: var(--color-error);
+}
+
+.themes-tab-card-preview {
+  position: relative;
+  height: 4.5rem;
+  overflow: hidden;
+}
+
+.themes-tab-card-preview .app-chrome-background {
+  transform: scale(1.15);
+  transform-origin: center center;
+}
+
+.themes-tab-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.5rem 0.55rem;
+}
+
+.themes-tab-card-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.themes-tab-card-badge {
+  font-size: 0.72rem;
+}
+
+.themes-tab-card-error {
+  margin: 0;
+  color: var(--color-error);
+}
+
+.themes-tab-context-menu {
+  position: fixed;
+  z-index: 50;
+  min-width: 10rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+
+.themes-tab-context-menu button {
+  display: block;
+  width: 100%;
+  text-align: start;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: default;
+  font: inherit;
+}
+
+.themes-tab-context-menu button:hover {
+  background: var(--color-titlebar-hover);
+}
+
+.themes-tab-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.themes-tab-modal {
+  width: min(22rem, 100%);
+  padding: 1rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.themes-tab-modal h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
 }

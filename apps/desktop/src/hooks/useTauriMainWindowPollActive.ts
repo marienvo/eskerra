@@ -1,12 +1,9 @@
 import {isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow} from '@tauri-apps/api/window';
-import {WebviewWindow} from '@tauri-apps/api/webviewWindow';
 import {useEffect, useState} from 'react';
 
-import {SETTINGS_WINDOW_LABEL} from '../lib/openSettingsWindow';
-
 /**
- * True while the main (non-settings) Tauri window is focused, visible, and the document is visible.
+ * True while the main Tauri window is focused, visible, and the document is visible.
  */
 export function useTauriMainWindowPollActive(): boolean {
   const [active, setActive] = useState(false);
@@ -21,12 +18,6 @@ export function useTauriMainWindowPollActive(): boolean {
 
     const sync = async (): Promise<void> => {
       try {
-        if (WebviewWindow.getCurrent().label === SETTINGS_WINDOW_LABEL) {
-          if (!cancelled) {
-            setActive(false);
-          }
-          return;
-        }
         const win = getCurrentWindow();
         const focused = await win.isFocused();
         const visible = await win.isVisible();
