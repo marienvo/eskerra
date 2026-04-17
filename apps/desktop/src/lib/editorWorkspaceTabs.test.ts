@@ -6,6 +6,8 @@ import {
   createEditorWorkspaceTab,
   ensureActiveTabId,
   findTabIdWithCurrentUri,
+  insertTabAfterActive,
+  insertTabAtIndex,
   migrateOpenTabUrisToWorkspaceTabs,
   pickNeighborTabIdAfterRemovingTab,
   pushNavigateOnTab,
@@ -67,6 +69,73 @@ describe('editorWorkspaceTabs', () => {
   it('migrateOpenTabUrisToWorkspaceTabs dedupes', () => {
     const tabs = migrateOpenTabUrisToWorkspaceTabs(['/a.md', '/a.md', '/b.md']);
     expect(tabs.length).toBe(2);
+  });
+
+  it('insertTabAfterActive places after active or at 0', () => {
+    const a = createEditorWorkspaceTab('/a.md');
+    const b = createEditorWorkspaceTab('/b.md');
+    const c = createEditorWorkspaceTab('/c.md');
+    const n = createEditorWorkspaceTab('/new.md');
+    const tabs = [a, b, c];
+    expect(insertTabAfterActive(tabs, a.id, n).map(t => tabCurrentUri(t))).toEqual([
+      '/a.md',
+      '/new.md',
+      '/b.md',
+      '/c.md',
+    ]);
+    expect(insertTabAfterActive(tabs, b.id, n).map(t => tabCurrentUri(t))).toEqual([
+      '/a.md',
+      '/b.md',
+      '/new.md',
+      '/c.md',
+    ]);
+    expect(insertTabAfterActive(tabs, c.id, n).map(t => tabCurrentUri(t))).toEqual([
+      '/a.md',
+      '/b.md',
+      '/c.md',
+      '/new.md',
+    ]);
+    expect(insertTabAfterActive(tabs, null, n).map(t => tabCurrentUri(t))).toEqual([
+      '/new.md',
+      '/a.md',
+      '/b.md',
+      '/c.md',
+    ]);
+    expect(insertTabAfterActive(tabs, 'missing', n).map(t => tabCurrentUri(t))).toEqual([
+      '/new.md',
+      '/a.md',
+      '/b.md',
+      '/c.md',
+    ]);
+    expect(insertTabAfterActive([], null, n).map(t => tabCurrentUri(t))).toEqual(['/new.md']);
+  });
+
+  it('insertTabAtIndex clamps and splices', () => {
+    const a = createEditorWorkspaceTab('/a.md');
+    const b = createEditorWorkspaceTab('/b.md');
+    const n = createEditorWorkspaceTab('/new.md');
+    const tabs = [a, b];
+    expect(insertTabAtIndex(tabs, 0, n).map(t => tabCurrentUri(t))).toEqual([
+      '/new.md',
+      '/a.md',
+      '/b.md',
+    ]);
+    expect(insertTabAtIndex(tabs, 2, n).map(t => tabCurrentUri(t))).toEqual([
+      '/a.md',
+      '/b.md',
+      '/new.md',
+    ]);
+    expect(insertTabAtIndex(tabs, 99, n).map(t => tabCurrentUri(t))).toEqual([
+      '/a.md',
+      '/b.md',
+      '/new.md',
+    ]);
+    expect(insertTabAtIndex(tabs, -5, n).map(t => tabCurrentUri(t))).toEqual([
+      '/new.md',
+      '/a.md',
+      '/b.md',
+    ]);
+    expect(insertTabAtIndex([], 0, n).map(t => tabCurrentUri(t))).toEqual(['/new.md']);
   });
 
   it('reorderEditorWorkspaceTabsInArray moves tab before target index', () => {

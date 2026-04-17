@@ -9,6 +9,7 @@ import {
   remapEditorHistoryPrefix,
   removeEditorHistoryUris,
 } from './editorDocumentHistory';
+import type {ClosedEditorTabRecord} from './editorClosedTabStack';
 
 export type EditorWorkspaceTab = {
   id: string;
@@ -94,6 +95,31 @@ export function findTabIdWithCurrentUri(
     }
   }
   return null;
+}
+
+/** Insert `newTab` immediately after the tab with `activeId`, or at index 0 if none. */
+export function insertTabAfterActive(
+  tabs: readonly EditorWorkspaceTab[],
+  activeId: string | null,
+  newTab: EditorWorkspaceTab,
+): EditorWorkspaceTab[] {
+  const idx = activeId == null ? -1 : tabs.findIndex(t => t.id === activeId);
+  const insertAt = idx < 0 ? 0 : idx + 1;
+  const out = [...tabs];
+  out.splice(insertAt, 0, newTab);
+  return out;
+}
+
+/** Insert `newTab` at `index`, clamped to `[0, tabs.length]`. */
+export function insertTabAtIndex(
+  tabs: readonly EditorWorkspaceTab[],
+  index: number,
+  newTab: EditorWorkspaceTab,
+): EditorWorkspaceTab[] {
+  const clamped = Math.max(0, Math.min(index, tabs.length));
+  const out = [...tabs];
+  out.splice(clamped, 0, newTab);
+  return out;
 }
 
 /**
@@ -194,10 +220,10 @@ export function firstSurvivorUriFromTabs(tabs: readonly EditorWorkspaceTab[]): s
 }
 
 /**
- * Push closed-tab URIs for reopen (most recently closed from the right, excluding keep).
+ * Push closed-tab records for reopen (most recently closed from the right, excluding keep).
  */
 export function pushClosedWorkspaceTabsFromCloseOther(
-  stack: string[],
+  stack: ClosedEditorTabRecord[],
   prevTabs: readonly EditorWorkspaceTab[],
   keepTabId: string,
 ): void {
@@ -208,13 +234,13 @@ export function pushClosedWorkspaceTabsFromCloseOther(
     }
     const u = tabCurrentUri(t);
     if (u) {
-      stack.push(u);
+      stack.push({uri: u, index: i});
     }
   }
 }
 
 export function pushClosedWorkspaceTabsFromCloseAll(
-  stack: string[],
+  stack: ClosedEditorTabRecord[],
   prevTabs: readonly EditorWorkspaceTab[],
   activeTabId: string | null,
 ): void {
@@ -229,20 +255,21 @@ export function pushClosedWorkspaceTabsFromCloseAll(
       if (t.id !== active) {
         const u = tabCurrentUri(t);
         if (u) {
-          stack.push(u);
+          stack.push({uri: u, index: i});
         }
       }
     }
+    const activeIdx = prevTabs.findIndex(t => t.id === active);
     const at = prevTabs.find(t => t.id === active);
     const selU = at ? tabCurrentUri(at) : null;
-    if (selU) {
-      stack.push(selU);
+    if (selU && activeIdx >= 0) {
+      stack.push({uri: selU, index: activeIdx});
     }
   } else {
     for (let i = prevTabs.length - 1; i >= 0; i--) {
       const u = tabCurrentUri(prevTabs[i]!);
       if (u) {
-        stack.push(u);
+        stack.push({uri: u, index: i});
       }
     }
   }

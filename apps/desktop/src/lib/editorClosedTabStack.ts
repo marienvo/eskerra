@@ -1,5 +1,6 @@
 /**
- * LIFO stack of user-closed editor tab URIs for "Reopen closed tab".
+ * LIFO stack of user-closed editor tabs for "Reopen closed tab".
+ * Each entry records the tab URI and its index in the strip when closed.
  * URIs are normalized; callers push in the order that makes the next pop()
  * return the most recently user-relevant closed tab first.
  */
@@ -8,6 +9,12 @@ import {normalizeVaultBaseUri} from '@eskerra/core';
 
 import {normalizeEditorDocUri} from './editorDocumentHistory';
 import {normalizeOpenTabList} from './editorOpenTabs';
+
+/** One closed tab row for the in-memory reopen stack. */
+export type ClosedEditorTabRecord = {
+  uri: string;
+  index: number;
+};
 
 export function isEditorClosedTabReopenable(
   uri: string,
