@@ -1077,6 +1077,7 @@ export default function App() {
                             catalogLoading={podcastCatalog.catalogLoading}
                             playEpisode={desktopPlayback.playEpisode}
                             markEpisodePlayed={desktopPlayback.markEpisodePlayed}
+                            openPodcastNote={selectNote}
                             activeEpisodeId={desktopPlayback.activeEpisodeId}
                             activeEpisodePlayControl={
                               desktopPlayback.activeEpisodePlayControl

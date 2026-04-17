@@ -10,6 +10,8 @@ export type PodcastEpisode = {
   id: string;
   isListened: boolean;
   mp3Url: string;
+  /** URI of the `📻 … .md` General note for this series, when resolved from catalog. */
+  podcastNoteUri?: string;
   rssFeedUrl?: string;
   sectionTitle: string;
   seriesName: string;

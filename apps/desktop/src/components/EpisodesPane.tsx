@@ -13,6 +13,7 @@ export type EpisodesPaneProps = {
   catalogLoading: boolean;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
   markEpisodePlayed: (ep: PodcastEpisode) => Promise<void>;
+  openPodcastNote: (uri: string) => void;
   activeEpisodeId: string | null;
   activeEpisodePlayControl: PlaybackTransportPlayControl;
   /** When true, episode rows do not start or switch playback (an episode is already playing). */
@@ -45,6 +46,7 @@ type EpisodeListRowProps = {
   sectionRssFeedUrl?: string;
   playEpisode: (ep: PodcastEpisode) => Promise<void>;
   markEpisodePlayed: (ep: PodcastEpisode) => Promise<void>;
+  openPodcastNote: (uri: string) => void;
   episodeSelectLocked: boolean;
   activeEpisodeId: string | null;
   activeEpisodePlayControl: PlaybackTransportPlayControl;
@@ -55,6 +57,7 @@ function EpisodeListRow({
   sectionRssFeedUrl,
   playEpisode,
   markEpisodePlayed,
+  openPodcastNote,
   episodeSelectLocked,
   activeEpisodeId,
   activeEpisodePlayControl,
@@ -179,6 +182,17 @@ function EpisodeListRow({
             >
               Mark played
             </ContextMenu.Item>
+            <ContextMenu.Item
+              className="note-list-context-menu__item"
+              disabled={!ep.podcastNoteUri}
+              onSelect={() => {
+                if (ep.podcastNoteUri) {
+                  openPodcastNote(ep.podcastNoteUri);
+                }
+              }}
+            >
+              Open podcast
+            </ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
@@ -191,6 +205,7 @@ export function EpisodesPane({
   catalogLoading,
   playEpisode,
   markEpisodePlayed,
+  openPodcastNote,
   activeEpisodeId,
   activeEpisodePlayControl,
   episodeSelectLocked = false,
@@ -224,6 +239,7 @@ export function EpisodesPane({
                   sectionRssFeedUrl={section.rssFeedUrl}
                   playEpisode={playEpisode}
                   markEpisodePlayed={markEpisodePlayed}
+                  openPodcastNote={openPodcastNote}
                   episodeSelectLocked={episodeSelectLocked}
                   activeEpisodeId={activeEpisodeId}
                   activeEpisodePlayControl={activeEpisodePlayControl}
