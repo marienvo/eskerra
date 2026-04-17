@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   episodeRowInner: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     paddingHorizontal: LIST_HORIZONTAL_INSET,
     paddingVertical: 12,
