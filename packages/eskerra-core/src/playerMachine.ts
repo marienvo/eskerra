@@ -130,6 +130,23 @@ function patchProgress(_context: MachineContext, event: PodcastPlayerMachineEven
   };
 }
 
+function errorMessageFromActorEvent(event: unknown): string {
+  if (typeof event !== 'object' || event === null) {
+    return 'Error';
+  }
+  const e = event as {type?: string; message?: string; error?: unknown};
+  if (e.type === 'ERROR' && typeof e.message === 'string') {
+    return e.message;
+  }
+  if (e.error instanceof Error) {
+    return e.error.message;
+  }
+  if (e.error != null) {
+    return String(e.error);
+  }
+  return 'Error';
+}
+
 export const podcastPlayerMachine = setup({
   types: {
     context: {} as MachineContext,
@@ -178,6 +195,13 @@ export const podcastPlayerMachine = setup({
         errorMessage: null,
       };
     }),
+    /** Enter error with native unlocked so UI (e.g. episode list) is not stuck on `playing`. */
+    enterError: assign(({event}) => ({
+      errorMessage: errorMessageFromActorEvent(event),
+      native: 'idle' as PlayerState,
+      buffering: false,
+      seeking: false,
+    })),
   },
   actors: {
     flushPersist: fromPromise(
@@ -431,10 +455,7 @@ export const podcastPlayerMachine = setup({
             },
             ERROR: {
               target: 'error',
-              actions: assign({
-                errorMessage: ({event}) =>
-                  event.type === 'ERROR' ? event.message : 'Error',
-              }),
+              actions: 'enterError',
             },
           },
         },
@@ -501,10 +522,7 @@ export const podcastPlayerMachine = setup({
             ],
             ERROR: {
               target: 'error',
-              actions: assign({
-                errorMessage: ({event}) =>
-                  event.type === 'ERROR' ? event.message : 'Error',
-              }),
+              actions: 'enterError',
             },
           },
         },
@@ -571,10 +589,7 @@ export const podcastPlayerMachine = setup({
             ],
             ERROR: {
               target: 'error',
-              actions: assign({
-                errorMessage: ({event}) =>
-                  event.type === 'ERROR' ? event.message : 'Error',
-              }),
+              actions: 'enterError',
             },
           },
         },
@@ -588,6 +603,11 @@ export const podcastPlayerMachine = setup({
             }),
             onDone: [
               {
+                guard: ({context}) => context.native === 'ended',
+                target: 'ended',
+                actions: assign({inNearEndZone: true, playlistBaseline: null}),
+              },
+              {
                 guard: ({context}) => context.native === 'playing',
                 target: 'nearEndPlaying',
                 actions: assign({inNearEndZone: true, playlistBaseline: null}),
@@ -599,10 +619,7 @@ export const podcastPlayerMachine = setup({
             ],
             onError: {
               target: 'error',
-              actions: assign({
-                errorMessage: ({event}) =>
-                  event.error instanceof Error ? event.error.message : String(event.error),
-              }),
+              actions: 'enterError',
             },
           },
           on: {
@@ -613,6 +630,20 @@ export const podcastPlayerMachine = setup({
             PROGRESS: {
               actions: assign(({context, event}) => patchProgress(context, event)),
             },
+            NATIVE: [
+              {
+                guard: 'nativeEnded',
+                target: 'ended',
+                actions: assign(({event}) =>
+                  event.type === 'NATIVE' ? {native: event.state} : {},
+                ),
+              },
+              {
+                actions: assign(({event}) =>
+                  event.type === 'NATIVE' ? {native: event.state} : {},
+                ),
+              },
+            ],
           },
         },
         nearEndPlaying: {
@@ -722,10 +753,7 @@ export const podcastPlayerMachine = setup({
             },
             onError: {
               target: 'error',
-              actions: assign({
-                errorMessage: ({event}) =>
-                  event.error instanceof Error ? event.error.message : String(event.error),
-              }),
+              actions: 'enterError',
             },
           },
         },

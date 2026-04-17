@@ -120,6 +120,25 @@ export class HtmlAudioPlayer implements AudioPlayer {
       }).catch(() => undefined);
     };
 
+    const emitFinalProgressOnEnded = () => {
+      const durationMs = Number.isFinite(this.audio.duration)
+        ? clampMs(this.audio.duration * 1000)
+        : null;
+      const positionMs =
+        durationMs != null && durationMs > 0
+          ? durationMs
+          : clampMs(this.audio.currentTime * 1000);
+      const progress: PlayerProgress = {durationMs, positionMs};
+      this.lastProgressEmit = Date.now();
+      for (const cb of this.progressListeners) {
+        cb(progress);
+      }
+      void invoke('media_set_playback', {
+        playing: false,
+        positionMs,
+      }).catch(() => undefined);
+    };
+
     this.audio.addEventListener('timeupdate', emitProgress);
     this.audio.addEventListener('loadedmetadata', () => {
       if (!this.currentTrack) {
@@ -159,6 +178,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
       this.emitState();
     });
     this.audio.addEventListener('ended', () => {
+      emitFinalProgressOnEnded();
       this.endedFlag = true;
       this.emitState();
       for (const cb of this.endedListeners) {

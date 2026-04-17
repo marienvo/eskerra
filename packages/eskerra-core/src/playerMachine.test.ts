@@ -75,6 +75,130 @@ describe('podcastPlayerMachine', () => {
     });
   });
 
+  it('NATIVE ended during markingNearEnd reaches idle (does not stick in nearEndPlaying)', async () => {
+    const persist = vi.fn().mockResolvedValue({kind: 'skipped' as const});
+    const hang = new Promise<void>(() => {
+      /* never resolves — simulates slow clearRemote during nearEndEffects */
+    });
+    const clearRemotePlaylist = vi
+      .fn()
+      .mockImplementationOnce(() => hang)
+      .mockResolvedValue(undefined);
+    const markEpisodeListened = vi.fn().mockResolvedValue(undefined);
+
+    const actor = createActor(podcastPlayerMachine, {
+      input: {
+        deps: {
+          hasR2: () => true,
+          persist,
+          clearRemotePlaylist,
+          markEpisodeListened,
+        },
+      },
+    });
+    actor.start();
+
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'playing'});
+    const duration = NEAR_END_WINDOW_MS * 2 + 50_000;
+    actor.send({
+      type: 'PROGRESS',
+      positionMs: duration - NEAR_END_WINDOW_MS + 1,
+      durationMs: duration,
+    });
+
+    await vi.waitFor(() => {
+      expect(clearRemotePlaylist).toHaveBeenCalledTimes(1);
+      expect(getPlaybackSubstate(actor.getSnapshot())).toBe('markingNearEnd');
+    });
+
+    actor.send({type: 'NATIVE', state: 'ended'});
+
+    await waitFor(
+      actor,
+      s => getPlaybackSubstate(s) === 'idle',
+      {timeout: 5000},
+    );
+    expect(actor.getSnapshot().context.native).toBe('idle');
+    expect(actor.getSnapshot().context.episode).toBeNull();
+    expect(markEpisodeListened).toHaveBeenCalledWith('e1', true);
+    expect(clearRemotePlaylist).toHaveBeenCalledTimes(2);
+  });
+
+  it('nearEndEffects rejection enters error with native idle', async () => {
+    const persist = vi.fn().mockResolvedValue({kind: 'skipped' as const});
+    const clearRemotePlaylist = vi.fn().mockRejectedValue(new Error('clear failed'));
+    const markEpisodeListened = vi.fn();
+
+    const actor = createActor(podcastPlayerMachine, {
+      input: {
+        deps: {
+          hasR2: () => true,
+          persist,
+          clearRemotePlaylist,
+          markEpisodeListened,
+        },
+      },
+    });
+    actor.start();
+
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'playing'});
+    const duration = NEAR_END_WINDOW_MS * 2 + 50_000;
+    actor.send({
+      type: 'PROGRESS',
+      positionMs: duration - NEAR_END_WINDOW_MS + 1,
+      durationMs: duration,
+    });
+
+    await vi.waitFor(() => {
+      expect(getPlaybackSubstate(actor.getSnapshot())).toBe('error');
+    });
+    expect(actor.getSnapshot().context.native).toBe('idle');
+    expect(actor.getSnapshot().context.errorMessage).toBe('clear failed');
+    expect(markEpisodeListened).not.toHaveBeenCalled();
+  });
+
+  it('ERROR from playing sets native idle so episode selection is not stuck', () => {
+    const actor = createActor(podcastPlayerMachine, {
+      input: {deps: noopDeps()},
+    });
+    actor.start();
+    actor.send({
+      type: 'EPISODE_PLAY',
+      episode: {
+        id: 'e1',
+        mp3Url: 'https://x/a.mp3',
+        title: 'T',
+        artist: 'A',
+      },
+      baseline: null,
+    });
+    actor.send({type: 'NATIVE', state: 'playing'});
+    actor.send({type: 'ERROR', message: 'boom'});
+    expect(getPlaybackSubstate(actor.getSnapshot())).toBe('error');
+    expect(actor.getSnapshot().context.native).toBe('idle');
+    expect(actor.getSnapshot().context.errorMessage).toBe('boom');
+  });
+
   it('HYDRATE from primed with same episode updates position and baseline only', () => {
     const actor = createActor(podcastPlayerMachine, {
       input: {deps: noopDeps()},
