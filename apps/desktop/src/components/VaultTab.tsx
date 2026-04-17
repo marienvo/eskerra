@@ -76,6 +76,7 @@ import {MaterialIcon} from './MaterialIcon';
 import {TodayHubCanvas} from './TodayHubCanvas';
 import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
+import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -681,6 +682,32 @@ export function VaultTab({
     }
     setConfirmDeleteUri(selectedUri);
   }, [busy, composingNewEntry, selectedUri]);
+
+  const onDeleteNoteShortcutRef = useRef(onDeleteNoteShortcut);
+  useLayoutEffect(() => {
+    onDeleteNoteShortcutRef.current = onDeleteNoteShortcut;
+  }, [onDeleteNoteShortcut]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        !shouldHandleDeleteNoteGlobalShortcut(e, {
+          activeElement: document.activeElement,
+          eventTarget: e.target,
+        })
+      ) {
+        return;
+      }
+      onDeleteNoteShortcutRef.current();
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKeyDown, false);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, false);
+    };
+  }, []);
+
   const renameFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const openRenameDialog = useCallback((uri: string) => {
