@@ -4,6 +4,7 @@ import {
   getPlaybackTransportPlayControl,
   isPlaybackTransportBusy,
   MIN_PROGRESS_MS,
+  type PlaybackTransportPlayControl,
   type PlayerEpisodeSnapshot,
   type PlaylistEntry,
   podcastPlayerMachine,
@@ -88,7 +89,7 @@ export type UseDesktopPodcastPlaybackResult = {
   togglePause: () => Promise<void>;
   /** True while the native element is `playing` (episode list locked). */
   episodeSelectLocked: boolean;
-  playbackTransportPlayControl: 'loading' | 'playing' | 'paused';
+  playbackTransportPlayControl: PlaybackTransportPlayControl;
   seekDisabled: boolean;
 };
 
