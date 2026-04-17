@@ -129,7 +129,7 @@ export function VaultSearchScreen({navigation}: Props) {
         eskerraVaultSearch.cancel().catch(() => undefined);
         navigation.getParent()?.setOptions({
           headerLeft: undefined,
-          headerTitle: 'Workspace',
+          headerTitle: 'Today',
         });
       };
     }, [navigation, renderHeaderLeft]),
