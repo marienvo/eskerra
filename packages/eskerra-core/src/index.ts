@@ -62,6 +62,17 @@ export {
   startOfLocalDayMs,
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export type {
+  CalloutCatalogEntry,
+  CalloutColor,
+  MatchedCalloutHeader,
+  ResolvedCallout,
+} from './markdown/callouts';
+export {
+  CALLOUT_CATALOG,
+  matchCalloutHeader,
+  resolveCallout,
+} from './markdown/callouts';
 export {mergeYamlFrontmatterBody} from './markdown/mergeYamlFrontmatterBody';
 export {splitYamlFrontmatter} from './markdown/splitYamlFrontmatter';
 export type {

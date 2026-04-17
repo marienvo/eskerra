@@ -17,6 +17,18 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      - name: Upload desktop DS Storybook (static)
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-ds-desktop-web
+          path: packages/eskerra-ds-desktop/storybook-static/
+          retention-days: 14
+      - name: Upload mobile RN-Web Storybook (static)
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-ds-mobile-web
+          path: packages/eskerra-ds-mobile/storybook-static-web/
+          retention-days: 14
       - name: Install AppStream CLI and Linux desktop build dependencies
         run: |
           sudo apt-get update

@@ -1,0 +1,28 @@
+.root {
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  cursor: default;
+}
+
+.primary {
+  background: var(--color-accent);
+  color: var(--color-primary-fg);
+  border-color: var(--color-primary-border);
+}
+
+.secondary {
+  background: var(--color-button-secondary-bg);
+  color: var(--color-text);
+}
+
+.disabled,
+.root:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

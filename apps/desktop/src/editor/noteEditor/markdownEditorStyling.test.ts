@@ -1,16 +1,73 @@
 import {commonmarkLanguage} from '@codemirror/lang-markdown';
-import {codeFolding, ensureSyntaxTree, foldable} from '@codemirror/language';
+import {
+  codeFolding,
+  ensureSyntaxTree,
+  foldable,
+  LanguageDescription,
+  syntaxTree,
+} from '@codemirror/language';
+import {languages} from '@codemirror/language-data';
 import {EditorState} from '@codemirror/state';
+import {EditorView, drawSelection} from '@codemirror/view';
 import {highlightTree} from '@lezer/highlight';
-import {describe, expect, it} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
 import {
+  MarkdownFenceBlockBackgroundMarker,
+  collectMarkdownCodeBackgroundMarkers,
+  markdownCodeBackgroundLayer,
+} from './markdownCodeBackgroundLayer';
+import {
   markdownEditorBlockLineClasses,
+  noteMarkdownEditorAppearance,
   noteMarkdownHighlightStyle,
   noteMarkdownListItemFoldService,
+  noteMarkdownNestedCodeHighlighter,
   noteMarkdownParserExtensions,
 } from './markdownEditorStyling';
 import {markdownEskerra} from './markdownEskerraLanguage';
+
+beforeAll(async () => {
+  const ts = LanguageDescription.matchLanguageName(languages, 'ts', true);
+  if (!(ts instanceof LanguageDescription)) {
+    throw new Error('Expected TypeScript in @codemirror/language-data');
+  }
+  await ts.load();
+});
+
+function classTokens(classStr: string | undefined): string[] {
+  return classStr ? classStr.trim().split(/\s+/).filter(Boolean) : [];
+}
+
+function innermostHighlightAt(
+  docText: string,
+  pos: number,
+  highlighters: Parameters<typeof highlightTree>[1],
+  useCodeLanguages: boolean,
+): string | undefined {
+  const state = EditorState.create({
+    doc: docText,
+    extensions: markdownEskerra({
+      base: commonmarkLanguage,
+      extensions: noteMarkdownParserExtensions,
+      ...(useCodeLanguages ? {codeLanguages: languages} : {}),
+    }),
+  });
+  const tree = ensureSyntaxTree(state, state.doc.length, 20_000);
+  expect(tree).not.toBeNull();
+  let bestLen = Infinity;
+  let bestCls: string | undefined;
+  highlightTree(tree!, highlighters, (from, to, classes) => {
+    if (pos >= from && pos < to) {
+      const len = to - from;
+      if (len < bestLen) {
+        bestLen = len;
+        bestCls = classes;
+      }
+    }
+  });
+  return bestCls;
+}
 
 function lineClassSets(md: string): Record<number, string[]> {
   const state = EditorState.create({
@@ -192,5 +249,137 @@ describe('noteMarkdown equal-highlight highlighting', () => {
     expect(innermostHighlightClassAt(doc, 0)).toContain('cm-md-equal-highlight-mark');
     expect(innermostHighlightClassAt(doc, 2)).toContain('cm-md-equal-highlight');
     expect(innermostHighlightClassAt(doc, doc.length - 2)).toContain('cm-md-equal-highlight-mark');
+  });
+});
+
+describe('noteMarkdown fenced CodeInfo (fence language id)', () => {
+  it('maps opening fence info to cm-md-fence-info', () => {
+    const doc = '```ts\nx\n```';
+    const pos = doc.indexOf('ts');
+    expect(pos).toBeGreaterThanOrEqual(0);
+    expect(innermostHighlightClassAt(doc, pos)).toContain('cm-md-fence-info');
+  });
+});
+
+describe('markdownCodeBackgroundLayer markers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('emits one fence marker per fenced block and at least one inline marker per inline code', async () => {
+    const doc = '`foo`\n\n```ts\nconst x = 1\n```';
+    const parent = document.createElement('div');
+    parent.style.width = '800px';
+    parent.style.height = '600px';
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc,
+      extensions: [
+        markdownEskerra({
+          base: commonmarkLanguage,
+          extensions: noteMarkdownParserExtensions,
+          codeLanguages: languages,
+        }),
+        ...noteMarkdownEditorAppearance,
+        drawSelection(),
+        markdownCodeBackgroundLayer,
+      ],
+    });
+    const view = new EditorView({state, parent});
+    try {
+      const stubRect = {
+        top: 20,
+        bottom: 36,
+        left: 40,
+        right: 120,
+        width: 80,
+        height: 16,
+        x: 40,
+        y: 20,
+        toJSON: () => '',
+      };
+      vi.spyOn(view, 'coordsAtPos').mockReturnValue(stubRect as DOMRect);
+
+      ensureSyntaxTree(view.state, view.state.doc.length, 20_000);
+      let inlineCodeNodes = 0;
+      syntaxTree(view.state).iterate({
+        enter(c) {
+          if (c.name === 'InlineCode') {
+            inlineCodeNodes++;
+          }
+        },
+      });
+      expect(inlineCodeNodes, 'syntax tree should contain InlineCode').toBeGreaterThan(0);
+
+      expect(
+        view.viewport,
+        `viewport should cover inline code at start of doc; got ${JSON.stringify(view.viewport)}`,
+      ).toMatchObject({from: 0});
+      expect(view.viewport.to).toBeGreaterThan(0);
+
+      const markers = collectMarkdownCodeBackgroundMarkers(view);
+      const fence = markers.filter(m => m instanceof MarkdownFenceBlockBackgroundMarker);
+      const nonFence = markers.filter(m => !(m instanceof MarkdownFenceBlockBackgroundMarker));
+      expect(fence.length).toBe(1);
+      expect(nonFence.length).toBeGreaterThanOrEqual(1);
+
+      expect(view.dom.querySelector('.cm-md-codeBackgroundLayer')).not.toBeNull();
+      await vi.waitFor(
+        () =>
+          (view.dom.querySelector('.cm-md-codeBackgroundLayer')?.querySelectorAll('.cm-md-fence-bg').length
+            ?? 0)
+          >= 1,
+        {interval: 5, timeout: 3000},
+      );
+      await vi.waitFor(
+        () =>
+          (view.dom.querySelector('.cm-md-codeBackgroundLayer')?.querySelectorAll('.cm-md-inline-code-bg').length
+            ?? 0)
+          >= 1,
+        {interval: 5, timeout: 3000},
+      );
+    } finally {
+      view.destroy();
+      parent.remove();
+    }
+  });
+});
+
+describe('noteMarkdown code fence and inline code highlighting', () => {
+  it('inline code inner uses cm-md-code-text without nested cm-md-code', () => {
+    const doc = '`x`';
+    const pos = doc.indexOf('x');
+    const cls = innermostHighlightAt(doc, pos, noteMarkdownHighlightStyle, false);
+    expect(classTokens(cls)).toContain('cm-md-code-text');
+    expect(classTokens(cls)).not.toContain('cm-md-code');
+  });
+
+  it('fenced TypeScript highlights keywords and avoids inline-code pill class on body', () => {
+    const doc = '```ts\nconst a = 1;\n```';
+    const posConst = doc.indexOf('const');
+    const clsKeyword = innermostHighlightAt(
+      doc,
+      posConst,
+      [noteMarkdownHighlightStyle, noteMarkdownNestedCodeHighlighter],
+      true,
+    );
+    expect(
+      classTokens(clsKeyword).some(
+        c => c === 'cm-md-code-hl-keyword' || c === 'cm-md-code-hl-definition-keyword',
+      ),
+    ).toBe(true);
+    expect(classTokens(clsKeyword)).not.toContain('cm-md-code');
+
+    const posDigit = doc.indexOf('1');
+    const clsDigit = innermostHighlightAt(
+      doc,
+      posDigit,
+      [noteMarkdownHighlightStyle, noteMarkdownNestedCodeHighlighter],
+      true,
+    );
+    expect(classTokens(clsDigit).some(c => c === 'cm-md-code-text' || c.startsWith('cm-md-code-hl'))).toBe(
+      true,
+    );
+    expect(classTokens(clsDigit)).not.toContain('cm-md-code');
   });
 });

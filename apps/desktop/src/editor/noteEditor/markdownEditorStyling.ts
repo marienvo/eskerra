@@ -1,6 +1,6 @@
 import {markdownLanguage} from '@codemirror/lang-markdown';
 import {Strikethrough, type MarkdownConfig, type MarkdownExtension} from '@lezer/markdown';
-import type {SyntaxNode, Tree} from '@lezer/common';
+import type {NodeType, SyntaxNode, Tree} from '@lezer/common';
 import {
   HighlightStyle,
   indentUnit,
@@ -8,6 +8,7 @@ import {
   ensureSyntaxTree,
   syntaxTree,
   foldService,
+  languageDataProp,
 } from '@codemirror/language';
 import type {Extension, Range, Text} from '@codemirror/state';
 import {
@@ -17,8 +18,9 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from '@codemirror/view';
-import {tags, styleTags, Tag} from '@lezer/highlight';
+import {tags, styleTags, Tag, tagHighlighter} from '@lezer/highlight';
 
+import {markdownCalloutsPlugin} from './markdownCallouts';
 import {markdownMarkerFocusLineExtension} from './markdownMarkerFocusLine';
 
 const SYNTAX_TREE_BUDGET_MS = 200;
@@ -32,6 +34,18 @@ export const markdownHeaderMarkTag = Tag.define();
 
 /** `-` / `1.` list markers and GFM `TaskMarker`; not `tags.list` (that colors whole list subtrees in Lezer). */
 export const markdownListMarkTag = Tag.define();
+
+/**
+ * Replaces Lezer default `CodeText` → `tags.monospace` (same as `InlineCode`), which made fenced code
+ * and inline code apply `.cm-md-code` twice (pill inside pill / block). Only `InlineCode` keeps `monospace`.
+ */
+export const markdownCodeTextTag = Tag.define();
+
+/**
+ * Opening-fence language info (` ```ts ` → `ts`). Split from {@link tags.labelName} on `LinkLabel`
+ * so CSS can hide it on non-marker-focus lines while backticks already use `cm-md-syntax-mark`.
+ */
+export const markdownFenceInfoTag = Tag.define();
 
 /** Visible `%%…%%` span (Eskerra extension); inner content is smaller gray text. */
 const markdownPercentMutedContentTag = Tag.define();
@@ -150,10 +164,32 @@ export const markdownListMarkParserExtension: MarkdownExtension = {
   ],
 };
 
+/** Override `CodeText` so fenced (and inline inner) text does not inherit `tags.monospace` / `.cm-md-code`. */
+export const markdownCodeTextParserExtension: MarkdownExtension = {
+  props: [
+    styleTags({
+      /** Must beat Lezer default `"InlineCode CodeText": tags.monospace` (path-specific wins). */
+      'InlineCode CodeText': markdownCodeTextTag,
+      CodeText: markdownCodeTextTag,
+    }),
+  ],
+};
+
+/** `CodeInfo` only (not `LinkLabel`); enables marker-focus-line hide for fence language ids. */
+export const markdownFenceInfoParserExtension: MarkdownExtension = {
+  props: [
+    styleTags({
+      CodeInfo: markdownFenceInfoTag,
+    }),
+  ],
+};
+
 /** Parser extensions for the vault markdown editor (header mark styling, GFM strikethrough, `%%` muted, `==` highlight). */
 export const noteMarkdownParserExtensions: MarkdownExtension = [
   markdownHeaderMarkParserExtension,
   markdownListMarkParserExtension,
+  markdownCodeTextParserExtension,
+  markdownFenceInfoParserExtension,
   Strikethrough,
   eskerraPercentMutedExtension,
   eskerraEqualHighlightExtension,
@@ -180,8 +216,74 @@ const markdownHighlightStyle = HighlightStyle.define(
     {tag: tags.processingInstruction, class: 'cm-md-syntax-mark'},
     {tag: markdownListMarkTag, class: 'cm-md-list-mark'},
     {tag: tags.monospace, class: 'cm-md-code'},
+    {tag: markdownCodeTextTag, class: 'cm-md-code-text'},
+    {tag: markdownFenceInfoTag, class: 'cm-md-fence-info'},
   ],
   {scope: markdownLanguage},
+);
+
+function nestedNonMarkdownTree(type: NodeType): boolean {
+  const ld = type.prop(languageDataProp);
+  return ld != null && ld !== markdownLanguage.data;
+}
+
+/**
+ * Token classes for fenced-code sub-languages (TS, JS, Python, …). Scoped so markdown prose
+ * (e.g. `LinkTitle` → `tags.string`) does not pick up code colors.
+ */
+export const noteMarkdownNestedCodeHighlighter = tagHighlighter(
+  [
+    {tag: tags.keyword, class: 'cm-md-code-hl-keyword'},
+    {tag: tags.controlKeyword, class: 'cm-md-code-hl-control-keyword'},
+    {tag: tags.operatorKeyword, class: 'cm-md-code-hl-operator-keyword'},
+    {tag: tags.definitionKeyword, class: 'cm-md-code-hl-definition-keyword'},
+    {tag: tags.moduleKeyword, class: 'cm-md-code-hl-module-keyword'},
+    {tag: tags.self, class: 'cm-md-code-hl-self'},
+    {tag: tags.namespace, class: 'cm-md-code-hl-namespace'},
+    {tag: tags.typeName, class: 'cm-md-code-hl-type-name'},
+    {tag: tags.className, class: 'cm-md-code-hl-class-name'},
+    {tag: tags.tagName, class: 'cm-md-code-hl-tag-name'},
+    {tag: tags.attributeName, class: 'cm-md-code-hl-attribute-name'},
+    {tag: tags.attributeValue, class: 'cm-md-code-hl-attribute-value'},
+    {tag: tags.propertyName, class: 'cm-md-code-hl-property-name'},
+    {tag: tags.variableName, class: 'cm-md-code-hl-variable-name'},
+    {tag: tags.definition(tags.variableName), class: 'cm-md-code-hl-variable-name-definition'},
+    {tag: tags.function(tags.variableName), class: 'cm-md-code-hl-function-variable-name'},
+    {tag: tags.constant(tags.variableName), class: 'cm-md-code-hl-constant-variable-name'},
+    {tag: tags.local(tags.variableName), class: 'cm-md-code-hl-local-variable-name'},
+    {tag: tags.special(tags.variableName), class: 'cm-md-code-hl-special-variable-name'},
+    {tag: tags.definition(tags.propertyName), class: 'cm-md-code-hl-property-name-definition'},
+    {tag: tags.macroName, class: 'cm-md-code-hl-macro-name'},
+    {tag: tags.labelName, class: 'cm-md-code-hl-label-name'},
+    {tag: tags.atom, class: 'cm-md-code-hl-atom'},
+    {tag: tags.bool, class: 'cm-md-code-hl-bool'},
+    {tag: tags.null, class: 'cm-md-code-hl-null'},
+    {tag: tags.number, class: 'cm-md-code-hl-number'},
+    {tag: tags.integer, class: 'cm-md-code-hl-integer'},
+    {tag: tags.float, class: 'cm-md-code-hl-float'},
+    {tag: tags.string, class: 'cm-md-code-hl-string'},
+    {tag: tags.special(tags.string), class: 'cm-md-code-hl-string-special'},
+    {tag: tags.docString, class: 'cm-md-code-hl-doc-string'},
+    {tag: tags.character, class: 'cm-md-code-hl-character'},
+    {tag: tags.regexp, class: 'cm-md-code-hl-regexp'},
+    {tag: tags.escape, class: 'cm-md-code-hl-escape'},
+    {tag: tags.color, class: 'cm-md-code-hl-color'},
+    {tag: tags.url, class: 'cm-md-code-hl-url'},
+    {tag: tags.comment, class: 'cm-md-code-hl-comment'},
+    {tag: tags.lineComment, class: 'cm-md-code-hl-line-comment'},
+    {tag: tags.blockComment, class: 'cm-md-code-hl-block-comment'},
+    {tag: tags.docComment, class: 'cm-md-code-hl-doc-comment'},
+    {tag: tags.meta, class: 'cm-md-code-hl-meta'},
+    {tag: tags.invalid, class: 'cm-md-code-hl-invalid'},
+    {tag: tags.operator, class: 'cm-md-code-hl-operator'},
+    {tag: tags.bracket, class: 'cm-md-code-hl-bracket'},
+    {tag: tags.punctuation, class: 'cm-md-code-hl-punctuation'},
+    {tag: tags.literal, class: 'cm-md-code-hl-literal'},
+    {tag: tags.inserted, class: 'cm-md-code-hl-inserted'},
+    {tag: tags.deleted, class: 'cm-md-code-hl-deleted'},
+    {tag: tags.changed, class: 'cm-md-code-hl-changed'},
+  ],
+  {scope: nestedNonMarkdownTree},
 );
 
 /** Same range as @codemirror/lang-markdown `foldNodeProp` for `ListItem`; foldService runs before syntax folding. */
@@ -427,7 +529,9 @@ const markdownBlockLineStyle = ViewPlugin.fromClass(
 /** Typography and block styling for the inbox markdown editor (Lezer markdown only). */
 export const noteMarkdownEditorAppearance: Extension[] = [
   syntaxHighlighting(markdownHighlightStyle),
+  syntaxHighlighting(noteMarkdownNestedCodeHighlighter),
   markdownBlockLineStyle,
+  markdownCalloutsPlugin,
   markdownMarkerFocusLineExtension,
 ];
 

@@ -337,6 +337,25 @@ export class HtmlAudioPlayer implements AudioPlayer {
     return this.currentTrack;
   }
 
+  /**
+   * After channel artwork is resolved and cached to a `file://` URI, refresh MPRIS metadata
+   * if this episode is still the loaded track.
+   */
+  async syncArtworkIfCurrentEpisode(episodeId: string, coverFileUrl: string): Promise<void> {
+    if (this.currentTrack?.id !== episodeId) {
+      return;
+    }
+    this.currentTrack = {...this.currentTrack, artwork: coverFileUrl};
+    const durationSec = this.audio.duration;
+    const durationMs = Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : 1;
+    await syncMprisMetadata(
+      this.currentTrack,
+      Math.max(durationMs, 1),
+      clampMs(this.audio.currentTime * 1000),
+      !this.audio.paused,
+    );
+  }
+
   async pause(): Promise<void> {
     this.audio.pause();
     this.emitState();
@@ -506,4 +525,12 @@ export function getDesktopAudioPlayer(): HtmlAudioPlayer {
     desktopPlayer = new HtmlAudioPlayer();
   }
   return desktopPlayer;
+}
+
+/** Call after `media_cache_artwork` when artwork was not known at `play()` / `primePausedAt()`. */
+export async function notifyDesktopMprisArtworkReady(
+  episodeId: string,
+  coverFileUrl: string,
+): Promise<void> {
+  await getDesktopAudioPlayer().syncArtworkIfCurrentEpisode(episodeId, coverFileUrl);
 }

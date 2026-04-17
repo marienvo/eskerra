@@ -1,0 +1,28 @@
+---
+description: When RN-Web is insufficient; release-gated on-device checks for Android
+globs: apps/mobile/**/* packages/eskerra-ds-mobile/**/*
+alwaysApply: false
+---
+
+# Mobile on-device verification
+
+**RN-Web Storybook is not a substitute for Android.** Merge gates may use RN-Web + test-runner; **release** requires on-device validation for native-affecting changes.
+
+## Trust on-device, not the browser
+
+Verify on a **real device or emulator** (not RN-Web alone) when touching:
+
+- `react-native-reanimated`, `react-native-gesture-handler`, `react-native-keyboard-controller`
+- Lists: `FlatList`, `FlashList`, large scroll performance
+- `react-native-track-player`, audio focus, notifications
+- `react-native-saf-x`, file pickers
+- Fonts (`react-native-vector-icons`), safe area, TalkBack order, haptics, AMOLED appearance
+
+## Gates (summary)
+
+- **Merge:** RN-Web + desktop web Storybook test-runner + a11y addon (automated first — does not replace TalkBack / focus-order manual checks).
+- **Release:** QA runs on-device Storybook or app build + checklist (`specs/review-checklists/design-system-on-device.md` when added) for every DS surface touched in the release.
+
+## Platform
+
+- **Android only** — no iOS Storybook or iOS-driven layout rules (see `specs/architecture/platform-targets.md`).

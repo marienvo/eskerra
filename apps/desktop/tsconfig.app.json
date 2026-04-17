@@ -20,6 +20,8 @@
     "paths": {
       "@eskerra/core": ["../../packages/eskerra-core/src/index.ts"],
       "@eskerra/core/*": ["../../packages/eskerra-core/src/*"],
+      "@eskerra/ds-desktop": ["../../packages/eskerra-ds-desktop/src/index.ts"],
+      "@eskerra/ds-desktop/*": ["../../packages/eskerra-ds-desktop/src/*"],
       "@eskerra/brand/*": ["../../assets/brand/*"]
     },
 
