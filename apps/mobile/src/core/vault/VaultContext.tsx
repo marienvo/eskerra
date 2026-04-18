@@ -21,6 +21,7 @@ import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
 import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 import {eskerraVaultSearch} from '../../native/eskerraVaultSearch';
+import {requestVaultSearchIndexWarmup} from '../../features/vault/vaultSearchIndexMaintenance';
 import {prepareVaultSession} from './applyVaultSession';
 
 type InboxContentCacheSession = {
@@ -315,6 +316,12 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
 
   useEffect(() => {
     syncVaultSessionContext(Boolean(baseUri));
+  }, [baseUri]);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && baseUri != null && baseUri.trim() !== '') {
+      requestVaultSearchIndexWarmup(baseUri);
+    }
   }, [baseUri]);
 
   const value = useMemo(

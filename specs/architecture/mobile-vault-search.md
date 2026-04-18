@@ -4,8 +4,8 @@ Full-vault markdown search on Android uses a **native Kotlin** module `EskerraVa
 
 ## Product rules
 
-- **No indexing on cold start** — work begins only after the user focuses the **Vault** tab (see `.cursor/rules/performance.mdc`).
-- **Lazy activation** — `open(baseUri)` from `VaultContext` after vault session apply is lightweight (DB metadata); rebuild/reconcile run from Vault tab `useFocusEffect` when needed.
+- **No indexing on cold start** — no vault scan or FTS work runs before the first meaningful render; indexing is scheduled only after a vault session exists (see `.cursor/rules/performance.mdc`).
+- **Lazy activation** — `open(baseUri)` from `VaultContext` after vault session apply is lightweight (DB metadata). **`requestVaultSearchIndexWarmup(baseUri)`** in [`vaultSearchIndexMaintenance.ts`](../../../apps/mobile/src/features/vault/vaultSearchIndexMaintenance.ts) runs after **`InteractionManager.runAfterInteractions`** (post–first paint / transitions) and performs the same **`open` → `getIndexStatus` → rebuild or reconcile** pipeline as before, so the index warms even if the user never focuses the Vault tab. **`runVaultSearchIndexMaintenance(baseUri)`** is the single-flight implementation; **`VaultSearchScreen`** uses it on mount to populate hook props without a second duplicate maintenance path.
 - **Stale async safety** — every event includes **`vaultInstanceId`**; JS (`useVaultContentSearch`) drops events whose `vaultInstanceId` or `searchId` does not match the active search/session.
 
 ## SQLite schema (v1)
@@ -24,14 +24,12 @@ Central URI/path helpers: canonicalize base URI, **SHA-1** `baseUriHash`, `relat
 
 ## Index lifecycle (JS)
 
-On **Vault** route focus (`VaultScreen`):
+When **`baseUri`** is set ([`VaultContext`](../../../apps/mobile/src/core/vault/VaultContext.tsx)):
 
-1. `open(baseUri)` (writer + WAL; ensures schema exists).
-2. `getIndexStatus(baseUri)`.
-3. If **`fullNeedsRebuild`** (see `apps/mobile/src/features/vault/vaultSearchLifecycle.ts`): `scheduleFullRebuild(baseUri, reason)` with `missing` | `schema-mismatch` | `base-uri-change`.
-4. Else if **`shouldReconcile`** (`lastReconciledAt` older than **60 s** default): `reconcile(baseUri)`.
+1. **`requestVaultSearchIndexWarmup(baseUri)`** schedules **`runVaultSearchIndexMaintenance`** (Android + native available).
+2. Maintenance: `open(baseUri)` → `getIndexStatus(baseUri)` → if **`fullNeedsRebuild`** (`apps/mobile/src/features/vault/vaultSearchLifecycle.ts`): **`scheduleFullRebuild(baseUri, reason)`** with `missing` | `schema-mismatch` | `base-uri-change` → else if **`shouldReconcile`** (`lastReconciledAt` older than **60 s** default): **`reconcile(baseUri)`** (fire-and-forget).
 
-**Vault search screen** (`VaultSearchScreen`) repeats the same **`open` → `getIndexStatus` → `scheduleFullRebuild` when `fullNeedsRebuild`** path on mount so search works even if the user opens search before focusing the Vault root screen (deep link / fast navigation). A **Retry** control calls `scheduleFullRebuild(baseUri, 'manual-retry')` after native emits **`vault-search:index-status`** with `status: "error"`.
+**Vault search screen** (`VaultSearchScreen`) calls **`runVaultSearchIndexMaintenance`** on mount (same in-flight promise as warm-up if both run close together) and uses the returned **`open`** fields for **`useVaultContentSearch`**. A **Retry** control calls **`scheduleFullRebuild(baseUri, 'manual-retry')`** after native emits **`vault-search:index-status`** with **`status: "error"`**.
 
 `touchPaths(baseUri, uris[])` is invoked after successful **create / write / delete** of inbox notes from `NotesContext` so in-app edits stay indexed without waiting for reconcile.
 

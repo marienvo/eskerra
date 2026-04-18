@@ -12,7 +12,7 @@ import {NativeEventEmitter, NativeModules} from 'react-native';
 
 import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
 
-const DEFAULT_DEBOUNCE_MS = 300;
+const DEFAULT_DEBOUNCE_MS = 260;
 const SEARCHING_STATUS_VISIBLE_DELAY_MS = 100;
 const PREVIOUS_RESULTS_HOLD_MS = 100;
 /** Dev-only: stale native events ignored (searchId / vaultInstanceId mismatch). */

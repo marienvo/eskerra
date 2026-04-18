@@ -23,13 +23,7 @@ import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultContentSearch} from '../hooks/useVaultContentSearch';
-import {
-  canonicalizeVaultBaseUriForSearch,
-  fullNeedsRebuild,
-  parseVaultSearchIndexStatus,
-  VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
-  vaultSearchBaseUriHash,
-} from '../vaultSearchLifecycle';
+import {runVaultSearchIndexMaintenance} from '../vaultSearchIndexMaintenance';
 
 type Props = StackScreenProps<VaultStackParamList, 'VaultSearch'>;
 
@@ -72,28 +66,17 @@ export function VaultSearchScreen({navigation}: Props) {
         if (!baseUri || !eskerraVaultSearch.isAvailable()) {
           return;
         }
-        const st = await eskerraVaultSearch.open(baseUri);
+        const st = await runVaultSearchIndexMaintenance(baseUri);
         if (cancelled) {
+          return;
+        }
+        if (st == null) {
+          setVaultInstanceId(null);
           return;
         }
         setVaultInstanceId(st.vaultInstanceId);
         setIndexReady(st.indexReady);
         setLastReconciledAt(st.lastReconciledAt);
-        const full = parseVaultSearchIndexStatus(await eskerraVaultSearch.getIndexStatus(baseUri));
-        if (cancelled || full == null) {
-          return;
-        }
-        if (fullNeedsRebuild(full, baseUri)) {
-          const canonical = canonicalizeVaultBaseUriForSearch(baseUri);
-          const expectedHash = vaultSearchBaseUriHash(canonical);
-          let rebuildReason = 'missing';
-          if (full.baseUriHash !== '' && full.baseUriHash !== expectedHash) {
-            rebuildReason = 'base-uri-change';
-          } else if (full.schemaVersion !== VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION) {
-            rebuildReason = 'schema-mismatch';
-          }
-          await eskerraVaultSearch.scheduleFullRebuild(baseUri, rebuildReason).catch(() => undefined);
-        }
       } catch {
         if (!cancelled) {
           setVaultInstanceId(null);
@@ -231,13 +214,13 @@ export function VaultSearchScreen({navigation}: Props) {
             ) : indexingHint ? (
               <Text style={[styles.hint, {color: muted}]}>
                 {indexStatusLive?.indexedNotes != null
-                  ? `Indexing vault… (${indexStatusLive.indexedNotes} notes)`
-                  : 'Indexing vault…'}
+                  ? `Building local search index… (${indexStatusLive.indexedNotes} notes)`
+                  : 'Building local search index…'}
               </Text>
             ) : (
               <Text style={[styles.hint, {color: muted}]}>
                 {progress != null && !progress.indexReady
-                  ? 'Index not ready yet — try again in a moment.'
+                  ? 'Search index not ready on this device yet — try again in a moment.'
                   : 'No matches.'}
               </Text>
             )
