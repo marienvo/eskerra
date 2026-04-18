@@ -5,7 +5,6 @@ import {Box, Text, useColorMode} from '@gluestack-ui/themed';
 import {StyleSheet, TouchableOpacity} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {useVaultContext} from '../../../core/vault/VaultContext';
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {VaultStackParamList} from '../../../navigation/types';
 import {NoteContentView} from '../components/NoteContentView';
@@ -13,7 +12,6 @@ import {NoteContentView} from '../components/NoteContentView';
 type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
 export function VaultScreen({navigation, route}: VaultScreenProps) {
-  const {baseUri} = useVaultContext();
   const colorMode = useColorMode();
   const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
 
@@ -138,7 +136,12 @@ export function VaultScreen({navigation, route}: VaultScreenProps) {
   return (
     <Box style={styles.container}>
       {showingNote && noteUri ? (
-        <NoteContentView noteUri={noteUri} />
+        <NoteContentView
+          noteUri={noteUri}
+          onNavigateToVaultNote={(uri, title) => {
+            navigation.setParams({noteUri: uri, noteTitle: title});
+          }}
+        />
       ) : (
         <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
           Open search to browse notes in this vault.
