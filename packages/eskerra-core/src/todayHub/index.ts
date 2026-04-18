@@ -21,9 +21,16 @@ export {
   startOfLocalWeek,
   startOfLocalWeekMonday,
   todayHubRowUri,
+  todayHubWeekDayIndexForJsWeekday,
+  todayHubWeekendMergePair,
+  todayHubWeekendSegmentState,
   todayHubWeekEndInclusive,
   todayHubWeekProgress,
+  todayHubWeekProgressSegments,
+  type TodayHubWeekendMergePair,
   type TodayHubWeekProgress,
+  type TodayHubWeekProgressSegment,
+  type TodayHubWeekProgressSegmentKind,
 } from './todayHubMondays';
 export {
   collectTodayHubRowStemsFromVaultMarkdownRefs,

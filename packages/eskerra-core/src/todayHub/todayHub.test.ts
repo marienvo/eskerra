@@ -15,7 +15,10 @@ import {
   todayHubRowSectionsAllBlank,
   todayHubRowUri,
   todayHubWeekEndInclusive,
+  todayHubWeekendMergePair,
+  todayHubWeekendSegmentState,
   todayHubWeekProgress,
+  todayHubWeekProgressSegments,
 } from './index';
 
 describe('addLocalCalendarDays', () => {
@@ -151,6 +154,66 @@ describe('todayHubWeekProgress', () => {
     expect(todayHubWeekProgress(start, sunday)).toEqual({kind: 'current', dayIndex: 6});
     const mondayAfter = new Date(2025, 10, 3);
     expect(todayHubWeekProgress(start, mondayAfter)).toEqual({kind: 'past'});
+  });
+});
+
+describe('todayHubWeekendMergePair', () => {
+  it('returns adjacent Sat–Sun indices for Monday-start week', () => {
+    const weekStart = new Date(2026, 3, 6); // Mon 6 Apr 2026
+    expect(todayHubWeekendMergePair(weekStart)).toEqual({satIndex: 5, sunIndex: 6});
+  });
+
+  it('returns null when Saturday and Sunday are not consecutive in the strip', () => {
+    const weekStart = new Date(2026, 3, 5); // Sun 5 Apr — window Sun..Sat
+    expect(todayHubWeekendMergePair(weekStart)).toBeNull();
+  });
+});
+
+describe('todayHubWeekendSegmentState', () => {
+  const weekStart = new Date(2026, 3, 6); // Mon 6 Apr; Sat 11, Sun 12
+
+  it('returns null when weekend is not merged', () => {
+    const sunStart = new Date(2026, 3, 5);
+    expect(todayHubWeekendSegmentState(sunStart, new Date(2026, 3, 10))).toBeNull();
+  });
+
+  it('is future before Saturday of that week', () => {
+    expect(todayHubWeekendSegmentState(weekStart, new Date(2026, 3, 10))).toBe('future');
+  });
+
+  it('is current on Saturday', () => {
+    expect(todayHubWeekendSegmentState(weekStart, new Date(2026, 3, 11))).toBe('current');
+  });
+
+  it('is current on Sunday', () => {
+    expect(todayHubWeekendSegmentState(weekStart, new Date(2026, 3, 12))).toBe('current');
+  });
+
+  it('is past after Sunday of that week', () => {
+    expect(todayHubWeekendSegmentState(weekStart, new Date(2026, 3, 13))).toBe('past');
+  });
+});
+
+describe('todayHubWeekProgressSegments', () => {
+  const cell = 10;
+  const gap = 3;
+
+  it('returns seven unit segments when weekend is not merged', () => {
+    const weekStart = new Date(2026, 3, 5); // Sun start — Sat/Sun not adjacent in strip
+    const progress = todayHubWeekProgress(weekStart, new Date(2026, 3, 7));
+    const segs = todayHubWeekProgressSegments(progress, weekStart, new Date(2026, 3, 7), cell, gap);
+    expect(segs).toHaveLength(7);
+    expect(segs.every(s => s.widthPx === cell)).toBe(true);
+  });
+
+  it('returns six segments with wide weekend when Sat/Sun are consecutive', () => {
+    const weekStart = new Date(2026, 3, 6);
+    const progress = todayHubWeekProgress(weekStart, new Date(2026, 3, 11));
+    const segs = todayHubWeekProgressSegments(progress, weekStart, new Date(2026, 3, 11), cell, gap);
+    expect(segs).toHaveLength(6);
+    const wide = segs.find(s => s.dayIndex === null);
+    expect(wide?.widthPx).toBe(cell * 2 + gap);
+    expect(wide?.kind).toBe('current');
   });
 });
 

@@ -477,10 +477,12 @@ export function VaultScreen({navigation}: VaultScreenProps) {
                     titleTrailing={
                       ci === 0 ? (
                         <TodayWeekProgressStrip
+                          comparisonNow={weekProgressComparisonNow}
                           progress={todayHubWeekProgress(
                             renderedWeekStart,
                             weekProgressComparisonNow,
                           )}
+                          weekStart={renderedWeekStart}
                         />
                       ) : undefined
                     }

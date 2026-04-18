@@ -1,39 +1,55 @@
 import type {TodayHubWeekProgress} from '../lib/todayHub';
+import {todayHubWeekProgressSegments} from '../lib/todayHub';
+
+const CELL_PX = 10;
+const GAP_PX = 3;
 
 type TodayWeekProgressBarProps = {
   progress: TodayHubWeekProgress;
+  weekStart: Date;
+  comparisonNow: Date;
 };
 
 /**
- * Seven cells for the local Mon–Sun (or hub-configured) week window: past filled, today accent, future empty.
+ * Week progress for the hub week window: past filled, today accent, future outline;
+ * Sat–Sun one wide segment when they are consecutive in the strip.
  */
-export function TodayWeekProgressBar({progress}: TodayWeekProgressBarProps) {
+export function TodayWeekProgressBar({progress, weekStart, comparisonNow}: TodayWeekProgressBarProps) {
+  const segments = todayHubWeekProgressSegments(
+    progress,
+    weekStart,
+    comparisonNow,
+    CELL_PX,
+    GAP_PX,
+  );
+  const merged = segments.length === 6;
+
   const ariaLabel =
     progress.kind === 'past'
-      ? 'Week complete, all 7 days passed'
+      ? merged
+        ? 'Week complete, six segments (weekend as one block)'
+        : 'Week complete, all 7 days passed'
       : progress.kind === 'future'
-        ? 'Upcoming week, no days started'
-        : `Day ${progress.dayIndex + 1} of 7`;
+        ? merged
+          ? 'Upcoming week, six segments (weekend as one block)'
+          : 'Upcoming week, no days started'
+        : merged
+          ? `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`
+          : `Day ${progress.dayIndex + 1} of 7`;
 
   return (
     <ul className="today-hub-canvas__week-progress" aria-label={ariaLabel}>
-      {Array.from({length: 7}, (_, i) => {
-        let cellKind: 'filled' | 'current' | 'empty' = 'empty';
-        if (progress.kind === 'past') {
-          cellKind = 'filled';
-        } else if (progress.kind === 'future') {
-          cellKind = 'empty';
-        } else if (i < progress.dayIndex) {
-          cellKind = 'filled';
-        } else if (i === progress.dayIndex) {
-          cellKind = 'current';
-        } else {
-          cellKind = 'empty';
-        }
+      {segments.map(seg => {
+        const isWeekend = seg.dayIndex === null;
+        const cellKind = seg.kind;
         return (
           <li
-            key={i}
-            className={`today-hub-canvas__week-progress-cell today-hub-canvas__week-progress-cell--${cellKind}`}
+            key={seg.key}
+            className={
+              isWeekend
+                ? `today-hub-canvas__week-progress-cell today-hub-canvas__week-progress-cell--weekend today-hub-canvas__week-progress-cell--${cellKind}`
+                : `today-hub-canvas__week-progress-cell today-hub-canvas__week-progress-cell--${cellKind}`
+            }
             aria-hidden="true"
           />
         );

@@ -3733,9 +3733,16 @@ button.primary.destructive {
   width: 10px;
   height: 10px;
   box-sizing: border-box;
+  flex-shrink: 0;
   border-radius: 2px;
   background: transparent;
   border: 1px solid var(--today-hub-chrome-label-color);
+}
+
+/* Merged Sat–Sun: two unit cells plus one inter-cell gap (matches mobile TodayWeekProgressStrip CELL/GAP). */
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--weekend {
+  width: calc(10px + 10px + 3px);
+  min-width: calc(10px + 10px + 3px);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__week-progress-cell--filled {

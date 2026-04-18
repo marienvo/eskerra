@@ -1,4 +1,5 @@
 import type {TodayHubWeekProgress} from '@eskerra/core';
+import {todayHubWeekProgressSegments} from '@eskerra/core';
 import {vaultReadonlyLinkSchemeFromColorMode, vaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
 import {useColorMode} from '@gluestack-ui/themed';
 import {useMemo} from 'react';
@@ -6,15 +7,18 @@ import {StyleSheet, View} from 'react-native';
 
 type TodayWeekProgressStripProps = {
   progress: TodayHubWeekProgress;
+  weekStart: Date;
+  /** Same clock used for `progress` (e.g. stable memo in parent). */
+  comparisonNow: Date;
 };
 
 const CELL = 10;
 const GAP = 3;
 
 /**
- * Seven cells for the hub week window: past filled, today accent, future outline.
+ * Week progress: past filled, today accent, future outline; Sat–Sun one wide segment when adjacent in the hub week.
  */
-export function TodayWeekProgressStrip({progress}: TodayWeekProgressStripProps) {
+export function TodayWeekProgressStrip({progress, weekStart, comparisonNow}: TodayWeekProgressStripProps) {
   const colorMode = useColorMode();
   const mutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const accentColor = useMemo(
@@ -23,42 +27,37 @@ export function TodayWeekProgressStrip({progress}: TodayWeekProgressStripProps) 
   );
   const filledColor = colorMode === 'dark' ? 'rgba(245,245,245,0.45)' : 'rgba(33,33,33,0.45)';
 
-  const cells = useMemo(() => {
-    return Array.from({length: 7}, (_, i) => {
-      if (progress.kind === 'past') {
-        return {i, style: [styles.cell, {backgroundColor: filledColor}]} as const;
-      }
-      if (progress.kind === 'future') {
-        return {
-          i,
-          style: [styles.cell, styles.cellEmpty, {borderColor: mutedColor}],
-        } as const;
-      }
-      if (i < progress.dayIndex) {
-        return {i, style: [styles.cell, {backgroundColor: filledColor}]} as const;
-      }
-      if (i === progress.dayIndex) {
-        return {i, style: [styles.cell, {backgroundColor: accentColor}]} as const;
-      }
-      return {
-        i,
-        style: [styles.cell, styles.cellEmpty, {borderColor: mutedColor}],
-      } as const;
-    });
-  }, [accentColor, filledColor, mutedColor, progress]);
+  const segments = useMemo(
+    () => todayHubWeekProgressSegments(progress, weekStart, comparisonNow, CELL, GAP),
+    [comparisonNow, progress, weekStart],
+  );
 
-  const accessibilityLabel =
-    progress.kind === 'past'
-      ? 'Week complete, all 7 days passed'
-      : progress.kind === 'future'
-        ? 'Upcoming week, no days started'
-        : `Day ${progress.dayIndex + 1} of 7`;
+  const accessibilityLabel = useMemo(() => {
+    const merged = segments.length === 6;
+    if (progress.kind === 'past') {
+      return merged ? 'Week complete, six segments (weekend as one block)' : 'Week complete, all 7 days passed';
+    }
+    if (progress.kind === 'future') {
+      return merged
+        ? 'Upcoming week, six segments (weekend as one block)'
+        : 'Upcoming week, no days started';
+    }
+    return merged
+      ? `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`
+      : `Day ${progress.dayIndex + 1} of 7`;
+  }, [progress, segments.length]);
 
   return (
     <View accessibilityLabel={accessibilityLabel} accessible style={styles.row}>
-      {cells.map(({i, style}) => (
-        <View key={i} style={style} />
-      ))}
+      {segments.map(seg => {
+        const base =
+          seg.kind === 'filled'
+            ? [styles.cell, {backgroundColor: filledColor, width: seg.widthPx}]
+            : seg.kind === 'current'
+              ? [styles.cell, {backgroundColor: accentColor, width: seg.widthPx}]
+              : [styles.cell, styles.cellEmpty, {borderColor: mutedColor, width: seg.widthPx}];
+        return <View key={seg.key} style={base} />;
+      })}
     </View>
   );
 }
@@ -67,7 +66,6 @@ const styles = StyleSheet.create({
   cell: {
     borderRadius: 2,
     height: CELL,
-    width: CELL,
   },
   cellEmpty: {
     backgroundColor: 'transparent',

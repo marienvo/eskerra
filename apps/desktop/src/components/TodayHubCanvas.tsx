@@ -929,7 +929,9 @@ export function TodayHubCanvas({
               </div>
               <div className="today-hub-canvas__row-date-bar today-hub-canvas__row-date-bar--footer">
                 <TodayWeekProgressBar
+                  comparisonNow={progressComparisonNow}
                   progress={todayHubWeekProgress(weekStart, progressComparisonNow)}
+                  weekStart={weekStart}
                 />
                 <span className="today-hub-canvas__row-date-end">
                   {formatHubWeekDate(weekEnd)}

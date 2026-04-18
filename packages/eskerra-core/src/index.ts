@@ -299,8 +299,12 @@ export {
   todayHubRowUri,
   todayHubRowUriFromTodayNoteUri,
   todayHubStartJsDay,
+  todayHubWeekDayIndexForJsWeekday,
+  todayHubWeekendMergePair,
+  todayHubWeekendSegmentState,
   todayHubWeekEndInclusive,
   todayHubWeekProgress,
+  todayHubWeekProgressSegments,
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
   vaultMarkdownRefIsTodayHubNote,
   vaultTodayHubMarkdownRefUriMatchesExpectedRowUri,
@@ -308,7 +312,10 @@ export {
   type TodayHubPerpetualType,
   type TodayHubSettings,
   type TodayHubStartDay,
+  type TodayHubWeekendMergePair,
   type TodayHubWeekProgress,
+  type TodayHubWeekProgressSegment,
+  type TodayHubWeekProgressSegmentKind,
 } from './todayHub';
 export type {VaultSearchHighlightSegment} from './vaultSearch/vaultSearchHighlight';
 export {
