@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {
   clearArtworkCacheForTests,
@@ -29,11 +29,6 @@ function mockFetchOnce(okXml: string): void {
     })) as unknown as typeof fetch,
   );
 }
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  clearArtworkCacheForTests();
-});
 
 describe('artworkCacheDesktop', () => {
   beforeEach(() => {

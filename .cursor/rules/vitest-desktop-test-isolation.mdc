@@ -1,0 +1,33 @@
+---
+description: Desktop Vitest harness — RTL cleanup, mocks, Tauri-safe setup, singleton resets
+globs: apps/desktop/vitest*.ts,apps/desktop/src/**/*.test.ts,apps/desktop/src/**/*.test.tsx
+alwaysApply: false
+---
+
+# Desktop Vitest test isolation
+
+Authoritative detail: `specs/adrs/adr-vitest-desktop-test-isolation.md`. PR checklist: `.github/pull_request_template.md`.
+
+## Global harness (`apps/desktop/vitest.setup.ts` + `vitest.config.ts`)
+
+- **RTL:** `import '@testing-library/react'` + explicit `cleanup()` in `afterEach` so roots/effects do not leak between tests.
+- **Timers / env / DOM:** `afterEach` restores real timers, `vi.unstubAllGlobals()` / `unstubAllEnvs()`, clears `localStorage` / `sessionStorage`, `document.body.replaceChildren()`; `beforeEach` clears cookies.
+- **`restoreMocks`:** keep **`false`** in `vitest.config.ts`. **`restoreMocks: true`** (or `vi.restoreAllMocks()` in setup) resets **`vi.mock()`** factories and breaks module mocks (e.g. `@tauri-apps/plugin-store`, `saveVaultImageBytes`). Use **`clearMocks: true`** only; use **`vi.spyOn(...).mockRestore()`** inside a test file when you need a real implementation back.
+- **`isolate: true`:** do not set `test.isolate` to `false` without superseding the ADR (ESLint flags `isolate: false` in `vitest.config.ts`).
+
+## Do not import Tauri in `vitest.setup.ts`
+
+**`setupFiles` run before test files.** Importing a module that loads `@tauri-apps/*` at **module scope** binds the real Tauri client **before** `vi.mock('@tauri-apps/...')` runs → errors like `Cannot read properties of undefined (reading 'invoke')`.
+
+- **Safe to import in setup** (no Tauri at top level): e.g. `artworkCacheDesktop`, `cleanNoteMarkdown`, `editorWorkspaceTabs`, `htmlClipboardToMarkdown`, `tableShellStaticPreviewStore` — only those wired today; extend cautiously.
+- **Not wired in setup** (Tauri / `invoke` / `plugin-store` at import): e.g. `emojiUsageStore`, `emojiColonAutocomplete`, `rssFeedUrlCacheDesktop`, `podcastPhase1Desktop`, `htmlAudioPlayer`. They still export **`__resetForTests`**; call it from **`beforeEach` / `afterEach`** in tests that mock Tauri, or split caches into a Tauri-free module if you need global reset.
+
+## New module-scoped mutable state
+
+1. Export **`__resetForTests()`** that clears Maps/timers/singletons and any lazy-init flags.
+2. If the module **does not** import `@tauri-apps/*` at top level → add one import + call in **`vitest.setup.ts`** `afterEach`.
+3. If it **does** → document in ADR-adjacent comment and reset from affected test files only.
+
+## CodeMirror / DOM
+
+Global setup does **not** call **`EditorView.destroy()`**. Tests that construct CodeMirror views must **`destroy()`** in the same test (or `afterEach` in that file).

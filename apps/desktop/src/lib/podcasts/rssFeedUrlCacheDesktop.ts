@@ -159,3 +159,10 @@ export function resolveCachedRssFeedUrl(baseUri: string, seriesName: string): st
   }
   return rssFeedUrlByNormalizedSeriesName.get(normalizedKey);
 }
+
+/** Vitest harness: clear in-memory RSS URL cache and drop queued persist chain. */
+export function __resetForTests(): void {
+  rssFeedUrlBySeriesName.clear();
+  rssFeedUrlByNormalizedSeriesName.clear();
+  persistChain = Promise.resolve();
+}

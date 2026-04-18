@@ -328,3 +328,8 @@ export function migrateOpenTabUrisToWorkspaceTabs(uris: readonly string[]): Edit
   }
   return out;
 }
+
+/** Vitest harness: reset tab id sequence so id-sensitive tests do not leak across cases. */
+export function __resetForTests(): void {
+  editorTabIdSeq = 0;
+}

@@ -1,5 +1,5 @@
 import {act, renderHook} from '@testing-library/react';
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import type {VaultSearchDonePayload, VaultSearchUpdatePayload} from '@eskerra/core';
 import {useVaultContentSearch, isVaultSearchEventCurrent} from './useVaultContentSearch';
@@ -15,10 +15,15 @@ function progress(partial: Partial<VaultSearchDonePayload['progress']> = {}): Va
   };
 }
 
-const tauriCtx = vi.hoisted(() => {
+/** Hoisted mock bridge: {@link resetTauriVaultSearchBridge} runs each test so stale handlers cannot accumulate. */
+const tauriTest = vi.hoisted(() => {
   const state = {
     emitUpdate: (_payload: VaultSearchUpdatePayload) => {},
     emitDone: (_payload: VaultSearchDonePayload) => {},
+  };
+  const resetTauriVaultSearchBridge = (): void => {
+    state.emitUpdate = (_payload: VaultSearchUpdatePayload) => {};
+    state.emitDone = (_payload: VaultSearchDonePayload) => {};
   };
   const listen = vi.fn(async (channel: string, handler: (e: {payload: unknown}) => void) => {
     if (channel === 'vault-search:update') {
@@ -28,7 +33,7 @@ const tauriCtx = vi.hoisted(() => {
     }
     return vi.fn();
   });
-  return {listen, state};
+  return {listen, state, resetTauriVaultSearchBridge};
 });
 
 const vaultSearchStartMock = vi.hoisted(() =>
@@ -37,7 +42,7 @@ const vaultSearchStartMock = vi.hoisted(() =>
 const vaultSearchCancelMock = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: tauriCtx.listen,
+  listen: tauriTest.listen,
 }));
 
 vi.mock('../lib/tauriVaultSearch', () => ({
@@ -62,6 +67,7 @@ describe('isVaultSearchEventCurrent', () => {
 describe('useVaultContentSearch', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    tauriTest.resetTauriVaultSearchBridge();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
       window.setTimeout(() => cb(0), 0),
     );
@@ -70,12 +76,7 @@ describe('useVaultContentSearch', () => {
     });
     vaultSearchStartMock.mockClear();
     vaultSearchCancelMock.mockClear();
-    tauriCtx.listen.mockClear();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.useRealTimers();
+    tauriTest.listen.mockClear();
   });
 
   async function flushListeners() {
@@ -160,7 +161,7 @@ describe('useVaultContentSearch', () => {
       vi.advanceTimersByTime(50);
     });
     await act(async () => {
-      tauriCtx.state.emitDone({
+      tauriTest.state.emitDone({
         searchId: id,
         cancelled: false,
         progress: progress({scannedFiles: 1, totalHits: 0}),
@@ -204,7 +205,7 @@ describe('useVaultContentSearch', () => {
       snippets: [{lineNumber: 1, text: 'x'}],
     };
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: firstSearchId,
         notes: [note],
         progress: progress({scannedFiles: 1, totalHits: 1}),
@@ -276,7 +277,7 @@ describe('useVaultContentSearch', () => {
       snippets: [{lineNumber: 1, text: 'old'}],
     };
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: firstId,
         notes: [oldNote],
         progress: progress({scannedFiles: 1, totalHits: 1}),
@@ -310,7 +311,7 @@ describe('useVaultContentSearch', () => {
       vi.advanceTimersByTime(50);
     });
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: secondId,
         notes: [newNote],
         progress: progress({scannedFiles: 2, totalHits: 1}),
@@ -344,7 +345,7 @@ describe('useVaultContentSearch', () => {
     });
     const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: firstId,
         notes: [
           {
@@ -377,7 +378,7 @@ describe('useVaultContentSearch', () => {
       vi.advanceTimersByTime(50);
     });
     await act(async () => {
-      tauriCtx.state.emitDone({
+      tauriTest.state.emitDone({
         searchId: secondId,
         cancelled: false,
         progress: progress({scannedFiles: 0, totalHits: 0}),
@@ -407,7 +408,7 @@ describe('useVaultContentSearch', () => {
     const firstId = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
 
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: firstId,
         notes: [
           {
@@ -434,7 +435,7 @@ describe('useVaultContentSearch', () => {
     });
 
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: firstId,
         notes: [
           {
@@ -472,7 +473,7 @@ describe('useVaultContentSearch', () => {
     const id = vaultSearchStartMock.mock.calls[0]![0].searchId as string;
 
     await act(async () => {
-      tauriCtx.state.emitDone({
+      tauriTest.state.emitDone({
         searchId: 'other-id',
         cancelled: false,
         progress: progress({scannedFiles: 1, totalHits: 0}),
@@ -481,7 +482,7 @@ describe('useVaultContentSearch', () => {
     expect(result.current.scanDone).toBe(false);
 
     await act(async () => {
-      tauriCtx.state.emitDone({
+      tauriTest.state.emitDone({
         searchId: id,
         cancelled: false,
         progress: progress({scannedFiles: 10, totalHits: 3}),
@@ -547,17 +548,17 @@ describe('useVaultContentSearch', () => {
     });
 
     await act(async () => {
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: id,
         notes: [mk('file:///a.md', '1')],
         progress: progress({scannedFiles: 1, totalHits: 1}),
       });
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: id,
         notes: [mk('file:///b.md', '2')],
         progress: progress({scannedFiles: 2, totalHits: 1}),
       });
-      tauriCtx.state.emitUpdate({
+      tauriTest.state.emitUpdate({
         searchId: id,
         notes: [mk('file:///c.md', '3')],
         progress: progress({scannedFiles: 3, totalHits: 1}),

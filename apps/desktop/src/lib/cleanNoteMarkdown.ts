@@ -911,3 +911,8 @@ function restoreBlockquoteAdmonitions(text: string, tokens: Map<string, string>)
   }
   return output;
 }
+
+/** Vitest harness: clear cached remark processors keyed by resolved options. */
+export function __resetForTests(): void {
+  processorCache.clear();
+}

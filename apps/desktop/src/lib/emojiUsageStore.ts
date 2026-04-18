@@ -155,3 +155,12 @@ export async function hydrateEmojiUsageFromStore(): Promise<void> {
     /* Ignore corrupt or missing store. */
   }
 }
+
+/** Vitest harness: clears in-memory counts and pending debounced save timer. */
+export function __resetForTests(): void {
+  if (saveTimer !== null) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  counts.clear();
+}

@@ -504,6 +504,23 @@ export class HtmlAudioPlayer implements AudioPlayer {
     await invoke('media_clear_session').catch(() => undefined);
   }
 
+  /**
+   * Vitest harness: synchronous teardown without awaiting `stop()` (avoids dangling singleton).
+   * Does not remove native `Audio` event listeners; drops listener sets so callbacks are not held.
+   */
+  resetForTestsSync(): void {
+    this.resetBufferingTracking();
+    this.audio.pause();
+    this.audio.src = '';
+    this.currentTrack = null;
+    this.endedFlag = false;
+    this.progressListeners.clear();
+    this.stateListeners.clear();
+    this.bufferingListeners.clear();
+    this.endedListeners.clear();
+    void invoke('media_clear_session').catch(() => undefined);
+  }
+
   /** Handles OS media keys / MPRIS toggle when the shell sends "play" or "toggle". */
   async resumeOrToggleFromOs(): Promise<void> {
     if (this.endedFlag || !this.audio.src) {
@@ -525,6 +542,14 @@ export function getDesktopAudioPlayer(): HtmlAudioPlayer {
     desktopPlayer = new HtmlAudioPlayer();
   }
   return desktopPlayer;
+}
+
+/** Vitest harness: release the desktop audio singleton. */
+export function __resetForTests(): void {
+  if (desktopPlayer) {
+    desktopPlayer.resetForTestsSync();
+    desktopPlayer = null;
+  }
 }
 
 /** Call after `media_cache_artwork` when artwork was not known at `play()` / `primePausedAt()`. */

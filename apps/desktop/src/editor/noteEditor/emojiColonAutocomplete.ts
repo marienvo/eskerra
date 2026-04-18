@@ -133,3 +133,9 @@ export const emojiColonCompletionSource: CompletionSource = (
     };
   });
 };
+
+/** Vitest harness: drop lazy-loaded emoji completion rows cache. */
+export function __resetForTests(): void {
+  cachedRows = null;
+  loadPromise = null;
+}

@@ -38,6 +38,11 @@ export function clearPodcastMarkdownFileContentCache(): void {
   fileContentCache.clear();
 }
 
+/** Vitest harness: same as {@link clearPodcastMarkdownFileContentCache}. */
+export function __resetForTests(): void {
+  clearPodcastMarkdownFileContentCache();
+}
+
 /** Drop cached markdown for one URI (e.g. after mark-as-played writes new content). */
 export function invalidatePodcastMarkdownFileContentCacheEntry(uri: string): void {
   fileContentCache.delete(uri);

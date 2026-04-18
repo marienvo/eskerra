@@ -1,6 +1,6 @@
 import type {VaultMarkdownRef} from '@eskerra/core';
 import {act, renderHook} from '@testing-library/react';
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {QUICK_OPEN_SEARCH_DEBOUNCE_MS, useQuickOpenSearch} from './useQuickOpenSearch';
 
@@ -13,9 +13,6 @@ const REFS: VaultMarkdownRef[] = [
 describe('useQuickOpenSearch', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('shows no results before the first debounce fires', () => {

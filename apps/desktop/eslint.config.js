@@ -8,6 +8,19 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist', 'src-tauri/target']),
   {
+    files: ['vitest.config.ts', '../../packages/*/vitest.config.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Property[key.name="isolate"][value.value=false]',
+          message:
+            'Do not set Vitest test.isolate to false without superseding specs/adrs/adr-vitest-desktop-test-isolation.md.',
+        },
+      ],
+    },
+  },
+  {
     files: ['src/editor/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
