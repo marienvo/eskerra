@@ -45,7 +45,7 @@ export function SetupScreen() {
       await saveUri(selectedDirectory.uri);
       await initEskerra(selectedDirectory.uri);
       await setSessionUri(selectedDirectory.uri);
-      navigation.replace('MainTabs', {screen: 'PodcastsTab'});
+      navigation.replace('MainTabs', {screen: 'VaultTab'});
     } catch (error) {
       const fallbackMessage =
         'Could not save this directory. Please try again.';
