@@ -208,10 +208,11 @@ describe('VaultSearchScreen', () => {
     await act(async () => {
       row!.props.onPress();
     });
-    expect(navigation.replace).toHaveBeenCalledWith('VaultNoteRead', {
+    expect(navigation.navigate).toHaveBeenCalledWith('VaultNoteRead', {
       noteUri: 'content://tree/v/doc.md',
       noteTitle: 'MyNote',
     });
+    expect(navigation.replace).not.toHaveBeenCalled();
     expect(navigation.goBack).not.toHaveBeenCalled();
   });
 

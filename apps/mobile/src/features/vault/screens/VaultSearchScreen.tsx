@@ -144,7 +144,8 @@ export function VaultSearchScreen({navigation}: Props) {
 
   const onPick = useCallback(
     (uri: string, title: string) => {
-      navigation.replace('VaultNoteRead', {noteUri: uri, noteTitle: title});
+      // Push on top of VaultSearch so back from the reader returns here with query + results intact.
+      navigation.navigate('VaultNoteRead', {noteUri: uri, noteTitle: title});
     },
     [navigation],
   );
