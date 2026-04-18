@@ -12,6 +12,7 @@ class VaultListingPackage : ReactPackage {
       com.eskerra.vaultsearch.VaultSearchModule(reactContext),
       PodcastArtworkCacheModule(reactContext),
       PodcastRssSyncModule(reactContext),
+      AndroidShareIntentModule(reactContext),
     )
   }
 

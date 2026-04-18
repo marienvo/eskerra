@@ -139,6 +139,17 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
     };
   }, [editParams?.noteUri, read, setStatusText]);
 
+  useEffect(() => {
+    if (isEdit) {
+      return;
+    }
+    const draft = editParams?.initialComposeText?.trim();
+    if (!draft) {
+      return;
+    }
+    setComposeInput(draft);
+  }, [editParams?.initialComposeText, isEdit]);
+
   useLayoutEffect(() => {
     if (!isInboxComposeStack(stackNavigation)) {
       return;
