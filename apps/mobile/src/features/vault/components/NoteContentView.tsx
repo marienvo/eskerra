@@ -40,7 +40,9 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
     vaultMarkdownRefs,
     isVaultMarkdownRefsLoading,
     vaultMarkdownRefsError,
-  } = useVaultMarkdownRefs(baseUri);
+    vaultMarkdownRefsStatus,
+    refreshVaultMarkdownRefs,
+  } = useVaultMarkdownRefs();
   const headerFileName = fileNameFromUri(noteUri);
   const [content, setContent] = useState(
     () => getInboxNoteContentFromCache(noteUri) ?? '',
@@ -71,6 +73,13 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
     [onNavigateToVaultNote],
   );
 
+  const wikiIndexStatus =
+    vaultMarkdownRefsStatus === 'ready'
+      ? 'ready'
+      : vaultMarkdownRefsStatus === 'error'
+        ? 'error'
+        : 'loading';
+
   const vaultRules = useMemo(
     () =>
       createVaultReadonlyMarkdownRules({
@@ -78,10 +87,20 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
         currentNoteUri: noteUri,
         noteRefs: vaultMarkdownRefs,
         markdownMutedColor,
+        wikiIndexStatus,
+        onRefreshWikiIndex: refreshVaultMarkdownRefs,
         onOpenInternalNote: openInternalNote,
         onWikiAmbiguous: setWikiPick,
       }),
-    [baseUri, markdownMutedColor, noteUri, openInternalNote, vaultMarkdownRefs],
+    [
+      baseUri,
+      markdownMutedColor,
+      noteUri,
+      openInternalNote,
+      refreshVaultMarkdownRefs,
+      vaultMarkdownRefs,
+      wikiIndexStatus,
+    ],
   );
 
   const markdownRules = useMemo(

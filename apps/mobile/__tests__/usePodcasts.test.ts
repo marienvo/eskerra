@@ -174,7 +174,9 @@ describe('usePodcasts loading lifecycle', () => {
       isLoading: false,
       pruneInboxNoteContentFromCache: jest.fn(),
       refreshSession: jest.fn(async () => undefined),
+      refreshVaultMarkdownRefs: jest.fn(),
       replaceInboxContentFromSession: jest.fn(),
+      scheduleDebouncedVaultMarkdownRefsRefresh: jest.fn(),
       setInboxNoteContentInCache: jest.fn(),
       localSettings: null,
       setLocalSettings: jest.fn(),
@@ -183,6 +185,9 @@ describe('usePodcasts loading lifecycle', () => {
       setSettings: jest.fn(),
       playlistSyncGeneration: 0,
       notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
+      vaultMarkdownRefs: [],
+      vaultMarkdownRefsError: null,
+      vaultMarkdownRefsStatus: 'idle',
     });
 
     readPlaylistMock.mockResolvedValue(null);

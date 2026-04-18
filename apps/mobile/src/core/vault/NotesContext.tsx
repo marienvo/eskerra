@@ -94,6 +94,7 @@ export function NotesProvider({children}: NotesProviderProps) {
     notifyPlaylistSyncAfterVaultRefresh,
     pruneInboxNoteContentFromCache,
     replaceInboxContentFromSession,
+    scheduleDebouncedVaultMarkdownRefsRefresh,
     setInboxNoteContentInCache,
   } = useVaultContext();
   const [error, setError] = useState<string | null>(null);
@@ -168,13 +169,14 @@ export function NotesProvider({children}: NotesProviderProps) {
         occupiedInboxMarkdownNames,
       );
       touchVaultSearchNoteUris(baseUri, [createdNote.uri]).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       setNotes(previousNotes => mergeInboxNoteOptimistic(previousNotes, createdNote));
       InteractionManager.runAfterInteractions(() => {
         refresh({silent: true}).catch(() => undefined);
       });
       return createdNote;
     },
-    [baseUri, notes, refresh],
+    [baseUri, notes, refresh, scheduleDebouncedVaultMarkdownRefsRefresh],
   );
 
   const read = useCallback(
@@ -224,6 +226,7 @@ export function NotesProvider({children}: NotesProviderProps) {
 
       await deleteInboxNotes(baseUri, canonicalDeleteUris);
       touchVaultSearchNoteUris(baseUri, canonicalDeleteUris).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       pruneInboxNoteContentFromCache(canonicalDeleteUris);
       const removedUris = new Set(canonicalNotes.map(note => note.uri));
       setNotes(previousNotes =>
@@ -233,17 +236,18 @@ export function NotesProvider({children}: NotesProviderProps) {
         refresh({silent: true}).catch(() => undefined);
       });
     },
-    [baseUri, notes, pruneInboxNoteContentFromCache, refresh],
+    [baseUri, notes, pruneInboxNoteContentFromCache, refresh, scheduleDebouncedVaultMarkdownRefsRefresh],
   );
 
   const write = useCallback(
     async (noteUri: string, content: string) => {
       await writeNoteContent(noteUri, content);
       touchVaultSearchNoteUris(baseUri, [noteUri]).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       setInboxNoteContentInCache(noteUri, content);
       await refresh();
     },
-    [baseUri, refresh, setInboxNoteContentInCache],
+    [baseUri, refresh, scheduleDebouncedVaultMarkdownRefsRefresh, setInboxNoteContentInCache],
   );
 
   const value = useMemo(

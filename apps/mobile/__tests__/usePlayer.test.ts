@@ -268,7 +268,9 @@ describe('usePlayer restore state', () => {
       isLoading: false,
       pruneInboxNoteContentFromCache: jest.fn(),
       refreshSession: jest.fn(async () => undefined),
+      refreshVaultMarkdownRefs: jest.fn(),
       replaceInboxContentFromSession: jest.fn(),
+      scheduleDebouncedVaultMarkdownRefsRefresh: jest.fn(),
       setInboxNoteContentInCache: jest.fn(),
       localSettings: {
         deviceInstanceId: 'test-device-instance',
@@ -283,6 +285,9 @@ describe('usePlayer restore state', () => {
       setSettings: jest.fn(),
       playlistSyncGeneration: playlistSyncGenRef.current,
       notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
+      vaultMarkdownRefs: [],
+      vaultMarkdownRefsError: null,
+      vaultMarkdownRefsStatus: 'idle',
     }));
 
     writePlaylistMock.mockImplementation(async (_uri, entry) => ({

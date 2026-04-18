@@ -1,4 +1,9 @@
 import {
+  collectVaultMarkdownRefs,
+  stemFromMarkdownFileName,
+  type VaultMarkdownRef,
+} from '@eskerra/core';
+import {
   createContext,
   ReactNode,
   useCallback,
@@ -8,8 +13,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import {Platform} from 'react-native';
+import {InteractionManager, Platform} from 'react-native';
 
+import {tryListVaultMarkdownRefsNative} from '../storage/androidVaultListing';
+import {safVaultFilesystem} from '../storage/safVaultFilesystem';
 import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../observability';
 import {elapsedMsSinceJsBundleEval} from '../observability/startupTiming';
 import {getSavedUri} from '../storage/appStorage';
@@ -23,11 +30,18 @@ import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 import {eskerraVaultSearch} from '../../native/eskerraVaultSearch';
 import {requestVaultSearchIndexWarmup} from '../../features/vault/vaultSearchIndexMaintenance';
 import {prepareVaultSession} from './applyVaultSession';
+import {
+  buildMockVaultMarkdownRefs,
+  isDevMockVaultBaseUri,
+  normalizeVaultMarkdownRefsBaseUri,
+} from './vaultMarkdownRefsSession';
 
 type InboxContentCacheSession = {
   map: Map<string, string>;
   uri: string;
 };
+
+export type VaultMarkdownRefsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type VaultContextValue = {
   baseUri: string | null;
@@ -48,6 +62,11 @@ type VaultContextValue = {
   setLocalSettings: (next: EskerraLocalSettings) => void;
   playlistSyncGeneration: number;
   notifyPlaylistSyncAfterVaultRefresh: () => void;
+  vaultMarkdownRefs: readonly VaultMarkdownRef[];
+  vaultMarkdownRefsStatus: VaultMarkdownRefsStatus;
+  vaultMarkdownRefsError: string | null;
+  refreshVaultMarkdownRefs: () => void;
+  scheduleDebouncedVaultMarkdownRefsRefresh: () => void;
 };
 
 const VaultContext = createContext<VaultContextValue | null>(null);
@@ -105,6 +124,28 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         )
       : null,
   );
+
+  const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<readonly VaultMarkdownRef[]>([]);
+  const [vaultMarkdownRefsStatus, setVaultMarkdownRefsStatus] =
+    useState<VaultMarkdownRefsStatus>('idle');
+  const [vaultMarkdownRefsError, setVaultMarkdownRefsError] = useState<string | null>(null);
+  const [vaultMarkdownRefsRefreshNonce, setVaultMarkdownRefsRefreshNonce] = useState(0);
+  const vaultMarkdownRefsAbortRef = useRef<AbortController | null>(null);
+  const vaultMarkdownRefsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const refreshVaultMarkdownRefs = useCallback(() => {
+    setVaultMarkdownRefsRefreshNonce(n => n + 1);
+  }, []);
+
+  const scheduleDebouncedVaultMarkdownRefsRefresh = useCallback(() => {
+    if (vaultMarkdownRefsDebounceRef.current) {
+      clearTimeout(vaultMarkdownRefsDebounceRef.current);
+    }
+    vaultMarkdownRefsDebounceRef.current = setTimeout(() => {
+      vaultMarkdownRefsDebounceRef.current = null;
+      setVaultMarkdownRefsRefreshNonce(n => n + 1);
+    }, 1000);
+  }, []);
 
   const clearSessionPrefetchRefs = useCallback(() => {
     inboxPrefetchRef.current = null;
@@ -183,6 +224,106 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     return pending.notes;
   }, []);
 
+  useEffect(() => {
+    vaultMarkdownRefsAbortRef.current?.abort();
+    if (vaultMarkdownRefsDebounceRef.current && (baseUri == null || baseUri.trim() === '')) {
+      clearTimeout(vaultMarkdownRefsDebounceRef.current);
+      vaultMarkdownRefsDebounceRef.current = null;
+    }
+
+    if (baseUri == null || baseUri.trim() === '') {
+      setVaultMarkdownRefs([]);
+      setVaultMarkdownRefsStatus('idle');
+      setVaultMarkdownRefsError(null);
+      return;
+    }
+
+    const normalizedBase = normalizeVaultMarkdownRefsBaseUri(baseUri);
+
+    if (isDevMockVaultBaseUri(normalizedBase)) {
+      setVaultMarkdownRefs(buildMockVaultMarkdownRefs());
+      setVaultMarkdownRefsStatus('ready');
+      setVaultMarkdownRefsError(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    vaultMarkdownRefsAbortRef.current = ac;
+    setVaultMarkdownRefsStatus('loading');
+    setVaultMarkdownRefsError(null);
+    setVaultMarkdownRefs([]);
+
+    const runMarkdownRefsIndex = async (): Promise<void> => {
+      try {
+        let rows: VaultMarkdownRef[] | undefined;
+
+        if (Platform.OS === 'android') {
+          const nativeRows = await tryListVaultMarkdownRefsNative(normalizedBase);
+          if (ac.signal.aborted) {
+            return;
+          }
+          if (nativeRows != null) {
+            rows = nativeRows.map(r => ({
+              name: stemFromMarkdownFileName(r.fileName),
+              uri: r.uri,
+            }));
+            rows.sort((a, b) => {
+              const byName = a.name.localeCompare(b.name);
+              return byName !== 0 ? byName : a.uri.localeCompare(b.uri);
+            });
+          }
+        }
+
+        if (rows === undefined) {
+          ac.signal.throwIfAborted();
+          rows = await collectVaultMarkdownRefs(normalizedBase, safVaultFilesystem, {
+            signal: ac.signal,
+          });
+        }
+
+        if (ac.signal.aborted) {
+          return;
+        }
+        setVaultMarkdownRefs(rows);
+        setVaultMarkdownRefsStatus('ready');
+        appBreadcrumb({
+          category: 'vault',
+          message: 'vault.markdown_refs.ready',
+          data: {note_count: rows.length},
+        });
+      } catch (e) {
+        if (ac.signal.aborted) {
+          return;
+        }
+        if (e instanceof Error && e.name === 'AbortError') {
+          return;
+        }
+        const message = e instanceof Error ? e.message : 'Could not index vault notes.';
+        setVaultMarkdownRefsError(message);
+        setVaultMarkdownRefs([]);
+        setVaultMarkdownRefsStatus('error');
+      }
+    };
+
+    const cancelable = InteractionManager.runAfterInteractions(() => {
+      runMarkdownRefsIndex().catch(() => undefined);
+    });
+
+    return () => {
+      ac.abort();
+      cancelable.cancel();
+    };
+  }, [baseUri, vaultMarkdownRefsRefreshNonce]);
+
+  useEffect(() => {
+    return () => {
+      if (vaultMarkdownRefsDebounceRef.current) {
+        clearTimeout(vaultMarkdownRefsDebounceRef.current);
+        vaultMarkdownRefsDebounceRef.current = null;
+      }
+    };
+  }, []);
+
   const applyVaultSessionUri = useCallback(async (nextUri: string) => {
     clearSessionPrefetchRefs();
 
@@ -208,6 +349,10 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     async (nextUri: string | null) => {
       if (!nextUri) {
         clearSessionPrefetchRefs();
+        vaultMarkdownRefsAbortRef.current?.abort();
+        setVaultMarkdownRefs([]);
+        setVaultMarkdownRefsStatus('idle');
+        setVaultMarkdownRefsError(null);
         setBaseUri(null);
         setSettings(null);
         setLocalSettings(null);
@@ -241,6 +386,10 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
 
       if (!savedUri) {
         clearSessionPrefetchRefs();
+        vaultMarkdownRefsAbortRef.current?.abort();
+        setVaultMarkdownRefs([]);
+        setVaultMarkdownRefsStatus('idle');
+        setVaultMarkdownRefsError(null);
         setBaseUri(null);
         setSettings(null);
         setLocalSettings(null);
@@ -266,6 +415,10 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       });
     } catch (error) {
       clearSessionPrefetchRefs();
+      vaultMarkdownRefsAbortRef.current?.abort();
+      setVaultMarkdownRefs([]);
+      setVaultMarkdownRefsStatus('idle');
+      setVaultMarkdownRefsError(null);
       setBaseUri(null);
       setSettings(null);
       setLocalSettings(null);
@@ -342,6 +495,11 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       setLocalSettings,
       playlistSyncGeneration,
       notifyPlaylistSyncAfterVaultRefresh,
+      vaultMarkdownRefs,
+      vaultMarkdownRefsStatus,
+      vaultMarkdownRefsError,
+      refreshVaultMarkdownRefs,
+      scheduleDebouncedVaultMarkdownRefsRefresh,
     }),
     [
       baseUri,
@@ -354,10 +512,15 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       playlistSyncGeneration,
       pruneInboxNoteContentFromCache,
       refreshSession,
+      refreshVaultMarkdownRefs,
       replaceInboxContentFromSession,
+      scheduleDebouncedVaultMarkdownRefsRefresh,
       setInboxNoteContentInCache,
       setSessionUri,
       settings,
+      vaultMarkdownRefs,
+      vaultMarkdownRefsError,
+      vaultMarkdownRefsStatus,
     ],
   );
 

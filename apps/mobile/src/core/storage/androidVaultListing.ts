@@ -4,10 +4,14 @@ import {DEV_MOCK_VAULT_URI} from '../../dev/mockVaultData';
 import {NoteSummary} from '../../types';
 import {normalizeNoteUri} from './noteUriNormalize';
 
+type NativeVaultMarkdownRefRow = {fileName: string; uri: string};
+
 type NativeVaultListingModule = {
   listMarkdownFiles: (
     directoryUri: string,
   ) => Promise<Array<{lastModified?: number | null; name: string; uri: string}>>;
+  /** Full-vault walk (Android); same eligibility rules as `collectVaultMarkdownRefs`. */
+  listVaultMarkdownRefs?: (baseUri: string) => Promise<NativeVaultMarkdownRefRow[]>;
   prepareEskerraSession?: (
     baseUri: string,
   ) => Promise<
@@ -71,6 +75,32 @@ export async function tryListMarkdownFilesNative(
       name: row.name,
       lastModified: typeof row.lastModified === 'number' ? row.lastModified : null,
     }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full-vault markdown ref index for wiki links. Uses native DocumentFile walk (reliable tree URIs);
+ * returns null when the method is missing or fails so callers can fall back to JS SAF walk.
+ */
+export async function tryListVaultMarkdownRefsNative(
+  baseUri: string,
+): Promise<NativeVaultMarkdownRefRow[] | null> {
+  if (Platform.OS !== 'android') {
+    return null;
+  }
+  if (baseUri.trim() === DEV_MOCK_VAULT_URI) {
+    return null;
+  }
+
+  const mod = NativeModules.EskerraVaultListing as NativeVaultListingModule | undefined;
+  if (mod?.listVaultMarkdownRefs == null) {
+    return null;
+  }
+
+  try {
+    return await mod.listVaultMarkdownRefs(baseUri.trim());
   } catch {
     return null;
   }
