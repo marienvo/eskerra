@@ -163,6 +163,10 @@ export type UseDesktopPodcastPlaybackResult = {
   waitForPersistFlushed: (timeoutMs: number) => Promise<void>;
   /** True while the native element is `playing` (episode list locked). */
   episodeSelectLocked: boolean;
+  /**
+   * True while local playback transport is `playing`, `buffering`, or `loading` (e.g. pause R2 polling).
+   */
+  localPlaybackActive: boolean;
   playbackTransportPlayControl: PlaybackTransportPlayControl;
   seekDisabled: boolean;
 };
@@ -306,6 +310,11 @@ export function useDesktopPodcastPlayback({
       }),
     [snapCtx, snapshot.value],
   );
+
+  const localPlaybackActive =
+    playbackTransportPlayControl === 'playing' ||
+    playbackTransportPlayControl === 'buffering' ||
+    playbackTransportPlayControl === 'loading';
 
   const activeEpisodeId = snapCtx.episode?.id ?? null;
 
@@ -882,6 +891,7 @@ export function useDesktopPodcastPlayback({
     activeEpisodePlayControl: playbackTransportPlayControl,
     durationMs: snapCtx.durationMs,
     episodeSelectLocked: snapCtx.native === 'playing',
+    localPlaybackActive,
     markEpisodePlayed,
     playEpisode,
     playerLabel,

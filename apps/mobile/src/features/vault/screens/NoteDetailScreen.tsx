@@ -12,11 +12,11 @@ import {splitYamlFrontmatter} from '@eskerra/core';
 import {normalizeNoteUri} from '../../../core/storage/noteUriNormalize';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {isNavigateToAddNoteAction} from '../../../navigation/navigationActionGuards';
-import {VaultStackParamList} from '../../../navigation/types';
+import {InboxStackParamList} from '../../../navigation/types';
 import {createCalloutMarkdownRules} from '../markdown/calloutRule';
 import {useNotes} from '../hooks/useNotes';
 
-type NoteDetailScreenProps = StackScreenProps<VaultStackParamList, 'NoteDetail'>;
+type NoteDetailScreenProps = StackScreenProps<InboxStackParamList, 'NoteDetail'>;
 
 function noteFileNameFromRoute(route: NoteDetailScreenProps['route']): string {
   if (route.params.noteFileName?.trim()) {
@@ -110,15 +110,15 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       return;
     }
 
-    const showVaultTabHeader = () => {
+    const showInboxTabHeader = () => {
       tabNavigation.setOptions({
         headerShown: true,
         headerLeft: undefined,
-        headerTitle: 'Log',
+        headerTitle: 'Inbox',
       });
     };
 
-    const hideVaultTabHeader = () => {
+    const hideInboxTabHeader = () => {
       tabNavigation.setOptions({
         headerShown: false,
       });
@@ -146,7 +146,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       if (event.data.closing) {
         return;
       }
-      hideVaultTabHeader();
+      hideInboxTabHeader();
       showNoteStackHeader();
     });
 
@@ -155,7 +155,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
         return;
       }
       hideNoteStackHeader();
-      showVaultTabHeader();
+      showInboxTabHeader();
     });
 
     const unsubscribeBeforeRemove = navigation.addListener('beforeRemove', e => {
@@ -163,7 +163,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       if (isNavigateToAddNoteAction(e.data.action)) {
         return;
       }
-      showVaultTabHeader();
+      showInboxTabHeader();
     });
 
     return () => {
@@ -171,7 +171,7 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
       unsubscribeTransitionStart();
       unsubscribeBeforeRemove();
       hideNoteStackHeader();
-      showVaultTabHeader();
+      showInboxTabHeader();
     };
   }, [navigation, headerFileName, route.params.noteTitle, route.params.noteUri]);
 

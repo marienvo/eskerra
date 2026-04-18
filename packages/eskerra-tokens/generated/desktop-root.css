@@ -17,6 +17,15 @@
   --color-brand-surface-bright: rgb(250, 250, 250);
   --color-interactive-text: rgb(203, 77, 73);
 
+  /*
+   * Vault read-only markdown (wiki + browser links). Light = current editor surfaces; *-on-dark for
+   * dark reader / future dark editor — specs/design/vault-readonly-link-colors.md
+   */
+  --color-vault-readonly-link-internal: rgb(203, 77, 73);
+  --color-vault-readonly-link-external: #4FAFE6;
+  --color-vault-readonly-link-internal-on-dark: #FF8A82;
+  --color-vault-readonly-link-external-on-dark: #7DCCFF;
+
   /* Foundation — app shell uses soft gray; panels use near-white surfaces */
   --color-bg: var(--color-brand-bg);
   --color-surface: rgb(250, 250, 250);

@@ -6,7 +6,7 @@ import type {
   VaultSearchNoteResult,
   VaultSearchProgress,
   VaultSearchUpdatePayload,
-} from '../lib/vaultSearchTypes';
+} from '@eskerra/core';
 import {vaultSearchCancel, vaultSearchStart} from '../lib/tauriVaultSearch';
 
 /** Trailing idle after typing before starting a search run (palette: no `Searching…` until a run actually starts). */

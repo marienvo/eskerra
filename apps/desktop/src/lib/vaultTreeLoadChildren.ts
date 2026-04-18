@@ -3,19 +3,13 @@ import {
   isEligibleVaultMarkdownFileName,
   type VaultDirEntry,
   type VaultFilesystem,
+  VAULT_TREE_TODAY_HUB_NOTE_NAME,
+  vaultUriIsTodayMarkdownFile,
 } from '@eskerra/core';
 
 import type {MutableRefObject} from 'react';
 
-/** Eligible markdown files with this exact name inside a directory make that directory a Today hub. */
-export const VAULT_TREE_TODAY_HUB_NOTE_NAME = 'Today.md';
-
-/** Last path segment is exactly {@link VAULT_TREE_TODAY_HUB_NOTE_NAME} (vault URI; normalizes `\\`). */
-export function vaultUriIsTodayMarkdownFile(uri: string): boolean {
-  const norm = uri.replace(/\\/g, '/').replace(/\/+$/, '');
-  const seg = norm.split('/').pop() ?? '';
-  return seg === VAULT_TREE_TODAY_HUB_NOTE_NAME;
-}
+export {VAULT_TREE_TODAY_HUB_NOTE_NAME, vaultUriIsTodayMarkdownFile};
 
 export type VaultTreeItemData = {
   kind: 'folder' | 'article' | 'todayHub';

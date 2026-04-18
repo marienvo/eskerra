@@ -61,7 +61,6 @@ describe('noteMarkdownCellEditor table keymap vs completion', () => {
   afterEach(() => {
     view?.destroy();
     view = null;
-    document.body.replaceChildren();
   });
 
   it('Enter accepts wiki completion instead of running onEnterFromCell', async () => {

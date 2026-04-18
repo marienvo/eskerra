@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 
-import {TODAY_HUB_SECTION_DELIMITER} from '../todayHubSectionDelimiter';
-import {mergeTodayHubRowAfterCleaningNonEmptyColumns} from '../cleanTodayHubRowColumns';
+import {mergeTodayHubRowAfterCleaningNonEmptyColumns} from './cleanTodayHubRowColumns';
+import {TODAY_HUB_SECTION_DELIMITER} from './todayHubSectionDelimiter';
 
 describe('mergeTodayHubRowAfterCleaningNonEmptyColumns', () => {
   it('leaves empty columns untouched and preserves delimiter structure', () => {

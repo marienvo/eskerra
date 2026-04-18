@@ -1,21 +1,6 @@
 import {describe, expect, it} from 'vitest';
 
-import {
-  pickDefaultActiveTodayHubUri,
-  sortedTodayHubNoteUrisFromRefs,
-} from './todayHubWorkspaceRestore';
-
-describe('sortedTodayHubNoteUrisFromRefs', () => {
-  it('filters and sorts Today.md paths', () => {
-    expect(
-      sortedTodayHubNoteUrisFromRefs([
-        {uri: '/v/B/Today.md'},
-        {uri: '/v/A/Today.md'},
-        {uri: '/v/x.md'},
-      ]),
-    ).toEqual(['/v/A/Today.md', '/v/B/Today.md']);
-  });
-});
+import {pickDefaultActiveTodayHubUri} from './todayHubWorkspaceRestore';
 
 describe('pickDefaultActiveTodayHubUri', () => {
   const hubs = ['/v/a/Today.md', '/v/b/Today.md'];

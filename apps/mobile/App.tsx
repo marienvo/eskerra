@@ -37,6 +37,7 @@ type VaultInitialSession = {
   localSettings: EskerraLocalSettings;
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
+  todayHubContentByUri: Record<string, string> | null;
 };
 
 function App() {
@@ -131,6 +132,7 @@ function App() {
               localSettings: prepared.localSettings,
               inboxContentByUri: prepared.inboxContentByUri,
               inboxPrefetch: prepared.inboxPrefetch,
+              todayHubContentByUri: prepared.todayHubContentByUri,
             };
 
             setInitialSession(initial);

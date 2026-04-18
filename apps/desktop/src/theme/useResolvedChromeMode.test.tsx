@@ -1,13 +1,13 @@
 import {renderHook, act} from '@testing-library/react';
-import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {useResolvedChromeMode} from './useResolvedChromeMode';
 
 describe('useResolvedChromeMode', () => {
-  let listener: (() => void) | null = null;
+  const darkSchemeListener = {current: null as (() => void) | null};
 
   beforeEach(() => {
-    listener = null;
+    darkSchemeListener.current = null;
     vi.stubGlobal(
       'matchMedia',
       vi.fn((query: string) => ({
@@ -17,18 +17,14 @@ describe('useResolvedChromeMode', () => {
         media: query,
         addEventListener: (_: string, fn: () => void) => {
           if (query === '(prefers-color-scheme: dark)') {
-            listener = fn;
+            darkSchemeListener.current = fn;
           }
         },
         removeEventListener: () => {
-          listener = null;
+          darkSchemeListener.current = null;
         },
       })),
     );
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   it('returns light and dark for fixed modes', () => {
@@ -42,6 +38,7 @@ describe('useResolvedChromeMode', () => {
   });
 
   it('updates when prefers-color-scheme changes in auto', () => {
+    const listener = {current: null as (() => void) | null};
     let prefersDark = true;
     vi.stubGlobal(
       'matchMedia',
@@ -55,10 +52,10 @@ describe('useResolvedChromeMode', () => {
           },
           media: query,
           addEventListener: (_: string, fn: () => void) => {
-            listener = fn;
+            listener.current = fn;
           },
           removeEventListener: () => {
-            listener = null;
+            listener.current = null;
           },
         };
         return mq;
@@ -70,7 +67,7 @@ describe('useResolvedChromeMode', () => {
 
     act(() => {
       prefersDark = false;
-      listener?.();
+      listener.current?.();
     });
     expect(result.current).toBe('light');
   });

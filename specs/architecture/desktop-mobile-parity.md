@@ -19,6 +19,7 @@ The following are **identical on disk** once a vault root is chosen:
 | Selected root | SAF **tree URI** persisted in AsyncStorage (`notesDirectoryUri`) | **Absolute POSIX path**; session in Tauri + persisted path in the app store plugin (`eskerra-desktop.json` under the app data dir) |
 | File API | `react-native-saf-x` via `safVaultFilesystem` implementing `VaultFilesystem` | Tauri **`vault_*` commands** (Rust `std::fs`) implementing the same `VaultFilesystem` surface for the web UI |
 | Indexing / listing | SAF + optional Kotlin `EskerraVaultListing` acceleration | POSIX `read_dir` via `vault_list_dir` (no RSS batch sync in MVP) |
+| Full-vault content search | SQLite **FTS5** in Kotlin `EskerraVaultSearch` (lazy index on Vault tab focus); see [`mobile-vault-search.md`](mobile-vault-search.md) | Tantivy + Rust (`vault_search*`) in Tauri; shared types + highlight helpers in `@eskerra/core` |
 
 ## Feature matrix (MVP vs deferred)
 

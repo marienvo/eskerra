@@ -9,6 +9,7 @@ class VaultListingPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
     return listOf(
       VaultListingModule(reactContext),
+      com.eskerra.vaultsearch.VaultSearchModule(reactContext),
       PodcastArtworkCacheModule(reactContext),
       PodcastRssSyncModule(reactContext),
     )

@@ -28,3 +28,10 @@ export function bumpTableShellStaticPreview(): void {
     });
   }
 }
+
+/** Vitest harness: reset preview version and subscriber set. */
+export function __resetForTests(): void {
+  version = 0;
+  bumpCoalesceScheduled = false;
+  listeners.clear();
+}

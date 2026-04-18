@@ -94,6 +94,7 @@ describe('VaultProvider initialSession hydration', () => {
     prepareVaultSessionMock.mockResolvedValue({
       inboxContentByUri: null,
       inboxPrefetch: null,
+      todayHubContentByUri: null,
       localSettings: initialSession.localSettings,
       sessionPrep: 'legacy',
       settings: initialSession.settings,

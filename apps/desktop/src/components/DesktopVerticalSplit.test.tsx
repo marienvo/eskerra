@@ -1,11 +1,7 @@
-import {cleanup, render, screen} from '@testing-library/react';
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {render, screen} from '@testing-library/react';
+import {describe, expect, it, vi} from 'vitest';
 
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
-
-afterEach(() => {
-  cleanup();
-});
 
 describe('DesktopVerticalSplit', () => {
   it('omits the resize separator and bottom when bottomCollapsed', () => {

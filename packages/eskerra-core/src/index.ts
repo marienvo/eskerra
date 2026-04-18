@@ -257,6 +257,59 @@ export {
   vaultPathDirname,
   VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES,
 } from './vaultVisibility';
+export type {
+  VaultSearchBestField,
+  VaultSearchDonePayload,
+  VaultSearchIndexProgress,
+  VaultSearchIndexStatusEvent,
+  VaultSearchIndexStatusPayload,
+  VaultSearchNoteResult,
+  VaultSearchNoteSnippet,
+  VaultSearchProgress,
+  VaultSearchUpdatePayload,
+} from './vaultSearch/vaultSearchTypes';
+export {
+  compareVaultSearchNotes,
+  vaultSearchBestFieldRank,
+} from './vaultSearch/vaultSearchTypes';
+export {
+  mergeTodayHubRowAfterCleaningNonEmptyColumns,
+  TODAY_HUB_SECTION_DELIMITER,
+  TODAY_HUB_START_DAYS,
+  enumerateTodayHubMondays,
+  enumerateTodayHubWeekStarts,
+  formatTodayHubMondayStem,
+  mergeTodayRowColumns,
+  normalizeTodayHubRowForDisk,
+  parseTodayHubFrontmatter,
+  sortedTodayHubNoteUrisFromRefs,
+  splitTodayRowIntoColumns,
+  startOfLocalWeek,
+  startOfLocalWeekMonday,
+  stripTodayHubDelimiterOnlyLinesFromColumn,
+  todayHubColumnCount,
+  todayHubDirectoryUriFromTodayNoteUri,
+  todayHubFolderLabelFromTodayNoteUri,
+  todayHubFolderLabelFromUri,
+  todayHubFolderLabelFromVaultMarkdownRef,
+  todayHubRowSectionsAllBlank,
+  todayHubRowUri,
+  todayHubRowUriFromTodayNoteUri,
+  todayHubStartJsDay,
+  todayHubWeekEndInclusive,
+  VAULT_TREE_TODAY_HUB_NOTE_NAME,
+  vaultMarkdownRefIsTodayHubNote,
+  vaultUriIsTodayMarkdownFile,
+  type TodayHubPerpetualType,
+  type TodayHubSettings,
+  type TodayHubStartDay,
+} from './todayHub';
+export type {VaultSearchHighlightSegment} from './vaultSearch/vaultSearchHighlight';
+export {
+  VAULT_SEARCH_HIGHLIGHT_MIN_TOKEN_CHARS,
+  vaultSearchHighlightNeedles,
+  vaultSearchHighlightSegments,
+} from './vaultSearch/vaultSearchHighlight';
 export {
   ASSETS_DIRECTORY_NAME,
   ATTACHMENTS_DIRECTORY_NAME,

@@ -10,12 +10,21 @@ jest.mock('../src/core/storage/androidVaultListing', () => ({
   tryPrepareEskerraSessionNative: jest.fn(),
 }));
 
+jest.mock('../src/core/storage/sessionTodayHubPrefetch', () => ({
+  resolveTodayHubPrefetchUrisForSession: jest.fn(() => Promise.resolve(undefined)),
+}));
+
 jest.mock('../src/core/storage/eskerraStorage', () => ({
   createNote: jest.fn(),
   deleteInboxNotes: jest.fn(),
   listNotes: jest.fn(),
   readNote: jest.fn(),
   writeNoteContent: jest.fn(),
+}));
+
+jest.mock('../src/native/eskerraVaultSearch', () => ({
+  touchVaultSearchNoteUris: jest.fn(() => Promise.resolve()),
+  touchMarkdownNoteUris: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('../src/core/storage/appStorage', () => ({
@@ -63,6 +72,7 @@ describe('NotesContext refresh', () => {
       inboxContentByUri: {[noteUri]: '# Title From H1\n'},
       inboxPrefetch: [{lastModified: 1, name: 'a.md', uri: noteUri}],
       settingsJson: '{"displayName":"Vault"}\n',
+      todayHubContentByUri: null,
     });
 
     const snapshotHolder: {current: HarnessSnapshot | null} = {current: null};
@@ -94,7 +104,10 @@ describe('NotesContext refresh', () => {
       await flushPromises();
     });
 
-    expect(tryPrepareMock).toHaveBeenCalledWith(vaultUri);
+    expect(tryPrepareMock).toHaveBeenCalledWith(
+      vaultUri,
+      expect.objectContaining({prefetchNoteUris: undefined}),
+    );
     expect(listNotesMock).not.toHaveBeenCalled();
     const snap1 = snapshotHolder.current;
     expect(snap1).not.toBeNull();
@@ -137,7 +150,10 @@ describe('NotesContext refresh', () => {
       await flushPromises();
     });
 
-    expect(tryPrepareMock).toHaveBeenCalledWith(vaultUri);
+    expect(tryPrepareMock).toHaveBeenCalledWith(
+      vaultUri,
+      expect.objectContaining({prefetchNoteUris: undefined}),
+    );
     expect(listNotesMock).toHaveBeenCalledWith(vaultUri);
     const snap2 = snapshotHolder.current;
     expect(snap2).not.toBeNull();

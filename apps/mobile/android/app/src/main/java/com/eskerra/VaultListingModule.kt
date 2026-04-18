@@ -9,10 +9,14 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import com.eskerra.vaultsearch.VaultPath
+import com.eskerra.vaultsearch.VaultSearchModule
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import java.util.concurrent.Executors
 
 /**
@@ -56,10 +60,14 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
    * string) and `inboxNotes` (array of uri/name/lastModified).
    */
   @ReactMethod
-  fun prepareEskerraSession(baseUri: String, promise: Promise) {
+  fun prepareEskerraSession(
+    baseUri: String,
+    prefetchNoteUris: ReadableArray?,
+    promise: Promise,
+  ) {
     safExecutor.execute {
       try {
-        val result = prepareEskerraSessionSync(baseUri.trim())
+        val result = prepareEskerraSessionSync(baseUri.trim(), prefetchNoteUris)
         reactContext.runOnUiQueueThread { promise.resolve(result) }
       } catch (e: Exception) {
         Log.e(TAG, "prepareEskerraSession failed", e)
@@ -83,6 +91,54 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
         }
       }
     }
+  }
+
+  /**
+   * Full-vault recursive walk for wiki-link resolution (parity with `@eskerra/core` `collectVaultMarkdownRefs`).
+   * Uses [DocumentFile] / tree URIs like session prepare — avoids fragile JS SAF recursion.
+   */
+  @ReactMethod
+  fun listVaultMarkdownRefs(baseUri: String, promise: Promise) {
+    safExecutor.execute {
+      try {
+        val result = buildVaultMarkdownRefsArray(baseUri.trim())
+        reactContext.runOnUiQueueThread { promise.resolve(result) }
+      } catch (e: Exception) {
+        Log.e(TAG, "listVaultMarkdownRefs failed", e)
+        reactContext.runOnUiQueueThread {
+          promise.reject(E_VAULT_LISTING, e.message ?: "listVaultMarkdownRefs failed", e)
+        }
+      }
+    }
+  }
+
+  private data class VaultMarkdownRefRow(val uri: String, val fileName: String)
+
+  private fun buildVaultMarkdownRefsArray(baseUriTrimmed: String): WritableArray {
+    val canonical = VaultPath.canonicalizeUri(baseUriTrimmed)
+    val uri = Uri.parse(canonical)
+    val root =
+      documentFileFromStorageUri(uri)
+        ?: throw IllegalStateException("DocumentFile could not open vault root (tree/single).")
+    if (!root.exists() || !root.isDirectory) {
+      throw IllegalStateException("Vault root URI is not a directory.")
+    }
+    val rows = ArrayList<VaultMarkdownRefRow>()
+    VaultSearchModule.walkEligibleMarkdown(root, canonical) { doc ->
+      val fileName = doc.name ?: return@walkEligibleMarkdown
+      rows.add(VaultMarkdownRefRow(uri = doc.uri.toString(), fileName = fileName))
+    }
+    rows.sortWith(
+      compareBy<VaultMarkdownRefRow> { it.fileName.lowercase(Locale.ROOT) }.thenBy { it.uri },
+    )
+    val out = Arguments.createArray()
+    for (row in rows) {
+      val map = Arguments.createMap()
+      map.putString("uri", row.uri)
+      map.putString("fileName", row.fileName)
+      out.pushMap(map)
+    }
+    return out
   }
 
   private fun buildMarkdownListing(directoryUri: String): WritableArray {
@@ -305,7 +361,10 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     rootChildrenByName[ESKERRA_DIR_NAME] = legacy
   }
 
-  private fun prepareEskerraSessionSync(baseUriTrimmed: String): WritableMap {
+  private fun prepareEskerraSessionSync(
+    baseUriTrimmed: String,
+    prefetchNoteUris: ReadableArray?,
+  ): WritableMap {
     val uri = Uri.parse(baseUriTrimmed)
     val root =
       documentFileFromStorageUri(uri)
@@ -405,6 +464,20 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     val out = Arguments.createMap()
     out.putString("settings", raw)
     out.putArray("inboxNotes", prepareRowsToWritableArray(inboxRows, resolver))
+    if (prefetchNoteUris != null && prefetchNoteUris.size() > 0) {
+      val prefetchArr = Arguments.createArray()
+      for (i in 0 until prefetchNoteUris.size()) {
+        val noteUri = prefetchNoteUris.getString(i) ?: continue
+        val content = readInboxMarkdownContentForPrepare(resolver, noteUri)
+        val entry = Arguments.createMap()
+        entry.putString("uri", noteUri)
+        if (content != null) {
+          entry.putString("content", content)
+        }
+        prefetchArr.pushMap(entry)
+      }
+      out.putArray("todayHubPrefetch", prefetchArr)
+    }
     return out
   }
 

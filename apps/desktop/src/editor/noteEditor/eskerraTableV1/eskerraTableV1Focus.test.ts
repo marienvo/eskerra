@@ -5,7 +5,7 @@ import {
   type Extension,
 } from '@codemirror/state';
 import {drawSelection, EditorView} from '@codemirror/view';
-import {afterEach, describe, expect, it} from 'vitest';
+import {describe, expect, it} from 'vitest';
 
 import {eskerraTableCellBundleFacet} from './eskerraTableCellBundleFacet';
 import {eskerraTableParentLinkCompartmentsFacet} from './eskerraTableParentLinkCompartments';
@@ -40,10 +40,6 @@ function editorExtensions(): readonly Extension[] {
 }
 
 describe('eskerra table shell focus', () => {
-  afterEach(() => {
-    document.body.replaceChildren();
-  });
-
   it('renders one shell widget per Eskerra table (not only the primary)', async () => {
     const t1 = makeTable('A', 2);
     const t2 = makeTable('B', 2);

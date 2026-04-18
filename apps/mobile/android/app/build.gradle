@@ -115,8 +115,8 @@ android {
         applicationId "com.eskerra"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 95
-        versionName "0.13.0"
+        versionCode 109
+        versionName "0.14.13"
     }
     signingConfigs {
         debug {
@@ -138,10 +138,16 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
 }
 
 dependencies {
+    implementation("androidx.work:work-runtime:2.9.1")
     implementation("androidx.documentfile:documentfile:1.0.1")
+    /** Bundled SQLite with FTS5 (platform SQLite does not include the fts5 module on any Android version). */
+    implementation("com.github.requery:sqlite-android:3.49.0")
 
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
@@ -153,4 +159,7 @@ dependencies {
     }
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
 }

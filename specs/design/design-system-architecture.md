@@ -4,7 +4,7 @@ This document is the normative architecture for Eskerra’s design tokens, deskt
 
 ## Packages and Storybook runtimes
 
-- **`@eskerra/tokens`** (`packages/eskerra-tokens`) — TypeScript source of truth for calm editorial colors, desktop brand anchors, RN color exports, and **generated** `generated/desktop-root.css`. Run `npm run generate -w @eskerra/tokens` after changing token TS; CI runs `npm run check:generated -w @eskerra/tokens`.
+- **`@eskerra/tokens`** (`packages/eskerra-tokens`) — TypeScript source of truth for calm editorial colors, desktop brand anchors, vault read-only markdown link pairs (`vaultReadonlyLinks.ts`; see `specs/design/vault-readonly-link-colors.md`), RN color exports, and **generated** `generated/desktop-root.css`. Run `npm run generate -w @eskerra/tokens` after changing token TS; CI runs `npm run check:generated -w @eskerra/tokens`.
 - **`@eskerra/ds-desktop`** (`packages/eskerra-ds-desktop`) — Narrow DOM primitives (Surface, Text, Divider, IconGlyph, Button, …). **Not** shell chrome (rail tabs, pane headers, splits, toolbars).
 - **`@eskerra/ds-mobile`** (`packages/eskerra-ds-mobile`) — RN primitives for Android; shares **one story file set** between on-device and RN-Web Storybook only.
 

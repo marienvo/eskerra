@@ -1,6 +1,7 @@
 import {ensureDeviceInstanceId} from '@eskerra/core';
 
 import {appBreadcrumb} from '../observability';
+import {resolveTodayHubPrefetchUrisForSession} from '../storage/sessionTodayHubPrefetch';
 import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
 import {
   initEskerra,
@@ -15,6 +16,7 @@ import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 export type PreparedVaultSession = {
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
+  todayHubContentByUri: Record<string, string> | null;
   localSettings: EskerraLocalSettings;
   sessionPrep: 'native' | 'legacy';
   settings: EskerraSettings;
@@ -36,9 +38,18 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
   let sessionPrep: 'native' | 'legacy' = 'legacy';
   let inboxPrefetch: NoteSummary[] | null = null;
   let inboxContentByUri: Record<string, string> | null = null;
+  let todayHubContentByUri: Record<string, string> | null = null;
 
   try {
-    const prepared = await tryPrepareEskerraSessionNative(baseUri);
+    let prefetchHub: string[] | undefined;
+    try {
+      prefetchHub = await resolveTodayHubPrefetchUrisForSession(baseUri);
+    } catch {
+      prefetchHub = undefined;
+    }
+    const prepared = await tryPrepareEskerraSessionNative(baseUri, {
+      prefetchNoteUris: prefetchHub,
+    });
     if (prepared !== null) {
       nextSettings = parseEskerraSettings(prepared.settingsJson);
       await migrateLegacySharedDisplayNameIfNeeded(
@@ -49,6 +60,7 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
       sessionPrep = 'native';
       inboxPrefetch = prepared.inboxPrefetch;
       inboxContentByUri = prepared.inboxContentByUri;
+      todayHubContentByUri = prepared.todayHubContentByUri;
     } else {
       await initEskerra(baseUri);
       nextSettings = await readSettings(baseUri);
@@ -59,6 +71,7 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     sessionPrep = 'legacy';
     inboxPrefetch = null;
     inboxContentByUri = null;
+    todayHubContentByUri = null;
   }
 
   let localSettings = await readLocalSettings(baseUri);
@@ -78,6 +91,13 @@ export async function prepareVaultSession(baseUri: string): Promise<PreparedVaul
     },
   });
 
-  return {inboxContentByUri, inboxPrefetch, localSettings, sessionPrep, settings: nextSettings};
+  return {
+    inboxContentByUri,
+    inboxPrefetch,
+    todayHubContentByUri,
+    localSettings,
+    sessionPrep,
+    settings: nextSettings,
+  };
 }
 

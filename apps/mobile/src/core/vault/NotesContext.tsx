@@ -9,7 +9,9 @@ import {
 } from 'react';
 import {InteractionManager} from 'react-native';
 
+import {resolveTodayHubPrefetchUrisForSession} from '../storage/sessionTodayHubPrefetch';
 import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
+import {touchMarkdownNoteUris, touchVaultSearchNoteUris} from '../../native/eskerraVaultSearch';
 import {
   createNote,
   deleteInboxNotes,
@@ -90,10 +92,15 @@ export function NotesProvider({children}: NotesProviderProps) {
     clearInboxContentCache,
     consumeInboxPrefetch,
     getInboxNoteContentFromCache,
+    getTodayHubNoteContentFromCache,
     notifyPlaylistSyncAfterVaultRefresh,
     pruneInboxNoteContentFromCache,
+    pruneTodayHubNoteContentFromCache,
     replaceInboxContentFromSession,
+    replaceTodayHubContentFromSession,
+    scheduleDebouncedVaultMarkdownRefsRefresh,
     setInboxNoteContentInCache,
+    setTodayHubNoteContentInCache,
   } = useVaultContext();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,10 +125,19 @@ export function NotesProvider({children}: NotesProviderProps) {
           return;
         }
 
-        const prepared = await tryPrepareEskerraSessionNative(baseUri);
+        let prefetchHub: string[] | undefined;
+        try {
+          prefetchHub = await resolveTodayHubPrefetchUrisForSession(baseUri);
+        } catch {
+          prefetchHub = undefined;
+        }
+        const prepared = await tryPrepareEskerraSessionNative(baseUri, {
+          prefetchNoteUris: prefetchHub,
+        });
         if (prepared !== null && prepared.inboxPrefetch !== null) {
           setNotes(prepared.inboxPrefetch);
           replaceInboxContentFromSession(prepared.inboxContentByUri);
+          replaceTodayHubContentFromSession(prepared.todayHubContentByUri);
           return;
         }
 
@@ -146,6 +162,7 @@ export function NotesProvider({children}: NotesProviderProps) {
       consumeInboxPrefetch,
       notifyPlaylistSyncAfterVaultRefresh,
       replaceInboxContentFromSession,
+      replaceTodayHubContentFromSession,
     ],
   );
 
@@ -166,13 +183,16 @@ export function NotesProvider({children}: NotesProviderProps) {
         content,
         occupiedInboxMarkdownNames,
       );
+      touchVaultSearchNoteUris(baseUri, [createdNote.uri]).catch(() => undefined);
+      touchMarkdownNoteUris(baseUri, [createdNote.uri]).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       setNotes(previousNotes => mergeInboxNoteOptimistic(previousNotes, createdNote));
       InteractionManager.runAfterInteractions(() => {
         refresh({silent: true}).catch(() => undefined);
       });
       return createdNote;
     },
-    [baseUri, notes, refresh],
+    [baseUri, notes, refresh, scheduleDebouncedVaultMarkdownRefsRefresh],
   );
 
   const read = useCallback(
@@ -190,9 +210,22 @@ export function NotesProvider({children}: NotesProviderProps) {
           },
         };
       }
+      const todayCached = getTodayHubNoteContentFromCache(noteUri);
+      if (todayCached !== undefined) {
+        const normalizedNoteUri = normalizeNoteUri(noteUri);
+        const nameFromUri = normalizedNoteUri.split('/').pop() ?? 'Untitled.md';
+        return {
+          content: todayCached,
+          summary: {
+            lastModified: null,
+            name: nameFromUri,
+            uri: normalizedNoteUri,
+          },
+        };
+      }
       return readNote(noteUri);
     },
-    [getInboxNoteContentFromCache],
+    [getInboxNoteContentFromCache, getTodayHubNoteContentFromCache],
   );
 
   const deleteNotes = useCallback(
@@ -221,7 +254,11 @@ export function NotesProvider({children}: NotesProviderProps) {
       );
 
       await deleteInboxNotes(baseUri, canonicalDeleteUris);
+      touchVaultSearchNoteUris(baseUri, canonicalDeleteUris).catch(() => undefined);
+      touchMarkdownNoteUris(baseUri, canonicalDeleteUris).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       pruneInboxNoteContentFromCache(canonicalDeleteUris);
+      pruneTodayHubNoteContentFromCache(canonicalDeleteUris);
       const removedUris = new Set(canonicalNotes.map(note => note.uri));
       setNotes(previousNotes =>
         previousNotes.filter(note => !removedUris.has(note.uri)),
@@ -230,16 +267,33 @@ export function NotesProvider({children}: NotesProviderProps) {
         refresh({silent: true}).catch(() => undefined);
       });
     },
-    [baseUri, notes, pruneInboxNoteContentFromCache, refresh],
+    [
+      baseUri,
+      notes,
+      pruneInboxNoteContentFromCache,
+      pruneTodayHubNoteContentFromCache,
+      refresh,
+      scheduleDebouncedVaultMarkdownRefsRefresh,
+    ],
   );
 
   const write = useCallback(
     async (noteUri: string, content: string) => {
       await writeNoteContent(noteUri, content);
+      touchVaultSearchNoteUris(baseUri, [noteUri]).catch(() => undefined);
+      touchMarkdownNoteUris(baseUri, [noteUri]).catch(() => undefined);
+      scheduleDebouncedVaultMarkdownRefsRefresh();
       setInboxNoteContentInCache(noteUri, content);
+      setTodayHubNoteContentInCache(noteUri, content);
       await refresh();
     },
-    [refresh, setInboxNoteContentInCache],
+    [
+      baseUri,
+      refresh,
+      scheduleDebouncedVaultMarkdownRefsRefresh,
+      setInboxNoteContentInCache,
+      setTodayHubNoteContentInCache,
+    ],
   );
 
   const value = useMemo(

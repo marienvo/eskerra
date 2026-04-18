@@ -61,15 +61,22 @@ const mockVaultContextValue = {
   consumeInboxPrefetch: () => null,
   getInboxNoteContentFromCache: () => undefined,
   isLoading: false,
+  notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
+  playlistSyncGeneration: 0,
   pruneInboxNoteContentFromCache: jest.fn(),
   refreshSession: jest.fn(),
+  refreshVaultMarkdownRefs: jest.fn(),
   replaceInboxContentFromSession: jest.fn(),
+  scheduleDebouncedVaultMarkdownRefsRefresh: jest.fn(),
   setInboxNoteContentInCache: jest.fn(),
   setSessionUri: jest.fn(),
   settings: null,
   setSettings: jest.fn(),
   localSettings: null,
   setLocalSettings: jest.fn(),
+  vaultMarkdownRefs: [],
+  vaultMarkdownRefsError: null,
+  vaultMarkdownRefsStatus: 'idle' as const,
 };
 
 jest.mock('../src/core/vault/VaultContext', () => ({
@@ -128,6 +135,7 @@ describe('App bootstrap preload', () => {
       settings: {},
       localSettings: {deviceName: '', displayName: 'Notebook A'},
       inboxPrefetch: null,
+      todayHubContentByUri: null,
       sessionPrep: 'native',
     });
 
@@ -173,6 +181,7 @@ describe('App bootstrap preload', () => {
       localSettings: {deviceName: '', displayName: 'Notebook A'},
       inboxContentByUri: null,
       inboxPrefetch: null,
+      todayHubContentByUri: null,
     });
 
     const messages = appBreadcrumbMock.mock.calls.map(call => call[0].message);

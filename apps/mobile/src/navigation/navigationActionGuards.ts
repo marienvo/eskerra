@@ -1,4 +1,4 @@
-/** True when the navigation action targets the Vault stack AddNote screen (e.g. edit from note detail). */
+/** True when the navigation action targets the Inbox stack AddNote screen (e.g. edit from note detail). */
 export function isNavigateToAddNoteAction(action: unknown): boolean {
   if (typeof action !== 'object' || action === null || !('type' in action)) {
     return false;

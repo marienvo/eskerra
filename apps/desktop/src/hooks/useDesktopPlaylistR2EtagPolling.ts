@@ -12,6 +12,9 @@ import {desktopR2SignedTransport} from '../lib/desktopR2Transport';
 
 import {useTauriMainWindowPollActive} from './useTauriMainWindowPollActive';
 
+const FOREGROUND_INTERVAL_MS = 1000;
+const BACKGROUND_INTERVAL_MS = 5000;
+
 type UseDesktopPlaylistR2EtagPollingParams = {
   vaultRoot: string | null;
   vaultSettings: EskerraSettings | null;
@@ -62,16 +65,18 @@ export function useDesktopPlaylistR2EtagPolling({
   }, [deviceInstanceId]);
 
   const pollerRef = useRef<ReturnType<typeof createPlaylistEtagPoller> | null>(null);
+  const prevMainWindowActiveRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     if (!vaultRoot) {
+      prevMainWindowActiveRef.current = null;
       pollerRef.current?.dispose();
       pollerRef.current = null;
       return;
     }
 
     const poller = createPlaylistEtagPoller({
-      intervalMs: 1000,
+      intervalMs: BACKGROUND_INTERVAL_MS,
       fetchConditional: ({etag, signal}) => {
         const s = settingsRef.current;
         if (!s || !isVaultR2PlaylistConfigured(s)) {
@@ -110,8 +115,22 @@ export function useDesktopPlaylistR2EtagPolling({
     }
     const s = vaultSettings;
     const r2Ok = s != null && isVaultR2PlaylistConfigured(s);
-    poller.setActive(r2Ok && mainWindowActive && allowPolling);
-  }, [vaultRoot, vaultSettings, mainWindowActive, allowPolling]);
+    poller.setActive(r2Ok && allowPolling);
+  }, [vaultRoot, vaultSettings, allowPolling]);
+
+  useEffect(() => {
+    const poller = pollerRef.current;
+    if (!poller || !vaultRoot) {
+      return;
+    }
+    poller.setIntervalMs(
+      mainWindowActive ? FOREGROUND_INTERVAL_MS : BACKGROUND_INTERVAL_MS,
+    );
+    if (prevMainWindowActiveRef.current === false && mainWindowActive) {
+      poller.triggerCheck();
+    }
+    prevMainWindowActiveRef.current = mainWindowActive;
+  }, [vaultRoot, mainWindowActive]);
 }
 
 /** Composes window focus/visibility with R2 polling for the main app window. */

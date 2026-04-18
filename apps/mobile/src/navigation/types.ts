@@ -7,7 +7,7 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   AddNoteTab: NavigatorScreenParams<AddNoteStackParamList> | undefined;
-  PlaylistTab: NavigatorScreenParams<PlaylistStackParamList> | undefined;
+  InboxTab: NavigatorScreenParams<InboxStackParamList> | undefined;
   PodcastsTab: NavigatorScreenParams<PodcastsStackParamList> | undefined;
   RecordTab: NavigatorScreenParams<RecordStackParamList> | undefined;
   SettingsTab: NavigatorScreenParams<SettingsStackParamList> | undefined;
@@ -18,10 +18,6 @@ export type AddNoteStackParamList = {
   AddNote: {noteTitle: string; noteUri: string} | undefined;
 };
 
-export type PlaylistStackParamList = {
-  Playlist: undefined;
-};
-
 export type PodcastsStackParamList = {
   Podcasts: undefined;
 };
@@ -30,10 +26,18 @@ export type RecordStackParamList = {
   Record: undefined;
 };
 
-export type VaultStackParamList = {
+/** Inbox markdown list (formerly Log tab). */
+export type InboxStackParamList = {
   AddNote: {noteTitle: string; noteUri: string} | undefined;
+  Inbox: undefined;
   NoteDetail: {noteFileName?: string; noteTitle: string; noteUri: string};
+};
+
+/** Full-vault search tab. */
+export type VaultStackParamList = {
   Vault: undefined;
+  VaultNoteRead: {noteTitle: string; noteUri: string};
+  VaultSearch: undefined;
 };
 
 export type SettingsStackParamList = {

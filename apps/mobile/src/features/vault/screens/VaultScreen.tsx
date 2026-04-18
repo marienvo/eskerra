@@ -1,373 +1,430 @@
-import type {NavigationProp} from '@react-navigation/native';
-import {useFocusEffect} from '@react-navigation/native';
+import {
+  enumerateTodayHubWeekStarts,
+  parseTodayHubFrontmatter,
+  sortedTodayHubNoteUrisFromRefs,
+  splitTodayRowIntoColumns,
+  todayHubColumnCount,
+  todayHubFolderLabelFromTodayNoteUri,
+  todayHubRowUriFromTodayNoteUri,
+  type TodayHubSettings,
+} from '@eskerra/core';
+import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
-import {useCallback, useLayoutEffect, useRef, useState} from 'react';
-import {
-  Box,
-  Pressable,
-  Spinner,
-  Text,
-  useColorMode,
-} from '@gluestack-ui/themed';
-import {
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
+import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {
-  LIST_DIVIDER_DARK,
-  LIST_DIVIDER_LIGHT,
-  LIST_HORIZONTAL_INSET,
-} from '../../../core/ui/listMetrics';
-import {getNoteTitle} from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
-import {
-  extractFirstMarkdownH1,
-  formatRelativeCalendarLabel,
-  getInboxTileBackgroundColor,
-} from '@eskerra/core';
-import {MainTabParamList, VaultStackParamList} from '../../../navigation/types';
+import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
+import {VaultStackParamList} from '../../../navigation/types';
+import {useVaultTodayHubContext} from '../context/VaultTodayHubContext';
+import {TodayHubPickerModal} from '../components/TodayHubPickerModal';
+import {VaultReadonlyMarkdownBlock} from '../components/VaultReadonlyMarkdownBlock';
+import {useVaultMarkdownRefs} from '../hooks/useVaultMarkdownRefs';
 import {useNotes} from '../hooks/useNotes';
+import {
+  loadPersistedActiveTodayHubUri,
+  persistActiveTodayHubUri,
+} from '../storage/activeTodayHubStorage';
+import {formatTodayHubWeekDateLong, formatTodayHubWeekRangeShort} from '../todayHubFormat';
 
 type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
+type HubLoadState =
+  | {status: 'idle'}
+  | {status: 'loading'}
+  | {status: 'error'; message: string}
+  | {
+      status: 'ready';
+      intro: string;
+      row: string;
+      settings: TodayHubSettings;
+      weekStart: Date;
+    };
+
 export function VaultScreen({navigation}: VaultScreenProps) {
-  const {getInboxNoteContentFromCache} = useVaultContext();
-  const {deleteNotes, error, isLoading, notes, refresh} = useNotes();
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [selectedNoteUris, setSelectedNoteUris] = useState<Set<string>>(new Set());
-  const deleteInFlightRef = useRef(false);
+  const isScreenFocused = useIsFocused();
   const colorMode = useColorMode();
-  const dividerColor = colorMode === 'dark' ? LIST_DIVIDER_DARK : LIST_DIVIDER_LIGHT;
-  const mutedTextColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
-  const selectedCount = selectedNoteUris.size;
-  const hasSelection = selectedCount > 0;
-  const isVaultTopRoute = useCallback((): boolean => {
+  const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const {baseUri} = useVaultContext();
+  const {read} = useNotes();
+  const vaultToday = useVaultTodayHubContext();
+  const {
+    vaultMarkdownRefs,
+    isVaultMarkdownRefsLoading,
+    vaultMarkdownRefsError,
+    vaultMarkdownRefsStatus,
+  } = useVaultMarkdownRefs();
+
+  const hubs = useMemo(
+    () => sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs),
+    [vaultMarkdownRefs],
+  );
+
+  const [persistedHubUri, setPersistedHubUri] = useState<string | null | undefined>(undefined);
+  const [userPickedHubUri, setUserPickedHubUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadPersistedActiveTodayHubUri().then(uri => setPersistedHubUri(uri));
+  }, []);
+
+  const activeHubUri = useMemo(() => {
+    if (hubs.length === 0) {
+      return null;
+    }
+    const normalize = (u: string) => u.replace(/\\/g, '/');
+    const findInHubs = (u: string | null) => {
+      if (!u) {
+        return null;
+      }
+      const n = normalize(u);
+      return hubs.find(h => normalize(h) === n) ?? null;
+    };
+    if (userPickedHubUri) {
+      const picked = findInHubs(userPickedHubUri);
+      if (picked) {
+        return picked;
+      }
+    }
+    if (persistedHubUri !== undefined) {
+      const fromStore = findInHubs(persistedHubUri);
+      if (fromStore) {
+        return fromStore;
+      }
+    }
+    return hubs[0] ?? null;
+  }, [hubs, persistedHubUri, userPickedHubUri]);
+
+  useEffect(() => {
+    vaultToday.setHasTodayHub(hubs.length > 0);
+  }, [hubs.length, vaultToday]);
+
+  const weekIndex = vaultToday.weekIndex;
+
+  const [hubLoadState, setHubLoadState] = useState<HubLoadState>({status: 'idle'});
+
+  useEffect(() => {
+    if (!activeHubUri) {
+      setHubLoadState({status: 'idle'});
+      return;
+    }
+    let cancelled = false;
+    setHubLoadState({status: 'loading'});
+    (async () => {
+      try {
+        const introNote = await read(activeHubUri);
+        if (cancelled) {
+          return;
+        }
+        const settings = parseTodayHubFrontmatter(introNote.content);
+        const weekStarts = enumerateTodayHubWeekStarts(new Date(), settings.start);
+        const ws = weekStarts[weekIndex]!;
+        const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, ws);
+        let rowContent = '';
+        try {
+          const rowNote = await read(rowUri);
+          rowContent = rowNote.content;
+        } catch {
+          rowContent = '';
+        }
+        if (cancelled) {
+          return;
+        }
+        setHubLoadState({
+          status: 'ready',
+          intro: introNote.content,
+          row: rowContent,
+          settings,
+          weekStart: ws,
+        });
+      } catch (e) {
+        if (!cancelled) {
+          setHubLoadState({
+            status: 'error',
+            message: e instanceof Error ? e.message : 'Could not load Today hub.',
+          });
+        }
+      }
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeHubUri, read, weekIndex]);
+
+  const {setWeekNavSubtitle} = vaultToday;
+  useEffect(() => {
+    if (hubLoadState.status === 'ready') {
+      setWeekNavSubtitle(formatTodayHubWeekRangeShort(hubLoadState.weekStart));
+    } else {
+      setWeekNavSubtitle('');
+    }
+  }, [hubLoadState, setWeekNavSubtitle]);
+
+  const selectHub = useCallback(
+    (uri: string) => {
+      setUserPickedHubUri(uri);
+      vaultToday.resetWeekToCurrent();
+      persistActiveTodayHubUri(uri).catch(() => undefined);
+    },
+    [vaultToday],
+  );
+
+  const [hubPickerOpen, setHubPickerOpen] = useState(false);
+
+  const openHubPicker = useCallback(() => {
+    if (hubs.length <= 1) {
+      return;
+    }
+    setHubPickerOpen(true);
+  }, [hubs.length]);
+
+  const wikiIndexLoading =
+    vaultMarkdownRefsStatus !== 'ready' &&
+    vaultMarkdownRefsStatus !== 'error' &&
+    vaultMarkdownRefs.length === 0;
+
+  /** Block only when we still have no Today hubs and the wiki index has not settled. */
+  const awaitingVaultMarkdownIndex =
+    baseUri != null &&
+    hubs.length === 0 &&
+    vaultMarkdownRefsStatus !== 'ready' &&
+    vaultMarkdownRefsStatus !== 'error';
+
+  const headerTitle = useMemo(() => {
+    if (!activeHubUri) {
+      return 'Today';
+    }
+    return todayHubFolderLabelFromTodayNoteUri(activeHubUri);
+  }, [activeHubUri]);
+
+  const isVaultHubTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
     const activeRoute = state.routes[state.index];
     return activeRoute?.name === 'Vault';
   }, [navigation]);
 
-  const openNote = useCallback(
-    (noteUri: string, noteName: string) => {
-      const cached = getInboxNoteContentFromCache(noteUri);
-      const fromH1 =
-        cached !== undefined ? extractFirstMarkdownH1(cached) : null;
-      const noteTitle = fromH1 ?? getNoteTitle(noteName);
-      navigation.navigate('NoteDetail', {
-        noteFileName: noteName,
-        noteTitle,
-        noteUri,
-      });
-    },
-    [getInboxNoteContentFromCache, navigation],
-  );
+  const shouldShowTodayTabHeader = isVaultHubTopRoute() && isScreenFocused;
 
-  const renderSelectionHeaderLeft = useCallback(
+  const renderSearchHeaderRight = useCallback(
     () => (
       <TouchableOpacity
+        accessibilityLabel="Search vault"
         hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-        onPress={() => {
-          setDeleteError(null);
-          setSelectedNoteUris(new Set());
-        }}
-        style={styles.headerBackButton}>
-        <MaterialIcons color="#ffffff" name="arrow-back" size={22} />
-      </TouchableOpacity>
-    ),
-    [],
-  );
-
-  const renderSettingsHeaderRight = useCallback(
-    () => (
-      <TouchableOpacity
-        accessibilityLabel="Settings"
-        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-        onPress={() => {
-          const tabNavigation = navigation.getParent<NavigationProp<MainTabParamList>>();
-          tabNavigation?.navigate('SettingsTab');
-        }}
+        onPress={() => navigation.navigate('VaultSearch')}
         style={styles.headerIconButton}>
-        <MaterialIcons color="#ffffff" name="settings" size={24} />
+        <MaterialIcons color="#ffffff" name="search" size={24} />
       </TouchableOpacity>
     ),
     [navigation],
   );
 
-  const toggleNoteSelection = useCallback((noteUri: string) => {
-    setDeleteError(null);
-    setSelectedNoteUris(previousSelected => {
-      const nextSelected = new Set(previousSelected);
-      if (nextSelected.has(noteUri)) {
-        nextSelected.delete(noteUri);
-      } else {
-        nextSelected.add(noteUri);
-      }
-      return nextSelected;
-    });
-  }, []);
-
-  const handleDeleteSelected = useCallback(async () => {
-    if (deleteInFlightRef.current || isDeleting) {
-      return;
-    }
-    const selectedUris = Array.from(selectedNoteUris).filter(selectedUri =>
-      notes.some(note => note.uri === selectedUri),
-    );
-    if (selectedUris.length === 0) {
-      return;
-    }
-
-    setDeleteError(null);
-    deleteInFlightRef.current = true;
-    setIsDeleting(true);
-    try {
-      await deleteNotes(selectedUris);
-      setSelectedNoteUris(new Set());
-    } catch (deleteNotesError) {
-      const fallbackMessage = 'Could not delete selected entries.';
-      setDeleteError(
-        deleteNotesError instanceof Error ? deleteNotesError.message : fallbackMessage,
-      );
-    } finally {
-      deleteInFlightRef.current = false;
-      setIsDeleting(false);
-    }
-  }, [deleteNotes, isDeleting, notes, selectedNoteUris]);
-
-  const renderSelectionHeaderRight = useCallback(
-    () => (
-      <TouchableOpacity
-        disabled={isDeleting}
-        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-        onPress={() => {
-          handleDeleteSelected().catch(() => undefined);
-        }}
-        style={styles.headerIconButton}>
-        {isDeleting ? (
-          <Spinner size="small" />
-        ) : (
-          <MaterialIcons color="#ffffff" name="delete-outline" size={24} />
-        )}
-      </TouchableOpacity>
-    ),
-    [handleDeleteSelected, isDeleting],
-  );
-
-  useLayoutEffect(() => {
-    if (!isVaultTopRoute()) {
+  const applyTodayTabHeader = useCallback(() => {
+    if (!shouldShowTodayTabHeader) {
       return;
     }
     const tabNavigation = navigation.getParent();
     if (!tabNavigation) {
       return;
     }
-
-    if (!hasSelection) {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: renderSettingsHeaderRight,
-        headerTitle: 'Log',
-      });
-      return;
-    }
-
+    const titleEl =
+      hubs.length > 1 ? (
+        <TouchableOpacity
+          accessibilityLabel="Choose Today hub"
+          hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+          onPress={openHubPicker}
+          style={styles.headerTitleButton}>
+          <Text style={styles.headerTitleText}>{headerTitle}</Text>
+          <MaterialIcons color="#ffffff" name="arrow-drop-down" size={22} />
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.headerTitlePlain}>{headerTitle}</Text>
+      );
     tabNavigation.setOptions({
-      headerLeft: renderSelectionHeaderLeft,
-      headerRight: renderSelectionHeaderRight,
-      headerTitle: `${selectedCount} selected`,
+      headerShown: true,
+      headerLeft: undefined,
+      headerRight: renderSearchHeaderRight,
+      headerTitle: () => titleEl,
     });
-
-    return () => {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: undefined,
-        headerTitle: 'Log',
-      });
-    };
   }, [
-    hasSelection,
-    isVaultTopRoute,
+    shouldShowTodayTabHeader,
+    headerTitle,
+    hubs.length,
     navigation,
-    renderSettingsHeaderRight,
-    renderSelectionHeaderLeft,
-    renderSelectionHeaderRight,
-    selectedCount,
+    openHubPicker,
+    renderSearchHeaderRight,
   ]);
+
+  useLayoutEffect(() => {
+    applyTodayTabHeader();
+  }, [applyTodayTabHeader]);
 
   useFocusEffect(
     useCallback(() => {
-      const tabNavigation = navigation.getParent();
-      if (!tabNavigation) {
-        return;
-      }
-
-      const applyHeader = () => {
-        if (!isVaultTopRoute()) {
-          return;
-        }
-        tabNavigation.setOptions({
-          headerShown: true,
-          headerLeft: hasSelection ? renderSelectionHeaderLeft : undefined,
-          headerRight: hasSelection ? renderSelectionHeaderRight : renderSettingsHeaderRight,
-          headerTitle: hasSelection ? `${selectedCount} selected` : 'Log',
-        });
-      };
-
-      applyHeader();
+      applyTodayTabHeader();
       const frameId = requestAnimationFrame(() => {
-        applyHeader();
+        applyTodayTabHeader();
       });
-      return () => cancelAnimationFrame(frameId);
-    }, [
-      hasSelection,
-      isVaultTopRoute,
-      navigation,
-      renderSettingsHeaderRight,
-      renderSelectionHeaderLeft,
-      renderSelectionHeaderRight,
-      selectedCount,
-    ]),
+      const timeoutId = setTimeout(() => {
+        applyTodayTabHeader();
+      }, 0);
+      return () => {
+        cancelAnimationFrame(frameId);
+        clearTimeout(timeoutId);
+      };
+    }, [applyTodayTabHeader]),
   );
+
+  const onNavigateToVaultNote = useCallback(
+    (noteUri: string, noteTitle: string) => {
+      navigation.navigate('VaultNoteRead', {noteUri, noteTitle});
+    },
+    [navigation],
+  );
+
+  const columnSections = useMemo(() => {
+    if (hubLoadState.status !== 'ready') {
+      return [];
+    }
+    const count = todayHubColumnCount(hubLoadState.settings);
+    return splitTodayRowIntoColumns(hubLoadState.row, count);
+  }, [hubLoadState]);
+
+  const columnHeaders = useMemo(() => {
+    if (hubLoadState.status !== 'ready') {
+      return [];
+    }
+    const {settings, weekStart} = hubLoadState;
+    const count = todayHubColumnCount(settings);
+    const h: string[] = [];
+    for (let c = 0; c < count; c++) {
+      if (c === 0) {
+        h.push(formatTodayHubWeekDateLong(weekStart));
+      } else {
+        h.push(settings.columns[c - 1] ?? `Column ${c + 1}`);
+      }
+    }
+    return h;
+  }, [hubLoadState]);
+
+  if (awaitingVaultMarkdownIndex) {
+    return (
+      <Box style={styles.container}>
+        <Spinner accessibilityLabel="Loading vault" style={styles.spinner} />
+        <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
+          Loading vault…
+        </Text>
+      </Box>
+    );
+  }
+
+  if (hubs.length === 0) {
+    return (
+      <Box style={styles.container}>
+        <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
+          Open search to browse notes in this vault.
+        </Text>
+      </Box>
+    );
+  }
 
   return (
     <Box style={styles.container}>
-      {isLoading && notes.length === 0 ? (
+      {hubLoadState.status === 'loading' || hubLoadState.status === 'idle' ? (
         <Spinner style={styles.spinner} />
       ) : null}
-      {deleteError ? <Text style={styles.status}>{deleteError}</Text> : null}
-      {error ? <Text style={styles.status}>{error}</Text> : null}
-      <FlatList
-        contentContainerStyle={styles.listContent}
-        data={notes}
-        keyExtractor={item => item.uri}
-        refreshControl={
-          <RefreshControl
-            onRefresh={refresh}
-            refreshing={isLoading && notes.length > 0}
-          />
-        }
-        renderItem={({index, item}) => {
-          const cached = getInboxNoteContentFromCache(item.uri);
-          const fromH1 =
-            cached !== undefined ? extractFirstMarkdownH1(cached) : null;
-          const listTitle = fromH1 ?? getNoteTitle(item.name);
-          const isLast = index === notes.length - 1;
-
-          return (
-            <View
-              style={[
-                styles.noteRowOuter,
-                {borderBottomColor: dividerColor},
-                isLast ? styles.noteRowOuterLast : null,
-              ]}>
-              <View style={styles.noteRowInner}>
-                <Pressable
-                  disabled={isDeleting}
-                  onPress={() => toggleNoteSelection(item.uri)}
-                  style={[
-                    styles.checkboxAvatar,
-                    {
-                      backgroundColor: getInboxTileBackgroundColor(item.lastModified),
-                    },
-                  ]}>
-                  {selectedNoteUris.has(item.uri) ? (
-                    <MaterialIcons color="#000000" name="check" size={28} />
-                  ) : null}
-                </Pressable>
-                <Pressable
-                  disabled={isDeleting}
-                  onPress={() => openNote(item.uri, item.name)}
-                  style={styles.noteContent}>
-                  <Text style={styles.noteTitle}>{listTitle}</Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.noteFileName, {color: mutedTextColor}]}>
-                    {item.name}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.noteMeta, {color: mutedTextColor}]}>
-                    {formatRelativeCalendarLabel(item.lastModified)}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          !isLoading ? (
-            <Text style={styles.status}>
-              No markdown entries found in Log. Add one via the Entry tab.
+      {hubLoadState.status === 'error' ? (
+        <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
+          {hubLoadState.message}
+        </Text>
+      ) : null}
+      {hubLoadState.status === 'ready' ? (
+        <ScrollView contentContainerStyle={styles.scrollContent} nestedScrollEnabled>
+          {vaultMarkdownRefsError ? (
+            <Text style={[styles.indexWarning, {color: muted}]}>
+              Link name index unavailable ({vaultMarkdownRefsError}). Wiki links may not resolve until
+              the vault is reachable again.
             </Text>
-          ) : null
-        }
+          ) : null}
+          {isVaultMarkdownRefsLoading && wikiIndexLoading ? (
+            <Text style={[styles.indexHint, {color: muted}]}>Indexing vault notes for links…</Text>
+          ) : null}
+          <VaultReadonlyMarkdownBlock
+            markdownFullText={hubLoadState.intro}
+            noteUri={activeHubUri!}
+            omitWikiIndexWarning
+            onNavigateToVaultNote={onNavigateToVaultNote}
+          />
+          <View style={styles.columnsWrap}>
+            {columnSections.map((colBody, ci) => (
+              <VaultReadonlyMarkdownBlock
+                key={`col-${ci}`}
+                markdownFullText={colBody}
+                noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, hubLoadState.weekStart)}
+                omitWikiIndexWarning
+                sectionTitle={columnHeaders[ci] ?? ''}
+                onNavigateToVaultNote={onNavigateToVaultNote}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      ) : null}
+      <TodayHubPickerModal
+        activeUri={activeHubUri}
+        colorMode={colorMode === 'dark' ? 'dark' : 'light'}
+        hubs={hubs}
+        visible={hubPickerOpen}
+        onClose={() => setHubPickerOpen(false)}
+        onPick={selectHub}
       />
     </Box>
   );
 }
 
 const styles = StyleSheet.create({
+  columnsWrap: {
+    marginTop: 8,
+  },
   container: {
     flex: 1,
+    paddingTop: 8,
   },
-  listContent: {
-    paddingBottom: 20,
-    paddingHorizontal: LIST_HORIZONTAL_INSET,
-  },
-  noteMeta: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  noteFileName: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  noteContent: {
-    flex: 1,
-  },
-  noteRowOuter: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginHorizontal: -LIST_HORIZONTAL_INSET,
-  },
-  noteRowOuterLast: {
-    borderBottomWidth: 0,
-  },
-  noteRowInner: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: LIST_HORIZONTAL_INSET,
-    paddingVertical: 12,
-  },
-  noteTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  checkboxAvatar: {
-    alignItems: 'center',
-    borderRadius: 8,
-    height: 40,
-    justifyContent: 'center',
-    marginRight: 10,
-    width: 40,
-  },
-  headerBackButton: {
-    marginLeft: 12,
+  empty: {
+    fontSize: 15,
+    textAlign: 'center',
   },
   headerIconButton: {
     marginRight: 12,
   },
-  spinner: {
-    marginVertical: 10,
+  headerTitleButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    maxWidth: 260,
   },
-  status: {
-    marginVertical: 10,
-    paddingHorizontal: 20,
-    textAlign: 'center',
+  headerTitlePlain: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  headerTitleText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  indexHint: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  indexWarning: {
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+    paddingHorizontal: LIST_HORIZONTAL_INSET,
+  },
+  spinner: {
+    marginVertical: 16,
   },
 });

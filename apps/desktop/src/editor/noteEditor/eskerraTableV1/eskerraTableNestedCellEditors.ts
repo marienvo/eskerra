@@ -3,7 +3,7 @@ import type {EditorView} from '@codemirror/view';
 
 import {bumpTableShellStaticPreview} from './tableShellStaticPreviewStore';
 
-const parentToCellViews = new Map<EditorView, Set<EditorView>>();
+const parentToCellViews = new WeakMap<EditorView, Set<EditorView>>();
 
 /** Drop all nested cell registrations for a parent (e.g. after a full-document swap). */
 export function clearEskerraTableNestedCellRegistrations(

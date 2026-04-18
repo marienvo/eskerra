@@ -176,3 +176,8 @@ export function tryClipboardHtmlToMarkdownInsert(
   }
   return trimmed;
 }
+
+/** Vitest harness: drop cached Turndown instance. */
+export function __resetForTests(): void {
+  turndownSingleton = null;
+}

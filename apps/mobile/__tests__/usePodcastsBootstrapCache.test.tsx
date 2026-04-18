@@ -93,15 +93,22 @@ describe('usePodcasts bootstrap cache', () => {
       consumeInboxPrefetch: jest.fn(() => null),
       getInboxNoteContentFromCache: () => undefined,
       isLoading: false,
+      notifyPlaylistSyncAfterVaultRefresh: jest.fn(),
+      playlistSyncGeneration: 0,
       pruneInboxNoteContentFromCache: jest.fn(),
       refreshSession: jest.fn(async () => undefined),
+      refreshVaultMarkdownRefs: jest.fn(),
       replaceInboxContentFromSession: jest.fn(),
+      scheduleDebouncedVaultMarkdownRefsRefresh: jest.fn(),
       setInboxNoteContentInCache: jest.fn(),
       localSettings: null,
       setLocalSettings: jest.fn(),
       settings: null,
       setSessionUri: jest.fn(async () => undefined),
       setSettings: jest.fn(),
+      vaultMarkdownRefs: [],
+      vaultMarkdownRefsError: null,
+      vaultMarkdownRefsStatus: 'idle',
     });
     listGeneralMarkdownFilesMock.mockResolvedValue([]);
     readPlaylistCoalescedMock.mockResolvedValue(null);

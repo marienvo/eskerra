@@ -1,7 +1,6 @@
-import {vaultPathDirname} from '@eskerra/core';
+import {todayHubFolderLabelFromUri, vaultUriIsTodayMarkdownFile} from '@eskerra/core';
 
 import {editorTabPillDisplayName} from './editorTabPillDisplayName';
-import {vaultUriIsTodayMarkdownFile} from './vaultTreeLoadChildren';
 
 /**
  * Tab strip label for an open note URI. `Today.md` uses the **parent folder name** (hub-style daily note).
@@ -12,11 +11,7 @@ export function editorOpenTabPillLabel(
 ): string {
   const norm = uri.replace(/\\/g, '/');
   if (vaultUriIsTodayMarkdownFile(norm)) {
-    const parent = vaultPathDirname(norm);
-    const folderSeg = parent.split('/').filter(Boolean).pop();
-    if (folderSeg) {
-      return folderSeg;
-    }
+    return todayHubFolderLabelFromUri(norm);
   }
   const row = notes.find(
     n => n.uri === uri || n.uri.replace(/\\/g, '/') === norm,

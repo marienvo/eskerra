@@ -15,6 +15,9 @@ export type ArtworkCacheEntry = {
 const memory = new Map<string, ArtworkCacheEntry>();
 const pendingFetches = new Map<string, Promise<string | null>>();
 
+/** False until first read/write path calls {@link ensureHydratedFromStorage}. Cleared by {@link clearArtworkCacheForTests}. */
+let hydratedFromStorage = false;
+
 function normalizeFeedUrl(rssFeedUrl: string): string {
   return rssFeedUrl.trim();
 }
@@ -60,7 +63,7 @@ function persistToStorage(): void {
   }
 }
 
-/** Hydrate memory from localStorage (call once on module load in browser). */
+/** Hydrate memory from localStorage (lazy; avoids import-time side effects in tests). */
 function hydrateMemoryFromStorage(): void {
   if (typeof localStorage === 'undefined') {
     return;
@@ -77,13 +80,20 @@ function hydrateMemoryFromStorage(): void {
   }
 }
 
-hydrateMemoryFromStorage();
+function ensureHydratedFromStorage(): void {
+  if (hydratedFromStorage) {
+    return;
+  }
+  hydrateMemoryFromStorage();
+  hydratedFromStorage = true;
+}
 
 /**
  * Synchronous peek for first paint.
  * @returns `undefined` if unknown (not cached), `null` if cached miss, URL string if cached hit.
  */
 export function peekCachedArtworkUri(rssFeedUrl: string): string | null | undefined {
+  ensureHydratedFromStorage();
   const key = normalizeFeedUrl(rssFeedUrl);
   if (!key) {
     return null;
@@ -103,12 +113,14 @@ export function setArtworkCacheEntryForTests(
   rssFeedUrl: string,
   entry: ArtworkCacheEntry,
 ): void {
+  ensureHydratedFromStorage();
   memory.set(normalizeFeedUrl(rssFeedUrl), entry);
 }
 
 export function clearArtworkCacheForTests(): void {
   memory.clear();
   pendingFetches.clear();
+  hydratedFromStorage = false;
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -118,10 +130,16 @@ export function clearArtworkCacheForTests(): void {
   }
 }
 
+/** Vitest harness: same as {@link clearArtworkCacheForTests}. */
+export function __resetForTests(): void {
+  clearArtworkCacheForTests();
+}
+
 /**
  * Resolve artwork URL for an RSS feed (network on cache miss). Deduplicates in-flight fetches.
  */
 export async function resolveArtworkUri(rssFeedUrl: string): Promise<string | null> {
+  ensureHydratedFromStorage();
   const key = normalizeFeedUrl(rssFeedUrl);
   if (!key) {
     return null;
