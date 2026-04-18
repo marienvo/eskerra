@@ -1,5 +1,5 @@
 import {
-  enumerateTodayHubWeekStarts,
+  startOfLocalWeekMonday,
   todayHubRowUriFromTodayNoteUri,
 } from '@eskerra/core';
 
@@ -54,10 +54,11 @@ export async function resolveTodayHubPrefetchUrisForSession(
   if (!hub || !vaultUriBelongsToBase(hub, baseUri)) {
     return undefined;
   }
-  const weekStarts = enumerateTodayHubWeekStarts(new Date(), 'monday');
-  const ws = weekStarts[0];
-  if (!ws) {
-    return [hub];
-  }
+  /**
+   * VaultScreen initially renders `CURRENT_WEEK_INDEX` from VaultTodayHubContext, which maps
+   * to the current local-Monday week (not the previous anchor at index 0). Prefetch the same
+   * week's row file so the first cold-start read hits the prepared session cache.
+   */
+  const ws = startOfLocalWeekMonday(new Date());
   return [hub, todayHubRowUriFromTodayNoteUri(hub, ws)];
 }

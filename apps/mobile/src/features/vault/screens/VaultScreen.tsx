@@ -87,11 +87,18 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         return picked;
       }
     }
-    if (persistedHubUri !== undefined) {
-      const fromStore = findInHubs(persistedHubUri);
-      if (fromStore) {
-        return fromStore;
-      }
+    /**
+     * Wait for the persisted active hub URI to resolve from AsyncStorage before falling back
+     * to the first hub alphabetically. Otherwise the initial cold-start render picks `hubs[0]`
+     * (possibly the wrong hub) and fires a live SAF read for a hub whose content was never
+     * prefetched by `prepareEskerraSession`, wasting I/O in parallel with the real hub read.
+     */
+    if (persistedHubUri === undefined) {
+      return null;
+    }
+    const fromStore = findInHubs(persistedHubUri);
+    if (fromStore) {
+      return fromStore;
     }
     return hubs[0] ?? null;
   }, [hubs, persistedHubUri, userPickedHubUri]);
