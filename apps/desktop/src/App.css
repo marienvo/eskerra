@@ -3729,6 +3729,13 @@ button.primary.destructive {
   list-style: none;
 }
 
+/* Footer strip: nudge week dots left to line up with hub cell content (desktop capture surface). */
+[data-app-surface='capture']
+  .today-hub-canvas__row-date-bar--footer
+  .today-hub-canvas__week-progress {
+  margin-left: 78px;
+}
+
 [data-app-surface='capture'] .today-hub-canvas__week-progress-cell {
   width: 10px;
   height: 10px;
@@ -3821,7 +3828,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date {
   display: block;
-  padding-inline-start: var(--today-hub-header-pad-inline-start);
+  padding-inline-start: calc(var(--today-hub-header-pad-inline-start) - 3px);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell {
