@@ -60,13 +60,6 @@ export function VaultNoteReadScreen({navigation, route}: VaultNoteReadScreenProp
       headerRight: renderSearchHeaderRight,
       headerTitle: noteTitle.length > 0 ? noteTitle : 'Note',
     });
-    return () => {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: undefined,
-        headerTitle: 'Today',
-      });
-    };
   }, [
     isVaultNoteReadTopRoute,
     navigation,

@@ -26,8 +26,10 @@ export {
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
   sortedTodayHubNoteUrisFromRefs,
   todayHubDirectoryUriFromTodayNoteUri,
+  todayHubFolderLabelFromTodayNoteUri,
   todayHubFolderLabelFromUri,
   todayHubFolderLabelFromVaultMarkdownRef,
+  todayHubRowUriFromTodayNoteUri,
   vaultMarkdownRefIsTodayHubNote,
   vaultUriIsTodayMarkdownFile,
 } from './vaultTodayHub';

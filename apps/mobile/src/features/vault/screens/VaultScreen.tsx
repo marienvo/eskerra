@@ -4,23 +4,22 @@ import {
   sortedTodayHubNoteUrisFromRefs,
   splitTodayRowIntoColumns,
   todayHubColumnCount,
-  todayHubDirectoryUriFromTodayNoteUri,
-  todayHubFolderLabelFromUri,
-  todayHubFolderLabelFromVaultMarkdownRef,
-  todayHubRowUri,
+  todayHubFolderLabelFromTodayNoteUri,
+  todayHubRowUriFromTodayNoteUri,
   type TodayHubSettings,
 } from '@eskerra/core';
-import {useFocusEffect} from '@react-navigation/native';
+import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
 import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
-import {Alert, StyleSheet, TouchableOpacity, View} from 'react-native';
+import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultTodayHubContext} from '../context/VaultTodayHubContext';
+import {TodayHubPickerModal} from '../components/TodayHubPickerModal';
 import {VaultReadonlyMarkdownBlock} from '../components/VaultReadonlyMarkdownBlock';
 import {useVaultMarkdownRefs} from '../hooks/useVaultMarkdownRefs';
 import {useNotes} from '../hooks/useNotes';
@@ -45,6 +44,7 @@ type HubLoadState =
     };
 
 export function VaultScreen({navigation}: VaultScreenProps) {
+  const isScreenFocused = useIsFocused();
   const colorMode = useColorMode();
   const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const {baseUri} = useVaultContext();
@@ -120,7 +120,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         const settings = parseTodayHubFrontmatter(introNote.content);
         const weekStarts = enumerateTodayHubWeekStarts(new Date(), settings.start);
         const ws = weekStarts[weekIndex]!;
-        const rowUri = todayHubRowUri(todayHubDirectoryUriFromTodayNoteUri(activeHubUri), ws);
+        const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, ws);
         let rowContent = '';
         try {
           const rowNote = await read(rowUri);
@@ -170,26 +170,14 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [vaultToday],
   );
 
+  const [hubPickerOpen, setHubPickerOpen] = useState(false);
+
   const openHubPicker = useCallback(() => {
     if (hubs.length <= 1) {
       return;
     }
-    const buttons = [
-      ...hubs.map(uri => {
-        const norm = uri.replace(/\\/g, '/');
-        const ref = vaultMarkdownRefs.find(r => r.uri.replace(/\\/g, '/') === norm);
-        const label = ref
-          ? todayHubFolderLabelFromVaultMarkdownRef(ref)
-          : todayHubFolderLabelFromUri(uri);
-        return {
-          text: label,
-          onPress: () => selectHub(uri),
-        };
-      }),
-      {text: 'Cancel', style: 'cancel' as const},
-    ];
-    Alert.alert('Today hub', 'Choose a hub', buttons);
-  }, [hubs, selectHub, vaultMarkdownRefs]);
+    setHubPickerOpen(true);
+  }, [hubs.length]);
 
   const wikiIndexLoading =
     vaultMarkdownRefsStatus !== 'ready' &&
@@ -205,19 +193,16 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     if (!activeHubUri) {
       return 'Today';
     }
-    const norm = activeHubUri.replace(/\\/g, '/');
-    const ref = vaultMarkdownRefs.find(r => r.uri.replace(/\\/g, '/') === norm);
-    if (ref) {
-      return todayHubFolderLabelFromVaultMarkdownRef(ref);
-    }
-    return todayHubFolderLabelFromUri(activeHubUri);
-  }, [activeHubUri, vaultMarkdownRefs]);
+    return todayHubFolderLabelFromTodayNoteUri(activeHubUri);
+  }, [activeHubUri]);
 
   const isVaultHubTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
     const activeRoute = state.routes[state.index];
     return activeRoute?.name === 'Vault';
   }, [navigation]);
+
+  const shouldShowTodayTabHeader = isVaultHubTopRoute() && isScreenFocused;
 
   const renderSearchHeaderRight = useCallback(
     () => (
@@ -232,15 +217,14 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [navigation],
   );
 
-  useLayoutEffect(() => {
-    if (!isVaultHubTopRoute()) {
+  const applyTodayTabHeader = useCallback(() => {
+    if (!shouldShowTodayTabHeader) {
       return;
     }
     const tabNavigation = navigation.getParent();
     if (!tabNavigation) {
       return;
     }
-
     const titleEl =
       hubs.length > 1 ? (
         <TouchableOpacity
@@ -254,73 +238,39 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       ) : (
         <Text style={styles.headerTitlePlain}>{headerTitle}</Text>
       );
-
     tabNavigation.setOptions({
+      headerShown: true,
       headerLeft: undefined,
       headerRight: renderSearchHeaderRight,
       headerTitle: () => titleEl,
     });
-    return () => {
-      tabNavigation.setOptions({
-        headerLeft: undefined,
-        headerRight: undefined,
-        headerTitle: 'Today',
-      });
-    };
   }, [
+    shouldShowTodayTabHeader,
     headerTitle,
     hubs.length,
-    isVaultHubTopRoute,
     navigation,
     openHubPicker,
     renderSearchHeaderRight,
   ]);
 
+  useLayoutEffect(() => {
+    applyTodayTabHeader();
+  }, [applyTodayTabHeader]);
+
   useFocusEffect(
     useCallback(() => {
-      const tabNavigation = navigation.getParent();
-      if (!tabNavigation) {
-        return;
-      }
-
-      const applyHeader = () => {
-        if (!isVaultHubTopRoute()) {
-          return;
-        }
-        const titleEl =
-          hubs.length > 1 ? (
-            <TouchableOpacity
-              accessibilityLabel="Choose Today hub"
-              hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
-              onPress={openHubPicker}
-              style={styles.headerTitleButton}>
-              <Text style={styles.headerTitleText}>{headerTitle}</Text>
-              <MaterialIcons color="#ffffff" name="arrow-drop-down" size={22} />
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.headerTitlePlain}>{headerTitle}</Text>
-          );
-        tabNavigation.setOptions({
-          headerShown: true,
-          headerLeft: undefined,
-          headerRight: renderSearchHeaderRight,
-          headerTitle: () => titleEl,
-        });
-      };
-
-      applyHeader();
+      applyTodayTabHeader();
       const frameId = requestAnimationFrame(() => {
-        applyHeader();
+        applyTodayTabHeader();
       });
-      return () => cancelAnimationFrame(frameId);
-    }, [
-      headerTitle,
-      hubs.length,
-      isVaultHubTopRoute,
-      navigation,
-      openHubPicker,
-      renderSearchHeaderRight,
-    ]),
+      const timeoutId = setTimeout(() => {
+        applyTodayTabHeader();
+      }, 0);
+      return () => {
+        cancelAnimationFrame(frameId);
+        clearTimeout(timeoutId);
+      };
+    }, [applyTodayTabHeader]),
   );
 
   const onNavigateToVaultNote = useCallback(
@@ -408,10 +358,7 @@ export function VaultScreen({navigation}: VaultScreenProps) {
               <VaultReadonlyMarkdownBlock
                 key={`col-${ci}`}
                 markdownFullText={colBody}
-                noteUri={todayHubRowUri(
-                  todayHubDirectoryUriFromTodayNoteUri(activeHubUri!),
-                  hubLoadState.weekStart,
-                )}
+                noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, hubLoadState.weekStart)}
                 omitWikiIndexWarning
                 sectionTitle={columnHeaders[ci] ?? ''}
                 onNavigateToVaultNote={onNavigateToVaultNote}
@@ -420,6 +367,14 @@ export function VaultScreen({navigation}: VaultScreenProps) {
           </View>
         </ScrollView>
       ) : null}
+      <TodayHubPickerModal
+        activeUri={activeHubUri}
+        colorMode={colorMode === 'dark' ? 'dark' : 'light'}
+        hubs={hubs}
+        visible={hubPickerOpen}
+        onClose={() => setHubPickerOpen(false)}
+        onPick={selectHub}
+      />
     </Box>
   );
 }

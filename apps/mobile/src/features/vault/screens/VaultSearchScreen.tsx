@@ -112,10 +112,8 @@ export function VaultSearchScreen({navigation}: Props) {
       return () => {
         setHookOpen(false);
         eskerraVaultSearch.cancel().catch(() => undefined);
-        navigation.getParent()?.setOptions({
-          headerLeft: undefined,
-          headerTitle: 'Today',
-        });
+        // Do not reset the parent tab header here: VaultScreen reapplies the Today hub header on
+        // focus. Clearing to a plain "Today" races with VaultScreen and drops the hub switcher/search.
       };
     }, [navigation, renderHeaderLeft]),
   );

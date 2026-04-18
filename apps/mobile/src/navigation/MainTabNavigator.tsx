@@ -5,7 +5,9 @@ import {
   BottomTabNavigationOptions,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
-import {useNavigationState} from '@react-navigation/native';
+import {useNavigation, useNavigationState} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
+import {useCallback} from 'react';
 import {createStackNavigator} from '@react-navigation/stack';
 import {Pressable, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -67,6 +69,27 @@ const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
   <TabBarButton {...props} />
 );
 
+function VaultTabBarButton(props: BottomTabBarButtonProps) {
+  const vaultToday = useVaultTodayHubContext();
+  /** BottomTabBarButtonProps does not include `navigation`; use tab context from the bar. */
+  const tabNavigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const {onPress} = props;
+  const handlePress = useCallback(() => {
+    const state = tabNavigation.getState();
+    const activeTab = state.routes[state.index];
+    if (activeTab?.name === 'VaultTab') {
+      vaultToday.resetWeekToCurrent();
+      tabNavigation.navigate('VaultTab', {screen: 'Vault', merge: true});
+    }
+    onPress?.();
+  }, [tabNavigation, onPress, vaultToday]);
+  return <TabBarButton {...props} onPress={handlePress} />;
+}
+
+const vaultTabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
+  <VaultTabBarButton {...props} />
+);
+
 function TabBarWithTodayWeekNav(props: Parameters<typeof BottomTabBar>[0]) {
   const rootState = useNavigationState(s => s);
   const vaultToday = useVaultTodayHubContext();
@@ -85,7 +108,6 @@ function TabBarWithTodayWeekNav(props: Parameters<typeof BottomTabBar>[0]) {
 
   return (
     <>
-      <MiniPlayer />
       {showWeekNav ? (
         <View style={styles.weekNavRow}>
           <TouchableOpacity
@@ -95,8 +117,7 @@ function TabBarWithTodayWeekNav(props: Parameters<typeof BottomTabBar>[0]) {
             hitSlop={{bottom: 6, left: 8, right: 8, top: 6}}
             onPress={goPrevWeek}
             style={[styles.weekNavSide, !canGoPrev ? styles.weekNavDisabled : null]}>
-            <MaterialIcons color="#ffffff" name="chevron-left" size={22} />
-            <Text style={styles.weekNavBtnText}>Previous week</Text>
+            <MaterialIcons color="#ffffff" name="chevron-left" size={32} />
           </TouchableOpacity>
           <Text numberOfLines={1} style={styles.weekNavSubtitle}>
             {weekNavSubtitle}
@@ -108,11 +129,11 @@ function TabBarWithTodayWeekNav(props: Parameters<typeof BottomTabBar>[0]) {
             hitSlop={{bottom: 6, left: 8, right: 8, top: 6}}
             onPress={goNextWeek}
             style={[styles.weekNavSide, styles.weekNavSideEnd, !canGoNext ? styles.weekNavDisabled : null]}>
-            <Text style={styles.weekNavBtnText}>Next week</Text>
-            <MaterialIcons color="#ffffff" name="chevron-right" size={22} />
+            <MaterialIcons color="#ffffff" name="chevron-right" size={32} />
           </TouchableOpacity>
         </View>
       ) : null}
+      <MiniPlayer />
       <BottomTabBar {...props} />
     </>
   );
@@ -276,7 +297,7 @@ export function MainTabNavigator() {
             component={VaultStackScreen}
             name="VaultTab"
             options={{
-              tabBarButton,
+              tabBarButton: vaultTabBarButton,
               tabBarIcon: vaultTabIcon,
               title: 'Today',
             }}
@@ -326,11 +347,6 @@ export function MainTabNavigator() {
 }
 
 const styles = StyleSheet.create({
-  weekNavBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
   weekNavDisabled: {
     opacity: 0.38,
   },
@@ -342,16 +358,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   weekNavSide: {
     alignItems: 'center',
-    flexDirection: 'row',
     flexShrink: 0,
-    maxWidth: '36%',
+    justifyContent: 'center',
+    minWidth: 44,
   },
   weekNavSideEnd: {
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   weekNavSubtitle: {
     color: 'rgba(255,255,255,0.72)',
