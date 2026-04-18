@@ -463,20 +463,20 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       db.endTransaction()
     }
     reopenReader()
-    if (added + updated + removed > 0) {
-      val recAt = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull()
-      emitIndexStatus(
-        metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: "",
-        "ready",
-        null,
-        added,
-        updated,
-        removed,
-        "reconcile",
-        null,
-        recAt,
-      )
-    }
+    val recAt = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull()
+    /** Always emit after reconcile so JS can refresh [lastReconciledAt] even when the diff is empty
+     *  (otherwise the hook keeps treating the index as stale and re-walks the vault every session). */
+    emitIndexStatus(
+      metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: "",
+      "ready",
+      null,
+      added,
+      updated,
+      removed,
+      "reconcile",
+      null,
+      recAt,
+    )
   }
 
   private fun emitIndexStatus(

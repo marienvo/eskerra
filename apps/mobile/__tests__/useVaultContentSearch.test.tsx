@@ -582,4 +582,82 @@ describe('useVaultContentSearch', () => {
       inst!.unmount();
     });
   });
+
+  test('auto-retries search when indexReady prop becomes true', async () => {
+    const onRender = jest.fn();
+    let inst: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      inst = TestRenderer.create(
+        <SearchHarness
+          baseUri="content://v"
+          indexReady={false}
+          lastReconciledAt={0}
+          onRender={onRender}
+          open
+          vaultInstanceId="vault-1"
+        />,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const api = onRender.mock.calls.at(-1)![0] as ReturnType<typeof useVaultContentSearch>;
+
+    await act(async () => {
+      api.setQuery('hello');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const searchId = (eskerraVaultSearch.start.mock.calls[0] as [string, string, string])[1];
+    expect(eskerraVaultSearch.start).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      emitDone({
+        cancelled: false,
+        notes: [],
+        progress: {
+          indexReady: false,
+          indexStatus: 'idle',
+          scannedFiles: 0,
+          skippedLargeFiles: 0,
+          totalHits: 0,
+        },
+        searchId,
+        vaultInstanceId: 'vault-1',
+      });
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      inst!.update(
+        <SearchHarness
+          baseUri="content://v"
+          indexReady
+          lastReconciledAt={Number.MAX_SAFE_INTEGER}
+          onRender={onRender}
+          open
+          vaultInstanceId="vault-1"
+        />,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(eskerraVaultSearch.start.mock.calls.length).toBeGreaterThanOrEqual(2);
+    const lastCall = eskerraVaultSearch.start.mock.calls.at(-1)! as [string, string, string];
+    expect(lastCall[1]).not.toBe(searchId);
+    expect(lastCall[2]).toBe('hello');
+
+    await act(async () => {
+      inst!.unmount();
+    });
+  });
 });

@@ -226,6 +226,40 @@ export function useVaultContentSearch({
     }
   }, []);
 
+  /** Shared by `vault-search:index-status` and prop-driven `indexReady` (open() may resolve after a not-ready search). */
+  const startSearchRetryIfPending = useCallback(
+    (uri: string | null) => {
+      if (uri == null || !needsSearchRetryRef.current || !openRef.current) {
+        return;
+      }
+      if (!eskerraVaultSearch.isAvailable()) {
+        return;
+      }
+      const q = queryRef.current.trim();
+      if (q.length === 0) {
+        return;
+      }
+      needsSearchRetryRef.current = false;
+      const id =
+        globalThis.crypto && 'randomUUID' in globalThis.crypto
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`;
+      searchIdRef.current = id;
+      clearResultHoldTimer();
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      setScanDone(false);
+      eskerraVaultSearch.start(uri, id, q).catch(() => {
+        searchIdRef.current = null;
+        queueMicrotask(() => {
+          setScanDone(true);
+        });
+      });
+    },
+    [clearResultHoldTimer],
+  );
+
   useEffect(() => {
     queryRef.current = query;
   }, [query]);
@@ -402,27 +436,8 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         setIndexStatusLive(live);
       });
-      if (st === 'ready' && needsSearchRetryRef.current && openRef.current && baseUri != null) {
-        const q = queryRef.current.trim();
-        if (q.length > 0) {
-          needsSearchRetryRef.current = false;
-          const id =
-            globalThis.crypto && 'randomUUID' in globalThis.crypto
-              ? globalThis.crypto.randomUUID()
-              : `${Date.now()}-${Math.random()}`;
-          searchIdRef.current = id;
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setScanDone(false);
-          eskerraVaultSearch.start(baseUri, id, q).catch(() => {
-            searchIdRef.current = null;
-            queueMicrotask(() => {
-              setScanDone(true);
-            });
-          });
-        }
+      if (st === 'ready') {
+        startSearchRetryIfPending(baseUri);
       }
     };
 
@@ -436,7 +451,14 @@ export function useVaultContentSearch({
       subDone.remove();
       subIndex.remove();
     };
-  }, [open, baseUri, cancelNotesFlushRaf, clearResultHoldTimer]);
+  }, [open, baseUri, cancelNotesFlushRaf, clearResultHoldTimer, startSearchRetryIfPending]);
+
+  useEffect(() => {
+    if (!indexReady) {
+      return;
+    }
+    startSearchRetryIfPending(baseUri);
+  }, [indexReady, baseUri, startSearchRetryIfPending]);
 
   useEffect(() => {
     if (!open || !baseUri || !eskerraVaultSearch.isAvailable()) {
@@ -522,7 +544,8 @@ export function useVaultContentSearch({
             !Number.isFinite(lastRec) ||
             Date.now() - lastRec > RECONCILE_STALE_MS;
           if (ready && stale) {
-            await eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
+            /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
+            void eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
           }
         }
         await eskerraVaultSearch.start(baseUri, id, q).catch(() => {
