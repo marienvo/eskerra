@@ -18,6 +18,7 @@ import {
   inboxWikiLinkTargetIsResolved,
 } from '../lib/inboxWikiLinkNavigation';
 import {countInboxVaultMarkdownRefs} from '../lib/countInboxVaultMarkdownRefs';
+import {fireInboxClearedConfetti} from '../lib/fireInboxClearedConfetti';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
@@ -103,6 +104,7 @@ type VaultTabProps = {
   onToggleInboxPane: () => void;
   /** Ensures the Inbox tree pane is shown (e.g. before reveal when the active note is under Inbox). */
   onOpenInboxPane: () => void;
+  onCloseInboxPane: () => void;
   notificationsInboxStackTopHeightPx: number;
   onNotificationsInboxStackTopHeightPxChanged: (px: number) => void;
   /** Shown in {@link EditorWorkspaceToolbar} when an episode is active. */
@@ -536,6 +538,7 @@ export function VaultTab({
   inboxPaneVisible,
   onToggleInboxPane,
   onOpenInboxPane,
+  onCloseInboxPane,
   notificationsInboxStackTopHeightPx,
   onNotificationsInboxStackTopHeightPxChanged,
   playbackTransport,
@@ -624,6 +627,26 @@ export function VaultTab({
     () => countInboxVaultMarkdownRefs(vaultRoot, vaultMarkdownRefs) > 0,
     [vaultRoot, vaultMarkdownRefs],
   );
+  const prevInboxHadItemsRef = useRef(false);
+  useEffect(() => {
+    const wasNonEmpty = prevInboxHadItemsRef.current;
+    prevInboxHadItemsRef.current = inboxHasItems;
+    if (wasNonEmpty && !inboxHasItems && inboxPaneVisible) {
+      fireInboxClearedConfetti();
+      const raf = requestAnimationFrame(() => {
+        onCloseInboxPane();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [inboxHasItems, inboxPaneVisible, onCloseInboxPane]);
+  const prevVaultRootForInboxTrackingRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevVaultRootForInboxTrackingRef.current;
+    prevVaultRootForInboxTrackingRef.current = vaultRoot;
+    if (prev != null && prev !== vaultRoot) {
+      prevInboxHadItemsRef.current = false;
+    }
+  }, [vaultRoot]);
   const notificationsHasItems = notificationItems.length > 0;
   const revealActiveNoteDisabled =
     composingNewEntry
