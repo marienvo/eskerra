@@ -5,6 +5,83 @@ import {formatTodayHubMondayStem} from './todayHubMondays';
 
 const SAF_DOCUMENT_MARKER = '/document/';
 
+const TODAY_HUB_ROW_STEM_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Parses a `YYYY-MM-DD` Today hub row filename stem into a local-calendar `Date` at that day,
+ * or `null` if the stem is not a valid calendar date for this format.
+ */
+export function parseTodayHubRowStemToLocalCalendarDate(stem: string): Date | null {
+  if (!TODAY_HUB_ROW_STEM_RE.test(stem)) {
+    return null;
+  }
+  const y = Number(stem.slice(0, 4));
+  const mo = Number(stem.slice(5, 7)) - 1;
+  const d = Number(stem.slice(8, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) {
+    return null;
+  }
+  const out = new Date(y, mo, d);
+  if (formatTodayHubMondayStem(out) !== stem) {
+    return null;
+  }
+  return out;
+}
+
+/**
+ * True when `refUri` is the indexed vault URI for the hub row `YYYY-MM-DD.md` beside `todayNoteUri`.
+ */
+export function vaultTodayHubMarkdownRefUriMatchesExpectedRowUri(
+  todayNoteUri: string,
+  refUri: string,
+  rowWeekStart: Date,
+): boolean {
+  const expected = todayHubRowUriFromTodayNoteUri(todayNoteUri, rowWeekStart);
+  return vaultUriComparableEquals(refUri, expected);
+}
+
+function vaultUriComparableEquals(a: string, b: string): boolean {
+  const na = a.replace(/\\/g, '/');
+  const nb = b.replace(/\\/g, '/');
+  if (na === nb) {
+    return true;
+  }
+  const da = tryDecodeSafDocumentId(na);
+  const db = tryDecodeSafDocumentId(nb);
+  if (da != null && db != null) {
+    return da.replace(/\\/g, '/').toLowerCase() === db.replace(/\\/g, '/').toLowerCase();
+  }
+  return na.toLowerCase() === nb.toLowerCase();
+}
+
+/**
+ * Stems `YYYY-MM-DD` for row markdown files beside `Today.md` that appear in the vault markdown index.
+ */
+export function collectTodayHubRowStemsFromVaultMarkdownRefs(
+  todayNoteUri: string,
+  vaultMarkdownRefs: readonly {uri: string; name: string}[],
+): Set<string> {
+  const stems = new Set<string>();
+  for (const r of vaultMarkdownRefs) {
+    if (vaultMarkdownRefIsTodayHubNote(r)) {
+      continue;
+    }
+    const stemCandidate = stemFromMarkdownFileName(r.name);
+    if (!TODAY_HUB_ROW_STEM_RE.test(stemCandidate)) {
+      continue;
+    }
+    const weekStart = parseTodayHubRowStemToLocalCalendarDate(stemCandidate);
+    if (!weekStart) {
+      continue;
+    }
+    if (!vaultTodayHubMarkdownRefUriMatchesExpectedRowUri(todayNoteUri, r.uri, weekStart)) {
+      continue;
+    }
+    stems.add(stemCandidate);
+  }
+  return stems;
+}
+
 /** Eligible markdown files with this exact name inside a directory make that directory a Today hub. */
 export const VAULT_TREE_TODAY_HUB_NOTE_NAME = 'Today.md';
 

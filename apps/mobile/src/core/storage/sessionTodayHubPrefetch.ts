@@ -55,9 +55,8 @@ export async function resolveTodayHubPrefetchUrisForSession(
     return undefined;
   }
   /**
-   * VaultScreen initially renders `CURRENT_WEEK_INDEX` from VaultTodayHubContext, which maps
-   * to the current local-Monday week (not the previous anchor at index 0). Prefetch the same
-   * week's row file so the first cold-start read hits the prepared session cache.
+   * Best-effort current-week row for cold start (Monday-aligned; VaultScreen applies the hub's
+   * `start` from frontmatter when syncing week navigation). Prefetch hits session cache on first read.
    */
   const ws = startOfLocalWeekMonday(new Date());
   return [hub, todayHubRowUriFromTodayNoteUri(hub, ws)];

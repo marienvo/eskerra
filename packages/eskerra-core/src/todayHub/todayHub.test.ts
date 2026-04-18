@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 
 import {
+  addLocalCalendarDays,
   enumerateTodayHubMondays,
   enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
@@ -16,6 +17,22 @@ import {
   todayHubWeekEndInclusive,
   todayHubWeekProgress,
 } from './index';
+
+describe('addLocalCalendarDays', () => {
+  it('subtracts seven local days', () => {
+    const d = new Date(2026, 3, 13);
+    const prev = addLocalCalendarDays(d, -7);
+    expect(prev.getFullYear()).toBe(2026);
+    expect(prev.getMonth()).toBe(3);
+    expect(prev.getDate()).toBe(6);
+  });
+
+  it('adds seven local days', () => {
+    const d = new Date(2026, 3, 13);
+    const next = addLocalCalendarDays(d, 7);
+    expect(next.getDate()).toBe(20);
+  });
+});
 
 describe('startOfLocalWeekMonday', () => {
   it('returns Monday for a Tuesday', () => {

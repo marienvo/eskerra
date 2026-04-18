@@ -12,7 +12,7 @@ import {
 import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
 import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -51,7 +51,13 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const {baseUri} = useVaultContext();
   const {read} = useNotes();
-  const vaultToday = useVaultTodayHubContext();
+  const {
+    resetWeekToCurrent,
+    selectedWeekStart,
+    setActiveTodayHubUri,
+    setWeekNavSubtitle,
+    syncWeekNavToCurrentWeek,
+  } = useVaultTodayHubContext();
   const {
     vaultMarkdownRefs,
     isVaultMarkdownRefsLoading,
@@ -122,9 +128,12 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     setPersistedHubUri(activeHubUri);
   }, [activeHubUri, persistedHubUri]);
 
-  const weekIndex = vaultToday.weekIndex;
+  useEffect(() => {
+    setActiveTodayHubUri(activeHubUri);
+  }, [activeHubUri, setActiveTodayHubUri]);
 
   const [hubLoadState, setHubLoadState] = useState<HubLoadState>({status: 'idle'});
+  const weekNavInitHubRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeHubUri) {
@@ -141,7 +150,13 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         }
         const settings = parseTodayHubFrontmatter(introNote.content);
         const weekStarts = enumerateTodayHubWeekStarts(new Date(), settings.start);
-        const ws = weekStarts[weekIndex]!;
+        const anchorWs = weekStarts[1]!;
+        const hubJustInitialized = weekNavInitHubRef.current !== activeHubUri;
+        if (hubJustInitialized) {
+          weekNavInitHubRef.current = activeHubUri;
+          syncWeekNavToCurrentWeek(anchorWs);
+        }
+        const ws = hubJustInitialized ? anchorWs : (selectedWeekStart ?? anchorWs);
         const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, ws);
         let rowContent = '';
         try {
@@ -172,9 +187,8 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeHubUri, read, weekIndex]);
+  }, [activeHubUri, read, selectedWeekStart, syncWeekNavToCurrentWeek]);
 
-  const {setWeekNavSubtitle} = vaultToday;
   useEffect(() => {
     if (hubLoadState.status === 'ready') {
       setWeekNavSubtitle(formatTodayHubWeekRangeShort(hubLoadState.weekStart));
@@ -186,10 +200,10 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   const selectHub = useCallback(
     (uri: string) => {
       setUserPickedHubUri(uri);
-      vaultToday.resetWeekToCurrent();
+      resetWeekToCurrent();
       persistActiveTodayHubUri(uri).catch(() => undefined);
     },
-    [vaultToday],
+    [resetWeekToCurrent],
   );
 
   const [hubPickerOpen, setHubPickerOpen] = useState(false);

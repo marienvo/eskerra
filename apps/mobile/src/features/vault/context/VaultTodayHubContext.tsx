@@ -1,20 +1,31 @@
-import {sortedTodayHubNoteUrisFromRefs} from '@eskerra/core';
+import {
+  addLocalCalendarDays,
+  collectTodayHubRowStemsFromVaultMarkdownRefs,
+  formatTodayHubMondayStem,
+  sortedTodayHubNoteUrisFromRefs,
+} from '@eskerra/core';
 import React, {
   createContext,
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
 
-const CURRENT_WEEK_INDEX = 1;
-const WEEK_COUNT = 53;
+function normalizeLocalCalendarDate(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
 
 export type VaultTodayHubContextValue = {
-  weekIndex: number;
-  setWeekIndex: (i: number) => void;
+  /** Active Today.md URI for week navigation; set from VaultScreen. */
+  activeTodayHubUri: string | null;
+  setActiveTodayHubUri: (uri: string | null) => void;
+  /** Calendar week start (local) for the visible hub row; null before first hub sync. */
+  selectedWeekStart: Date | null;
+  syncWeekNavToCurrentWeek: (weekStart: Date) => void;
   goPrevWeek: () => void;
   goNextWeek: () => void;
   resetWeekToCurrent: () => void;
@@ -34,28 +45,92 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
     () => sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs).length > 0,
     [vaultMarkdownRefs],
   );
-  const [weekIndex, setWeekIndex] = useState(CURRENT_WEEK_INDEX);
+
+  const [activeTodayHubUri, setActiveTodayHubUriState] = useState<string | null>(null);
+  const [selectedWeekStart, setSelectedWeekStart] = useState<Date | null>(null);
   const [weekNavSubtitle, setWeekNavSubtitle] = useState('');
 
-  const goPrevWeek = useCallback(() => {
-    setWeekIndex(i => Math.max(0, i - 1));
+  const calendarAnchorWeekStartRef = useRef<Date | null>(null);
+  const rowStemsRef = useRef<ReadonlySet<string>>(new Set());
+
+  const rowStems = useMemo(() => {
+    if (!activeTodayHubUri) {
+      return new Set<string>();
+    }
+    return collectTodayHubRowStemsFromVaultMarkdownRefs(activeTodayHubUri, vaultMarkdownRefs);
+  }, [activeTodayHubUri, vaultMarkdownRefs]);
+
+  rowStemsRef.current = rowStems;
+
+  const setActiveTodayHubUri = useCallback((uri: string | null) => {
+    setActiveTodayHubUriState(uri);
+    setSelectedWeekStart(null);
+    calendarAnchorWeekStartRef.current = null;
   }, []);
 
-  const goNextWeek = useCallback(() => {
-    setWeekIndex(i => Math.min(WEEK_COUNT - 1, i + 1));
+  const syncWeekNavToCurrentWeek = useCallback((weekStart: Date) => {
+    const n = normalizeLocalCalendarDate(weekStart);
+    calendarAnchorWeekStartRef.current = n;
+    setSelectedWeekStart(n);
   }, []);
 
   const resetWeekToCurrent = useCallback(() => {
-    setWeekIndex(CURRENT_WEEK_INDEX);
+    const anchor = calendarAnchorWeekStartRef.current;
+    if (anchor) {
+      setSelectedWeekStart(normalizeLocalCalendarDate(anchor));
+    }
   }, []);
 
-  const canGoPrev = weekIndex > 0;
-  const canGoNext = weekIndex < WEEK_COUNT - 1;
+  const canGoPrev = useMemo(() => {
+    if (!selectedWeekStart || !activeTodayHubUri) {
+      return false;
+    }
+    const prevStart = addLocalCalendarDays(selectedWeekStart, -7);
+    return rowStems.has(formatTodayHubMondayStem(prevStart));
+  }, [activeTodayHubUri, rowStems, selectedWeekStart]);
+
+  const canGoNext = useMemo(() => {
+    if (!selectedWeekStart || !activeTodayHubUri) {
+      return false;
+    }
+    const nextStart = addLocalCalendarDays(selectedWeekStart, 7);
+    return rowStems.has(formatTodayHubMondayStem(nextStart));
+  }, [activeTodayHubUri, rowStems, selectedWeekStart]);
+
+  const goPrevWeek = useCallback(() => {
+    setSelectedWeekStart(prev => {
+      if (!prev) {
+        return prev;
+      }
+      const prevStart = addLocalCalendarDays(prev, -7);
+      const stem = formatTodayHubMondayStem(prevStart);
+      if (!rowStemsRef.current.has(stem)) {
+        return prev;
+      }
+      return normalizeLocalCalendarDate(prevStart);
+    });
+  }, []);
+
+  const goNextWeek = useCallback(() => {
+    setSelectedWeekStart(prev => {
+      if (!prev) {
+        return prev;
+      }
+      const nextStart = addLocalCalendarDays(prev, 7);
+      const stem = formatTodayHubMondayStem(nextStart);
+      if (!rowStemsRef.current.has(stem)) {
+        return prev;
+      }
+      return normalizeLocalCalendarDate(nextStart);
+    });
+  }, []);
 
   const value = useMemo(
     (): VaultTodayHubContextValue => ({
-      weekIndex,
-      setWeekIndex,
+      activeTodayHubUri,
+      setActiveTodayHubUri,
+      selectedWeekStart,
+      syncWeekNavToCurrentWeek,
       goPrevWeek,
       goNextWeek,
       resetWeekToCurrent,
@@ -66,7 +141,10 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
       setWeekNavSubtitle,
     }),
     [
-      weekIndex,
+      activeTodayHubUri,
+      setActiveTodayHubUri,
+      selectedWeekStart,
+      syncWeekNavToCurrentWeek,
       goPrevWeek,
       goNextWeek,
       resetWeekToCurrent,

@@ -20,6 +20,14 @@ export function startOfLocalWeekMonday(reference: Date): Date {
 }
 
 /**
+ * Adds calendar days in the local timezone (same construction as {@link enumerateTodayHubWeekStarts}),
+ * avoiding UTC `setDate` surprises around DST.
+ */
+export function addLocalCalendarDays(date: Date, deltaDays: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + deltaDays);
+}
+
+/**
  * 53 consecutive week-start dates: previous week's anchor, then +7 days each step (local date).
  * Row files use `YYYY-MM-DD` of each anchor day.
  */
@@ -33,9 +41,7 @@ export function enumerateTodayHubWeekStarts(now: Date, start: TodayHubStartDay):
   );
   const out: Date[] = [];
   for (let k = 0; k < 53; k++) {
-    out.push(
-      new Date(anchorDay.getFullYear(), anchorDay.getMonth(), anchorDay.getDate() + k * 7),
-    );
+    out.push(addLocalCalendarDays(anchorDay, k * 7));
   }
   return out;
 }

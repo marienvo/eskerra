@@ -14,6 +14,7 @@ export {
   TODAY_HUB_SECTION_DELIMITER,
 } from './todayHubSectionDelimiter';
 export {
+  addLocalCalendarDays,
   enumerateTodayHubMondays,
   enumerateTodayHubWeekStarts,
   formatTodayHubMondayStem,
@@ -25,6 +26,8 @@ export {
   type TodayHubWeekProgress,
 } from './todayHubMondays';
 export {
+  collectTodayHubRowStemsFromVaultMarkdownRefs,
+  parseTodayHubRowStemToLocalCalendarDate,
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
   sortedTodayHubNoteUrisFromRefs,
   todayHubDirectoryUriFromTodayNoteUri,
@@ -33,6 +36,7 @@ export {
   todayHubFolderLabelFromVaultMarkdownRef,
   todayHubRowUriFromTodayNoteUri,
   vaultMarkdownRefIsTodayHubNote,
+  vaultTodayHubMarkdownRefUriMatchesExpectedRowUri,
   vaultUriIsTodayMarkdownFile,
 } from './vaultTodayHub';
 export {

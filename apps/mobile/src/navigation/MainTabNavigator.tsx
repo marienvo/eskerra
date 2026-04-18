@@ -70,7 +70,7 @@ const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
 );
 
 function VaultTabBarButton(props: BottomTabBarButtonProps) {
-  const vaultToday = useVaultTodayHubContext();
+  const {resetWeekToCurrent} = useVaultTodayHubContext();
   /** BottomTabBarButtonProps does not include `navigation`; use tab context from the bar. */
   const tabNavigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const {onPress} = props;
@@ -78,11 +78,11 @@ function VaultTabBarButton(props: BottomTabBarButtonProps) {
     const state = tabNavigation.getState();
     const activeTab = state.routes[state.index];
     if (activeTab?.name === 'VaultTab') {
-      vaultToday.resetWeekToCurrent();
+      resetWeekToCurrent();
       tabNavigation.navigate('VaultTab', {screen: 'Vault', merge: true});
     }
     onPress?.();
-  }, [tabNavigation, onPress, vaultToday]);
+  }, [tabNavigation, onPress, resetWeekToCurrent]);
   return <TabBarButton {...props} onPress={handlePress} />;
 }
 
