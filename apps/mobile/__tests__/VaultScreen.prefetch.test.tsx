@@ -8,9 +8,15 @@ import React, {useEffect} from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import * as eskerraStorage from '../src/core/storage/eskerraStorage';
+import {getSavedUri} from '../src/core/storage/appStorage';
 import {NotesProvider, useNotesContext} from '../src/core/vault/NotesContext';
 import {VaultProvider} from '../src/core/vault/VaultContext';
 import {MOCK_LOCAL_SETTINGS, MOCK_SETTINGS} from '../src/dev/mockVaultData';
+
+jest.mock('../src/core/storage/appStorage', () => ({
+  ...jest.requireActual('../src/core/storage/appStorage'),
+  getSavedUri: jest.fn(),
+}));
 
 jest.mock('../src/core/storage/eskerraStorage', () => ({
   ...jest.requireActual('../src/core/storage/eskerraStorage'),
@@ -22,6 +28,7 @@ jest.mock('../src/core/storage/sessionTodayHubPrefetch', () => ({
 }));
 
 const readNoteMock = eskerraStorage.readNote as jest.MockedFunction<typeof eskerraStorage.readNote>;
+const getSavedUriMock = getSavedUri as jest.MockedFunction<typeof getSavedUri>;
 
 function flushPromises(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
@@ -57,6 +64,7 @@ describe('Today hub prefetch (VaultScreen hub load path)', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    getSavedUriMock.mockResolvedValue(vaultUri);
   });
 
   test('read uses today hub cache for intro and row without readNote', async () => {

@@ -18,7 +18,7 @@ jest.mock('../src/native/eskerraVaultSearch', () => {
     isBuilding: false,
     lastFullBuildAt: 1,
     lastReconciledAt: Number.MAX_SAFE_INTEGER,
-    schemaVersion: 1,
+    schemaVersion: 3,
     vaultInstanceId: 'v1',
   };
   return {
@@ -92,7 +92,7 @@ const defaultIndexStatus = {
   isBuilding: false,
   lastFullBuildAt: 1,
   lastReconciledAt: Number.MAX_SAFE_INTEGER,
-  schemaVersion: 1,
+  schemaVersion: 3,
   vaultInstanceId: 'v1',
 };
 
@@ -250,7 +250,7 @@ describe('VaultSearchScreen', () => {
       isBuilding: false,
       lastFullBuildAt: 0,
       lastReconciledAt: 0,
-      schemaVersion: 1,
+      schemaVersion: 3,
       vaultInstanceId: 'v1',
     };
     eskerraVaultSearch.open.mockResolvedValue(notReady);

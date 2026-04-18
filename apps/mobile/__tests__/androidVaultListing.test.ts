@@ -138,7 +138,7 @@ describe('tryPrepareEskerraSessionNative', () => {
       }),
     ).resolves.toEqual({
       inboxContentByUri: null,
-      inboxPrefetch: null,
+      inboxPrefetch: [],
       settingsJson: settingsSample,
       todayHubContentByUri: {
         'content://hub/Today.md': 'intro body',
