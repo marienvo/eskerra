@@ -19,6 +19,7 @@ import {PodcastsScreen} from '../features/podcasts/screens/PodcastsScreen';
 import {SettingsScreen} from '../features/settings/screens/SettingsScreen';
 import {AddNoteScreen} from '../features/vault/screens/AddNoteScreen';
 import {NoteDetailScreen} from '../features/vault/screens/NoteDetailScreen';
+import {VaultNoteReadScreen} from '../features/vault/screens/VaultNoteReadScreen';
 import {VaultScreen} from '../features/vault/screens/VaultScreen';
 import {VaultSearchScreen} from '../features/vault/screens/VaultSearchScreen';
 import {
@@ -160,6 +161,11 @@ function VaultStackScreen() {
         headerTitleStyle: styles.tabHeaderTitle,
       }}>
       <VaultStack.Screen component={VaultScreen} name="Vault" />
+      <VaultStack.Screen
+        component={VaultNoteReadScreen}
+        name="VaultNoteRead"
+        options={{gestureEnabled: true, headerShown: false}}
+      />
       <VaultStack.Screen
         component={VaultSearchScreen}
         name="VaultSearch"

@@ -1,23 +1,23 @@
 import {useFocusEffect} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
 import {useCallback, useLayoutEffect} from 'react';
-import {Box, Text, useColorMode} from '@gluestack-ui/themed';
+import {Box} from '@gluestack-ui/themed';
 import {StyleSheet, TouchableOpacity} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {VaultStackParamList} from '../../../navigation/types';
+import {NoteContentView} from '../components/NoteContentView';
 
-type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
+type VaultNoteReadScreenProps = StackScreenProps<VaultStackParamList, 'VaultNoteRead'>;
 
-export function VaultScreen({navigation}: VaultScreenProps) {
-  const colorMode = useColorMode();
-  const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+export function VaultNoteReadScreen({navigation, route}: VaultNoteReadScreenProps) {
+  const noteUri = route.params.noteUri.trim();
+  const noteTitle = route.params.noteTitle.trim();
 
-  const isVaultHubTopRoute = useCallback((): boolean => {
+  const isVaultNoteReadTopRoute = useCallback((): boolean => {
     const state = navigation.getState();
     const activeRoute = state.routes[state.index];
-    return activeRoute?.name === 'Vault';
+    return activeRoute?.name === 'VaultNoteRead';
   }, [navigation]);
 
   const renderSearchHeaderRight = useCallback(
@@ -33,8 +33,21 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     [navigation],
   );
 
+  const renderNoteBackHeaderLeft = useCallback(
+    () => (
+      <TouchableOpacity
+        accessibilityLabel="Back to previous note"
+        hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+        onPress={() => navigation.goBack()}
+        style={styles.headerBackButton}>
+        <MaterialIcons color="#ffffff" name="arrow-back" size={22} />
+      </TouchableOpacity>
+    ),
+    [navigation],
+  );
+
   useLayoutEffect(() => {
-    if (!isVaultHubTopRoute()) {
+    if (!isVaultNoteReadTopRoute()) {
       return;
     }
     const tabNavigation = navigation.getParent();
@@ -43,9 +56,9 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     }
 
     tabNavigation.setOptions({
-      headerLeft: undefined,
+      headerLeft: renderNoteBackHeaderLeft,
       headerRight: renderSearchHeaderRight,
-      headerTitle: 'Today',
+      headerTitle: noteTitle.length > 0 ? noteTitle : 'Note',
     });
     return () => {
       tabNavigation.setOptions({
@@ -54,7 +67,13 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         headerTitle: 'Today',
       });
     };
-  }, [isVaultHubTopRoute, navigation, renderSearchHeaderRight]);
+  }, [
+    isVaultNoteReadTopRoute,
+    navigation,
+    noteTitle,
+    renderNoteBackHeaderLeft,
+    renderSearchHeaderRight,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -64,14 +83,14 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       }
 
       const applyHeader = () => {
-        if (!isVaultHubTopRoute()) {
+        if (!isVaultNoteReadTopRoute()) {
           return;
         }
         tabNavigation.setOptions({
           headerShown: true,
-          headerLeft: undefined,
+          headerLeft: renderNoteBackHeaderLeft,
           headerRight: renderSearchHeaderRight,
-          headerTitle: 'Today',
+          headerTitle: noteTitle.length > 0 ? noteTitle : 'Note',
         });
       };
 
@@ -80,14 +99,23 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         applyHeader();
       });
       return () => cancelAnimationFrame(frameId);
-    }, [isVaultHubTopRoute, navigation, renderSearchHeaderRight]),
+    }, [
+      isVaultNoteReadTopRoute,
+      navigation,
+      noteTitle,
+      renderNoteBackHeaderLeft,
+      renderSearchHeaderRight,
+    ]),
   );
 
   return (
     <Box style={styles.container}>
-      <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
-        Open search to browse notes in this vault.
-      </Text>
+      <NoteContentView
+        noteUri={noteUri}
+        onNavigateToVaultNote={(uri, title) => {
+          navigation.push('VaultNoteRead', {noteUri: uri, noteTitle: title});
+        }}
+      />
     </Box>
   );
 }
@@ -97,9 +125,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 24,
   },
-  empty: {
-    fontSize: 15,
-    textAlign: 'center',
+  headerBackButton: {
+    marginLeft: 12,
   },
   headerIconButton: {
     marginRight: 12,

@@ -35,7 +35,8 @@ export type InboxStackParamList = {
 
 /** Full-vault search tab. */
 export type VaultStackParamList = {
-  Vault: {noteTitle?: string; noteUri?: string} | undefined;
+  Vault: undefined;
+  VaultNoteRead: {noteTitle: string; noteUri: string};
   VaultSearch: undefined;
 };
 

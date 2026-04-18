@@ -116,9 +116,10 @@ describe('VaultSearchScreen', () => {
       getParent: () => ({setOptions}),
       goBack: jest.fn(),
       navigate: jest.fn(),
+      replace: jest.fn(),
     };
 
-    let inst: TestRenderer.ReactTestRenderer;
+    let inst!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       inst = TestRenderer.create(
         <VaultSearchScreen navigation={navigation as never} route={{} as never} />,
@@ -139,9 +140,10 @@ describe('VaultSearchScreen', () => {
       getParent: () => ({setOptions}),
       goBack: jest.fn(),
       navigate: jest.fn(),
+      replace: jest.fn(),
     };
 
-    let inst: TestRenderer.ReactTestRenderer;
+    let inst!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       inst = TestRenderer.create(
         <VaultSearchScreen navigation={navigation as never} route={{} as never} />,
@@ -206,11 +208,11 @@ describe('VaultSearchScreen', () => {
     await act(async () => {
       row!.props.onPress();
     });
-    expect(navigation.navigate).toHaveBeenCalledWith('Vault', {
+    expect(navigation.replace).toHaveBeenCalledWith('VaultNoteRead', {
       noteUri: 'content://tree/v/doc.md',
       noteTitle: 'MyNote',
     });
-    expect(navigation.goBack).toHaveBeenCalled();
+    expect(navigation.goBack).not.toHaveBeenCalled();
   });
 
   test('unmount triggers cancel from focus cleanup', async () => {
@@ -219,9 +221,10 @@ describe('VaultSearchScreen', () => {
       getParent: () => ({setOptions}),
       goBack: jest.fn(),
       navigate: jest.fn(),
+      replace: jest.fn(),
     };
 
-    let inst: TestRenderer.ReactTestRenderer;
+    let inst!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       inst = TestRenderer.create(
         <VaultSearchScreen navigation={navigation as never} route={{} as never} />,
@@ -255,6 +258,7 @@ describe('VaultSearchScreen', () => {
       getParent: () => ({setOptions}),
       goBack: jest.fn(),
       navigate: jest.fn(),
+      replace: jest.fn(),
     };
 
     await act(async () => {
@@ -275,9 +279,10 @@ describe('VaultSearchScreen', () => {
       getParent: () => ({setOptions}),
       goBack: jest.fn(),
       navigate: jest.fn(),
+      replace: jest.fn(),
     };
 
-    let inst: TestRenderer.ReactTestRenderer;
+    let inst!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       inst = TestRenderer.create(<VaultSearchScreen navigation={navigation as never} route={{} as never} />);
     });
