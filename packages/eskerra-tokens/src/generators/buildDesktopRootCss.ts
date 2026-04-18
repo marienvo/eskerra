@@ -1,5 +1,6 @@
 import {calmEditorial} from '../calmEditorial.ts';
 import {desktopBrand} from '../desktopBrand.ts';
+import {vaultReadonlyLinks} from '../vaultReadonlyLinks.ts';
 
 /**
  * Emits the desktop `:root { ... }` block (single source for drift tests).
@@ -8,6 +9,7 @@ import {desktopBrand} from '../desktopBrand.ts';
 export function buildDesktopRootCss(): string {
   const c = calmEditorial;
   const b = desktopBrand;
+  const v = vaultReadonlyLinks;
 
   return `/* AUTO-GENERATED from @eskerra/tokens — do not edit. Run: npm run generate -w @eskerra/tokens */
 /* Calm Editorial + desktop brand: specs/design/design-system-calm-editorial.md, brand-tokens-desktop.md */
@@ -27,6 +29,15 @@ export function buildDesktopRootCss(): string {
   --color-brand-bg: ${b.brandBackground};
   --color-brand-surface-bright: ${b.brandSurfaceBright};
   --color-interactive-text: ${b.interactiveText};
+
+  /*
+   * Vault read-only markdown (wiki + browser links). Light = current editor surfaces; *-on-dark for
+   * dark reader / future dark editor — specs/design/vault-readonly-link-colors.md
+   */
+  --color-vault-readonly-link-internal: ${v.light.internalNote};
+  --color-vault-readonly-link-external: ${v.light.externalSite};
+  --color-vault-readonly-link-internal-on-dark: ${v.dark.internalNote};
+  --color-vault-readonly-link-external-on-dark: ${v.dark.externalSite};
 
   /* Foundation — app shell uses soft gray; panels use near-white surfaces */
   --color-bg: var(--color-brand-bg);

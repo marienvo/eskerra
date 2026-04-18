@@ -1,4 +1,5 @@
 import {splitYamlFrontmatter, stemFromMarkdownFileName} from '@eskerra/core';
+import {vaultReadonlyLinkSchemeFromColorMode, vaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
 import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Alert, StyleSheet} from 'react-native';
@@ -57,6 +58,10 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
   );
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const vaultLinkColors = useMemo(
+    () => vaultReadonlyMarkdownLinkColors(vaultReadonlyLinkSchemeFromColorMode(colorMode)),
+    [colorMode],
+  );
   const calloutRules = useMemo(() => createCalloutMarkdownRules(colorMode), [colorMode]);
 
   const openInternalNote = useCallback(
@@ -87,6 +92,7 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
         currentNoteUri: noteUri,
         noteRefs: vaultMarkdownRefs,
         markdownMutedColor,
+        linkColors: vaultLinkColors,
         wikiIndexStatus,
         onRefreshWikiIndex: refreshVaultMarkdownRefs,
         onOpenInternalNote: openInternalNote,
@@ -98,6 +104,7 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
       noteUri,
       openInternalNote,
       refreshVaultMarkdownRefs,
+      vaultLinkColors,
       vaultMarkdownRefs,
       wikiIndexStatus,
     ],
@@ -197,6 +204,7 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
         </ScrollView>
       ) : null}
       <WikiAmbiguousPickerModal
+        accentLinkColor={vaultLinkColors.externalSite}
         colorMode={colorMode}
         payload={wikiPick}
         visible={wikiPick != null}

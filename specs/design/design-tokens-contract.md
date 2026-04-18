@@ -4,6 +4,7 @@
 
 - **Colors (calm editorial):** `packages/eskerra-tokens/src/calmEditorial.ts`
 - **Desktop brand anchors:** `packages/eskerra-tokens/src/desktopBrand.ts`
+- **Vault read-only markdown links (internal red / external blue, light + dark):** `packages/eskerra-tokens/src/vaultReadonlyLinks.ts` — documented in `specs/design/vault-readonly-link-colors.md`; CSS vars `--color-vault-readonly-link-*` in generated `desktop-root.css`
 - **Desktop CSS custom properties (`:root`):** generated file `packages/eskerra-tokens/generated/desktop-root.css`, produced by `buildDesktopRootCss()` in `packages/eskerra-tokens/src/generators/buildDesktopRootCss.ts`
 
 ## Rules

@@ -6,9 +6,9 @@ import {
   wikiLinkInnerBrowserOpenableHref,
   type VaultMarkdownRef,
 } from '@eskerra/core';
-import {calmEditorial, desktopBrand} from '@eskerra/tokens';
+import type {VaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
 import type {ReactNode} from 'react';
-import React from 'react';
+import React, {isValidElement} from 'react';
 import {
   Alert,
   Linking,
@@ -58,6 +58,8 @@ export type VaultReadonlyMarkdownRuleOptions = {
   currentNoteUri: string;
   noteRefs: readonly VaultMarkdownRef[];
   markdownMutedColor: string;
+  /** Internal (note) vs external (browser) link hues — from `@eskerra/tokens` `vaultReadonlyMarkdownLinkColors`. */
+  linkColors: VaultReadonlyMarkdownLinkColors;
   /** Wiki / relative `.md` resolution depends on vault-wide refs; not `ready` while indexing or after failure. */
   wikiIndexStatus: WikiIndexStatus;
   onRefreshWikiIndex: () => void;
@@ -73,20 +75,20 @@ function linkTextColor(
   if (wikiInner != null) {
     const browser = wikiLinkInnerBrowserOpenableHref(wikiInner);
     if (browser != null) {
-      return calmEditorial.accent;
+      return options.linkColors.externalSite;
     }
     const resolved = resolveInboxWikiLinkTarget(options.noteRefs, wikiInner);
     if (resolved.kind === 'open' || resolved.kind === 'ambiguous') {
-      return desktopBrand.interactiveText;
+      return options.linkColors.internalNote;
     }
     if (resolved.kind === 'create' && options.wikiIndexStatus !== 'ready') {
-      return desktopBrand.interactiveText;
+      return options.linkColors.internalNote;
     }
     return options.markdownMutedColor;
   }
 
   if (isBrowserOpenableMarkdownHref(href)) {
-    return calmEditorial.accent;
+    return options.linkColors.externalSite;
   }
 
   const root = options.vaultRoot?.trim();
@@ -98,14 +100,48 @@ function linkTextColor(
       options.noteRefs,
     );
     if (rel != null) {
-      return desktopBrand.interactiveText;
+      return options.linkColors.internalNote;
     }
     if (options.wikiIndexStatus !== 'ready') {
-      return desktopBrand.interactiveText;
+      return options.linkColors.internalNote;
     }
   }
 
   return options.markdownMutedColor;
+}
+
+/**
+ * `react-native-markdown-display` renders link labels as nested `<Text>` nodes that already carry
+ * `color` from paragraph/body inherited styles. In RN, that inner `color` wins over the parent
+ * link `Text`, so links look body-colored (e.g. white in dark mode). Force our link hue on the
+ * whole subtree of `Text` elements.
+ */
+function withVaultReadonlyLinkTextColor(children: ReactNode, color: string): ReactNode {
+  if (children == null || typeof children === 'string' || typeof children === 'number') {
+    return children;
+  }
+
+  return React.Children.map(children, child => {
+    if (!isValidElement(child)) {
+      return child;
+    }
+
+    if (child.type === Text) {
+      const prev = (child.props as {style?: object | object[] | undefined}).style;
+      return React.cloneElement(child as React.ReactElement<{style?: object | object[]}>, {
+        style: [prev, {color}],
+      });
+    }
+
+    const nested = (child.props as {children?: ReactNode}).children;
+    if (nested != null) {
+      return React.cloneElement(child as React.ReactElement<{children?: ReactNode}>, {
+        children: withVaultReadonlyLinkTextColor(nested, color),
+      });
+    }
+
+    return child;
+  });
 }
 
 async function openExternalUrl(url: string): Promise<void> {
@@ -208,6 +244,7 @@ function renderVaultReadonlyLink(
   const href = String(node.attributes?.href ?? '');
   const color = linkTextColor(href, options);
   const baseStyle = styles[styleKey] as object | undefined;
+  const tintedChildren = withVaultReadonlyLinkTextColor(children, color);
 
   return (
     <Text
@@ -215,7 +252,7 @@ function renderVaultReadonlyLink(
       accessibilityRole="link"
       onPress={() => handleLinkPress(href, options)}
       style={[baseStyle, {color}]}>
-      {children}
+      {tintedChildren}
     </Text>
   );
 }
@@ -293,10 +330,12 @@ export function WikiAmbiguousPickerModal(props: {
   visible: boolean;
   payload: VaultWikiAmbiguousPayload | null;
   colorMode: string;
+  /** Typically `linkColors.externalSite` (accent action on sheet). */
+  accentLinkColor: string;
   onPick: (noteUri: string) => void;
   onClose: () => void;
 }): ReactNode {
-  const {visible, payload, colorMode, onPick, onClose} = props;
+  const {visible, payload, colorMode, accentLinkColor, onPick, onClose} = props;
   if (!visible || payload == null) {
     return null;
   }
@@ -308,7 +347,7 @@ export function WikiAmbiguousPickerModal(props: {
   const rowBorder = isDark ? '#333' : '#e0e0e0';
   const rowTitleColor = isDark ? '#f5f5f5' : '#111';
   const rowUriColor = isDark ? '#9e9e9e' : '#757575';
-  const cancelColor = calmEditorial.accent;
+  const cancelColor = accentLinkColor;
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
