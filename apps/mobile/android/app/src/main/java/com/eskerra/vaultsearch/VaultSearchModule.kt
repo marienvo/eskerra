@@ -11,6 +11,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
@@ -30,6 +31,7 @@ private const val RECONCILE_BATCH_SIZE = 100
  * Full-vault FTS5 search index (SQLite WAL) with separate read lane for search.
  * Eligibility mirrors [packages/eskerra-core/src/vaultVisibility.ts].
  */
+@ReactModule(name = VaultSearchModule.MODULE_NAME)
 class VaultSearchModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
@@ -520,7 +522,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     )
     db.execSQL(
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
-      arrayOf(key, rel, name, title, len, doc.lastModified()),
+      arrayOf<Any?>(key, rel, name, title, len, doc.lastModified()),
     )
     VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
   }
@@ -568,7 +570,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     db.execSQL("UPDATE notes SET rel_path = ?, title = ?, filename = ?, body = ? WHERE uri = ?", arrayOf(rel, title, name, body, uriKey))
     db.execSQL(
       "UPDATE note_meta SET rel_path = ?, filename = ?, title = ?, size = ?, last_modified = ? WHERE uri = ?",
-      arrayOf(rel, name, title, len, doc.lastModified(), uriKey),
+      arrayOf<Any?>(rel, name, title, len, doc.lastModified(), uriKey),
     )
   }
 
@@ -910,7 +912,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     )
     db.execSQL(
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
-      arrayOf(key, rel, name, title, len, doc.lastModified()),
+      arrayOf<Any?>(key, rel, name, title, len, doc.lastModified()),
     )
     VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
   }

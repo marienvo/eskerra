@@ -121,7 +121,7 @@ internal object VaultSearchWorkerReconcile {
     )
     db.execSQL(
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
-      arrayOf(key, rel, name, title, len, doc.lastModified()),
+      arrayOf<Any?>(key, rel, name, title, len, doc.lastModified()),
     )
     VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
   }

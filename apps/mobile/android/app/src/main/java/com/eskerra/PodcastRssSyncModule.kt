@@ -9,6 +9,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.module.annotations.ReactModule
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.eskerra.podcast.rss.DefaultRssFeedFetcher
 import com.eskerra.podcast.rss.FrontmatterRss
@@ -30,6 +31,7 @@ import java.util.concurrent.Executors
  * aggregate merge; `- [x]` excludes it. Episode lines inside `*- podcasts.md` use `[ ]`/`[x]`
  * for played state only; that semantics is unchanged here (see [com.eskerra.podcast.rss.PodcastsMdMerge]).
  */
+@ReactModule(name = PodcastRssSyncModule.MODULE_NAME)
 class PodcastRssSyncModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
