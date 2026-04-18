@@ -20,6 +20,11 @@ import java.util.UUID
 import java.util.concurrent.Executors
 import kotlin.jvm.JvmStatic
 import java.util.concurrent.atomic.AtomicBoolean
+
+private const val TITLE_BATCH_SIZE = 50
+private const val BODY_BATCH_SIZE = 25
+private const val RECONCILE_BATCH_SIZE = 100
+
 /**
  * Full-vault FTS5 search index (SQLite WAL) with separate read lane for search.
  * Eligibility mirrors [packages/eskerra-core/src/vaultVisibility.ts].
@@ -44,6 +49,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
   private var vaultInstanceId: String? = null
   private val searchCancel = AtomicBoolean(false)
   private val writeCancel = AtomicBoolean(false)
+  private val rebuildInProgress = AtomicBoolean(false)
 
   override fun getName(): String = MODULE_NAME
 
@@ -147,6 +153,22 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     promise.resolve(null)
   }
 
+  @ReactMethod
+  fun persistActiveVaultUriForWorker(uri: String, promise: Promise) {
+    try {
+      reactContext
+        .getSharedPreferences(VaultSearchReconcileWorker.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        .edit()
+        .putString(VaultSearchReconcileWorker.KEY_ACTIVE_VAULT_URI, uri.trim())
+        .apply()
+      reactContext.runOnUiQueueThread { promise.resolve(null) }
+    } catch (e: Exception) {
+      reactContext.runOnUiQueueThread {
+        promise.reject(E_VAULT_SEARCH, e.message ?: "persistActiveVaultUriForWorker failed", e)
+      }
+    }
+  }
+
   private fun emit(event: String, payload: WritableMap) {
     if (!reactContext.hasActiveReactInstance()) {
       return
@@ -165,14 +187,8 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  private fun dbFileForBase(base: String): java.io.File {
-    val hash = VaultPath.baseUriHash(VaultPath.canonicalizeUri(base))
-    val dir = java.io.File(reactContext.filesDir, "vault-search-index")
-    if (!dir.exists()) {
-      dir.mkdirs()
-    }
-    return java.io.File(dir, "$hash.sqlite")
-  }
+  private fun dbFileForBase(base: String): java.io.File =
+    VaultSearchPaths.indexSqliteFile(reactContext, base)
 
   private fun closeDbs() {
     synchronized(lock) {
@@ -260,23 +276,54 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         metaPut(db, VaultSearchSchema.KEY_SCHEMA_VERSION, VaultSearchSchema.SCHEMA_VERSION.toString())
         metaPut(db, VaultSearchSchema.KEY_BASE_URI_HASH, VaultPath.baseUriHash(canonical))
         metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, newId)
+        metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, "0")
         metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, "0")
         metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, "0")
         reopenReader()
-        return buildStatusMap(newId, canonical, false, false, 0, 0L, 0L, VaultSearchSchema.SCHEMA_VERSION)
+        return buildStatusMap(
+          newId,
+          canonical,
+          false,
+          rebuildInProgress.get(),
+          0,
+          0L,
+          0L,
+          VaultSearchSchema.SCHEMA_VERSION,
+          false,
+        )
       }
-      val schema = metaGet(db, VaultSearchSchema.KEY_SCHEMA_VERSION)?.toIntOrNull() ?: 0
+      var schema = metaGet(db, VaultSearchSchema.KEY_SCHEMA_VERSION)?.toIntOrNull() ?: 0
+      if (schema != VaultSearchSchema.SCHEMA_VERSION && schema != 0) {
+        if (VaultSearchSchema.migrate(db, schema, VaultSearchSchema.SCHEMA_VERSION)) {
+          metaPut(db, VaultSearchSchema.KEY_SCHEMA_VERSION, VaultSearchSchema.SCHEMA_VERSION.toString())
+          schema = VaultSearchSchema.SCHEMA_VERSION
+        } else {
+          reopenReader()
+          return buildStatusMap(
+            metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: "",
+            canonical,
+            false,
+            rebuildInProgress.get(),
+            0,
+            0L,
+            0L,
+            schema,
+            false,
+          )
+        }
+      }
       if (schema != VaultSearchSchema.SCHEMA_VERSION) {
         reopenReader()
         return buildStatusMap(
           metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: "",
           canonical,
           false,
-          false,
+          rebuildInProgress.get(),
           0,
           0L,
           0L,
           schema,
+          false,
         )
       }
       vaultInstanceId = metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: run {
@@ -284,13 +331,26 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, id)
         id
       }
+      ensureLegacyTitlesMeta(db)
       reopenReader()
       val count = countNotes(db)
+      val lastTitles = metaGet(db, VaultSearchSchema.KEY_LAST_TITLES_AT)?.toLongOrNull() ?: 0L
       val lastBuild = metaGet(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
       val lastRec = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull() ?: 0L
-      // Empty vault is still "ready" after a successful full build (lastBuild > 0).
-      val ready = lastBuild > 0L
-      return buildStatusMap(vaultInstanceId!!, canonical, ready, false, count, lastBuild, lastRec, schema)
+      val indexReady = lastTitles > 0L
+      val bodiesIndexReady = lastBuild > 0L
+      val isBuilding = rebuildInProgress.get()
+      return buildStatusMap(
+        vaultInstanceId!!,
+        canonical,
+        indexReady,
+        isBuilding,
+        count,
+        lastBuild,
+        lastRec,
+        schema,
+        bodiesIndexReady,
+      )
     }
   }
 
@@ -298,17 +358,30 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val canonical = VaultPath.canonicalizeUri(baseUri)
     val file = dbFileForBase(canonical)
     if (!file.exists()) {
-      return buildStatusMap("", canonical, false, false, 0, 0L, 0L, 0)
+      return buildStatusMap("", canonical, false, false, 0, 0L, 0L, 0, false)
     }
     val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY, null)
     return db.use {
       val id = metaGet(it, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: ""
       val schema = metaGet(it, VaultSearchSchema.KEY_SCHEMA_VERSION)?.toIntOrNull() ?: 0
       val count = countNotes(it)
+      val lastTitles = metaGet(it, VaultSearchSchema.KEY_LAST_TITLES_AT)?.toLongOrNull() ?: 0L
       val lastBuild = metaGet(it, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
       val lastRec = metaGet(it, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull() ?: 0L
-      val ready = schema == VaultSearchSchema.SCHEMA_VERSION && lastBuild > 0L
-      buildStatusMap(id, canonical, ready, false, count, lastBuild, lastRec, schema)
+      val effectiveTitles =
+        if (lastTitles == 0L && lastBuild > 0L) {
+          lastBuild
+        } else {
+          lastTitles
+        }
+      val indexReady = schema == VaultSearchSchema.SCHEMA_VERSION && effectiveTitles > 0L
+      val bodiesIndexReady = schema == VaultSearchSchema.SCHEMA_VERSION && lastBuild > 0L
+      val isBuilding =
+        rebuildInProgress.get() &&
+          synchronized(lock) {
+            activeBaseUri != null && VaultPath.canonicalizeUri(activeBaseUri!!) == canonical
+          }
+      buildStatusMap(id, canonical, indexReady, isBuilding, count, lastBuild, lastRec, schema, bodiesIndexReady)
     }
   }
 
@@ -321,6 +394,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     lastFullBuildAt: Long,
     lastReconciledAt: Long,
     reportedSchemaVersion: Int = VaultSearchSchema.SCHEMA_VERSION,
+    bodiesIndexReady: Boolean = lastFullBuildAt > 0L,
   ): WritableMap {
     val m = Arguments.createMap()
     m.putString("vaultInstanceId", instanceId)
@@ -328,6 +402,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     m.putInt("schemaVersion", reportedSchemaVersion)
     m.putBoolean("indexReady", indexReady)
     m.putBoolean("isBuilding", isBuilding)
+    m.putBoolean("bodiesIndexReady", bodiesIndexReady)
     m.putInt("indexedNotes", indexedNotes)
     m.putDouble("lastFullBuildAt", lastFullBuildAt.toDouble())
     m.putDouble("lastReconciledAt", lastReconciledAt.toDouble())
@@ -343,74 +418,265 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     return 0
   }
 
+  private fun ensureLegacyTitlesMeta(db: SQLiteDatabase) {
+    val lastTitles = metaGet(db, VaultSearchSchema.KEY_LAST_TITLES_AT)?.toLongOrNull() ?: 0L
+    val lastFull = metaGet(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
+    if (lastTitles == 0L && lastFull > 0L) {
+      metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, lastFull.toString())
+    }
+  }
+
+  private fun clearAllIndexedNotes(db: SQLiteDatabase) {
+    db.execSQL("DELETE FROM notes")
+    db.execSQL("DELETE FROM note_meta")
+  }
+
+  private fun emitIndexProgress(
+    instanceId: String,
+    phase: String,
+    processed: Int,
+    total: Int,
+    indexed: Int,
+    skipped: Int,
+  ) {
+    val m = Arguments.createMap()
+    m.putString("vaultInstanceId", instanceId)
+    m.putString("phase", phase)
+    m.putInt("processed", processed)
+    m.putInt("total", total)
+    m.putInt("indexed", indexed)
+    m.putInt("skipped", skipped)
+    emit("vault-search:index-progress", m)
+  }
+
+  private fun upsertTitleOnly(db: SQLiteDatabase, vaultRoot: String, doc: DocumentFile) {
+    val uri = doc.uri.toString()
+    val key = VaultPath.keyForIndex(uri)
+    val name = doc.name ?: return
+    val rel = VaultPath.relativePath(vaultRoot, uri)
+    val title = VaultPath.titleFromFileName(name)
+    val len = doc.length()
+    deleteNoteByUri(db, key)
+    db.execSQL(
+      "INSERT INTO notes(uri, rel_path, title, filename, body) VALUES(?,?,?,?,?)",
+      arrayOf(key, rel, title, name, ""),
+    )
+    db.execSQL(
+      "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
+      arrayOf(key, rel, name, title, len, doc.lastModified()),
+    )
+  }
+
+  private fun queryUrisNeedingBody(db: SQLiteDatabase, limit: Int): List<String> {
+    val out = ArrayList<String>()
+    db.rawQuery(
+      """
+      SELECT m.uri FROM note_meta m
+      INNER JOIN notes n ON n.uri = m.uri
+      WHERE m.size > 0 AND (n.body IS NULL OR n.body = '')
+      LIMIT ?
+      """.trimIndent(),
+      arrayOf(limit.toString()),
+    ).use { c ->
+      val i = c.getColumnIndexOrThrow("uri")
+      while (c.moveToNext()) {
+        val u = c.getString(i) ?: continue
+        out.add(u)
+      }
+    }
+    return out
+  }
+
+  private fun updateNoteBodyFromUriKey(
+    db: SQLiteDatabase,
+    vaultRoot: String,
+    uriKey: String,
+    resolver: ContentResolver,
+  ) {
+    val doc = documentFromUri(Uri.parse(uriKey)) ?: return
+    if (!doc.isFile) {
+      return
+    }
+    val name = doc.name ?: return
+    val len = doc.length()
+    val body =
+      if (len > MAX_FILE_BYTES) {
+        ""
+      } else {
+        readUtf8(resolver, doc.uri, MAX_FILE_BYTES.toInt()) ?: ""
+      }
+    val rel = VaultPath.relativePath(vaultRoot, doc.uri.toString())
+    val title = VaultPath.titleFromFileName(name)
+    db.execSQL("UPDATE notes SET rel_path = ?, title = ?, filename = ?, body = ? WHERE uri = ?", arrayOf(rel, title, name, body, uriKey))
+    db.execSQL(
+      "UPDATE note_meta SET rel_path = ?, filename = ?, title = ?, size = ?, last_modified = ? WHERE uri = ?",
+      arrayOf(rel, name, title, len, doc.lastModified(), uriKey),
+    )
+  }
+
   private fun scheduleFullRebuildSync(baseUri: String, @Suppress("UNUSED_PARAMETER") reason: String) {
+    rebuildInProgress.set(true)
+    writeCancel.set(false)
     val canonical = VaultPath.canonicalizeUri(baseUri)
     val file = dbFileForBase(canonical)
-    writeCancel.set(false)
-    emitIndexStatus(vaultInstanceId ?: "", "building", null, null, null, null, reason, null, null)
     val root =
       documentFromUri(Uri.parse(canonical))
         ?: run {
           Log.w(TAG, "rebuild failed: could not open vault root for $canonical")
-          emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+          emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null, null)
           throw IllegalStateException("Could not open vault root")
         }
     if (!root.exists() || !root.isDirectory) {
       Log.w(TAG, "rebuild failed: vault root is not a directory for $canonical")
-      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null, null)
       throw IllegalStateException("Vault root is not a directory")
     }
     try {
-      if (file.exists()) {
-        file.delete()
-      }
       synchronized(lock) {
-        writeDb?.close()
-        readDb?.close()
-        writeDb = null
-        readDb = null
-        activeBaseUri = canonical
+        if (activeBaseUri != canonical) {
+          closeDbs()
+          activeBaseUri = canonical
+        }
       }
       val path = file.absolutePath
       val db = ensureWriterOpen(path)
-      var indexed = 0
-      var skipped = 0
-      db.beginTransaction()
-      try {
-        VaultSearchSchema.createTables(db)
-        val newId = UUID.randomUUID().toString()
-        vaultInstanceId = newId
+      VaultSearchSchema.createTables(db)
+      val prevSchema = metaGet(db, VaultSearchSchema.KEY_SCHEMA_VERSION)?.toIntOrNull() ?: 0
+      if (prevSchema != 0 && prevSchema != VaultSearchSchema.SCHEMA_VERSION) {
+        if (!VaultSearchSchema.migrate(db, prevSchema, VaultSearchSchema.SCHEMA_VERSION)) {
+          clearAllIndexedNotes(db)
+        }
         metaPut(db, VaultSearchSchema.KEY_SCHEMA_VERSION, VaultSearchSchema.SCHEMA_VERSION.toString())
-        metaPut(db, VaultSearchSchema.KEY_BASE_URI_HASH, VaultPath.baseUriHash(canonical))
-        metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, newId)
-        indexed = 0
-        skipped = 0
-        walkEligibleMarkdown(root, canonical) { doc ->
-          if (writeCancel.get()) {
-            return@walkEligibleMarkdown
+      }
+      val newId = UUID.randomUUID().toString()
+      vaultInstanceId = newId
+      metaPut(db, VaultSearchSchema.KEY_BASE_URI_HASH, VaultPath.baseUriHash(canonical))
+      metaPut(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID, newId)
+      metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, "0")
+      metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, "0")
+      metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, "0")
+      clearAllIndexedNotes(db)
+      emitIndexStatus(newId, "building", null, null, null, null, reason, null, null, null)
+
+      val eligibleUris = ArrayList<String>()
+      walkEligibleMarkdown(root, canonical) { doc ->
+        eligibleUris.add(doc.uri.toString())
+      }
+      val totalTitles = eligibleUris.size
+      var titleSkipped = 0
+      var titleProcessed = 0
+      val resolver = reactContext.contentResolver
+      var batch = ArrayList<String>(TITLE_BATCH_SIZE)
+      fun flushTitleBatch() {
+        if (batch.isEmpty()) {
+          return
+        }
+        db.beginTransaction()
+        try {
+          for (uriStr in batch) {
+            if (writeCancel.get()) {
+              break
+            }
+            val doc = documentFromUri(Uri.parse(uriStr)) ?: continue
+            try {
+              upsertTitleOnly(db, canonical, doc)
+            } catch (e: Exception) {
+              Log.w(TAG, "skip title $uriStr: ${e.message}")
+              titleSkipped++
+            }
           }
-          try {
-            upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
-            indexed++
-          } catch (e: Exception) {
-            Log.w(TAG, "skip ${doc.uri}: ${e.message}")
-            skipped++
+          db.setTransactionSuccessful()
+        } finally {
+          db.endTransaction()
+        }
+        titleProcessed += batch.size
+        batch.clear()
+        reopenReader()
+        emitIndexProgress(newId, "titles", titleProcessed, totalTitles, titleProcessed, titleSkipped)
+      }
+      for (uriStr in eligibleUris) {
+        if (writeCancel.get()) {
+          break
+        }
+        batch.add(uriStr)
+        if (batch.size >= TITLE_BATCH_SIZE) {
+          flushTitleBatch()
+        }
+      }
+      flushTitleBatch()
+      if (writeCancel.get()) {
+        emitIndexStatus(newId, "error", null, null, null, null, reason, null, null, null)
+        throw IllegalStateException("rebuild cancelled")
+      }
+      val titlesNow = System.currentTimeMillis()
+      metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, titlesNow.toString())
+      reopenReader()
+      val countAfterTitles = countNotes(db)
+      emitIndexStatus(
+        newId,
+        "ready",
+        countAfterTitles,
+        null,
+        null,
+        null,
+        "incremental-titles",
+        null,
+        metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull(),
+        false,
+      )
+
+      var bodySkipped = 0
+      var bodyProcessed = 0
+      val totalBodies =
+        db.rawQuery("SELECT COUNT(*) FROM note_meta WHERE size > 0", null).use { c ->
+          if (c.moveToFirst()) {
+            maxOf(c.getInt(0), 1)
+          } else {
+            1
           }
         }
-        val now = System.currentTimeMillis()
-        metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, now.toString())
-        metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, now.toString())
-        db.setTransactionSuccessful()
-      } finally {
-        db.endTransaction()
+      while (!writeCancel.get()) {
+        val chunk = queryUrisNeedingBody(db, BODY_BATCH_SIZE)
+        if (chunk.isEmpty()) {
+          break
+        }
+        db.beginTransaction()
+        try {
+          for (uriKey in chunk) {
+            if (writeCancel.get()) {
+              break
+            }
+            try {
+              updateNoteBodyFromUriKey(db, canonical, uriKey, resolver)
+            } catch (e: Exception) {
+              Log.w(TAG, "skip body $uriKey: ${e.message}")
+              bodySkipped++
+            }
+            bodyProcessed++
+          }
+          db.setTransactionSuccessful()
+        } finally {
+          db.endTransaction()
+        }
+        reopenReader()
+        emitIndexProgress(newId, "bodies", bodyProcessed, totalBodies, bodyProcessed, bodySkipped)
       }
+      if (writeCancel.get()) {
+        emitIndexStatus(newId, "error", null, null, null, null, reason, null, null, null)
+        throw IllegalStateException("rebuild cancelled")
+      }
+      val now = System.currentTimeMillis()
+      metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, now.toString())
+      metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, now.toString())
       reopenReader()
-      val nowMs = System.currentTimeMillis()
-      emitIndexStatus(vaultInstanceId!!, "ready", indexed, null, null, null, "full-rebuild", skipped, nowMs)
+      val indexed = countNotes(db)
+      emitIndexStatus(newId, "ready", indexed, null, null, null, "full-rebuild", titleSkipped + bodySkipped, now, true)
     } catch (t: Throwable) {
       Log.w(TAG, "rebuild failed: ${t.message}", t)
-      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null)
+      emitIndexStatus(vaultInstanceId ?: "", "error", null, null, null, null, reason, null, null, null)
       throw t
+    } finally {
+      rebuildInProgress.set(false)
     }
   }
 
@@ -422,6 +688,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     }
     val db = ensureWriterOpen(file.absolutePath)
     val root = documentFromUri(Uri.parse(canonical)) ?: return
+    val instanceId = metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: ""
     val onDisk = HashMap<String, FileSnapshot>()
     walkEligibleMarkdown(root, canonical) { doc ->
       val len = doc.length()
@@ -438,32 +705,56 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       }
     }
     val diff = ReconcileDiffer.diff(inDb, onDisk)
+    val removedSet = diff.removed.toHashSet()
+    val addedSet = diff.added.toHashSet()
+    val updatedSet = diff.updated.toHashSet()
+    val allChanges = ArrayList<String>(diff.removed.size + diff.added.size + diff.updated.size)
+    allChanges.addAll(diff.removed)
+    allChanges.addAll(diff.added)
+    allChanges.addAll(diff.updated)
+    val totalChanges = allChanges.size
     var added = 0
     var updated = 0
     var removed = 0
-    db.beginTransaction()
-    try {
-      for (uri in diff.removed) {
-        deleteNoteByUri(db, uri)
-        removed++
+    var i = 0
+    while (i < allChanges.size) {
+      val end = minOf(i + RECONCILE_BATCH_SIZE, allChanges.size)
+      db.beginTransaction()
+      try {
+        for (k in i until end) {
+          val uri = allChanges[k]
+          when {
+            uri in removedSet -> {
+              deleteNoteByUri(db, uri)
+              removed++
+            }
+            uri in addedSet -> {
+              val doc = documentFromUri(Uri.parse(uri)) ?: continue
+              upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
+              added++
+            }
+            uri in updatedSet -> {
+              val doc = documentFromUri(Uri.parse(uri)) ?: continue
+              upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
+              updated++
+            }
+          }
+        }
+        db.setTransactionSuccessful()
+      } finally {
+        db.endTransaction()
       }
-      for (uri in diff.added) {
-        val doc = documentFromUri(Uri.parse(uri)) ?: continue
-        upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
-        added++
+      i = end
+      reopenReader()
+      if (totalChanges > RECONCILE_BATCH_SIZE) {
+        emitIndexProgress(instanceId, "reconcile", i, totalChanges, i, 0)
       }
-      for (uri in diff.updated) {
-        val doc = documentFromUri(Uri.parse(uri)) ?: continue
-        upsertNoteDocument(db, canonical, doc, reactContext.contentResolver)
-        updated++
-      }
-      metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, System.currentTimeMillis().toString())
-      db.setTransactionSuccessful()
-    } finally {
-      db.endTransaction()
     }
+    metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, System.currentTimeMillis().toString())
     reopenReader()
     val recAt = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull()
+    val lastFull = metaGet(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
+    val bodiesReady = lastFull > 0L
     /** Always emit after reconcile so JS can refresh [lastReconciledAt] even when the diff is empty
      *  (otherwise the hook keeps treating the index as stale and re-walks the vault every session). */
     emitIndexStatus(
@@ -476,6 +767,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       "reconcile",
       null,
       recAt,
+      bodiesReady,
     )
   }
 
@@ -489,6 +781,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     reason: String? = null,
     skippedNotes: Int? = null,
     lastReconciledAt: Long? = null,
+    bodiesIndexReady: Boolean? = null,
   ) {
     val m = Arguments.createMap()
     m.putString("vaultInstanceId", instanceId)
@@ -500,6 +793,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     reason?.let { m.putString("reason", it) }
     skippedNotes?.let { m.putInt("skippedNotes", it) }
     lastReconciledAt?.let { m.putDouble("lastReconciledAt", it.toDouble()) }
+    bodiesIndexReady?.let { m.putBoolean("bodiesIndexReady", it) }
     emit("vault-search:index-status", m)
   }
 
@@ -557,6 +851,18 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     )
   }
 
+  private fun readSearchIndexProgressFlags(rdb: SQLiteDatabase): Pair<Boolean, Boolean> {
+    val lastTitles = metaGet(rdb, VaultSearchSchema.KEY_LAST_TITLES_AT)?.toLongOrNull() ?: 0L
+    val lastFull = metaGet(rdb, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
+    val effectiveTitles =
+      if (lastTitles == 0L && lastFull > 0L) {
+        lastFull
+      } else {
+        lastTitles
+      }
+    return Pair(effectiveTitles > 0L, lastFull > 0L)
+  }
+
   private fun readUtf8(resolver: ContentResolver, uri: Uri, maxBytes: Int): String? {
     return try {
       resolver.openInputStream(uri)?.use { input ->
@@ -588,12 +894,12 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val trimmed = query.trim()
     val instanceId = synchronized(lock) { vaultInstanceId }
     if (trimmed.isEmpty()) {
-      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false)
+      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false, false)
       return
     }
     val tokens = Fts5Query.tokenizeQuery(trimmed)
     val matchExpr = Fts5Query.buildSafeMatch(tokens) ?: run {
-      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false)
+      emitDone(searchId, instanceId ?: "", false, emptyList(), 0, 0, 0, "idle", false, false, false)
       return
     }
     val (rdb, readerMissing) =
@@ -618,9 +924,12 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         p.indexStatus,
         p.indexReady,
         p.isBuilding,
+        false,
       )
       return
     }
+    val (titlesIndexReady, bodiesIndexReady) = readSearchIndexProgressFlags(rdb)
+    val indexBuilding = rebuildInProgress.get()
     val sql =
       "SELECT uri, rel_path, title, filename, body, bm25(notes) AS rk FROM notes WHERE notes MATCH ? ORDER BY rk LIMIT ?"
     val candidates = ArrayList<SearchCandidate>()
@@ -633,7 +942,19 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       val iRk = c.getColumnIndex("rk")
       while (c.moveToNext()) {
         if (searchCancel.get()) {
-          emitDone(searchId, instanceId ?: "", true, emptyList(), 0, 0, 0, "ready", true, false)
+          emitDone(
+            searchId,
+            instanceId ?: "",
+            true,
+            emptyList(),
+            0,
+            0,
+            0,
+            "ready",
+            titlesIndexReady,
+            indexBuilding,
+            bodiesIndexReady,
+          )
           return
         }
         candidates.add(
@@ -651,11 +972,31 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     val ranked = candidates.map { SearchRanker.rank(it, trimmed, tokens) }.sortedByDescending { it.score }
     val initial = ranked.take(INITIAL_UPDATE_MAX)
     val finalList = ranked.take(VAULT_SEARCH_FINAL_MAX)
-    emitUpdate(searchId, instanceId ?: "", initial, trimmed)
-    emitDone(searchId, instanceId ?: "", false, finalList, finalList.size, 0, 0, "ready", true, false)
+    emitUpdate(searchId, instanceId ?: "", initial, trimmed, titlesIndexReady, bodiesIndexReady, indexBuilding)
+    emitDone(
+      searchId,
+      instanceId ?: "",
+      false,
+      finalList,
+      finalList.size,
+      0,
+      0,
+      "ready",
+      titlesIndexReady,
+      indexBuilding,
+      bodiesIndexReady,
+    )
   }
 
-  private fun emitUpdate(searchId: String, instanceId: String, rows: List<RankedNote>, @Suppress("UNUSED_PARAMETER") query: String) {
+  private fun emitUpdate(
+    searchId: String,
+    instanceId: String,
+    rows: List<RankedNote>,
+    @Suppress("UNUSED_PARAMETER") query: String,
+    titlesIndexReady: Boolean = true,
+    bodiesIndexReady: Boolean = true,
+    indexBuilding: Boolean = false,
+  ) {
     val m = Arguments.createMap()
     m.putString("searchId", searchId)
     m.putString("vaultInstanceId", instanceId)
@@ -669,8 +1010,9 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     prog.putInt("totalHits", rows.size)
     prog.putInt("skippedLargeFiles", 0)
     prog.putString("indexStatus", "ready")
-    prog.putBoolean("indexReady", true)
-    prog.putBoolean("isBuilding", false)
+    prog.putBoolean("indexReady", titlesIndexReady)
+    prog.putBoolean("bodiesIndexReady", bodiesIndexReady)
+    prog.putBoolean("isBuilding", indexBuilding)
     prog.putInt("schemaVersion", VaultSearchSchema.SCHEMA_VERSION)
     m.putMap("progress", prog)
     emit("vault-search:update", m)
@@ -687,6 +1029,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     indexStatus: String,
     indexReady: Boolean,
     isBuilding: Boolean,
+    bodiesIndexReady: Boolean = true,
   ) {
     val m = Arguments.createMap()
     m.putString("searchId", searchId)
@@ -703,6 +1046,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     prog.putInt("skippedLargeFiles", skipped)
     prog.putString("indexStatus", indexStatus)
     prog.putBoolean("indexReady", indexReady)
+    prog.putBoolean("bodiesIndexReady", bodiesIndexReady)
     prog.putBoolean("isBuilding", isBuilding)
     prog.putInt("schemaVersion", VaultSearchSchema.SCHEMA_VERSION)
     m.putMap("progress", prog)

@@ -8,6 +8,8 @@ export type VaultSearchOpenResult = {
   schemaVersion: number;
   indexReady: boolean;
   isBuilding: boolean;
+  /** False while title rows exist but body column is still being filled (incremental index). */
+  bodiesIndexReady?: boolean;
   indexedNotes: number;
   lastFullBuildAt: number;
   lastReconciledAt: number;
@@ -16,6 +18,7 @@ export type VaultSearchOpenResult = {
 type NativeModule = {
   open: (baseUri: string) => Promise<VaultSearchOpenResult>;
   getIndexStatus: (baseUri: string) => Promise<VaultSearchOpenResult>;
+  persistActiveVaultUriForWorker: (uri: string) => Promise<void>;
   scheduleFullRebuild: (baseUri: string, reason: string) => Promise<void>;
   reconcile: (baseUri: string) => Promise<void>;
   touchPaths: (baseUri: string, paths: string[]) => Promise<void>;
@@ -48,6 +51,9 @@ export const eskerraVaultSearch = {
       return Promise.reject(new Error('EskerraVaultSearch native module unavailable'));
     }
     return n.getIndexStatus(baseUri);
+  },
+  persistActiveVaultUriForWorker(uri: string): Promise<void> {
+    return getNative()?.persistActiveVaultUriForWorker(uri) ?? Promise.resolve();
   },
   scheduleFullRebuild(baseUri: string, reason: string): Promise<void> {
     return getNative()?.scheduleFullRebuild(baseUri, reason) ?? Promise.resolve();

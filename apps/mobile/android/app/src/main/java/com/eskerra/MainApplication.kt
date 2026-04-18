@@ -7,6 +7,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.eskerra.vaultsearch.VaultSearchReconcileWorker
 
 class MainApplication : Application(), ReactApplication {
 
@@ -40,5 +41,10 @@ class MainApplication : Application(), ReactApplication {
     }
     super.onCreate()
     loadReactNative(this)
+    try {
+      VaultSearchReconcileWorker.enqueuePeriodic(this)
+    } catch (_: Exception) {
+      // WorkManager may be unavailable in some test harnesses.
+    }
   }
 }

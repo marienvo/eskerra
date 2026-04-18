@@ -12,6 +12,7 @@ export type VaultSearchIndexStatus = {
   schemaVersion: number;
   indexReady: boolean;
   isBuilding: boolean;
+  bodiesIndexReady?: boolean;
   indexedNotes: number;
   lastFullBuildAt: number;
   lastReconciledAt: number;
@@ -49,6 +50,7 @@ export function parseVaultSearchIndexStatus(raw: unknown): VaultSearchIndexStatu
     schemaVersion: Number.isFinite(schemaNum) ? schemaNum : 0,
     indexReady: o.indexReady === true,
     isBuilding: o.isBuilding === true,
+    bodiesIndexReady: o.bodiesIndexReady === true ? true : o.bodiesIndexReady === false ? false : undefined,
     indexedNotes: Number(o.indexedNotes ?? 0),
     lastFullBuildAt: Number(o.lastFullBuildAt ?? 0),
     lastReconciledAt: Number(o.lastReconciledAt ?? 0),

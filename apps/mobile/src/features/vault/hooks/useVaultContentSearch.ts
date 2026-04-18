@@ -1,13 +1,14 @@
 import type {
   VaultSearchBestField,
   VaultSearchDonePayload,
+  VaultSearchIndexProgress,
   VaultSearchIndexStatusPayload,
   VaultSearchNoteResult,
   VaultSearchNoteSnippet,
   VaultSearchProgress,
   VaultSearchUpdatePayload,
 } from '@eskerra/core';
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {NativeEventEmitter, NativeModules} from 'react-native';
 
 import {eskerraVaultSearch} from '../../../native/eskerraVaultSearch';
@@ -92,6 +93,7 @@ function normalizeProgress(raw: unknown): VaultSearchProgress | null {
     return null;
   }
   const p = raw as Record<string, unknown>;
+  const bodiesRaw = p.bodiesIndexReady;
   return {
     scannedFiles: Number(p.scannedFiles ?? 0),
     totalHits: Number(p.totalHits ?? 0),
@@ -99,6 +101,7 @@ function normalizeProgress(raw: unknown): VaultSearchProgress | null {
     indexStatus: String(p.indexStatus ?? 'idle'),
     indexReady: Boolean(p.indexReady),
     isBuilding: p.isBuilding === true,
+    bodiesIndexReady: typeof bodiesRaw === 'boolean' ? bodiesRaw : undefined,
     schemaVersion:
       p.schemaVersion === undefined || p.schemaVersion === null
         ? undefined
@@ -125,6 +128,7 @@ function normalizeIndexStatusLive(raw: unknown): VaultSearchIndexStatusPayload |
       lastReconciledAt = n;
     }
   }
+  const bodiesRaw = o.bodiesIndexReady;
   return {
     vaultInstanceId: typeof o.vaultInstanceId === 'string' ? o.vaultInstanceId : undefined,
     status: String(st) as VaultSearchIndexStatusPayload['status'],
@@ -132,6 +136,26 @@ function normalizeIndexStatusLive(raw: unknown): VaultSearchIndexStatusPayload |
     skippedNotes: typeof o.skippedNotes === 'number' ? o.skippedNotes : undefined,
     reason: typeof o.reason === 'string' ? o.reason : undefined,
     lastReconciledAt,
+    bodiesIndexReady: typeof bodiesRaw === 'boolean' ? bodiesRaw : undefined,
+  };
+}
+
+function normalizeIndexProgressEvent(raw: unknown): VaultSearchIndexProgress | null {
+  if (typeof raw !== 'object' || raw === null) {
+    return null;
+  }
+  const o = raw as Record<string, unknown>;
+  const phase = o.phase;
+  if (phase !== 'titles' && phase !== 'bodies' && phase !== 'reconcile') {
+    return null;
+  }
+  return {
+    phase,
+    processed: Number(o.processed ?? 0),
+    total: Number(o.total ?? 0),
+    indexed: Number(o.indexed ?? 0),
+    skipped: Number(o.skipped ?? 0),
+    vaultInstanceId: String(o.vaultInstanceId ?? ''),
   };
 }
 
@@ -143,6 +167,8 @@ export type UseVaultContentSearchMobileOptions = {
   indexReady?: boolean;
   /** From native open/getIndexStatus; used to throttle reconcile. */
   lastReconciledAt?: number | null;
+  /** From native `open()` when titles are ready but body column is still filling. */
+  bodiesIndexReadyFromOpen?: boolean;
   debounceMs?: number;
 };
 
@@ -152,6 +178,7 @@ export function useVaultContentSearch({
   vaultInstanceId,
   indexReady = false,
   lastReconciledAt = null,
+  bodiesIndexReadyFromOpen = true,
   debounceMs = DEFAULT_DEBOUNCE_MS,
 }: UseVaultContentSearchMobileOptions) {
   const [query, setQuery] = useState('');
@@ -162,6 +189,7 @@ export function useVaultContentSearch({
   const [searchingStatusVisible, setSearchingStatusVisible] = useState(false);
   const [holdingPreviousResults, setHoldingPreviousResults] = useState(false);
   const [indexStatusLive, setIndexStatusLive] = useState<VaultSearchIndexStatusPayload | null>(null);
+  const [indexProgress, setIndexProgress] = useState<VaultSearchIndexProgress | null>(null);
 
   const searchIdRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -195,6 +223,7 @@ export function useVaultContentSearch({
 
   useEffect(() => {
     setIndexStatusLive(null);
+    setIndexProgress(null);
   }, [baseUri]);
 
   useEffect(() => {
@@ -325,6 +354,7 @@ export function useVaultContentSearch({
     });
     setNotes([]);
     setProgress(null);
+    setIndexProgress(null);
     setScanDone(true);
     setAwaitingDebouncedRun(false);
   }, [clearPendingSearchFlush, clearResultHoldTimer]);
@@ -430,7 +460,7 @@ export function useVaultContentSearch({
         if (live.lastReconciledAt != null && Number.isFinite(live.lastReconciledAt)) {
           lastReconciledAtRef.current = live.lastReconciledAt;
         }
-      } else if (st === 'building' || st === 'error') {
+      } else if (st === 'error') {
         indexReadyRef.current = false;
       }
       queueMicrotask(() => {
@@ -441,15 +471,34 @@ export function useVaultContentSearch({
       }
     };
 
+    const onIndexProgress = (raw: unknown) => {
+      const p = normalizeIndexProgressEvent(raw);
+      if (p == null) {
+        return;
+      }
+      if (!isVaultInstanceCurrent(p.vaultInstanceId, vaultInstanceIdRef.current)) {
+        logDroppedVaultSearchEvent(
+          'vaultInstanceId',
+          `index-progress vault=${p.vaultInstanceId} current=${vaultInstanceIdRef.current ?? ''}`,
+        );
+        return;
+      }
+      queueMicrotask(() => {
+        setIndexProgress(p);
+      });
+    };
+
     const subUpdate = emitter.addListener('vault-search:update', onUpdate);
     const subDone = emitter.addListener('vault-search:done', onDone);
     const subIndex = emitter.addListener('vault-search:index-status', onIndexStatus);
+    const subIndexProgress = emitter.addListener('vault-search:index-progress', onIndexProgress);
     return () => {
       clearResultHoldTimer();
       cancelNotesFlushRaf();
       subUpdate.remove();
       subDone.remove();
       subIndex.remove();
+      subIndexProgress.remove();
     };
   }, [open, baseUri, cancelNotesFlushRaf, clearResultHoldTimer, startSearchRetryIfPending]);
 
@@ -567,6 +616,32 @@ export function useVaultContentSearch({
     };
   }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer]);
 
+  const partialBodiesIndexing = useMemo(() => {
+    if (bodiesIndexReadyFromOpen === false) {
+      return true;
+    }
+    if (progress?.bodiesIndexReady === false) {
+      return true;
+    }
+    if (indexStatusLive?.bodiesIndexReady === false) {
+      return true;
+    }
+    if (
+      indexProgress != null &&
+      indexProgress.phase === 'bodies' &&
+      indexProgress.total > 0 &&
+      indexProgress.processed < indexProgress.total
+    ) {
+      return true;
+    }
+    return false;
+  }, [
+    bodiesIndexReadyFromOpen,
+    progress?.bodiesIndexReady,
+    indexStatusLive?.bodiesIndexReady,
+    indexProgress,
+  ]);
+
   return {
     query,
     setQuery,
@@ -577,5 +652,7 @@ export function useVaultContentSearch({
     searchingStatusVisible,
     holdingPreviousResults,
     indexStatusLive,
+    indexProgress,
+    partialBodiesIndexing,
   };
 }

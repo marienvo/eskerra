@@ -47,6 +47,7 @@ export function VaultSearchScreen({navigation}: Props) {
   const {baseUri} = useVaultContext();
   const [vaultInstanceId, setVaultInstanceId] = useState<string | null>(null);
   const [indexReady, setIndexReady] = useState(false);
+  const [bodiesIndexReady, setBodiesIndexReady] = useState(true);
   const [lastReconciledAt, setLastReconciledAt] = useState<number | null>(null);
   const [hookOpen, setHookOpen] = useState(true);
 
@@ -76,6 +77,7 @@ export function VaultSearchScreen({navigation}: Props) {
         }
         setVaultInstanceId(st.vaultInstanceId);
         setIndexReady(st.indexReady);
+        setBodiesIndexReady(st.bodiesIndexReady !== false);
         setLastReconciledAt(st.lastReconciledAt);
       } catch {
         if (!cancelled) {
@@ -127,12 +129,15 @@ export function VaultSearchScreen({navigation}: Props) {
     awaitingDebouncedRun,
     searchingStatusVisible,
     indexStatusLive,
+    indexProgress,
+    partialBodiesIndexing,
   } = useVaultContentSearch({
     open: hookOpen,
     baseUri,
     vaultInstanceId,
     indexReady,
     lastReconciledAt,
+    bodiesIndexReadyFromOpen: bodiesIndexReady,
   });
 
   const colorMode = useColorMode();
@@ -156,7 +161,16 @@ export function VaultSearchScreen({navigation}: Props) {
       : '';
   const indexingHint =
     indexStatusLive?.status === 'building' ||
-    (progress?.isBuilding === true && progress.indexReady !== true);
+    (progress?.isBuilding === true && progress.indexReady !== true) ||
+    (indexProgress != null && (indexProgress.phase === 'titles' || indexProgress.phase === 'bodies')) ||
+    bodiesIndexReady === false;
+
+  const indexProgressLabel =
+    indexProgress != null
+      ? `Indexing (${indexProgress.phase})… ${indexProgress.processed} / ${indexProgress.total}`
+      : indexStatusLive?.indexedNotes != null
+        ? `Indexing… (${indexStatusLive.indexedNotes} notes)`
+        : 'Indexing vault notes…';
 
   const statusLine =
     trimmed.length === 0
@@ -212,11 +226,7 @@ export function VaultSearchScreen({navigation}: Props) {
                 </Pressable>
               </Box>
             ) : indexingHint ? (
-              <Text style={[styles.hint, {color: muted}]}>
-                {indexStatusLive?.indexedNotes != null
-                  ? `Building local search index… (${indexStatusLive.indexedNotes} notes)`
-                  : 'Building local search index…'}
-              </Text>
+              <Text style={[styles.hint, {color: muted}]}>{indexProgressLabel}</Text>
             ) : (
               <Text style={[styles.hint, {color: muted}]}>
                 {progress != null && !progress.indexReady
@@ -270,6 +280,12 @@ export function VaultSearchScreen({navigation}: Props) {
           );
         }}
       />
+      {trimmed.length > 0 && partialBodiesIndexing ? (
+        <Text style={[styles.footerHint, {color: muted}]}>
+          Some notes are still being indexed for full body search; title and path matches are already
+          available.
+        </Text>
+      ) : null}
     </Box>
   );
 }
@@ -336,6 +352,12 @@ const styles = StyleSheet.create({
   },
   highlight: {
     backgroundColor: 'rgba(255, 220, 0, 0.35)',
+  },
+  footerHint: {
+    fontSize: 12,
+    paddingHorizontal: LIST_HORIZONTAL_INSET,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   headerIcon: {
     marginLeft: 12,

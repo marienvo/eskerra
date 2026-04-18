@@ -28,7 +28,10 @@ import {normalizeNoteUri} from '../storage/noteUriNormalize';
 import {clearPodcastBootstrapCache} from '../../features/podcasts/services/podcastBootstrapCache';
 import {EskerraLocalSettings, EskerraSettings, NoteSummary} from '../../types';
 import {eskerraVaultSearch} from '../../native/eskerraVaultSearch';
-import {requestVaultSearchIndexWarmup} from '../../features/vault/vaultSearchIndexMaintenance';
+import {
+  installVaultSearchAutoRefresh,
+  requestVaultSearchIndexWarmup,
+} from '../../features/vault/vaultSearchIndexMaintenance';
 import {prepareVaultSession} from './applyVaultSession';
 import {
   buildMockVaultMarkdownRefs,
@@ -102,6 +105,7 @@ function recordToInboxContentCache(
 
 export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const [baseUri, setBaseUri] = useState<string | null>(initialSession?.uri ?? null);
+  const baseUriRef = useRef<string | null>(baseUri);
   const [isLoading, setIsLoading] = useState<boolean>(initialSession != null ? false : true);
   const [settings, setSettings] = useState<EskerraSettings | null>(
     initialSession?.settings ?? null,
@@ -472,9 +476,20 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
   }, [baseUri]);
 
   useEffect(() => {
-    if (Platform.OS === 'android' && baseUri != null && baseUri.trim() !== '') {
-      requestVaultSearchIndexWarmup(baseUri);
+    baseUriRef.current = baseUri;
+  }, [baseUri]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !eskerraVaultSearch.isAvailable()) {
+      return;
     }
+    if (baseUri == null || baseUri.trim() === '') {
+      return;
+    }
+    const trimmed = baseUri.trim();
+    requestVaultSearchIndexWarmup(trimmed);
+    void eskerraVaultSearch.persistActiveVaultUriForWorker(trimmed).catch(() => undefined);
+    return installVaultSearchAutoRefresh(() => baseUriRef.current);
   }, [baseUri]);
 
   const value = useMemo(

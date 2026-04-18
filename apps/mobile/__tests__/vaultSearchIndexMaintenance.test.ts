@@ -18,19 +18,14 @@ jest.mock('../src/native/eskerraVaultSearch', () => ({
     isAvailable: () => true,
     getIndexStatus: jest.fn(),
     open: jest.fn(),
+    persistActiveVaultUriForWorker: jest.fn(() => Promise.resolve()),
     reconcile: jest.fn(() => Promise.resolve()),
     scheduleFullRebuild: jest.fn(() => Promise.resolve()),
   },
 }));
 
-const {eskerraVaultSearch} = jest.requireMock('../src/native/eskerraVaultSearch') as {
-  eskerraVaultSearch: {
-    getIndexStatus: jest.Mock;
-    open: jest.Mock;
-    reconcile: jest.Mock;
-    scheduleFullRebuild: jest.Mock;
-  };
-};
+const mod = jest.requireMock('../src/native/eskerraVaultSearch');
+const eskerraVaultSearch = mod.eskerraVaultSearch;
 
 const readyStatus = {
   baseUriHash: TEST_URI_HASH,
@@ -68,12 +63,16 @@ describe('vaultSearchIndexMaintenance', () => {
       schemaVersion: 1,
       vaultInstanceId: 'v1',
     };
-    eskerraVaultSearch.open.mockResolvedValue(notReady);
     eskerraVaultSearch.getIndexStatus.mockResolvedValue(notReady);
+
+    const afterRebuild = {...notReady, indexReady: true, lastFullBuildAt: 1, vaultInstanceId: 'v2'};
+    eskerraVaultSearch.open.mockReset();
+    eskerraVaultSearch.open.mockResolvedValueOnce(notReady).mockResolvedValueOnce(afterRebuild);
 
     await runVaultSearchIndexMaintenance(TEST_URI);
 
     expect(eskerraVaultSearch.scheduleFullRebuild).toHaveBeenCalledWith(TEST_URI, 'missing');
+    expect(eskerraVaultSearch.open).toHaveBeenCalledTimes(2);
   });
 
   test('reconcile when index ready and stale', async () => {
@@ -90,7 +89,7 @@ describe('vaultSearchIndexMaintenance', () => {
   });
 
   test('concurrent calls for same URI share one in-flight run', async () => {
-    let resolveOpen!: (v: typeof readyStatus) => void;
+    let resolveOpen;
     eskerraVaultSearch.open.mockImplementation(
       () =>
         new Promise(resolve => {
@@ -101,7 +100,7 @@ describe('vaultSearchIndexMaintenance', () => {
 
     const p1 = runVaultSearchIndexMaintenance(TEST_URI);
     const p2 = runVaultSearchIndexMaintenance(TEST_URI);
-    resolveOpen!(readyStatus);
+    resolveOpen(readyStatus);
     await Promise.all([p1, p2]);
 
     expect(eskerraVaultSearch.open).toHaveBeenCalledTimes(1);

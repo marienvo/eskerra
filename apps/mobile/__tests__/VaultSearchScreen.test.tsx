@@ -26,6 +26,7 @@ jest.mock('../src/native/eskerraVaultSearch', () => {
       cancel: jest.fn(() => Promise.resolve()),
       getIndexStatus: jest.fn(() => Promise.resolve(defaultIndexStatus)),
       open: jest.fn(() => Promise.resolve(defaultIndexStatus)),
+      persistActiveVaultUriForWorker: jest.fn(() => Promise.resolve()),
       reconcile: jest.fn(() => Promise.resolve()),
       scheduleFullRebuild: jest.fn(() => Promise.resolve()),
       start: jest.fn(() => Promise.resolve()),

@@ -1,4 +1,4 @@
-import {InteractionManager} from 'react-native';
+import {AppState, type AppStateStatus, InteractionManager} from 'react-native';
 
 import {eskerraVaultSearch, type VaultSearchOpenResult} from '../../native/eskerraVaultSearch';
 import {
@@ -10,6 +10,8 @@ import {
   VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
   vaultSearchBaseUriHash,
 } from './vaultSearchLifecycle';
+
+const FOREGROUND_INDEX_REFRESH_MS = 5 * 60 * 1000;
 
 function rebuildReason(full: VaultSearchIndexStatus, canonicalBaseUri: string): string {
   const expectedHash = vaultSearchBaseUriHash(canonicalizeVaultBaseUriForSearch(canonicalBaseUri));
@@ -50,7 +52,8 @@ export function runVaultSearchIndexMaintenance(baseUri: string): Promise<VaultSe
       if (fullNeedsRebuild(full, trimmed)) {
         const reason = rebuildReason(full, trimmed);
         await eskerraVaultSearch.scheduleFullRebuild(trimmed, reason).catch(() => undefined);
-        return st;
+        /** Re-open so `vaultInstanceId` / index flags match the post-rebuild native state. */
+        return await eskerraVaultSearch.open(trimmed).catch(() => st);
       }
       if (shouldReconcile(full, Date.now())) {
         void eskerraVaultSearch.reconcile(trimmed).catch(() => undefined);
@@ -79,4 +82,33 @@ export function requestVaultSearchIndexWarmup(baseUri: string | null | undefined
   InteractionManager.runAfterInteractions(() => {
     void runVaultSearchIndexMaintenance(trimmed);
   });
+}
+
+/**
+ * Re-run index maintenance when the app returns to the foreground and on a light interval while active.
+ * Does not touch cold start: call from an effect after `baseUri` is known.
+ */
+export function installVaultSearchAutoRefresh(getBaseUri: () => string | null | undefined): () => void {
+  const onAppState = (next: AppStateStatus) => {
+    if (next === 'active') {
+      const u = getBaseUri()?.trim();
+      if (u) {
+        void runVaultSearchIndexMaintenance(u);
+      }
+    }
+  };
+  const sub = AppState.addEventListener('change', onAppState);
+  const interval = setInterval(() => {
+    if (AppState.currentState !== 'active') {
+      return;
+    }
+    const u = getBaseUri()?.trim();
+    if (u) {
+      void runVaultSearchIndexMaintenance(u);
+    }
+  }, FOREGROUND_INDEX_REFRESH_MS);
+  return () => {
+    sub.remove();
+    clearInterval(interval);
+  };
 }
