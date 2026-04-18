@@ -227,4 +227,54 @@ describe('createPlaylistEtagPoller', () => {
     await vi.waitFor(() => expect(onTransientError).toHaveBeenCalledWith(expect.any(Error)));
     poller.dispose();
   });
+
+  it('setIntervalMs reschedules without immediate tick and preserves etag', async () => {
+    const entry = {
+      controlRevision: 0,
+      durationMs: 0,
+      episodeId: 'e',
+      mp3Url: 'u',
+      playbackOwnerId: '',
+      positionMs: 0,
+      updatedAt: 1,
+    };
+    const fetchConditional = vi
+      .fn()
+      .mockResolvedValue({kind: 'not_modified'} as R2PlaylistConditionalResult);
+    fetchConditional.mockResolvedValueOnce({kind: 'updated', entry, etag: '"etag1"'} as R2PlaylistConditionalResult);
+    const poller = createPlaylistEtagPoller({
+      intervalMs: 1000,
+      fetchConditional,
+      onDataChanged: vi.fn(),
+    });
+    poller.setActive(true);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(1));
+    expect(poller.getEtag()).toBe('"etag1"');
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(2));
+    poller.setIntervalMs(5000);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchConditional).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(4000);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(3));
+    expect(poller.getEtag()).toBe('"etag1"');
+    poller.dispose();
+  });
+
+  it('setIntervalMs while inactive updates next schedule after activate', async () => {
+    const fetchConditional = vi.fn().mockResolvedValue({kind: 'not_modified'} as R2PlaylistConditionalResult);
+    const poller = createPlaylistEtagPoller({
+      intervalMs: 1000,
+      fetchConditional,
+      onDataChanged: () => undefined,
+    });
+    poller.setIntervalMs(3000);
+    poller.setActive(true);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchConditional).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.waitFor(() => expect(fetchConditional).toHaveBeenCalledTimes(2));
+    poller.dispose();
+  });
 });

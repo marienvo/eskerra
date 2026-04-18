@@ -584,7 +584,7 @@ export default function App() {
   }, [mainShellReady, maximized, tiling]);
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
-    allowPolling: !desktopPlayback.episodeSelectLocked,
+    allowPolling: !desktopPlayback.localPlaybackActive,
     deviceInstanceId,
     onRemotePlaylistChanged: bumpPlaylistDiskRevision,
     onRemotePlaylistCleared: bumpPlaylistDiskRevision,

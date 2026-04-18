@@ -17,6 +17,11 @@ export type CreatePlaylistEtagPollerOptions = {
 
 export type PlaylistEtagPoller = {
   setActive: (active: boolean) => void;
+  /**
+   * Changes the poll interval while preserving ETag state. If active, reschedules the timer
+   * without an extra immediate tick (use {@link triggerCheck} when you want that).
+   */
+  setIntervalMs: (intervalMs: number) => void;
   /** Runs one poll immediately if active and idle; skips when a request is in flight. */
   triggerCheck: () => void;
   dispose: () => void;
@@ -40,6 +45,7 @@ export function createPlaylistEtagPoller(options: CreatePlaylistEtagPollerOption
   /** True after we have observed a successful `updated` for this poller lifetime. */
   let haveRemote = false;
   let active = false;
+  let currentIntervalMs = options.intervalMs;
   let intervalId: ReturnType<typeof setInterval> | null = null;
   let inFlight = false;
   let disposed = false;
@@ -98,7 +104,7 @@ export function createPlaylistEtagPoller(options: CreatePlaylistEtagPollerOption
     clearTimer();
     intervalId = setInterval(() => {
       void tick();
-    }, options.intervalMs);
+    }, currentIntervalMs);
   };
 
   return {
@@ -116,6 +122,17 @@ export function createPlaylistEtagPoller(options: CreatePlaylistEtagPollerOption
         return;
       }
       void tick();
+      scheduleInterval();
+    },
+
+    setIntervalMs(nextMs: number): void {
+      if (disposed || nextMs === currentIntervalMs) {
+        return;
+      }
+      currentIntervalMs = nextMs;
+      if (!active) {
+        return;
+      }
       scheduleInterval();
     },
 
