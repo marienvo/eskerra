@@ -1,7 +1,7 @@
 import {
-  addLocalCalendarDays,
   collectTodayHubRowStemsFromVaultMarkdownRefs,
   formatTodayHubMondayStem,
+  parseTodayHubRowStemToLocalCalendarDate,
   sortedTodayHubNoteUrisFromRefs,
 } from '@eskerra/core';
 import React, {
@@ -17,6 +17,36 @@ import {useVaultContext} from '../../../core/vault/VaultContext';
 
 function normalizeLocalCalendarDate(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Largest `YYYY-MM-DD` stem in `sorted` that is strictly before `currentStem` (lex order = chronological). */
+function findEarlierStem(sorted: readonly string[], currentStem: string): string | null {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid]! < currentStem) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo > 0 ? sorted[lo - 1]! : null;
+}
+
+/** Smallest stem in `sorted` that is strictly after `currentStem`. */
+function findLaterStem(sorted: readonly string[], currentStem: string): string | null {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid]! <= currentStem) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo < sorted.length ? sorted[lo]! : null;
 }
 
 export type VaultTodayHubContextValue = {
@@ -51,7 +81,6 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
   const [weekNavSubtitle, setWeekNavSubtitle] = useState('');
 
   const calendarAnchorWeekStartRef = useRef<Date | null>(null);
-  const rowStemsRef = useRef<ReadonlySet<string>>(new Set());
 
   const rowStems = useMemo(() => {
     if (!activeTodayHubUri) {
@@ -60,7 +89,14 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
     return collectTodayHubRowStemsFromVaultMarkdownRefs(activeTodayHubUri, vaultMarkdownRefs);
   }, [activeTodayHubUri, vaultMarkdownRefs]);
 
-  rowStemsRef.current = rowStems;
+  const sortedRowStems = useMemo(() => {
+    const arr = Array.from(rowStems);
+    arr.sort();
+    return arr;
+  }, [rowStems]);
+
+  const sortedRowStemsRef = useRef<readonly string[]>([]);
+  sortedRowStemsRef.current = sortedRowStems;
 
   const setActiveTodayHubUri = useCallback((uri: string | null) => {
     setActiveTodayHubUriState(uri);
@@ -85,29 +121,32 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
     if (!selectedWeekStart || !activeTodayHubUri) {
       return false;
     }
-    const prevStart = addLocalCalendarDays(selectedWeekStart, -7);
-    return rowStems.has(formatTodayHubMondayStem(prevStart));
-  }, [activeTodayHubUri, rowStems, selectedWeekStart]);
+    const currentStem = formatTodayHubMondayStem(selectedWeekStart);
+    return findEarlierStem(sortedRowStems, currentStem) != null;
+  }, [activeTodayHubUri, selectedWeekStart, sortedRowStems]);
 
   const canGoNext = useMemo(() => {
     if (!selectedWeekStart || !activeTodayHubUri) {
       return false;
     }
-    const nextStart = addLocalCalendarDays(selectedWeekStart, 7);
-    return rowStems.has(formatTodayHubMondayStem(nextStart));
-  }, [activeTodayHubUri, rowStems, selectedWeekStart]);
+    const currentStem = formatTodayHubMondayStem(selectedWeekStart);
+    return findLaterStem(sortedRowStems, currentStem) != null;
+  }, [activeTodayHubUri, selectedWeekStart, sortedRowStems]);
 
   const goPrevWeek = useCallback(() => {
     setSelectedWeekStart(prev => {
       if (!prev) {
         return prev;
       }
-      const prevStart = addLocalCalendarDays(prev, -7);
-      const stem = formatTodayHubMondayStem(prevStart);
-      if (!rowStemsRef.current.has(stem)) {
+      const stem = findEarlierStem(
+        sortedRowStemsRef.current,
+        formatTodayHubMondayStem(prev),
+      );
+      if (!stem) {
         return prev;
       }
-      return normalizeLocalCalendarDate(prevStart);
+      const d = parseTodayHubRowStemToLocalCalendarDate(stem);
+      return d ? normalizeLocalCalendarDate(d) : prev;
     });
   }, []);
 
@@ -116,12 +155,15 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
       if (!prev) {
         return prev;
       }
-      const nextStart = addLocalCalendarDays(prev, 7);
-      const stem = formatTodayHubMondayStem(nextStart);
-      if (!rowStemsRef.current.has(stem)) {
+      const stem = findLaterStem(
+        sortedRowStemsRef.current,
+        formatTodayHubMondayStem(prev),
+      );
+      if (!stem) {
         return prev;
       }
-      return normalizeLocalCalendarDate(nextStart);
+      const d = parseTodayHubRowStemToLocalCalendarDate(stem);
+      return d ? normalizeLocalCalendarDate(d) : prev;
     });
   }, []);
 
