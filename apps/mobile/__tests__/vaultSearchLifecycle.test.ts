@@ -1,6 +1,7 @@
 import {
   canonicalizeVaultBaseUriForSearch,
   fullNeedsRebuild,
+  parseVaultSearchIndexStatus,
   shouldReconcile,
   VAULT_SEARCH_RECONCILE_MAX_AGE_MS,
   VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
@@ -22,6 +23,35 @@ function status(partial: Partial<Parameters<typeof fullNeedsRebuild>[0]>) {
 }
 
 describe('vaultSearchLifecycle', () => {
+  test('parseVaultSearchIndexStatus maps notesRegistryReady', () => {
+    expect(
+      parseVaultSearchIndexStatus({
+        vaultInstanceId: 'v',
+        baseUriHash: 'h',
+        schemaVersion: 3,
+        indexReady: true,
+        isBuilding: false,
+        notesRegistryReady: true,
+        indexedNotes: 0,
+        lastFullBuildAt: 0,
+        lastReconciledAt: 0,
+      })?.notesRegistryReady,
+    ).toBe(true);
+    expect(
+      parseVaultSearchIndexStatus({
+        vaultInstanceId: 'v',
+        baseUriHash: 'h',
+        schemaVersion: 3,
+        indexReady: true,
+        isBuilding: false,
+        notesRegistryReady: false,
+        indexedNotes: 0,
+        lastFullBuildAt: 0,
+        lastReconciledAt: 0,
+      })?.notesRegistryReady,
+    ).toBe(false);
+  });
+
   test('canonicalizeVaultBaseUriForSearch strips trailing slash', () => {
     expect(canonicalizeVaultBaseUriForSearch('content://tree/x/')).toBe('content://tree/x');
   });

@@ -135,6 +135,7 @@ describe('App bootstrap preload', () => {
       settings: {},
       localSettings: {deviceName: '', displayName: 'Notebook A'},
       inboxPrefetch: null,
+      todayHubContentByUri: null,
       sessionPrep: 'native',
     });
 
@@ -180,6 +181,7 @@ describe('App bootstrap preload', () => {
       localSettings: {deviceName: '', displayName: 'Notebook A'},
       inboxContentByUri: null,
       inboxPrefetch: null,
+      todayHubContentByUri: null,
     });
 
     const messages = appBreadcrumbMock.mock.calls.map(call => call[0].message);

@@ -9,6 +9,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.eskerra.vaultsearch.VaultPath
@@ -59,10 +60,14 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
    * string) and `inboxNotes` (array of uri/name/lastModified).
    */
   @ReactMethod
-  fun prepareEskerraSession(baseUri: String, promise: Promise) {
+  fun prepareEskerraSession(
+    baseUri: String,
+    prefetchNoteUris: ReadableArray?,
+    promise: Promise,
+  ) {
     safExecutor.execute {
       try {
-        val result = prepareEskerraSessionSync(baseUri.trim())
+        val result = prepareEskerraSessionSync(baseUri.trim(), prefetchNoteUris)
         reactContext.runOnUiQueueThread { promise.resolve(result) }
       } catch (e: Exception) {
         Log.e(TAG, "prepareEskerraSession failed", e)
@@ -356,7 +361,10 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     rootChildrenByName[ESKERRA_DIR_NAME] = legacy
   }
 
-  private fun prepareEskerraSessionSync(baseUriTrimmed: String): WritableMap {
+  private fun prepareEskerraSessionSync(
+    baseUriTrimmed: String,
+    prefetchNoteUris: ReadableArray?,
+  ): WritableMap {
     val uri = Uri.parse(baseUriTrimmed)
     val root =
       documentFileFromStorageUri(uri)
@@ -456,6 +464,20 @@ class VaultListingModule(private val reactContext: ReactApplicationContext) :
     val out = Arguments.createMap()
     out.putString("settings", raw)
     out.putArray("inboxNotes", prepareRowsToWritableArray(inboxRows, resolver))
+    if (prefetchNoteUris != null && prefetchNoteUris.size() > 0) {
+      val prefetchArr = Arguments.createArray()
+      for (i in 0 until prefetchNoteUris.size()) {
+        val noteUri = prefetchNoteUris.getString(i) ?: continue
+        val content = readInboxMarkdownContentForPrepare(resolver, noteUri)
+        val entry = Arguments.createMap()
+        entry.putString("uri", noteUri)
+        if (content != null) {
+          entry.putString("content", content)
+        }
+        prefetchArr.pushMap(entry)
+      }
+      out.putArray("todayHubPrefetch", prefetchArr)
+    }
     return out
   }
 

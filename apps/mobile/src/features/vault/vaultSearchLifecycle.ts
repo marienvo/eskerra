@@ -1,7 +1,7 @@
 import {createHash} from 'react-native-quick-crypto';
 
-/** Must match [com.eskerra.vaultsearch.VaultSearchModule] SCHEMA_VERSION. */
-export const VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION = 1;
+/** Must match [com.eskerra.vaultsearch.VaultSearchSchema] SCHEMA_VERSION. */
+export const VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION = 3;
 
 export const VAULT_SEARCH_RECONCILE_MAX_AGE_MS = 60_000;
 
@@ -13,6 +13,8 @@ export type VaultSearchIndexStatus = {
   indexReady: boolean;
   isBuilding: boolean;
   bodiesIndexReady?: boolean;
+  /** True when native has fully aligned [vault_markdown_notes] (migration / rebuild / reconcile). */
+  notesRegistryReady?: boolean;
   indexedNotes: number;
   lastFullBuildAt: number;
   lastReconciledAt: number;
@@ -51,6 +53,7 @@ export function parseVaultSearchIndexStatus(raw: unknown): VaultSearchIndexStatu
     indexReady: o.indexReady === true,
     isBuilding: o.isBuilding === true,
     bodiesIndexReady: o.bodiesIndexReady === true ? true : o.bodiesIndexReady === false ? false : undefined,
+    notesRegistryReady: o.notesRegistryReady === true ? true : o.notesRegistryReady === false ? false : undefined,
     indexedNotes: Number(o.indexedNotes ?? 0),
     lastFullBuildAt: Number(o.lastFullBuildAt ?? 0),
     lastReconciledAt: Number(o.lastReconciledAt ?? 0),

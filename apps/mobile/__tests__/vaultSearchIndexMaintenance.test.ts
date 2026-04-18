@@ -38,7 +38,7 @@ const readyStatus = {
   isBuilding: false,
   lastFullBuildAt: 1,
   lastReconciledAt: Number.MAX_SAFE_INTEGER,
-  schemaVersion: 1,
+  schemaVersion: 3,
   vaultInstanceId: 'v1',
 };
 
@@ -64,7 +64,7 @@ describe('vaultSearchIndexMaintenance', () => {
       isBuilding: false,
       lastFullBuildAt: 0,
       lastReconciledAt: 0,
-      schemaVersion: 1,
+      schemaVersion: 3,
       vaultInstanceId: 'v1',
     };
     eskerraVaultSearch.getIndexStatus.mockResolvedValue(notReady);
@@ -92,7 +92,7 @@ describe('vaultSearchIndexMaintenance', () => {
     expect(eskerraVaultSearch.reconcile).toHaveBeenCalledWith(TEST_URI);
   });
 
-  test('partial persisted index reconciles instead of full rebuild', async () => {
+  test('schema v3 persisted partial index reconciles instead of full rebuild', async () => {
     const partial = {
       baseUriHash: TEST_URI_HASH,
       indexedNotes: 12,
@@ -100,7 +100,7 @@ describe('vaultSearchIndexMaintenance', () => {
       isBuilding: false,
       lastFullBuildAt: 1,
       lastReconciledAt: 0,
-      schemaVersion: 1,
+      schemaVersion: 3,
       vaultInstanceId: 'v-partial',
     };
     eskerraVaultSearch.open.mockResolvedValue(partial);

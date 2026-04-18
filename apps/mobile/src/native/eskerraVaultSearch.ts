@@ -10,9 +10,17 @@ export type VaultSearchOpenResult = {
   isBuilding: boolean;
   /** False while title rows exist but body column is still being filled (incremental index). */
   bodiesIndexReady?: boolean;
+  /** When true, [readVaultMarkdownNotes] reflects a complete registry (not a partial incremental fill). */
+  notesRegistryReady?: boolean;
   indexedNotes: number;
   lastFullBuildAt: number;
   lastReconciledAt: number;
+};
+
+export type VaultMarkdownNoteRegistryRow = {
+  lookupName: string;
+  displayName: string;
+  uri: string;
 };
 
 type NativeModule = {
@@ -22,6 +30,8 @@ type NativeModule = {
   scheduleFullRebuild: (baseUri: string, reason: string) => Promise<void>;
   reconcile: (baseUri: string) => Promise<void>;
   touchPaths: (baseUri: string, paths: string[]) => Promise<void>;
+  readVaultMarkdownNotes?: (baseUri: string) => Promise<VaultMarkdownNoteRegistryRow[]>;
+  touchMarkdownNotes?: (baseUri: string, uris: string[]) => Promise<void>;
   start: (baseUri: string, searchId: string, query: string) => Promise<void>;
   cancel: () => Promise<void>;
 };
@@ -64,6 +74,13 @@ export const eskerraVaultSearch = {
   touchPaths(baseUri: string, paths: string[]): Promise<void> {
     return getNative()?.touchPaths(baseUri, paths) ?? Promise.resolve();
   },
+  readVaultMarkdownNotes(baseUri: string): Promise<VaultMarkdownNoteRegistryRow[]> {
+    const n = getNative();
+    if (!n?.readVaultMarkdownNotes) {
+      return Promise.resolve([]);
+    }
+    return n.readVaultMarkdownNotes(baseUri);
+  },
   start(baseUri: string, searchId: string, query: string): Promise<void> {
     const n = getNative();
     if (!n) {
@@ -91,4 +108,22 @@ export async function touchVaultSearchNoteUris(
     return;
   }
   await eskerraVaultSearch.touchPaths(baseUri.trim(), [...paths]).catch(() => undefined);
+}
+
+/** Lightweight markdown notes registry sync (Android); no-op when unavailable. */
+export async function touchMarkdownNoteUris(
+  baseUri: string | null | undefined,
+  uris: readonly string[],
+): Promise<void> {
+  if (baseUri == null || baseUri.trim() === '' || uris.length === 0) {
+    return;
+  }
+  if (baseUri.trim() === DEV_MOCK_VAULT_URI) {
+    return;
+  }
+  const n = getNative();
+  if (!n?.touchMarkdownNotes) {
+    return;
+  }
+  await n.touchMarkdownNotes(baseUri.trim(), [...uris]).catch(() => undefined);
 }

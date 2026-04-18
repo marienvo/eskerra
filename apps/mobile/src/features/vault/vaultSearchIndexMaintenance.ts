@@ -42,6 +42,7 @@ function mergeOpenWithIndexStatus(
     indexReady: full.indexReady,
     isBuilding: full.isBuilding,
     bodiesIndexReady: full.bodiesIndexReady ?? openResult.bodiesIndexReady,
+    notesRegistryReady: full.notesRegistryReady ?? openResult.notesRegistryReady,
     indexedNotes: full.indexedNotes,
     lastFullBuildAt: full.lastFullBuildAt,
     lastReconciledAt: full.lastReconciledAt,

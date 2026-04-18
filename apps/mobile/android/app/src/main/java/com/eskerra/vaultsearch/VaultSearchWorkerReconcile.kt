@@ -30,6 +30,7 @@ internal object VaultSearchWorkerReconcile {
       )
     db.enableWriteAheadLogging()
     db.execSQL("PRAGMA synchronous=NORMAL;")
+    VaultSearchSchema.createTables(db)
     try {
       val root = documentFromUri(context, Uri.parse(canonical)) ?: return
       val onDisk = HashMap<String, FileSnapshot>()
@@ -61,7 +62,9 @@ internal object VaultSearchWorkerReconcile {
           val doc = documentFromUri(context, Uri.parse(uri)) ?: continue
           upsertNoteDocument(db, canonical, doc, context.contentResolver)
         }
-        metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, System.currentTimeMillis().toString())
+        val recAt = System.currentTimeMillis()
+        metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, recAt.toString())
+        metaPut(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT, recAt.toString())
         db.setTransactionSuccessful()
       } finally {
         db.endTransaction()
@@ -90,6 +93,7 @@ internal object VaultSearchWorkerReconcile {
   private fun deleteNoteByUri(db: SQLiteDatabase, uriKey: String) {
     db.execSQL("DELETE FROM notes WHERE uri = ?", arrayOf(uriKey))
     db.execSQL("DELETE FROM note_meta WHERE uri = ?", arrayOf(uriKey))
+    VaultMarkdownNotesRegistry.deleteByUriKey(db, uriKey)
   }
 
   private fun upsertNoteDocument(
@@ -119,6 +123,7 @@ internal object VaultSearchWorkerReconcile {
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
       arrayOf(key, rel, name, title, len, doc.lastModified()),
     )
+    VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
   }
 
   private fun readUtf8(resolver: ContentResolver, uri: Uri, maxBytes: Int): String? {

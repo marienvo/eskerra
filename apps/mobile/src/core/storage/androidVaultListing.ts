@@ -14,6 +14,7 @@ type NativeVaultListingModule = {
   listVaultMarkdownRefs?: (baseUri: string) => Promise<NativeVaultMarkdownRefRow[]>;
   prepareEskerraSession?: (
     baseUri: string,
+    prefetchNoteUris: string[] | null | undefined,
   ) => Promise<
     | string
     | {
@@ -38,6 +39,8 @@ export type PreparedEskerraSessionNative = {
   inboxContentByUri: Record<string, string> | null;
   inboxPrefetch: NoteSummary[] | null;
   settingsJson: string;
+  /** Prefetched Today hub intro + week row bodies from native prepare (when requested). */
+  todayHubContentByUri: Record<string, string> | null;
 };
 
 function mapNativeInboxRow(row: {
@@ -113,8 +116,13 @@ export async function tryListVaultMarkdownRefsNative(
  * yields `inboxPrefetch: null`. Returns null when the module is missing, the platform is not Android,
  * or native prepare fails (caller should fall back to initEskerra + readSettings).
  */
+export type TryPrepareEskerraSessionOptions = {
+  prefetchNoteUris?: string[] | null;
+};
+
 export async function tryPrepareEskerraSessionNative(
   baseUri: string,
+  options?: TryPrepareEskerraSessionOptions | null,
 ): Promise<PreparedEskerraSessionNative | null> {
   if (Platform.OS !== 'android') {
     return null;
@@ -132,9 +140,18 @@ export async function tryPrepareEskerraSessionNative(
   }
 
   try {
-    const raw = await mod.prepareEskerraSession(baseUri);
+    const prefetch = options?.prefetchNoteUris;
+    const raw = await mod.prepareEskerraSession(
+      baseUri,
+      prefetch != null && prefetch.length > 0 ? prefetch : null,
+    );
     if (typeof raw === 'string') {
-      return {inboxContentByUri: null, settingsJson: raw, inboxPrefetch: null};
+      return {
+        inboxContentByUri: null,
+        settingsJson: raw,
+        inboxPrefetch: null,
+        todayHubContentByUri: null,
+      };
     }
     if (
       raw == null ||
@@ -151,6 +168,7 @@ export async function tryPrepareEskerraSessionNative(
         uri: string;
       }>;
       settings: string;
+      todayHubPrefetch?: Array<{uri?: string; content?: string}>;
     };
     const inboxNotes = structured.inboxNotes;
     const inboxPrefetch = Array.isArray(inboxNotes)
@@ -166,10 +184,22 @@ export async function tryPrepareEskerraSessionNative(
       }
       inboxContentByUri = Object.keys(byUri).length > 0 ? byUri : null;
     }
+    let todayHubContentByUri: Record<string, string> | null = null;
+    const hubPrefetch = structured.todayHubPrefetch;
+    if (Array.isArray(hubPrefetch)) {
+      const byUri: Record<string, string> = {};
+      for (const row of hubPrefetch) {
+        if (typeof row.uri === 'string' && typeof row.content === 'string') {
+          byUri[normalizeNoteUri(row.uri)] = row.content;
+        }
+      }
+      todayHubContentByUri = Object.keys(byUri).length > 0 ? byUri : null;
+    }
     return {
       inboxContentByUri,
       settingsJson: structured.settings,
       inboxPrefetch,
+      todayHubContentByUri,
     };
   } catch {
     return null;

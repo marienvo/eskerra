@@ -12,6 +12,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.ByteArrayOutputStream
@@ -127,6 +128,35 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       } catch (e: Exception) {
         reactContext.runOnUiQueueThread {
           promise.reject(E_VAULT_SEARCH, e.message ?: "touchPaths failed", e)
+        }
+      }
+    }
+  }
+
+  @ReactMethod
+  fun readVaultMarkdownNotes(baseUri: String, promise: Promise) {
+    writeExecutor.execute {
+      try {
+        val arr = readVaultMarkdownNotesSync(baseUri.trim())
+        reactContext.runOnUiQueueThread { promise.resolve(arr) }
+      } catch (e: Exception) {
+        Log.e(TAG, "readVaultMarkdownNotes failed", e)
+        reactContext.runOnUiQueueThread {
+          promise.reject(E_VAULT_SEARCH, e.message ?: "readVaultMarkdownNotes failed", e)
+        }
+      }
+    }
+  }
+
+  @ReactMethod
+  fun touchMarkdownNotes(baseUri: String, uris: ReadableArray, promise: Promise) {
+    writeExecutor.execute {
+      try {
+        touchMarkdownNotesSync(baseUri.trim(), uris)
+        reactContext.runOnUiQueueThread { promise.resolve(null) }
+      } catch (e: Exception) {
+        reactContext.runOnUiQueueThread {
+          promise.reject(E_VAULT_SEARCH, e.message ?: "touchMarkdownNotes failed", e)
         }
       }
     }
@@ -279,6 +309,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, "0")
         metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, "0")
         metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, "0")
+        metaPut(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT, "0")
         reopenReader()
         return buildStatusMap(
           newId,
@@ -290,6 +321,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
           0L,
           VaultSearchSchema.SCHEMA_VERSION,
           false,
+          notesRegistryReadyFromMeta(db, VaultSearchSchema.SCHEMA_VERSION),
         )
       }
       var schema = metaGet(db, VaultSearchSchema.KEY_SCHEMA_VERSION)?.toIntOrNull() ?: 0
@@ -309,6 +341,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
             0L,
             schema,
             false,
+            notesRegistryReadyFromMeta(db, schema),
           )
         }
       }
@@ -324,6 +357,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
           0L,
           schema,
           false,
+          notesRegistryReadyFromMeta(db, schema),
         )
       }
       vaultInstanceId = metaGet(db, VaultSearchSchema.KEY_VAULT_INSTANCE_ID) ?: run {
@@ -350,15 +384,24 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         lastRec,
         schema,
         bodiesIndexReady,
+        notesRegistryReadyFromMeta(db, schema),
       )
     }
+  }
+
+  private fun notesRegistryReadyFromMeta(db: SQLiteDatabase, reportedSchemaVersion: Int): Boolean {
+    if (reportedSchemaVersion != VaultSearchSchema.SCHEMA_VERSION) {
+      return false
+    }
+    val at = metaGet(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT)?.toLongOrNull() ?: 0L
+    return at > 0L
   }
 
   private fun readIndexStatusSync(baseUri: String): WritableMap {
     val canonical = VaultPath.canonicalizeUri(baseUri)
     val file = dbFileForBase(canonical)
     if (!file.exists()) {
-      return buildStatusMap("", canonical, false, false, 0, 0L, 0L, 0, false)
+      return buildStatusMap("", canonical, false, false, 0, 0L, 0L, 0, false, false)
     }
     val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY, null)
     return db.use {
@@ -381,7 +424,18 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
           synchronized(lock) {
             activeBaseUri != null && VaultPath.canonicalizeUri(activeBaseUri!!) == canonical
           }
-      buildStatusMap(id, canonical, indexReady, isBuilding, count, lastBuild, lastRec, schema, bodiesIndexReady)
+      buildStatusMap(
+        id,
+        canonical,
+        indexReady,
+        isBuilding,
+        count,
+        lastBuild,
+        lastRec,
+        schema,
+        bodiesIndexReady,
+        notesRegistryReadyFromMeta(it, schema),
+      )
     }
   }
 
@@ -395,6 +449,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     lastReconciledAt: Long,
     reportedSchemaVersion: Int = VaultSearchSchema.SCHEMA_VERSION,
     bodiesIndexReady: Boolean = lastFullBuildAt > 0L,
+    notesRegistryReady: Boolean = false,
   ): WritableMap {
     val m = Arguments.createMap()
     m.putString("vaultInstanceId", instanceId)
@@ -403,6 +458,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
     m.putBoolean("indexReady", indexReady)
     m.putBoolean("isBuilding", isBuilding)
     m.putBoolean("bodiesIndexReady", bodiesIndexReady)
+    m.putBoolean("notesRegistryReady", notesRegistryReady)
     m.putInt("indexedNotes", indexedNotes)
     m.putDouble("lastFullBuildAt", lastFullBuildAt.toDouble())
     m.putDouble("lastReconciledAt", lastReconciledAt.toDouble())
@@ -429,6 +485,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
   private fun clearAllIndexedNotes(db: SQLiteDatabase) {
     db.execSQL("DELETE FROM notes")
     db.execSQL("DELETE FROM note_meta")
+    VaultMarkdownNotesRegistry.clearAll(db)
   }
 
   private fun emitIndexProgress(
@@ -465,6 +522,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
       arrayOf(key, rel, name, title, len, doc.lastModified()),
     )
+    VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
   }
 
   private fun queryUrisNeedingBody(db: SQLiteDatabase, limit: Int): List<String> {
@@ -555,6 +613,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       metaPut(db, VaultSearchSchema.KEY_LAST_TITLES_AT, "0")
       metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, "0")
       metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, "0")
+      metaPut(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT, "0")
       clearAllIndexedNotes(db)
       emitIndexStatus(newId, "building", null, null, null, null, reason, null, null, null)
 
@@ -668,6 +727,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       val now = System.currentTimeMillis()
       metaPut(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT, now.toString())
       metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, now.toString())
+      metaPut(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT, now.toString())
       reopenReader()
       val indexed = countNotes(db)
       emitIndexStatus(newId, "ready", indexed, null, null, null, "full-rebuild", titleSkipped + bodySkipped, now, true)
@@ -750,7 +810,9 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
         emitIndexProgress(instanceId, "reconcile", i, totalChanges, i, 0)
       }
     }
-    metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, System.currentTimeMillis().toString())
+    val recMillis = System.currentTimeMillis()
+    metaPut(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT, recMillis.toString())
+    metaPut(db, VaultSearchSchema.KEY_LAST_NOTES_REGISTRY_BUILD_AT, recMillis.toString())
     reopenReader()
     val recAt = metaGet(db, VaultSearchSchema.KEY_LAST_RECONCILED_AT)?.toLongOrNull()
     val lastFull = metaGet(db, VaultSearchSchema.KEY_LAST_FULL_BUILD_AT)?.toLongOrNull() ?: 0L
@@ -820,6 +882,7 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
   private fun deleteNoteByUri(db: SQLiteDatabase, uriKey: String) {
     db.execSQL("DELETE FROM notes WHERE uri = ?", arrayOf(uriKey))
     db.execSQL("DELETE FROM note_meta WHERE uri = ?", arrayOf(uriKey))
+    VaultMarkdownNotesRegistry.deleteByUriKey(db, uriKey)
   }
 
   private fun upsertNoteDocument(
@@ -849,6 +912,64 @@ class VaultSearchModule(private val reactContext: ReactApplicationContext) :
       "INSERT INTO note_meta(uri, rel_path, filename, title, size, last_modified) VALUES(?,?,?,?,?,?)",
       arrayOf(key, rel, name, title, len, doc.lastModified()),
     )
+    VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
+  }
+
+  private fun readVaultMarkdownNotesSync(baseUri: String): WritableArray {
+    val canonical = VaultPath.canonicalizeUri(baseUri)
+    val file = dbFileForBase(canonical)
+    if (!file.exists()) {
+      return Arguments.createArray()
+    }
+    return try {
+      SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY, null).use { db ->
+        db.rawQuery(
+          "SELECT lookup_name, display_name, uri FROM vault_markdown_notes ORDER BY display_name COLLATE NOCASE, uri",
+          null,
+        ).use { c ->
+          val out = Arguments.createArray()
+          val iLookup = c.getColumnIndexOrThrow("lookup_name")
+          val iDisplay = c.getColumnIndexOrThrow("display_name")
+          val iUri = c.getColumnIndexOrThrow("uri")
+          while (c.moveToNext()) {
+            val m = Arguments.createMap()
+            m.putString("lookupName", c.getString(iLookup))
+            m.putString("displayName", c.getString(iDisplay))
+            m.putString("uri", c.getString(iUri))
+            out.pushMap(m)
+          }
+          out
+        }
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "readVaultMarkdownNotesSync: ${e.message}")
+      Arguments.createArray()
+    }
+  }
+
+  private fun touchMarkdownNotesSync(baseUri: String, uris: ReadableArray) {
+    val canonical = VaultPath.canonicalizeUri(baseUri)
+    val file = dbFileForBase(canonical)
+    if (!file.exists()) {
+      return
+    }
+    val db = ensureWriterOpen(file.absolutePath)
+    VaultSearchSchema.createTables(db)
+    for (i in 0 until uris.size()) {
+      val p = uris.getString(i) ?: continue
+      val key = VaultPath.keyForIndex(p)
+      val doc = documentFromUri(Uri.parse(p))
+      if (doc == null) {
+        VaultMarkdownNotesRegistry.deleteByUriKey(db, key)
+        continue
+      }
+      if (doc.isFile && VaultSearchRules.isEligibleMarkdown(doc.name ?: "")) {
+        VaultMarkdownNotesRegistry.upsertFromDocument(db, doc)
+      } else {
+        VaultMarkdownNotesRegistry.deleteByUriKey(db, key)
+      }
+    }
+    reopenReader()
   }
 
   private fun readSearchIndexProgressFlags(rdb: SQLiteDatabase): Pair<Boolean, Boolean> {

@@ -184,8 +184,10 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     vaultMarkdownRefsStatus !== 'error' &&
     vaultMarkdownRefs.length === 0;
 
+  /** Block only when we still have no Today hubs and the wiki index has not settled. */
   const awaitingVaultMarkdownIndex =
     baseUri != null &&
+    hubs.length === 0 &&
     vaultMarkdownRefsStatus !== 'ready' &&
     vaultMarkdownRefsStatus !== 'error';
 

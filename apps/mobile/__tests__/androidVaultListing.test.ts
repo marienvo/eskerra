@@ -41,7 +41,9 @@ describe('tryPrepareEskerraSessionNative', () => {
       inboxContentByUri: null,
       inboxPrefetch: [{lastModified: 2, name: 'b.md', uri: 'content://in/b.md'}],
       settingsJson: settingsSample,
+      todayHubContentByUri: null,
     });
+    expect(prepare).toHaveBeenCalledWith('content://root', null);
   });
 
   it('treats legacy string response as settings-only (no prefetch)', async () => {
@@ -54,6 +56,7 @@ describe('tryPrepareEskerraSessionNative', () => {
       inboxContentByUri: null,
       inboxPrefetch: null,
       settingsJson: settingsSample,
+      todayHubContentByUri: null,
     });
   });
 
@@ -88,6 +91,7 @@ describe('tryPrepareEskerraSessionNative', () => {
       inboxContentByUri: null,
       inboxPrefetch: [{lastModified: null, name: 'n.md', uri: 'u'}],
       settingsJson: settingsSample,
+      todayHubContentByUri: null,
     });
   });
 
@@ -111,6 +115,35 @@ describe('tryPrepareEskerraSessionNative', () => {
       inboxContentByUri: {'content://in/b.md': '# Hello'},
       inboxPrefetch: [{lastModified: 2, name: 'b.md', uri: 'content://in/b.md'}],
       settingsJson: settingsSample,
+      todayHubContentByUri: null,
+    });
+  });
+
+  it('maps todayHubPrefetch into todayHubContentByUri', async () => {
+    const prepare = (
+      NativeModules.EskerraVaultListing as {prepareEskerraSession: jest.Mock}
+    ).prepareEskerraSession;
+    prepare.mockResolvedValue({
+      inboxNotes: [],
+      settings: settingsSample,
+      todayHubPrefetch: [
+        {uri: 'content://hub/Today.md', content: 'intro body'},
+        {uri: 'content://hub/2025-04-14.md', content: 'row body'},
+      ],
+    });
+
+    await expect(
+      tryPrepareEskerraSessionNative('content://root', {
+        prefetchNoteUris: ['content://hub/Today.md', 'content://hub/2025-04-14.md'],
+      }),
+    ).resolves.toEqual({
+      inboxContentByUri: null,
+      inboxPrefetch: null,
+      settingsJson: settingsSample,
+      todayHubContentByUri: {
+        'content://hub/Today.md': 'intro body',
+        'content://hub/2025-04-14.md': 'row body',
+      },
     });
   });
 });

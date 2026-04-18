@@ -32,6 +32,10 @@ import {
   installVaultSearchAutoRefresh,
   requestVaultSearchIndexWarmup,
 } from '../../features/vault/vaultSearchIndexMaintenance';
+import {
+  parseVaultSearchIndexStatus,
+  VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION,
+} from '../../features/vault/vaultSearchLifecycle';
 import {prepareVaultSession} from './applyVaultSession';
 import {
   buildMockVaultMarkdownRefs,
@@ -44,6 +48,11 @@ type InboxContentCacheSession = {
   uri: string;
 };
 
+type TodayHubContentCacheSession = {
+  map: Map<string, string>;
+  uri: string;
+};
+
 export type VaultMarkdownRefsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 type VaultContextValue = {
@@ -51,13 +60,19 @@ type VaultContextValue = {
   clearInboxContentCache: () => void;
   consumeInboxPrefetch: (forUri: string) => NoteSummary[] | null;
   getInboxNoteContentFromCache: (noteUri: string) => string | undefined;
+  getTodayHubNoteContentFromCache: (noteUri: string) => string | undefined;
   isLoading: boolean;
   pruneInboxNoteContentFromCache: (noteUris: readonly string[]) => void;
+  pruneTodayHubNoteContentFromCache: (noteUris: readonly string[]) => void;
   refreshSession: () => Promise<void>;
   replaceInboxContentFromSession: (
     inboxContentByUri: Record<string, string> | null | undefined,
   ) => void;
+  replaceTodayHubContentFromSession: (
+    todayHubContentByUri: Record<string, string> | null | undefined,
+  ) => void;
   setInboxNoteContentInCache: (noteUri: string, content: string) => void;
+  setTodayHubNoteContentInCache: (noteUri: string, content: string) => void;
   setSessionUri: (nextUri: string | null) => Promise<void>;
   settings: EskerraSettings | null;
   setSettings: (nextSettings: EskerraSettings) => void;
@@ -82,8 +97,27 @@ type VaultProviderProps = {
     localSettings: EskerraLocalSettings;
     inboxContentByUri: Record<string, string> | null;
     inboxPrefetch: NoteSummary[] | null;
+    todayHubContentByUri?: Record<string, string> | null;
   } | null;
 };
+
+function recordToTodayHubContentCache(
+  vaultUri: string,
+  record: Record<string, string> | null | undefined,
+): TodayHubContentCacheSession | null {
+  if (!record) {
+    return null;
+  }
+  const entries = Object.entries(record);
+  if (entries.length === 0) {
+    return null;
+  }
+  const map = new Map<string, string>();
+  for (const [k, v] of entries) {
+    map.set(normalizeNoteUri(k), v);
+  }
+  return {map, uri: vaultUri};
+}
 
 function recordToInboxContentCache(
   vaultUri: string,
@@ -129,6 +163,15 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       : null,
   );
 
+  const todayHubContentCacheRef = useRef<TodayHubContentCacheSession | null>(
+    initialSession
+      ? recordToTodayHubContentCache(
+          initialSession.uri,
+          initialSession.todayHubContentByUri ?? null,
+        )
+      : null,
+  );
+
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<readonly VaultMarkdownRef[]>([]);
   const [vaultMarkdownRefsStatus, setVaultMarkdownRefsStatus] =
     useState<VaultMarkdownRefsStatus>('idle');
@@ -154,6 +197,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
   const clearSessionPrefetchRefs = useCallback(() => {
     inboxPrefetchRef.current = null;
     inboxContentCacheRef.current = null;
+    todayHubContentCacheRef.current = null;
   }, []);
 
   const clearInboxContentCache = useCallback(() => {
@@ -195,6 +239,58 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         inboxContentCacheRef.current = session;
       }
       session.map.set(normalizeNoteUri(noteUri), content);
+    },
+    [baseUri],
+  );
+
+  const replaceTodayHubContentFromSession = useCallback(
+    (todayHubContentByUri: Record<string, string> | null | undefined) => {
+      if (baseUri == null) {
+        return;
+      }
+      todayHubContentCacheRef.current = recordToTodayHubContentCache(
+        baseUri,
+        todayHubContentByUri,
+      );
+    },
+    [baseUri],
+  );
+
+  const getTodayHubNoteContentFromCache = useCallback(
+    (noteUri: string): string | undefined => {
+      const session = todayHubContentCacheRef.current;
+      if (session == null || baseUri == null || session.uri !== baseUri) {
+        return undefined;
+      }
+      return session.map.get(normalizeNoteUri(noteUri));
+    },
+    [baseUri],
+  );
+
+  const setTodayHubNoteContentInCache = useCallback(
+    (noteUri: string, content: string) => {
+      if (baseUri == null) {
+        return;
+      }
+      let session = todayHubContentCacheRef.current;
+      if (session == null || session.uri !== baseUri) {
+        session = {map: new Map(), uri: baseUri};
+        todayHubContentCacheRef.current = session;
+      }
+      session.map.set(normalizeNoteUri(noteUri), content);
+    },
+    [baseUri],
+  );
+
+  const pruneTodayHubNoteContentFromCache = useCallback(
+    (noteUris: readonly string[]) => {
+      const session = todayHubContentCacheRef.current;
+      if (session == null || baseUri == null || session.uri !== baseUri) {
+        return;
+      }
+      for (const u of noteUris) {
+        session.map.delete(normalizeNoteUri(u));
+      }
     },
     [baseUri],
   );
@@ -257,7 +353,13 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     setVaultMarkdownRefsError(null);
     setVaultMarkdownRefs([]);
 
-    const runMarkdownRefsIndex = async (): Promise<void> => {
+    const sortRefs = (rows: VaultMarkdownRef[]) =>
+      [...rows].sort((a, b) => {
+        const byName = a.name.localeCompare(b.name);
+        return byName !== 0 ? byName : a.uri.localeCompare(b.uri);
+      });
+
+    const runMarkdownRefsFromWalk = async (): Promise<void> => {
       try {
         let rows: VaultMarkdownRef[] | undefined;
 
@@ -271,10 +373,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
               name: stemFromMarkdownFileName(r.fileName),
               uri: r.uri,
             }));
-            rows.sort((a, b) => {
-              const byName = a.name.localeCompare(b.name);
-              return byName !== 0 ? byName : a.uri.localeCompare(b.uri);
-            });
+            rows = sortRefs(rows);
           }
         }
 
@@ -283,6 +382,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
           rows = await collectVaultMarkdownRefs(normalizedBase, safVaultFilesystem, {
             signal: ac.signal,
           });
+          rows = sortRefs(rows);
         }
 
         if (ac.signal.aborted) {
@@ -309,13 +409,60 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       }
     };
 
-    const cancelable = InteractionManager.runAfterInteractions(() => {
-      runMarkdownRefsIndex().catch(() => undefined);
-    });
+    const tryRegistryThenDeferWalk = async (): Promise<void> => {
+      let settledFromRegistry = false;
+      if (Platform.OS === 'android' && eskerraVaultSearch.isAvailable()) {
+        try {
+          const statusRaw = await eskerraVaultSearch.getIndexStatus(normalizedBase).catch(() => null);
+          const status = statusRaw != null ? parseVaultSearchIndexStatus(statusRaw) : null;
+          const registryReady =
+            status != null &&
+            status.schemaVersion === VAULT_SEARCH_SUPPORTED_SCHEMA_VERSION &&
+            status.notesRegistryReady === true;
+
+          if (registryReady && !ac.signal.aborted) {
+            const reg = await eskerraVaultSearch.readVaultMarkdownNotes(normalizedBase);
+            if (!ac.signal.aborted) {
+              const rows: VaultMarkdownRef[] = reg.map(r => ({
+                name: r.displayName,
+                uri: r.uri,
+              }));
+              const sorted = sortRefs(rows);
+              setVaultMarkdownRefs(sorted);
+              setVaultMarkdownRefsStatus('ready');
+              settledFromRegistry = true;
+              appBreadcrumb({
+                category: 'vault',
+                message: 'vault.markdown_refs.registry_ready',
+                data: {note_count: sorted.length},
+              });
+            }
+          }
+        } catch {
+          // fall through to deferred walk
+        }
+      }
+
+      const cancelable = InteractionManager.runAfterInteractions(() => {
+        if (ac.signal.aborted || settledFromRegistry) {
+          return;
+        }
+        runMarkdownRefsFromWalk().catch(() => undefined);
+      });
+
+      ac.signal.addEventListener(
+        'abort',
+        () => {
+          cancelable.cancel();
+        },
+        {once: true},
+      );
+    };
+
+    void tryRegistryThenDeferWalk();
 
     return () => {
       ac.abort();
-      cancelable.cancel();
     };
   }, [baseUri, vaultMarkdownRefsRefreshNonce]);
 
@@ -338,6 +485,10 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     inboxContentCacheRef.current = recordToInboxContentCache(
       nextUri,
       prepared.inboxContentByUri,
+    );
+    todayHubContentCacheRef.current = recordToTodayHubContentCache(
+      nextUri,
+      prepared.todayHubContentByUri,
     );
 
     setBaseUri(nextUri);
@@ -498,11 +649,15 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       clearInboxContentCache,
       consumeInboxPrefetch,
       getInboxNoteContentFromCache,
+      getTodayHubNoteContentFromCache,
       isLoading,
       pruneInboxNoteContentFromCache,
+      pruneTodayHubNoteContentFromCache,
       refreshSession,
       replaceInboxContentFromSession,
+      replaceTodayHubContentFromSession,
       setInboxNoteContentInCache,
+      setTodayHubNoteContentInCache,
       setSessionUri,
       settings,
       setSettings,
@@ -521,16 +676,20 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       clearInboxContentCache,
       consumeInboxPrefetch,
       getInboxNoteContentFromCache,
+      getTodayHubNoteContentFromCache,
       isLoading,
       localSettings,
       notifyPlaylistSyncAfterVaultRefresh,
       playlistSyncGeneration,
       pruneInboxNoteContentFromCache,
+      pruneTodayHubNoteContentFromCache,
       refreshSession,
       refreshVaultMarkdownRefs,
       replaceInboxContentFromSession,
+      replaceTodayHubContentFromSession,
       scheduleDebouncedVaultMarkdownRefsRefresh,
       setInboxNoteContentInCache,
+      setTodayHubNoteContentInCache,
       setSessionUri,
       settings,
       vaultMarkdownRefs,
