@@ -1,6 +1,10 @@
 /**
  * @format
  */
+jest.mock('../src/core/observability', () => ({
+  appBreadcrumb: jest.fn(),
+}));
+
 import {
   requestVaultSearchIndexWarmup,
   runVaultSearchIndexMaintenance,
@@ -86,6 +90,28 @@ describe('vaultSearchIndexMaintenance', () => {
     await runVaultSearchIndexMaintenance(TEST_URI);
 
     expect(eskerraVaultSearch.reconcile).toHaveBeenCalledWith(TEST_URI);
+  });
+
+  test('partial persisted index reconciles instead of full rebuild', async () => {
+    const partial = {
+      baseUriHash: TEST_URI_HASH,
+      indexedNotes: 12,
+      indexReady: false,
+      isBuilding: false,
+      lastFullBuildAt: 1,
+      lastReconciledAt: 0,
+      schemaVersion: 1,
+      vaultInstanceId: 'v-partial',
+    };
+    eskerraVaultSearch.open.mockResolvedValue(partial);
+    eskerraVaultSearch.getIndexStatus.mockResolvedValue(partial);
+
+    const result = await runVaultSearchIndexMaintenance(TEST_URI);
+
+    expect(eskerraVaultSearch.scheduleFullRebuild).not.toHaveBeenCalled();
+    expect(eskerraVaultSearch.reconcile).toHaveBeenCalledWith(TEST_URI);
+    expect(result?.vaultInstanceId).toBe('v-partial');
+    expect(result?.indexedNotes).toBe(12);
   });
 
   test('concurrent calls for same URI share one in-flight run', async () => {

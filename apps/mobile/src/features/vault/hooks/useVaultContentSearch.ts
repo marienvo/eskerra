@@ -46,14 +46,24 @@ export function isVaultSearchEventCurrent(
   return currentId != null && payloadSearchId === currentId;
 }
 
-function isVaultInstanceCurrent(
+/**
+ * When JS has not yet pinned `vaultInstanceId` (screen still awaiting maintenance), the first
+ * native event for the active `searchId` carries the authoritative instance id — seed the ref so
+ * we do not drop `update`/`done` before the prop arrives (fixes first-query hang on reopen).
+ */
+function acceptVaultInstanceForSearchEvent(
   payloadInstanceId: string | undefined,
-  currentInstanceId: string | null,
+  vaultInstanceIdRef: {current: string | null},
 ): boolean {
   if (payloadInstanceId == null || payloadInstanceId === '') {
     return true;
   }
-  return currentInstanceId != null && payloadInstanceId === currentInstanceId;
+  const cur = vaultInstanceIdRef.current;
+  if (cur == null || cur === '') {
+    vaultInstanceIdRef.current = payloadInstanceId;
+    return true;
+  }
+  return payloadInstanceId === cur;
 }
 
 function normalizeNote(raw: unknown): VaultSearchNoteResult {
@@ -380,7 +390,7 @@ export function useVaultContentSearch({
         logDroppedVaultSearchEvent('searchId', `payload=${event.searchId} current=${searchIdRef.current}`);
         return;
       }
-      if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+      if (!acceptVaultInstanceForSearchEvent(event.vaultInstanceId, vaultInstanceIdRef)) {
         logDroppedVaultSearchEvent(
           'vaultInstanceId',
           `payload=${event.vaultInstanceId ?? ''} current=${vaultInstanceIdRef.current ?? ''}`,
@@ -415,7 +425,7 @@ export function useVaultContentSearch({
         logDroppedVaultSearchEvent('searchId', `payload=${event.searchId} current=${searchIdRef.current}`);
         return;
       }
-      if (!isVaultInstanceCurrent(event.vaultInstanceId, vaultInstanceIdRef.current)) {
+      if (!acceptVaultInstanceForSearchEvent(event.vaultInstanceId, vaultInstanceIdRef)) {
         logDroppedVaultSearchEvent(
           'vaultInstanceId',
           `payload=${event.vaultInstanceId ?? ''} current=${vaultInstanceIdRef.current ?? ''}`,
@@ -476,7 +486,7 @@ export function useVaultContentSearch({
       if (p == null) {
         return;
       }
-      if (!isVaultInstanceCurrent(p.vaultInstanceId, vaultInstanceIdRef.current)) {
+      if (!acceptVaultInstanceForSearchEvent(p.vaultInstanceId, vaultInstanceIdRef)) {
         logDroppedVaultSearchEvent(
           'vaultInstanceId',
           `index-progress vault=${p.vaultInstanceId} current=${vaultInstanceIdRef.current ?? ''}`,

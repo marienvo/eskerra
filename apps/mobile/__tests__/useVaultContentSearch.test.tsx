@@ -172,6 +172,75 @@ describe('useVaultContentSearch', () => {
     });
   });
 
+  test('seeds vaultInstanceId from first native done when prop still null', async () => {
+    const onRender = jest.fn();
+    let inst: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      inst = TestRenderer.create(
+        <SearchHarness
+          baseUri="content://v"
+          lastReconciledAt={Number.MAX_SAFE_INTEGER}
+          onRender={onRender}
+          open
+          vaultInstanceId={null}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const api = onRender.mock.calls.at(-1)![0] as ReturnType<typeof useVaultContentSearch>;
+
+    await act(async () => {
+      api.setQuery('hello');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+
+    const searchId = (eskerraVaultSearch.start.mock.calls[0] as [string, string, string])[1];
+
+    await act(async () => {
+      emitDone({
+        cancelled: false,
+        notes: [
+          {
+            bestField: 'title',
+            matchCount: 1,
+            relativePath: 'a.md',
+            score: 1,
+            snippets: [],
+            title: 'Seeded',
+            uri: 'content://v/a.md',
+          },
+        ],
+        progress: {
+          indexReady: true,
+          indexStatus: 'ready',
+          scannedFiles: 1,
+          skippedLargeFiles: 0,
+          totalHits: 1,
+        },
+        searchId,
+        vaultInstanceId: 'from-native',
+      } satisfies VaultSearchDonePayload);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const last = onRender.mock.calls.at(-1)![0] as ReturnType<typeof useVaultContentSearch>;
+    expect(last.notes.map(n => n.title)).toContain('Seeded');
+    expect(getDroppedVaultSearchEventsCountForTest()).toBe(0);
+
+    await act(async () => {
+      inst!.unmount();
+    });
+  });
+
   test('drops done when vaultInstanceId mismatches', async () => {
     const onRender = jest.fn();
     let inst: TestRenderer.ReactTestRenderer;

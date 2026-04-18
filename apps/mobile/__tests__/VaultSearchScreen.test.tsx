@@ -7,6 +7,7 @@ import TestRenderer, {act} from 'react-test-renderer';
 
 import type {VaultSearchDonePayload} from '@eskerra/core';
 
+import * as vaultSearchIndexMaintenance from '../src/features/vault/vaultSearchIndexMaintenance';
 import {VaultSearchScreen} from '../src/features/vault/screens/VaultSearchScreen';
 
 jest.mock('../src/native/eskerraVaultSearch', () => {
@@ -350,5 +351,80 @@ describe('VaultSearchScreen', () => {
     } finally {
       jest.useFakeTimers();
     }
+  });
+
+  test('first search shows results while runVaultSearchIndexMaintenance is still pending', async () => {
+    const spy = jest
+      .spyOn(vaultSearchIndexMaintenance, 'runVaultSearchIndexMaintenance')
+      .mockImplementation(() => new Promise(() => undefined));
+
+    const setOptions = jest.fn();
+    const navigation = {
+      getParent: () => ({setOptions}),
+      goBack: jest.fn(),
+      navigate: jest.fn(),
+      replace: jest.fn(),
+    };
+
+    let inst!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      inst = TestRenderer.create(
+        <VaultSearchScreen navigation={navigation as never} route={{} as never} />,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const input = findByTestId(inst.root, 'vault-search-input');
+    expect(input).not.toBeNull();
+
+    await act(async () => {
+      input!.props.onChangeText('hi');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const searchId = (eskerraVaultSearch.start.mock.calls[0] as [string, string, string])[1];
+
+    await act(async () => {
+      DeviceEventEmitter.emit('vault-search:done', {
+        cancelled: false,
+        notes: [
+          {
+            bestField: 'title',
+            matchCount: 1,
+            relativePath: 'notes/N.md',
+            score: 10,
+            snippets: [{lineNumber: null, text: 'line'}],
+            title: 'MyNote',
+            uri: 'content://tree/v/doc.md',
+          },
+        ],
+        progress: {
+          indexReady: true,
+          indexStatus: 'ready',
+          scannedFiles: 1,
+          skippedLargeFiles: 0,
+          totalHits: 1,
+        },
+        searchId,
+        vaultInstanceId: 'v1',
+      } satisfies VaultSearchDonePayload);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(findTextContaining(inst.root, 'MyNote')).toBe(true);
+
+    spy.mockRestore();
+    await act(async () => {
+      inst.unmount();
+    });
   });
 });

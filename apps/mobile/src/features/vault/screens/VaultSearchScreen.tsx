@@ -50,6 +50,10 @@ export function VaultSearchScreen({navigation}: Props) {
   const [bodiesIndexReady, setBodiesIndexReady] = useState(true);
   const [lastReconciledAt, setLastReconciledAt] = useState<number | null>(null);
   const [hookOpen, setHookOpen] = useState(true);
+  /** True until the fast native `open()` returns so the search hook can pin `vaultInstanceId` before maintenance finishes. */
+  const [searchIndexOpening, setSearchIndexOpening] = useState(false);
+  /** Full maintenance (open + status + optional reconcile) still in flight after bootstrap `open`. */
+  const [indexMaintenancePending, setIndexMaintenancePending] = useState(false);
 
   const goBack = useCallback(() => {
     navigation.goBack();
@@ -60,13 +64,51 @@ export function VaultSearchScreen({navigation}: Props) {
     [goBack],
   );
 
+  /** Pin vault instance + flags as soon as native has opened the DB — do not block first search on full maintenance. */
+  useEffect(() => {
+    let cancelled = false;
+    if (!baseUri || !eskerraVaultSearch.isAvailable()) {
+      setSearchIndexOpening(false);
+      return;
+    }
+    setSearchIndexOpening(true);
+    void eskerraVaultSearch
+      .open(baseUri.trim())
+      .then(st => {
+        if (cancelled) {
+          return;
+        }
+        if (st.vaultInstanceId) {
+          setVaultInstanceId(prev => prev ?? st.vaultInstanceId);
+        }
+        setIndexReady(prev => prev || st.indexReady);
+        if (st.bodiesIndexReady === false) {
+          setBodiesIndexReady(false);
+        }
+        setLastReconciledAt(prev =>
+          prev == null || !Number.isFinite(prev) ? st.lastReconciledAt : prev,
+        );
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) {
+          setSearchIndexOpening(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUri]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (!baseUri || !eskerraVaultSearch.isAvailable()) {
+          setIndexMaintenancePending(false);
           return;
         }
+        setIndexMaintenancePending(true);
         const st = await runVaultSearchIndexMaintenance(baseUri);
         if (cancelled) {
           return;
@@ -82,6 +124,10 @@ export function VaultSearchScreen({navigation}: Props) {
       } catch {
         if (!cancelled) {
           setVaultInstanceId(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIndexMaintenancePending(false);
         }
       }
     })().catch(() => undefined);
@@ -157,22 +203,36 @@ export function VaultSearchScreen({navigation}: Props) {
     progress != null && !progress.indexReady
       ? ` · index ${progress.indexStatus}`
       : '';
-  const indexingHint =
+  const indexUsableForSearch =
+    indexReady &&
+    indexStatusLive?.status !== 'building' &&
+    !(progress?.isBuilding === true && progress.indexReady !== true);
+
+  const heavyIndexingHint =
     indexStatusLive?.status === 'building' ||
     (progress?.isBuilding === true && progress.indexReady !== true) ||
-    (indexProgress != null && (indexProgress.phase === 'titles' || indexProgress.phase === 'bodies')) ||
-    bodiesIndexReady === false;
+    (indexProgress != null && (indexProgress.phase === 'titles' || indexProgress.phase === 'bodies'));
+
+  /** Full rebuild / title phase — block empty-state on “not ready” copy. */
+  const indexingHint = heavyIndexingHint || bodiesIndexReady === false;
+
+  const backgroundIndexRefresh =
+    indexMaintenancePending && indexUsableForSearch && !heavyIndexingHint && trimmed.length > 0;
 
   const indexProgressLabel =
     indexProgress != null
-      ? `Indexing (${indexProgress.phase})… ${indexProgress.processed} / ${indexProgress.total}`
+      ? `Building search index (${indexProgress.phase})… ${indexProgress.processed} / ${indexProgress.total}`
       : indexStatusLive?.indexedNotes != null
-        ? `Indexing… (${indexStatusLive.indexedNotes} notes)`
-        : 'Indexing vault notes…';
+        ? `Building search index… (${indexStatusLive.indexedNotes} notes)`
+        : 'Building search index…';
 
   const statusLine =
     trimmed.length === 0
       ? null
+      : searchIndexOpening || (vaultInstanceId == null && !scanDone)
+        ? 'Opening search index…'
+      : backgroundIndexRefresh
+        ? 'Updating search index in the background…'
       : !scanDone && searchingStatusVisible
         ? progress != null
           ? `Searching… · ${progress.totalHits} notes${indexHint}`
@@ -233,7 +293,12 @@ export function VaultSearchScreen({navigation}: Props) {
               </Text>
             )
           ) : !scanDone ? (
-            <Spinner style={styles.spinner} />
+            <Box style={styles.hintCol}>
+              {(searchIndexOpening || vaultInstanceId == null) && trimmed.length > 0 ? (
+                <Text style={[styles.hint, {color: muted}]}>Opening search index…</Text>
+              ) : null}
+              <Spinner style={styles.spinner} />
+            </Box>
           ) : null
         }
         renderItem={({item}) => {

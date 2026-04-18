@@ -45,10 +45,36 @@ describe('vaultSearchLifecycle', () => {
     ).toBe(true);
   });
 
-  test('fullNeedsRebuild when index not ready and not building', () => {
-    expect(fullNeedsRebuild(status({indexReady: false, isBuilding: false}), 'content://tree/v')).toBe(
-      true,
-    );
+  test('fullNeedsRebuild when index not ready and not building and no persisted rows', () => {
+    const canonical = 'content://tree/v';
+    const h = vaultSearchBaseUriHash(canonicalizeVaultBaseUriForSearch(canonical));
+    expect(
+      fullNeedsRebuild(
+        status({
+          baseUriHash: h,
+          indexReady: false,
+          isBuilding: false,
+          indexedNotes: 0,
+        }),
+        canonical,
+      ),
+    ).toBe(true);
+  });
+
+  test('fullNeedsRebuild false when persisted rows exist but indexReady is false', () => {
+    const canonical = 'content://tree/v';
+    const h = vaultSearchBaseUriHash(canonicalizeVaultBaseUriForSearch(canonical));
+    expect(
+      fullNeedsRebuild(
+        status({
+          baseUriHash: h,
+          indexReady: false,
+          isBuilding: false,
+          indexedNotes: 4,
+        }),
+        canonical,
+      ),
+    ).toBe(false);
   });
 
   test('fullNeedsRebuild false when ready', () => {

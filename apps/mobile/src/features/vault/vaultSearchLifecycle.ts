@@ -58,6 +58,15 @@ export function parseVaultSearchIndexStatus(raw: unknown): VaultSearchIndexStatu
 }
 
 /**
+ * True when the on-disk index clearly has rows for this vault (even if `indexReady` is still false,
+ * e.g. interrupted body phase). In that case we must not call `scheduleFullRebuild` — native can
+ * resume or `reconcile` will refresh without wiping the DB.
+ */
+export function persistedVaultSearchHasRows(status: VaultSearchIndexStatus): boolean {
+  return Number.isFinite(status.indexedNotes) && status.indexedNotes > 0;
+}
+
+/**
  * When true, JS should call `scheduleFullRebuild` (missing index, schema mismatch, or base-uri drift).
  */
 export function fullNeedsRebuild(
@@ -73,7 +82,12 @@ export function fullNeedsRebuild(
     return true;
   }
   if (!status.indexReady && !status.isBuilding) {
-    return true;
+    /** Empty DB / never built — full rebuild. */
+    if (!persistedVaultSearchHasRows(status)) {
+      return true;
+    }
+    /** Rows exist but flags say not ready and not building — resume with reconcile, not a wipe. */
+    return false;
   }
   return false;
 }
