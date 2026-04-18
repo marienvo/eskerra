@@ -54,6 +54,30 @@ export function todayHubWeekEndInclusive(weekStart: Date): Date {
   );
 }
 
+/** Progress of `now` within the 7-day window starting at `weekStart` (local calendar dates). */
+export type TodayHubWeekProgress =
+  | {kind: 'past'}
+  | {kind: 'current'; dayIndex: number}
+  | {kind: 'future'};
+
+/**
+ * Compares local calendar dates only. `dayIndex` for `current` is 0..6 where 0 is `weekStart`'s day.
+ * Uses `Math.round(ms / dayMs)` so spans that are 23h or 25h between local midnights (DST) still count as one day.
+ */
+export function todayHubWeekProgress(weekStart: Date, now: Date): TodayHubWeekProgress {
+  const start = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = Math.round((today.getTime() - start.getTime()) / dayMs);
+  if (diffDays < 0) {
+    return {kind: 'future'};
+  }
+  if (diffDays > 6) {
+    return {kind: 'past'};
+  }
+  return {kind: 'current', dayIndex: diffDays};
+}
+
 /** `YYYY-MM-DD` for the row filename stem (local calendar); identifies the week's first day. */
 export function formatTodayHubMondayStem(weekStart: Date): string {
   const y = weekStart.getFullYear();

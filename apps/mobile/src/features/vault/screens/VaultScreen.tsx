@@ -6,6 +6,7 @@ import {
   todayHubColumnCount,
   todayHubFolderLabelFromTodayNoteUri,
   todayHubRowUriFromTodayNoteUri,
+  todayHubWeekProgress,
   type TodayHubSettings,
 } from '@eskerra/core';
 import {useFocusEffect, useIsFocused} from '@react-navigation/native';
@@ -20,6 +21,7 @@ import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultTodayHubContext} from '../context/VaultTodayHubContext';
 import {TodayHubPickerModal} from '../components/TodayHubPickerModal';
+import {TodayWeekProgressStrip} from '../components/TodayWeekProgressStrip';
 import {VaultReadonlyMarkdownBlock} from '../components/VaultReadonlyMarkdownBlock';
 import {useVaultMarkdownRefs} from '../hooks/useVaultMarkdownRefs';
 import {useNotes} from '../hooks/useNotes';
@@ -327,6 +329,9 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     return h;
   }, [hubLoadState]);
 
+  /** Stable "now" for week progress so columns agree within one paint. */
+  const weekProgressComparisonNow = useMemo(() => new Date(), []);
+
   if (awaitingVaultMarkdownIndex) {
     return (
       <Box style={styles.container}>
@@ -383,6 +388,16 @@ export function VaultScreen({navigation}: VaultScreenProps) {
                 noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, hubLoadState.weekStart)}
                 omitWikiIndexWarning
                 sectionTitle={columnHeaders[ci] ?? ''}
+                titleTrailing={
+                  ci === 0 ? (
+                    <TodayWeekProgressStrip
+                      progress={todayHubWeekProgress(
+                        hubLoadState.weekStart,
+                        weekProgressComparisonNow,
+                      )}
+                    />
+                  ) : undefined
+                }
                 onNavigateToVaultNote={onNavigateToVaultNote}
               />
             ))}

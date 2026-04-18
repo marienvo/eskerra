@@ -17,9 +17,11 @@ export {
   todayHubRowUri,
   todayHubStartJsDay,
   todayHubWeekEndInclusive,
+  todayHubWeekProgress,
   type TodayHubPerpetualType,
   type TodayHubSettings,
   type TodayHubStartDay,
+  type TodayHubWeekProgress,
 } from '@eskerra/core';
 export {
   createIdleTodayHubWorkspaceBridge,

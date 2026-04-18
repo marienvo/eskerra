@@ -21,6 +21,8 @@ export {
   startOfLocalWeekMonday,
   todayHubRowUri,
   todayHubWeekEndInclusive,
+  todayHubWeekProgress,
+  type TodayHubWeekProgress,
 } from './todayHubMondays';
 export {
   VAULT_TREE_TODAY_HUB_NOTE_NAME,

@@ -14,6 +14,7 @@ import {
   todayHubRowSectionsAllBlank,
   todayHubRowUri,
   todayHubWeekEndInclusive,
+  todayHubWeekProgress,
 } from './index';
 
 describe('startOfLocalWeekMonday', () => {
@@ -88,6 +89,51 @@ describe('todayHubWeekEndInclusive', () => {
     expect(end.getFullYear()).toBe(2026);
     expect(end.getMonth()).toBe(3);
     expect(end.getDate()).toBe(12);
+  });
+});
+
+describe('todayHubWeekProgress', () => {
+  const weekStart = new Date(2026, 3, 6); // Mon 6 Apr 2026 (local)
+
+  it('returns future when now is before week start', () => {
+    expect(todayHubWeekProgress(weekStart, new Date(2026, 3, 5))).toEqual({kind: 'future'});
+  });
+
+  it('returns current with dayIndex 0 on the first day of the week', () => {
+    expect(todayHubWeekProgress(weekStart, new Date(2026, 3, 6))).toEqual({
+      kind: 'current',
+      dayIndex: 0,
+    });
+  });
+
+  it('returns current with dayIndex 3 on the fourth day', () => {
+    expect(todayHubWeekProgress(weekStart, new Date(2026, 3, 9))).toEqual({
+      kind: 'current',
+      dayIndex: 3,
+    });
+  });
+
+  it('returns current with dayIndex 6 on the last day of the week', () => {
+    expect(todayHubWeekProgress(weekStart, new Date(2026, 3, 12))).toEqual({
+      kind: 'current',
+      dayIndex: 6,
+    });
+  });
+
+  it('returns past when now is after the inclusive week end', () => {
+    expect(todayHubWeekProgress(weekStart, new Date(2026, 3, 13))).toEqual({kind: 'past'});
+  });
+
+  /**
+   * Fall-back weekend (US): local midnight-to-midnight across the extra hour can be 25h.
+   * `Math.round(ms / dayMs)` must still yield a whole number of calendar days.
+   */
+  it('counts calendar days across a 25-hour local midnight span (fall DST)', () => {
+    const start = new Date(2025, 9, 27); // Mon 27 Oct 2025 (local)
+    const sunday = new Date(2025, 10, 2); // Sun 2 Nov 2025 — week still in progress
+    expect(todayHubWeekProgress(start, sunday)).toEqual({kind: 'current', dayIndex: 6});
+    const mondayAfter = new Date(2025, 10, 3);
+    expect(todayHubWeekProgress(start, mondayAfter)).toEqual({kind: 'past'});
   });
 });
 

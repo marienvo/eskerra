@@ -297,12 +297,14 @@ export {
   todayHubRowUriFromTodayNoteUri,
   todayHubStartJsDay,
   todayHubWeekEndInclusive,
+  todayHubWeekProgress,
   VAULT_TREE_TODAY_HUB_NOTE_NAME,
   vaultMarkdownRefIsTodayHubNote,
   vaultUriIsTodayMarkdownFile,
   type TodayHubPerpetualType,
   type TodayHubSettings,
   type TodayHubStartDay,
+  type TodayHubWeekProgress,
 } from './todayHub';
 export type {VaultSearchHighlightSegment} from './vaultSearch/vaultSearchHighlight';
 export {

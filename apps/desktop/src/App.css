@@ -3708,11 +3708,44 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar--footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding-block: 6px 8px;
+  /* Align with `.today-hub-canvas__row-cells` / date-bar-cols left inset. */
+  padding-inline-start: 20px;
   /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22), minus 19px for week-end label. */
   padding-inline-end: calc(20px + 56px + 22px + 20px - 19px);
   padding-bottom: 30px; /* "gap" between rows */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--today-hub-chrome-label-color);
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--filled {
+  background: var(--today-hub-chrome-label-color);
+  border-color: transparent;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--current {
+  background: var(--color-accent, var(--nb-editor-text));
+  border-color: transparent;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar-cols {
