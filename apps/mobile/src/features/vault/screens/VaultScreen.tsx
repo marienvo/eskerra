@@ -1,5 +1,6 @@
 import {
   enumerateTodayHubWeekStarts,
+  formatTodayHubMondayStem,
   parseTodayHubFrontmatter,
   sortedTodayHubNoteUrisFromRefs,
   splitTodayRowIntoColumns,
@@ -33,17 +34,11 @@ import {formatTodayHubWeekDateLong, formatTodayHubWeekRangeShort} from '../today
 
 type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
-type HubLoadState =
+type HubIntroState =
   | {status: 'idle'}
   | {status: 'loading'}
   | {status: 'error'; message: string}
-  | {
-      status: 'ready';
-      intro: string;
-      row: string;
-      settings: TodayHubSettings;
-      weekStart: Date;
-    };
+  | {status: 'ready'; intro: string; settings: TodayHubSettings};
 
 export function VaultScreen({navigation}: VaultScreenProps) {
   const isScreenFocused = useIsFocused();
@@ -132,16 +127,19 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     setActiveTodayHubUri(activeHubUri);
   }, [activeHubUri, setActiveTodayHubUri]);
 
-  const [hubLoadState, setHubLoadState] = useState<HubLoadState>({status: 'idle'});
+  const [hubIntro, setHubIntro] = useState<HubIntroState>({status: 'idle'});
+  const [rowByWeek, setRowByWeek] = useState<Map<string, string>>(() => new Map());
   const weekNavInitHubRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeHubUri) {
-      setHubLoadState({status: 'idle'});
+      setHubIntro({status: 'idle'});
+      setRowByWeek(new Map());
       return;
     }
     let cancelled = false;
-    setHubLoadState({status: 'loading'});
+    setHubIntro({status: 'loading'});
+    setRowByWeek(new Map());
     (async () => {
       try {
         const introNote = await read(activeHubUri);
@@ -151,51 +149,72 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         const settings = parseTodayHubFrontmatter(introNote.content);
         const weekStarts = enumerateTodayHubWeekStarts(new Date(), settings.start);
         const anchorWs = weekStarts[1]!;
-        const hubJustInitialized = weekNavInitHubRef.current !== activeHubUri;
-        if (hubJustInitialized) {
+        if (weekNavInitHubRef.current !== activeHubUri) {
           weekNavInitHubRef.current = activeHubUri;
           syncWeekNavToCurrentWeek(anchorWs);
-        }
-        const ws = hubJustInitialized ? anchorWs : (selectedWeekStart ?? anchorWs);
-        const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, ws);
-        let rowContent = '';
-        try {
-          const rowNote = await read(rowUri);
-          rowContent = rowNote.content;
-        } catch {
-          rowContent = '';
         }
         if (cancelled) {
           return;
         }
-        setHubLoadState({
+        setHubIntro({
           status: 'ready',
           intro: introNote.content,
-          row: rowContent,
           settings,
-          weekStart: ws,
         });
       } catch (e) {
         if (!cancelled) {
-          setHubLoadState({
+          setHubIntro({
             status: 'error',
             message: e instanceof Error ? e.message : 'Could not load Today hub.',
           });
+          setRowByWeek(new Map());
         }
       }
     })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [activeHubUri, read, selectedWeekStart, syncWeekNavToCurrentWeek]);
+  }, [activeHubUri, read, syncWeekNavToCurrentWeek]);
 
   useEffect(() => {
-    if (hubLoadState.status === 'ready') {
-      setWeekNavSubtitle(formatTodayHubWeekRangeShort(hubLoadState.weekStart));
-    } else {
-      setWeekNavSubtitle('');
+    if (!activeHubUri || hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      return;
     }
-  }, [hubLoadState, setWeekNavSubtitle]);
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (rowByWeek.has(stem)) {
+      return;
+    }
+    let cancelled = false;
+    const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, selectedWeekStart);
+    (async () => {
+      let rowContent = '';
+      try {
+        const rowNote = await read(rowUri);
+        rowContent = rowNote.content;
+      } catch {
+        rowContent = '';
+      }
+      if (cancelled) {
+        return;
+      }
+      setRowByWeek(prev => {
+        const next = new Map(prev);
+        next.set(stem, rowContent);
+        return next;
+      });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeHubUri, hubIntro.status, read, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (selectedWeekStart == null) {
+      setWeekNavSubtitle('');
+    } else {
+      setWeekNavSubtitle(formatTodayHubWeekRangeShort(selectedWeekStart));
+    }
+  }, [selectedWeekStart, setWeekNavSubtitle]);
 
   const selectHub = useCallback(
     (uri: string) => {
@@ -319,29 +338,31 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   );
 
   const columnSections = useMemo(() => {
-    if (hubLoadState.status !== 'ready') {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
       return [];
     }
-    const count = todayHubColumnCount(hubLoadState.settings);
-    return splitTodayRowIntoColumns(hubLoadState.row, count);
-  }, [hubLoadState]);
+    const count = todayHubColumnCount(hubIntro.settings);
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    const row = rowByWeek.get(stem) ?? '';
+    return splitTodayRowIntoColumns(row, count);
+  }, [hubIntro, rowByWeek, selectedWeekStart]);
 
   const columnHeaders = useMemo(() => {
-    if (hubLoadState.status !== 'ready') {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
       return [];
     }
-    const {settings, weekStart} = hubLoadState;
+    const {settings} = hubIntro;
     const count = todayHubColumnCount(settings);
     const h: string[] = [];
     for (let c = 0; c < count; c++) {
       if (c === 0) {
-        h.push(formatTodayHubWeekDateLong(weekStart));
+        h.push(formatTodayHubWeekDateLong(selectedWeekStart));
       } else {
         h.push(settings.columns[c - 1] ?? `Column ${c + 1}`);
       }
     }
     return h;
-  }, [hubLoadState]);
+  }, [hubIntro, selectedWeekStart]);
 
   /** Stable "now" for week progress so columns agree within one paint. */
   const weekProgressComparisonNow = useMemo(() => new Date(), []);
@@ -367,17 +388,19 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     );
   }
 
+  const showHubIntroSpinner =
+    activeHubUri != null &&
+    (hubIntro.status === 'loading' || hubIntro.status === 'idle');
+
   return (
     <Box style={styles.container}>
-      {hubLoadState.status === 'loading' || hubLoadState.status === 'idle' ? (
-        <Spinner style={styles.spinner} />
-      ) : null}
-      {hubLoadState.status === 'error' ? (
+      {showHubIntroSpinner ? <Spinner style={styles.spinner} /> : null}
+      {hubIntro.status === 'error' ? (
         <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
-          {hubLoadState.message}
+          {hubIntro.message}
         </Text>
       ) : null}
-      {hubLoadState.status === 'ready' ? (
+      {hubIntro.status === 'ready' ? (
         <ScrollView contentContainerStyle={styles.scrollContent} nestedScrollEnabled>
           {vaultMarkdownRefsError ? (
             <Text style={[styles.indexWarning, {color: muted}]}>
@@ -389,32 +412,34 @@ export function VaultScreen({navigation}: VaultScreenProps) {
             <Text style={[styles.indexHint, {color: muted}]}>Indexing vault notes for links…</Text>
           ) : null}
           <VaultReadonlyMarkdownBlock
-            markdownFullText={hubLoadState.intro}
+            markdownFullText={hubIntro.intro}
             noteUri={activeHubUri!}
             omitWikiIndexWarning
             onNavigateToVaultNote={onNavigateToVaultNote}
           />
           <View style={styles.columnsWrap}>
-            {columnSections.map((colBody, ci) => (
-              <VaultReadonlyMarkdownBlock
-                key={`col-${ci}`}
-                markdownFullText={colBody}
-                noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, hubLoadState.weekStart)}
-                omitWikiIndexWarning
-                sectionTitle={columnHeaders[ci] ?? ''}
-                titleTrailing={
-                  ci === 0 ? (
-                    <TodayWeekProgressStrip
-                      progress={todayHubWeekProgress(
-                        hubLoadState.weekStart,
-                        weekProgressComparisonNow,
-                      )}
-                    />
-                  ) : undefined
-                }
-                onNavigateToVaultNote={onNavigateToVaultNote}
-              />
-            ))}
+            {selectedWeekStart != null
+              ? columnSections.map((colBody, ci) => (
+                  <VaultReadonlyMarkdownBlock
+                    key={`col-${ci}`}
+                    markdownFullText={colBody}
+                    noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, selectedWeekStart)}
+                    omitWikiIndexWarning
+                    sectionTitle={columnHeaders[ci] ?? ''}
+                    titleTrailing={
+                      ci === 0 ? (
+                        <TodayWeekProgressStrip
+                          progress={todayHubWeekProgress(
+                            selectedWeekStart,
+                            weekProgressComparisonNow,
+                          )}
+                        />
+                      ) : undefined
+                    }
+                    onNavigateToVaultNote={onNavigateToVaultNote}
+                  />
+                ))
+              : null}
           </View>
         </ScrollView>
       ) : null}
