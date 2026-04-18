@@ -1,6 +1,6 @@
 import {normalizeEditorDocUri} from './editorDocumentHistory';
 import {tabCurrentUri, type EditorWorkspaceTab} from './editorWorkspaceTabs';
-import {vaultUriIsTodayMarkdownFile} from './vaultTreeLoadChildren';
+import {vaultUriIsTodayMarkdownFile} from '@eskerra/core';
 
 export type SelectNoteActiveHubTodayOpen =
   /** No tab row; load active hub Today as the implicit workspace surface. */

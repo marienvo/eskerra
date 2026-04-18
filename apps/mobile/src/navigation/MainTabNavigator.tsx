@@ -5,9 +5,13 @@ import {
   BottomTabNavigationOptions,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
+import {useNavigationState} from '@react-navigation/native';
 import {createStackNavigator} from '@react-navigation/stack';
-import {Pressable, StyleSheet, View} from 'react-native';
+import {Pressable, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+import {VaultTodayHubProvider, useVaultTodayHubContext} from '../features/vault/context/VaultTodayHubContext';
+import {vaultStackRouteIsVaultHome, vaultStackStateFromRootState} from './vaultTabNavigationState';
 
 import {InboxScreen} from '../features/inbox/screens/InboxScreen';
 import {MiniPlayer} from '../features/podcasts/components/MiniPlayer';
@@ -63,11 +67,59 @@ const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
   <TabBarButton {...props} />
 );
 
+function TabBarWithTodayWeekNav(props: Parameters<typeof BottomTabBar>[0]) {
+  const rootState = useNavigationState(s => s);
+  const vaultToday = useVaultTodayHubContext();
+  const {
+    canGoNext,
+    canGoPrev,
+    goNextWeek,
+    goPrevWeek,
+    hasTodayHub,
+    weekNavSubtitle,
+  } = vaultToday;
+  const activeTabName = rootState?.routes?.[rootState.index ?? 0]?.name;
+  const vaultStack = vaultStackStateFromRootState(rootState);
+  const showWeekNav =
+    hasTodayHub && activeTabName === 'VaultTab' && vaultStackRouteIsVaultHome(vaultStack);
+
+  return (
+    <>
+      <MiniPlayer />
+      {showWeekNav ? (
+        <View style={styles.weekNavRow}>
+          <TouchableOpacity
+            accessibilityLabel="Previous week"
+            accessibilityState={{disabled: !canGoPrev}}
+            disabled={!canGoPrev}
+            hitSlop={{bottom: 6, left: 8, right: 8, top: 6}}
+            onPress={goPrevWeek}
+            style={[styles.weekNavSide, !canGoPrev ? styles.weekNavDisabled : null]}>
+            <MaterialIcons color="#ffffff" name="chevron-left" size={22} />
+            <Text style={styles.weekNavBtnText}>Previous week</Text>
+          </TouchableOpacity>
+          <Text numberOfLines={1} style={styles.weekNavSubtitle}>
+            {weekNavSubtitle}
+          </Text>
+          <TouchableOpacity
+            accessibilityLabel="Next week"
+            accessibilityState={{disabled: !canGoNext}}
+            disabled={!canGoNext}
+            hitSlop={{bottom: 6, left: 8, right: 8, top: 6}}
+            onPress={goNextWeek}
+            style={[styles.weekNavSide, styles.weekNavSideEnd, !canGoNext ? styles.weekNavDisabled : null]}>
+            <Text style={styles.weekNavBtnText}>Next week</Text>
+            <MaterialIcons color="#ffffff" name="chevron-right" size={22} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      <BottomTabBar {...props} />
+    </>
+  );
+}
+
 const renderTabBar = (props: Parameters<typeof BottomTabBar>[0]) => (
-  <>
-    <MiniPlayer />
-    <BottomTabBar {...props} />
-  </>
+  <TabBarWithTodayWeekNav {...props} />
 );
 
 function renderPodcastsTabHeader(props: BottomTabHeaderProps) {
@@ -193,85 +245,121 @@ function SettingsStackScreen() {
 
 export function MainTabNavigator() {
   return (
-    <PlayerProvider>
-      <PlaylistR2PollingHost />
-      <Tabs.Navigator
-        initialRouteName="PodcastsTab"
-        screenOptions={{
-          headerShown: true,
-          headerStyle: styles.tabHeader,
-          headerTintColor: '#ffffff',
-          headerTitleStyle: styles.tabHeaderTitle,
-          tabBarActiveTintColor: '#ffffff',
-          tabBarInactiveTintColor: 'rgba(255,255,255,0.72)',
-          tabBarLabelStyle: styles.tabBarLabel,
-          tabBarShowLabel: true,
-          tabBarStyle: styles.tabBar,
-        }}
-        tabBar={renderTabBar}>
-        <Tabs.Screen
-          component={PodcastsStackScreen}
-          name="PodcastsTab"
-          options={{
-            header: renderPodcastsTabHeader,
-            tabBarButton,
-            tabBarIcon: podcastsTabIcon,
-            title: 'Episodes',
+    <VaultTodayHubProvider>
+      <PlayerProvider>
+        <PlaylistR2PollingHost />
+        <Tabs.Navigator
+          initialRouteName="PodcastsTab"
+          screenOptions={{
+            headerShown: true,
+            headerStyle: styles.tabHeader,
+            headerTintColor: '#ffffff',
+            headerTitleStyle: styles.tabHeaderTitle,
+            tabBarActiveTintColor: '#ffffff',
+            tabBarInactiveTintColor: 'rgba(255,255,255,0.72)',
+            tabBarLabelStyle: styles.tabBarLabel,
+            tabBarShowLabel: true,
+            tabBarStyle: styles.tabBar,
           }}
-        />
-        <Tabs.Screen
-          component={VaultStackScreen}
-          name="VaultTab"
-          options={{
-            tabBarButton,
-            tabBarIcon: vaultTabIcon,
-            title: 'Today',
-          }}
-        />
-        <Tabs.Screen
-          component={InboxStackScreen}
-          name="InboxTab"
-          options={{
-            tabBarButton,
-            tabBarIcon: inboxTabIcon,
-            title: 'Inbox',
-          }}
-        />
-        <Tabs.Screen
-          component={AddNoteStackScreen}
-          name="AddNoteTab"
-          options={{
-            tabBarButton,
-            tabBarIcon: newNoteTabIcon,
-            title: 'Entry',
-          }}
-        />
-        <Tabs.Screen
-          component={RecordStackScreen}
-          name="RecordTab"
-          options={{
-            tabBarAccessibilityLabel: 'Record',
-            tabBarButton,
-            tabBarIcon: recordTabIcon,
-            tabBarLabel: 'Record',
-            title: 'Record',
-          }}
-        />
-        <Tabs.Screen
-          component={SettingsStackScreen}
-          name="SettingsTab"
-          options={{
-            tabBarButton: () => null,
-            tabBarItemStyle: {display: 'none'},
-            title: 'Settings',
-          }}
-        />
-      </Tabs.Navigator>
-    </PlayerProvider>
+          tabBar={renderTabBar}>
+          <Tabs.Screen
+            component={PodcastsStackScreen}
+            name="PodcastsTab"
+            options={{
+              header: renderPodcastsTabHeader,
+              tabBarButton,
+              tabBarIcon: podcastsTabIcon,
+              title: 'Episodes',
+            }}
+          />
+          <Tabs.Screen
+            component={VaultStackScreen}
+            name="VaultTab"
+            options={{
+              tabBarButton,
+              tabBarIcon: vaultTabIcon,
+              title: 'Today',
+            }}
+          />
+          <Tabs.Screen
+            component={InboxStackScreen}
+            name="InboxTab"
+            options={{
+              tabBarButton,
+              tabBarIcon: inboxTabIcon,
+              title: 'Inbox',
+            }}
+          />
+          <Tabs.Screen
+            component={AddNoteStackScreen}
+            name="AddNoteTab"
+            options={{
+              tabBarButton,
+              tabBarIcon: newNoteTabIcon,
+              title: 'Entry',
+            }}
+          />
+          <Tabs.Screen
+            component={RecordStackScreen}
+            name="RecordTab"
+            options={{
+              tabBarAccessibilityLabel: 'Record',
+              tabBarButton,
+              tabBarIcon: recordTabIcon,
+              tabBarLabel: 'Record',
+              title: 'Record',
+            }}
+          />
+          <Tabs.Screen
+            component={SettingsStackScreen}
+            name="SettingsTab"
+            options={{
+              tabBarButton: () => null,
+              tabBarItemStyle: {display: 'none'},
+              title: 'Settings',
+            }}
+          />
+        </Tabs.Navigator>
+      </PlayerProvider>
+    </VaultTodayHubProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  weekNavBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  weekNavDisabled: {
+    opacity: 0.38,
+  },
+  weekNavRow: {
+    alignItems: 'center',
+    backgroundColor: '#222222',
+    borderTopColor: '#2d2d2d',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  weekNavSide: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    maxWidth: '36%',
+  },
+  weekNavSideEnd: {
+    justifyContent: 'flex-end',
+  },
+  weekNavSubtitle: {
+    color: 'rgba(255,255,255,0.72)',
+    flex: 1,
+    fontSize: 11,
+    marginHorizontal: 8,
+    textAlign: 'center',
+  },
   tabBar: {
     backgroundColor: '#1d1d1d',
     borderTopColor: '#2d2d2d',

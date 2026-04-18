@@ -127,10 +127,8 @@ import {
 } from '../lib/editorWorkspaceTabs';
 import {editorOpenTabPillLabel} from '../lib/editorOpenTabPillLabel';
 import type {TodayHubWorkspaceSnapshot} from '../lib/mainWindowUiStore';
-import {
-  pickDefaultActiveTodayHubUri,
-  sortedTodayHubNoteUrisFromRefs,
-} from '../lib/todayHubWorkspaceRestore';
+import {sortedTodayHubNoteUrisFromRefs} from '@eskerra/core';
+import {pickDefaultActiveTodayHubUri} from '../lib/todayHubWorkspaceRestore';
 import {
   isActiveWorkspaceTodayLinkSurface,
   selectNoteActiveHubTodayOpen,

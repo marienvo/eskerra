@@ -1,22 +1,4 @@
 import type {StoredEditorWorkspaceTab} from './mainWindowUiStore';
-import {vaultUriIsTodayMarkdownFile} from './vaultTreeLoadChildren';
-
-/**
- * All eligible `Today.md` vault URIs from markdown refs, sorted for stable “first hub”.
- */
-export function sortedTodayHubNoteUrisFromRefs(
-  vaultMarkdownRefs: readonly {uri: string}[],
-): string[] {
-  const out: string[] = [];
-  for (const r of vaultMarkdownRefs) {
-    const u = r.uri.replace(/\\/g, '/');
-    if (vaultUriIsTodayMarkdownFile(u)) {
-      out.push(u);
-    }
-  }
-  out.sort((a, b) => a.localeCompare(b));
-  return out;
-}
 
 /**
  * When legacy flat inbox tabs had no per-hub map, choose which hub URI owns that snapshot.
