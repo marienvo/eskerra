@@ -100,6 +100,23 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     vaultToday.setHasTodayHub(hubs.length > 0);
   }, [hubs.length, vaultToday]);
 
+  /**
+   * Persist the effective active hub (persisted or first-hub fallback) so the next
+   * cold-start's native `prepareEskerraSession` prefetch includes the Today.md + week
+   * row bodies, avoiding a live SAF read on the first Today-tab tap.
+   */
+  useEffect(() => {
+    if (activeHubUri == null || persistedHubUri === undefined) {
+      return;
+    }
+    const normalize = (u: string) => u.replace(/\\/g, '/');
+    if (persistedHubUri != null && normalize(persistedHubUri) === normalize(activeHubUri)) {
+      return;
+    }
+    persistActiveTodayHubUri(activeHubUri).catch(() => undefined);
+    setPersistedHubUri(activeHubUri);
+  }, [activeHubUri, persistedHubUri]);
+
   const weekIndex = vaultToday.weekIndex;
 
   const [hubLoadState, setHubLoadState] = useState<HubLoadState>({status: 'idle'});
