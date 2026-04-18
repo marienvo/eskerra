@@ -103,10 +103,6 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     return hubs[0] ?? null;
   }, [hubs, persistedHubUri, userPickedHubUri]);
 
-  useEffect(() => {
-    vaultToday.setHasTodayHub(hubs.length > 0);
-  }, [hubs.length, vaultToday]);
-
   /**
    * Persist the effective active hub (persisted or first-hub fallback) so the next
    * cold-start's native `prepareEskerraSession` prefetch includes the Today.md + week

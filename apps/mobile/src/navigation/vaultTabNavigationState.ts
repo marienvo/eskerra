@@ -8,7 +8,12 @@ export function vaultStackRouteIsVaultHome(
   vaultTabState: NavigationState | undefined,
 ): boolean {
   if (!vaultTabState?.routes?.length) {
-    return false;
+    /**
+     * Nested stack state is absent on the first lazy visit to VaultTab; the stack
+     * still initializes at the `Vault` route, so treat as home (week nav caller
+     * already gates on `activeTabName === 'VaultTab'`).
+     */
+    return true;
   }
   const idx = vaultTabState.index ?? 0;
   const route = vaultTabState.routes[idx];

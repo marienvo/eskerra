@@ -1,3 +1,4 @@
+import {sortedTodayHubNoteUrisFromRefs} from '@eskerra/core';
 import React, {
   createContext,
   useCallback,
@@ -5,6 +6,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+
+import {useVaultContext} from '../../../core/vault/VaultContext';
 
 const CURRENT_WEEK_INDEX = 1;
 const WEEK_COUNT = 53;
@@ -18,7 +21,6 @@ export type VaultTodayHubContextValue = {
   canGoPrev: boolean;
   canGoNext: boolean;
   hasTodayHub: boolean;
-  setHasTodayHub: (v: boolean) => void;
   /** Shown between week nav buttons (e.g. date range); set from Vault hub screen. */
   weekNavSubtitle: string;
   setWeekNavSubtitle: (v: string) => void;
@@ -27,8 +29,12 @@ export type VaultTodayHubContextValue = {
 const VaultTodayHubContext = createContext<VaultTodayHubContextValue | null>(null);
 
 export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
+  const {vaultMarkdownRefs} = useVaultContext();
+  const hasTodayHub = useMemo(
+    () => sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs).length > 0,
+    [vaultMarkdownRefs],
+  );
   const [weekIndex, setWeekIndex] = useState(CURRENT_WEEK_INDEX);
-  const [hasTodayHub, setHasTodayHub] = useState(false);
   const [weekNavSubtitle, setWeekNavSubtitle] = useState('');
 
   const goPrevWeek = useCallback(() => {
@@ -56,7 +62,6 @@ export function VaultTodayHubProvider({children}: {children: React.ReactNode}) {
       canGoPrev,
       canGoNext,
       hasTodayHub,
-      setHasTodayHub,
       weekNavSubtitle,
       setWeekNavSubtitle,
     }),
