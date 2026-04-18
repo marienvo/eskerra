@@ -40,6 +40,9 @@ type HubIntroState =
   | {status: 'error'; message: string}
   | {status: 'ready'; intro: string; settings: TodayHubSettings};
 
+/** Show week-nav loading spinner only if row fetch exceeds this (avoids flash on prefetch). */
+const ROW_NAV_LOADING_DELAY_MS = 200;
+
 export function VaultScreen({navigation}: VaultScreenProps) {
   const isScreenFocused = useIsFocused();
   const colorMode = useColorMode();
@@ -129,6 +132,8 @@ export function VaultScreen({navigation}: VaultScreenProps) {
 
   const [hubIntro, setHubIntro] = useState<HubIntroState>({status: 'idle'});
   const [rowByWeek, setRowByWeek] = useState<Map<string, string>>(() => new Map());
+  const [renderedWeekStart, setRenderedWeekStart] = useState<Date | null>(null);
+  const [isNavLoading, setIsNavLoading] = useState(false);
   const weekNavInitHubRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -207,6 +212,48 @@ export function VaultScreen({navigation}: VaultScreenProps) {
       cancelled = true;
     };
   }, [activeHubUri, hubIntro.status, read, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (!activeHubUri || hubIntro.status !== 'ready') {
+      setRenderedWeekStart(null);
+      setIsNavLoading(false);
+    }
+  }, [activeHubUri, hubIntro.status]);
+
+  useEffect(() => {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      return;
+    }
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (!rowByWeek.has(stem)) {
+      return;
+    }
+    setRenderedWeekStart(prev => {
+      if (prev != null && formatTodayHubMondayStem(prev) === stem) {
+        return prev;
+      }
+      return selectedWeekStart;
+    });
+    setIsNavLoading(false);
+  }, [hubIntro.status, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      setIsNavLoading(false);
+      return;
+    }
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (rowByWeek.has(stem)) {
+      setIsNavLoading(false);
+      return;
+    }
+    const id = setTimeout(() => {
+      setIsNavLoading(true);
+    }, ROW_NAV_LOADING_DELAY_MS);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [hubIntro.status, rowByWeek, selectedWeekStart]);
 
   useEffect(() => {
     if (selectedWeekStart == null) {
@@ -338,17 +385,17 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   );
 
   const columnSections = useMemo(() => {
-    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+    if (hubIntro.status !== 'ready' || renderedWeekStart == null) {
       return [];
     }
     const count = todayHubColumnCount(hubIntro.settings);
-    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    const stem = formatTodayHubMondayStem(renderedWeekStart);
     const row = rowByWeek.get(stem) ?? '';
     return splitTodayRowIntoColumns(row, count);
-  }, [hubIntro, rowByWeek, selectedWeekStart]);
+  }, [hubIntro, rowByWeek, renderedWeekStart]);
 
   const columnHeaders = useMemo(() => {
-    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+    if (hubIntro.status !== 'ready' || renderedWeekStart == null) {
       return [];
     }
     const {settings} = hubIntro;
@@ -356,13 +403,13 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     const h: string[] = [];
     for (let c = 0; c < count; c++) {
       if (c === 0) {
-        h.push(formatTodayHubWeekDateLong(selectedWeekStart));
+        h.push(formatTodayHubWeekDateLong(renderedWeekStart));
       } else {
         h.push(settings.columns[c - 1] ?? `Column ${c + 1}`);
       }
     }
     return h;
-  }, [hubIntro, selectedWeekStart]);
+  }, [hubIntro, renderedWeekStart]);
 
   /** Stable "now" for week progress so columns agree within one paint. */
   const weekProgressComparisonNow = useMemo(() => new Date(), []);
@@ -418,19 +465,20 @@ export function VaultScreen({navigation}: VaultScreenProps) {
             onNavigateToVaultNote={onNavigateToVaultNote}
           />
           <View style={styles.columnsWrap}>
-            {selectedWeekStart != null
+            {isNavLoading ? <Spinner style={styles.spinner} /> : null}
+            {renderedWeekStart != null
               ? columnSections.map((colBody, ci) => (
                   <VaultReadonlyMarkdownBlock
                     key={`col-${ci}`}
                     markdownFullText={colBody}
-                    noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, selectedWeekStart)}
+                    noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, renderedWeekStart)}
                     omitWikiIndexWarning
                     sectionTitle={columnHeaders[ci] ?? ''}
                     titleTrailing={
                       ci === 0 ? (
                         <TodayWeekProgressStrip
                           progress={todayHubWeekProgress(
-                            selectedWeekStart,
+                            renderedWeekStart,
                             weekProgressComparisonNow,
                           )}
                         />
