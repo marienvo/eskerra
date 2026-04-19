@@ -203,7 +203,10 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 I want a Markdown app that is fast, predictable, and works out of the box. 
 No plugins required for the basics, no waiting, no hidden complexity.
 
-This project is built around that idea.
+This project is built around that idea. 
+
+Apps fade. Markdown remains.
+Like stones in a riverbed.
 
 | Tool | Core Idea | Strength | Trade-off |
 |------|----------|----------|-----------|
