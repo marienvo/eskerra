@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/marienvanoverbeek/git/notebox/**)",
+      "Bash(npx vitest *)"
+    ]
+  }
+}

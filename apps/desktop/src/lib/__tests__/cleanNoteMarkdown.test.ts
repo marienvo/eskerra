@@ -427,6 +427,14 @@ describe('cleanNoteMarkdownBody golden fixtures', () => {
 
     expect(actual).toBe(expected);
   });
+
+  it('005-code-block-whitespace', () => {
+    const input = readFixture('markdown/005-code-block-whitespace.input.md');
+    const expected = readFixture('markdown/005-code-block-whitespace.expected.md');
+    const actual = cleanNoteMarkdownBody(input, '/tmp/Fixture.md');
+
+    expect(actual).toBe(expected);
+  });
 });
 
 describe('resolveCleanNoteDefaults', () => {

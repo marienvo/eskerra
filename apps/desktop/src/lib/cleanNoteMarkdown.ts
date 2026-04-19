@@ -269,6 +269,35 @@ function preprocessMarkdown(input: string, resolved: ResolvedCleanNoteOptions): 
   return noHyphenBreaks.join('\n');
 }
 
+function trimEndOutsideFences(rawLines: string[]): string[] {
+  const out: string[] = [];
+  let inFence = false;
+  let fenceChar = '';
+  let fenceLen = 0;
+
+  for (const line of rawLines) {
+    const fence = getFence(line);
+    if (fence && !inFence) {
+      inFence = true;
+      fenceChar = fence.char;
+      fenceLen = fence.len;
+      out.push(line.trimEnd());
+      continue;
+    }
+    if (fence && inFence && fence.char === fenceChar && fence.len >= fenceLen) {
+      inFence = false;
+      out.push(line.trimEnd());
+      continue;
+    }
+    if (inFence) {
+      out.push(line);
+      continue;
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
+}
+
 function postprocessMarkdown(
   input: string,
   postOpts: {preserveLeadingBlankLine?: boolean} = {},
@@ -278,7 +307,7 @@ function postprocessMarkdown(
     return '';
   }
 
-  let lines = input.replace(/\r\n/g, '\n').split('\n').map(line => line.trimEnd());
+  let lines = trimEndOutsideFences(input.replace(/\r\n/g, '\n').split('\n'));
 
   lines = normalizeBulletSpacing(lines, resolved.bullet);
   if (resolved.listItemIndent === 'tab') {
@@ -439,18 +468,41 @@ function collapseInnerSpaces(line: string): string {
 
 function removeHyphenatedLineBreaks(lines: string[]): string[] {
   const out = lines.slice();
+  let inFence = false;
+  let fenceChar = '';
+  let fenceLen = 0;
   let i = 0;
-  while (i < out.length - 1) {
-    const current = out[i]!;
-    const next = out[i + 1]!;
-    if (
-      shouldJoinHyphenBreak(current, next)
-      && /[A-Za-z]-$/.test(current)
-      && /^[a-z]/.test(next.trim())
-    ) {
-      const merged = `${current.replace(/-\s*$/, '')}${next.trimStart()}`;
-      out.splice(i, 2, merged);
+  while (i < out.length) {
+    const line = out[i]!;
+    const fence = getFence(line);
+    if (fence && !inFence) {
+      inFence = true;
+      fenceChar = fence.char;
+      fenceLen = fence.len;
+      i++;
       continue;
+    }
+    if (fence && inFence && fence.char === fenceChar && fence.len >= fenceLen) {
+      inFence = false;
+      i++;
+      continue;
+    }
+    if (inFence) {
+      i++;
+      continue;
+    }
+    if (i < out.length - 1) {
+      const current = out[i]!;
+      const next = out[i + 1]!;
+      if (
+        shouldJoinHyphenBreak(current, next)
+        && /[A-Za-z]-$/.test(current)
+        && /^[a-z]/.test(next.trim())
+      ) {
+        const merged = `${current.replace(/-\s*$/, '')}${next.trimStart()}`;
+        out.splice(i, 2, merged);
+        continue;
+      }
     }
     i++;
   }
