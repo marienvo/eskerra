@@ -1,3 +1,4 @@
+mod link_rich_metadata;
 mod media;
 mod r2_http;
 mod tiling;
@@ -72,6 +73,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tiling::get_window_tiling_detection,
             r2_http::r2_signed_fetch,
+            link_rich_metadata::fetch_link_rich_metadata,
             vault::vault_set_session,
             vault::vault_get_session,
             vault::vault_exists,
