@@ -14,7 +14,7 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "node ../../scripts/tauri-desktop-build.mjs",
-    "desktop:icons": "tauri icon ../../assets/brand/logo-eskerra.svg",
+    "desktop:icons": "tauri icon ../../eskerra-logo.png",
     "validate-metainfo": "appstreamcli validate --override=cid-desktopapp-is-not-rdns=info src-tauri/metainfo/eskerra.metainfo.xml",
     "generate-emoji-data": "node scripts/generate-emoji-completion-data.mjs",
     "generate-emoji-variation-bases": "node scripts/generate-emoji-variation-bases.mjs"
