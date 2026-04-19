@@ -1,14 +1,45 @@
 import {
-  enumerateTodayHubWeekStarts,
+  startOfLocalWeekMonday,
   todayHubRowUriFromTodayNoteUri,
 } from '@eskerra/core';
 
 import {loadPersistedActiveTodayHubUri} from '../../features/vault/storage/activeTodayHubStorage';
 
+/**
+ * SAF tree URIs (`.../tree/<docId>[/document/<docId>]`) and document URIs
+ * (`.../document/<docId>`) share a `primary:...` document-id space. The persisted
+ * Today hub URI is typically a plain document URI while the session baseUri is a
+ * tree URI, so a naive prefix compare on the raw content:// strings reports false.
+ * Extract and URL-decode the canonical document-id segments and compare those.
+ */
+function extractSafDocumentId(uri: string): string | null {
+  const trimmed = uri.trim();
+  const docMatch = trimmed.match(/\/document\/([^/?#]+)/);
+  const treeMatch = trimmed.match(/\/tree\/([^/?#]+)/);
+  const raw = docMatch?.[1] ?? treeMatch?.[1] ?? null;
+  if (raw == null) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function vaultUriBelongsToBase(hubUri: string, baseUri: string): boolean {
-  const h = hubUri.replace(/\\/g, '/').trim();
-  const b = baseUri.replace(/\\/g, '/').replace(/\/+$/, '');
-  return h.startsWith(`${b}/`) || h === b;
+  const hubId = extractSafDocumentId(hubUri);
+  const baseId = extractSafDocumentId(baseUri);
+  if (hubId != null && baseId != null) {
+    const h = hubId.replace(/\\/g, '/').replace(/\/+$/, '');
+    const b = baseId.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (h === b || h.startsWith(`${b}/`)) {
+      return true;
+    }
+  }
+  const hRaw = hubUri.replace(/\\/g, '/').trim();
+  const bRaw = baseUri.replace(/\\/g, '/').replace(/\/+$/, '');
+  return hRaw.startsWith(`${bRaw}/`) || hRaw === bRaw;
 }
 
 /**
@@ -23,10 +54,10 @@ export async function resolveTodayHubPrefetchUrisForSession(
   if (!hub || !vaultUriBelongsToBase(hub, baseUri)) {
     return undefined;
   }
-  const weekStarts = enumerateTodayHubWeekStarts(new Date(), 'monday');
-  const ws = weekStarts[0];
-  if (!ws) {
-    return [hub];
-  }
+  /**
+   * Best-effort current-week row for cold start (Monday-aligned; VaultScreen applies the hub's
+   * `start` from frontmatter when syncing week navigation). Prefetch hits session cache on first read.
+   */
+  const ws = startOfLocalWeekMonday(new Date());
   return [hub, todayHubRowUriFromTodayNoteUri(hub, ws)];
 }

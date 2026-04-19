@@ -1,7 +1,7 @@
 import {splitYamlFrontmatter, stemFromMarkdownFileName} from '@eskerra/core';
 import {vaultReadonlyLinkSchemeFromColorMode, vaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
 import {Box, Text, useColorMode} from '@gluestack-ui/themed';
-import {useCallback, useMemo, useState} from 'react';
+import {useCallback, useMemo, useState, type ReactNode} from 'react';
 import {Alert, StyleSheet} from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
@@ -21,6 +21,8 @@ export type VaultReadonlyMarkdownBlockProps = {
   markdownFullText: string;
   onNavigateToVaultNote?: (noteUri: string, noteTitle: string) => void;
   sectionTitle?: string;
+  /** Rendered to the right of `sectionTitle` (e.g. Today hub week progress). */
+  titleTrailing?: ReactNode;
   emptyPlaceholder?: string;
   /** When the parent already shows a vault index warning, hide the duplicate per block. */
   omitWikiIndexWarning?: boolean;
@@ -36,6 +38,7 @@ export function VaultReadonlyMarkdownBlock({
   markdownFullText,
   onNavigateToVaultNote,
   sectionTitle,
+  titleTrailing,
   emptyPlaceholder = '*Empty*',
   omitWikiIndexWarning = false,
 }: VaultReadonlyMarkdownBlockProps) {
@@ -123,9 +126,15 @@ export function VaultReadonlyMarkdownBlock({
   return (
     <Box style={styles.block}>
       {sectionTitle ? (
-        <Text accessibilityRole="header" style={[styles.sectionTitle, {color: markdownTextColor}]}>
-          {sectionTitle}
-        </Text>
+        <Box style={styles.sectionTitleRow}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.sectionTitle, {color: markdownTextColor}]}
+            numberOfLines={1}>
+            {sectionTitle}
+          </Text>
+          {titleTrailing}
+        </Box>
       ) : null}
       {!omitWikiIndexWarning && vaultMarkdownRefsError ? (
         <Text style={[styles.indexWarning, {color: markdownMutedColor}]}>
@@ -170,8 +179,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
+    marginRight: 8,
+  },
+  sectionTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
 });

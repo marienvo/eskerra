@@ -33,6 +33,8 @@ type PlayerContextValue = {
   activeEpisode: PodcastEpisode | null;
   allEpisodes: PodcastEpisode[];
   clearMiniPlayerArtworkSelection: () => void;
+  /** Stops playback and clears playlist for the active episode when `episodeId` matches; does not mark played. */
+  clearNowPlayingIfMatchesEpisode: (episodeId: string) => Promise<void>;
   markEpisodeAsPlayed: (
     episode: PodcastEpisode,
     options?: MarkEpisodeAsPlayedOptions,
@@ -189,6 +191,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       activeEpisode,
       allEpisodes,
       clearMiniPlayerArtworkSelection,
+      clearNowPlayingIfMatchesEpisode,
       markEpisodeAsPlayed: handleMarkEpisodeAsPlayed,
       miniPlayerArtworkSelected,
       playEpisode,
@@ -213,6 +216,7 @@ export function PlayerProvider({children}: PlayerProviderProps) {
       activeEpisode,
       allEpisodes,
       clearMiniPlayerArtworkSelection,
+      clearNowPlayingIfMatchesEpisode,
       handleMarkEpisodeAsPlayed,
       miniPlayerArtworkSelected,
       playEpisode,

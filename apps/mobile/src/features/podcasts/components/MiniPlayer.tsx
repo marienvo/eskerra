@@ -1,6 +1,6 @@
 import {Box, Pressable, Text} from '@gluestack-ui/themed';
 import Slider from '@react-native-community/slider';
-import {useCallback, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, StyleSheet, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -14,6 +14,8 @@ import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 const SKIP_MS = 10_000;
 const SKIP_ICON_SIZE = 34;
 const PLAY_ICON_SIZE = 52;
+/** Icon-only episode actions when artwork is selected (matches ~64px artwork row). */
+const MINI_PLAYER_ACTION_ICON_SIZE = 30;
 
 /** Match bottom tab bar dark chrome; transport uses light fg so enabled/disabled read on dark in all color modes. */
 const MINI_PLAYER_BG = '#1d1d1d';
@@ -28,6 +30,8 @@ const MINI_PLAYER_PLACEHOLDER_BG = '#3a3a3a';
 /**
  * Approximate total height when MiniPlayer is visible. Used for keyboard footer offset;
  * update if container padding, artwork row, or progress block changes.
+ * Artwork action mode matches the same ~64px text column height; an error line below actions
+ * can add ~22px but is omitted here to keep the offset conservative.
  */
 export const MINI_PLAYER_LAYOUT_HEIGHT =
   1 + 20 + 64 + 8 + 40 + 6 + 52;// + 20;
@@ -64,6 +68,8 @@ export function MiniPlayer() {
   const {baseUri} = useVaultContext();
   const {
     activeEpisode,
+    clearNowPlayingIfMatchesEpisode,
+    markEpisodeAsPlayed,
     miniPlayerArtworkSelected,
     playbackPhase,
     playbackSeeking,
@@ -80,6 +86,16 @@ export function MiniPlayer() {
 
   const [sliderDragging, setSliderDragging] = useState(false);
   const [sliderDragMs, setSliderDragMs] = useState(0);
+  const [miniPlayerActionKind, setMiniPlayerActionKind] = useState<null | 'dismiss' | 'mark'>(null);
+  const [miniPlayerActionError, setMiniPlayerActionError] = useState<string | null>(null);
+  const miniPlayerActionBusy = miniPlayerActionKind !== null;
+
+  useEffect(() => {
+    if (!miniPlayerArtworkSelected) {
+      setMiniPlayerActionError(null);
+      setMiniPlayerActionKind(null);
+    }
+  }, [miniPlayerArtworkSelected]);
 
   const handleSeekBy = useCallback(
     (deltaMs: number) => {
@@ -99,6 +115,40 @@ export function MiniPlayer() {
     },
     [seekTo],
   );
+
+  const handleMiniPlayerMarkPlayed = useCallback(async () => {
+    if (miniPlayerActionBusy || !activeEpisode) {
+      return;
+    }
+    setMiniPlayerActionError(null);
+    setMiniPlayerActionKind('mark');
+    try {
+      await markEpisodeAsPlayed(activeEpisode);
+    } catch (e) {
+      setMiniPlayerActionError(
+        e instanceof Error ? e.message : 'Kon aflevering niet als beluisterd markeren.',
+      );
+    } finally {
+      setMiniPlayerActionKind(null);
+    }
+  }, [activeEpisode, markEpisodeAsPlayed, miniPlayerActionBusy]);
+
+  const handleMiniPlayerDismissWithoutPlayed = useCallback(async () => {
+    if (miniPlayerActionBusy || !activeEpisode) {
+      return;
+    }
+    setMiniPlayerActionError(null);
+    setMiniPlayerActionKind('dismiss');
+    try {
+      await clearNowPlayingIfMatchesEpisode(activeEpisode.id);
+    } catch (e) {
+      setMiniPlayerActionError(
+        e instanceof Error ? e.message : 'Kon aflevering niet sluiten.',
+      );
+    } finally {
+      setMiniPlayerActionKind(null);
+    }
+  }, [activeEpisode, clearNowPlayingIfMatchesEpisode, miniPlayerActionBusy]);
 
   if (!activeEpisode) {
     return null;
@@ -137,6 +187,10 @@ export function MiniPlayer() {
       ? formatClockFromMs(progress.durationMs)
       : '\u2014';
 
+  const actionIconColor = miniPlayerActionBusy
+    ? MINI_PLAYER_TRANSPORT_DISABLED
+    : MINI_PLAYER_TRANSPORT;
+
   return (
     <Box
       style={[
@@ -160,18 +214,70 @@ export function MiniPlayer() {
           />
         </Pressable>
         <View style={styles.textWrap}>
-          <Text
-            ellipsizeMode="tail"
-            numberOfLines={1}
-            style={[styles.title, {color: MINI_PLAYER_TITLE}]}>
-            {activeEpisode.title}
-          </Text>
-          <Text numberOfLines={1} style={[styles.subtitle, {color: MINI_PLAYER_MUTED}]}>
-            {activeEpisode.seriesName}
-          </Text>
-          <Text numberOfLines={1} style={[styles.dateLine, {color: MINI_PLAYER_MUTED}]}>
-            {bufferingSubtitle ?? formatRelativeCalendarLabelFromIsoDate(activeEpisode.date)}
-          </Text>
+          {miniPlayerArtworkSelected ? (
+            <>
+              <View style={styles.actionsRow}>
+                <Pressable
+                  accessibilityLabel="Markeer als beluisterd"
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    busy: miniPlayerActionKind === 'mark',
+                    disabled: miniPlayerActionBusy,
+                  }}
+                  disabled={miniPlayerActionBusy}
+                  hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+                  onPress={() => {
+                    void handleMiniPlayerMarkPlayed();
+                  }}
+                  style={styles.actionIconButton}>
+                  {miniPlayerActionKind === 'mark' ? (
+                    <ActivityIndicator color={MINI_PLAYER_TRANSPORT} size="small" />
+                  ) : (
+                    <MaterialIcons color={actionIconColor} name="archive" size={MINI_PLAYER_ACTION_ICON_SIZE} />
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Sluit aflevering zonder als beluisterd te markeren"
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    busy: miniPlayerActionKind === 'dismiss',
+                    disabled: miniPlayerActionBusy,
+                  }}
+                  disabled={miniPlayerActionBusy}
+                  hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
+                  onPress={() => {
+                    void handleMiniPlayerDismissWithoutPlayed();
+                  }}
+                  style={styles.actionIconButton}>
+                  {miniPlayerActionKind === 'dismiss' ? (
+                    <ActivityIndicator color={MINI_PLAYER_TRANSPORT} size="small" />
+                  ) : (
+                    <MaterialIcons color={actionIconColor} name="close" size={MINI_PLAYER_ACTION_ICON_SIZE} />
+                  )}
+                </Pressable>
+              </View>
+              {miniPlayerActionError ? (
+                <Text numberOfLines={2} style={[styles.actionError, {color: MINI_PLAYER_MUTED}]}>
+                  {miniPlayerActionError}
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <Text
+                ellipsizeMode="tail"
+                numberOfLines={1}
+                style={[styles.title, {color: MINI_PLAYER_TITLE}]}>
+                {activeEpisode.title}
+              </Text>
+              <Text numberOfLines={1} style={[styles.subtitle, {color: MINI_PLAYER_MUTED}]}>
+                {activeEpisode.seriesName}
+              </Text>
+              <Text numberOfLines={1} style={[styles.dateLine, {color: MINI_PLAYER_MUTED}]}>
+                {bufferingSubtitle ?? formatRelativeCalendarLabelFromIsoDate(activeEpisode.date)}
+              </Text>
+            </>
+          )}
         </View>
       </View>
       <Slider
@@ -300,6 +406,23 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     marginTop: 2,
+  },
+  actionError: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  actionIconButton: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
+  actionsRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 64,
   },
   textWrap: {
     flex: 1,

@@ -30,6 +30,7 @@ import {
   formatRelativeCalendarLabel,
   getInboxTileBackgroundColor,
 } from '@eskerra/core';
+import {consumePendingShareDraft} from '../../../core/share/pendingShareDraft';
 import {MainTabParamList, InboxStackParamList} from '../../../navigation/types';
 import {useNotes} from '../../vault/hooks/useNotes';
 
@@ -233,6 +234,15 @@ export function InboxScreen({navigation}: InboxScreenProps) {
       renderSelectionHeaderRight,
       selectedCount,
     ]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      const draft = consumePendingShareDraft();
+      if (draft) {
+        navigation.navigate('AddNote', {initialComposeText: draft});
+      }
+    }, [navigation]),
   );
 
   return (

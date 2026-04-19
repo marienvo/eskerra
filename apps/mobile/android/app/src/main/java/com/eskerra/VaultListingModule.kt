@@ -12,6 +12,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.module.annotations.ReactModule
 import com.eskerra.vaultsearch.VaultPath
 import com.eskerra.vaultsearch.VaultSearchModule
 import java.io.ByteArrayOutputStream
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors
  * Session prepare batches settings init/read and Inbox listing in one executor job to cut bridge
  * round-trips and duplicate SAF work on cold start.
  */
+@ReactModule(name = VaultListingModule.MODULE_NAME)
 class VaultListingModule(private val reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 

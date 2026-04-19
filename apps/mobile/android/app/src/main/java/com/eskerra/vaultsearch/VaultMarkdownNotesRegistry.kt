@@ -32,7 +32,7 @@ internal object VaultMarkdownNotesRegistry {
         display_name=excluded.display_name,
         last_modified=excluded.last_modified
       """.trimIndent(),
-      arrayOf(uriKey, lookup, display, lastModified),
+      arrayOf<Any?>(uriKey, lookup, display, lastModified),
     )
   }
 

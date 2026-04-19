@@ -1,10 +1,28 @@
-import {EditorSelection, Text} from '@codemirror/state';
+import {commonmarkLanguage} from '@codemirror/lang-markdown';
+import {ensureSyntaxTree} from '@codemirror/language';
+import {EditorSelection, EditorState, Text} from '@codemirror/state';
 import {describe, expect, it} from 'vitest';
 
+import {noteMarkdownParserExtensions} from './markdownEditorStyling';
+import {markdownEskerra} from './markdownEskerraLanguage';
 import {
   computeMarkerFocusDecorationStarts,
   computeMarkerFocusLineStarts,
+  expandFocusLinesForFencedCode,
 } from './markdownMarkerFocusLine';
+
+function makeStateAt(docText: string, cursorPos: number): EditorState {
+  const state = EditorState.create({
+    doc: docText,
+    selection: {anchor: cursorPos},
+    extensions: markdownEskerra({
+      base: commonmarkLanguage,
+      extensions: noteMarkdownParserExtensions,
+    }),
+  });
+  ensureSyntaxTree(state, state.doc.length, 5_000);
+  return state;
+}
 
 function lineStartsOf(doc: string): number[] {
   const lines = doc.split('\n');
@@ -61,6 +79,60 @@ describe('computeMarkerFocusLineStarts', () => {
     const starts = lineStartsOf(raw);
     const sel = EditorSelection.single(0, doc.length);
     expect(computeMarkerFocusLineStarts(doc, sel)).toEqual(starts);
+  });
+});
+
+describe('expandFocusLinesForFencedCode', () => {
+  const DOC = '# Title\n\n```ts\nconst x = 1;\n```\n\nParagraph.';
+  // line numbers: 1=# Title, 2=(blank), 3=```ts, 4=const x=1;, 5=```, 6=(blank), 7=Paragraph.
+
+  it('expands all lines of the fenced block when cursor is on the content line', () => {
+    const state = makeStateAt(DOC, DOC.indexOf('const'));
+    const lineStarts = new Set<number>([state.doc.lineAt(DOC.indexOf('const')).from]);
+    expandFocusLinesForFencedCode(state, lineStarts);
+    expect(lineStarts.has(state.doc.line(3).from)).toBe(true); // ```ts
+    expect(lineStarts.has(state.doc.line(4).from)).toBe(true); // const x = 1;
+    expect(lineStarts.has(state.doc.line(5).from)).toBe(true); // ```
+  });
+
+  it('expands when cursor is on the opening fence line', () => {
+    const state = makeStateAt(DOC, DOC.indexOf('```ts'));
+    const lineStarts = new Set<number>([state.doc.line(3).from]);
+    expandFocusLinesForFencedCode(state, lineStarts);
+    expect(lineStarts.has(state.doc.line(3).from)).toBe(true);
+    expect(lineStarts.has(state.doc.line(5).from)).toBe(true);
+  });
+
+  it('expands when cursor is on the closing fence line', () => {
+    const closingPos = DOC.lastIndexOf('```');
+    const state = makeStateAt(DOC, closingPos);
+    const lineStarts = new Set<number>([state.doc.lineAt(closingPos).from]);
+    expandFocusLinesForFencedCode(state, lineStarts);
+    expect(lineStarts.has(state.doc.line(3).from)).toBe(true);
+    expect(lineStarts.has(state.doc.line(5).from)).toBe(true);
+  });
+
+  it('does not expand when cursor is outside any fenced block', () => {
+    const pos = DOC.indexOf('Paragraph');
+    const state = makeStateAt(DOC, pos);
+    const paragraphFrom = state.doc.lineAt(pos).from;
+    const lineStarts = new Set<number>([paragraphFrom]);
+    expandFocusLinesForFencedCode(state, lineStarts);
+    expect([...lineStarts]).toEqual([paragraphFrom]);
+  });
+
+  it('does not add lines from a different fenced block', () => {
+    const twoBlocks =
+      '```ts\nfoo();\n```\n\ntext\n\n```py\nbar()\n```';
+    const posInFirst = twoBlocks.indexOf('foo');
+    const state = makeStateAt(twoBlocks, posInFirst);
+    const lineStarts = new Set<number>([state.doc.lineAt(posInFirst).from]);
+    expandFocusLinesForFencedCode(state, lineStarts);
+    // First block: lines 1–3; second block: lines 7–9.
+    expect(lineStarts.has(state.doc.line(1).from)).toBe(true);
+    expect(lineStarts.has(state.doc.line(3).from)).toBe(true);
+    expect(lineStarts.has(state.doc.line(7).from)).toBe(false);
+    expect(lineStarts.has(state.doc.line(9).from)).toBe(false);
   });
 });
 

@@ -472,7 +472,29 @@ export function markdownEditorBlockLineClasses(doc: Text, tree: Tree): Map<numbe
     },
   });
 
+  addMultiListMarkBulletLineClass(doc, tree, lineClasses);
+
   return lineClasses;
+}
+
+/** More than one `ListMark` on a line (e.g. `- - -`): decorative bullets overlap; show source glyphs. */
+function addMultiListMarkBulletLineClass(doc: Text, tree: Tree, lineClasses: Map<number, Set<string>>) {
+  const listMarkCountByLineFrom = new Map<number, number>();
+  tree.iterate({
+    enter(node) {
+      if (node.name !== 'ListMark') return;
+      const line = doc.lineAt(node.from);
+      listMarkCountByLineFrom.set(
+        line.from,
+        (listMarkCountByLineFrom.get(line.from) ?? 0) + 1,
+      );
+    },
+  });
+  for (const [lineFrom, count] of listMarkCountByLineFrom) {
+    if (count > 1) {
+      addLineClass(lineClasses, lineFrom, 'cm-md-list-line--multi-bullet-mark');
+    }
+  }
 }
 
 function headingLevelFromNode(name: string): string | null {
@@ -506,6 +528,40 @@ function buildBlockLineDecorations(view: EditorView): DecorationSet {
   return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
 }
 
+const escapeMarkDeco = Decoration.mark({class: 'cm-md-escape-mark'});
+
+function buildEscapeMarkDecorations(view: EditorView): DecorationSet {
+  const tree = ensureSyntaxTree(view.state, view.state.doc.length, SYNTAX_TREE_BUDGET_MS);
+  if (!tree) return Decoration.none;
+  const ranges: Range<Decoration>[] = [];
+  tree.iterate({
+    enter(node) {
+      if (node.name === 'Escape') {
+        ranges.push(escapeMarkDeco.range(node.from, node.from + 1));
+        return false;
+      }
+    },
+  });
+  return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
+}
+
+const markdownEscapeMarkPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildEscapeMarkDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
+        this.decorations = buildEscapeMarkDecorations(update.view);
+      }
+    }
+  },
+  {decorations: v => v.decorations},
+);
+
 const markdownBlockLineStyle = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -531,6 +587,7 @@ export const noteMarkdownEditorAppearance: Extension[] = [
   syntaxHighlighting(markdownHighlightStyle),
   syntaxHighlighting(noteMarkdownNestedCodeHighlighter),
   markdownBlockLineStyle,
+  markdownEscapeMarkPlugin,
   markdownCalloutsPlugin,
   markdownMarkerFocusLineExtension,
 ];

@@ -224,6 +224,16 @@ describe('markdownEditorBlockLineClasses', () => {
     const byLine = lineClassSets('before\n\n---\nafter');
     expect(byLine[3]?.includes('cm-md-hr-line')).toBe(true);
   });
+
+  it('tags bullet lines with multiple ListMark nodes so markers do not stack visually', () => {
+    const byLine = lineClassSets('- - - mistake');
+    expect(byLine[1]?.includes('cm-md-list-line--multi-bullet-mark')).toBe(true);
+  });
+
+  it('does not tag a normal task list line as multi-bullet (ListMark + TaskMarker)', () => {
+    const byLine = lineClassSets('- [ ] todo');
+    expect(byLine[1]?.includes('cm-md-list-line--multi-bullet-mark')).toBe(false);
+  });
 });
 
 describe('noteMarkdown horizontal rule highlighting', () => {

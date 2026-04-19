@@ -14,8 +14,15 @@ export type MainTabParamList = {
   VaultTab: NavigatorScreenParams<VaultStackParamList> | undefined;
 };
 
+/** Inbox / Entry compose: new note, optional share prefill, or edit existing via `noteUri`. */
+export type AddNoteScreenRouteParams = {
+  initialComposeText?: string;
+  noteTitle?: string;
+  noteUri?: string;
+};
+
 export type AddNoteStackParamList = {
-  AddNote: {noteTitle: string; noteUri: string} | undefined;
+  AddNote: AddNoteScreenRouteParams | undefined;
 };
 
 export type PodcastsStackParamList = {
@@ -28,7 +35,7 @@ export type RecordStackParamList = {
 
 /** Inbox markdown list (formerly Log tab). */
 export type InboxStackParamList = {
-  AddNote: {noteTitle: string; noteUri: string} | undefined;
+  AddNote: AddNoteScreenRouteParams | undefined;
   Inbox: undefined;
   NoteDetail: {noteFileName?: string; noteTitle: string; noteUri: string};
 };

@@ -573,4 +573,25 @@ describe('markdownSmartExpandSelection', () => {
     const withHeadingIdx = spans.findIndex(t => t.includes('# Main title'));
     expect(withHeadingIdx).toBeGreaterThanOrEqual(h1BodyIdx);
   });
+
+  it('expands to heading text (no marker) before selecting the full line', () => {
+    const doc = '## My Heading';
+    // cursor inside the word "Heading"
+    const cursorPos = doc.indexOf('Heading') + 3;
+    view = new EditorView({
+      state: EditorState.create({
+        doc,
+        selection: EditorSelection.cursor(cursorPos),
+        extensions: editorExtensions(),
+      }),
+      parent: document.body,
+    });
+    expand(view); // word: "Heading"
+    expect(mainSpan(view)).toEqual({from: doc.indexOf('Heading'), to: doc.length});
+    expand(view); // heading text: "My Heading" (after `## `)
+    const textFrom = '## '.length;
+    expect(mainSpan(view)).toEqual({from: textFrom, to: doc.length});
+    expand(view); // full line including `## `
+    expect(mainSpan(view)).toEqual({from: 0, to: doc.length});
+  });
 });

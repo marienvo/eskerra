@@ -129,7 +129,7 @@ import {
   shouldUseMergedReplaceForMarkdownLoad,
   shouldUseSetStateBranchForMarkdownLoad,
 } from './noteMarkdownLoadMarkdown';
-import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
+import {eolMarkerCaretPointerFixExtension} from './eolMarkerCaretPointerFix';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -923,7 +923,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           borderLeftColor: 'inherit',
         },
       }),
-      wikiEOLCaretPointerFixExtension(),
+      eolMarkerCaretPointerFixExtension(),
       caretJumpDetectorExtension(),
       EditorView.updateListener.of(update => {
         if (update.docChanged) {

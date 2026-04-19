@@ -1,12 +1,15 @@
 import {describe, expect, it} from 'vitest';
 
 import {
+  collectTodayHubRowStemsFromVaultMarkdownRefs,
+  parseTodayHubRowStemToLocalCalendarDate,
   sortedTodayHubNoteUrisFromRefs,
   todayHubFolderLabelFromTodayNoteUri,
   todayHubFolderLabelFromUri,
   todayHubFolderLabelFromVaultMarkdownRef,
   todayHubRowUriFromTodayNoteUri,
   vaultMarkdownRefIsTodayHubNote,
+  vaultTodayHubMarkdownRefUriMatchesExpectedRowUri,
   vaultUriIsTodayMarkdownFile,
 } from './vaultTodayHub';
 
@@ -83,6 +86,59 @@ describe('todayHubFolderLabelFromVaultMarkdownRef', () => {
     const uri =
       'content://x/document/primary%3Avault%2FDaily%2FToday.md';
     expect(todayHubFolderLabelFromVaultMarkdownRef({name: 'Today', uri})).toBe('Daily');
+  });
+});
+
+describe('parseTodayHubRowStemToLocalCalendarDate', () => {
+  it('parses valid stems', () => {
+    const d = parseTodayHubRowStemToLocalCalendarDate('2026-04-13');
+    expect(d).not.toBeNull();
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(3);
+    expect(d!.getDate()).toBe(13);
+  });
+
+  it('rejects invalid calendar dates', () => {
+    expect(parseTodayHubRowStemToLocalCalendarDate('2026-02-31')).toBeNull();
+    expect(parseTodayHubRowStemToLocalCalendarDate('not-a-date')).toBeNull();
+  });
+});
+
+describe('collectTodayHubRowStemsFromVaultMarkdownRefs', () => {
+  const hub = '/vault/Daily/Today.md';
+
+  it('collects date stems beside Today that match expected row URIs', () => {
+    const stems = collectTodayHubRowStemsFromVaultMarkdownRefs(hub, [
+      {name: 'Today', uri: hub},
+      {name: '2026-04-13', uri: '/vault/Daily/2026-04-13.md'},
+      {name: '2026-03-30', uri: '/vault/Daily/2026-03-30.md'},
+      {name: 'Note', uri: '/vault/Other/2026-04-13.md'},
+    ]);
+    expect([...stems].sort()).toEqual(['2026-03-30', '2026-04-13']);
+  });
+
+  it('matches SAF-encoded row URIs', () => {
+    const rowWeek = new Date(2026, 3, 13);
+    const rowUri = todayHubRowUriFromTodayNoteUri(hub, rowWeek);
+    const stems = collectTodayHubRowStemsFromVaultMarkdownRefs(hub, [
+      {name: 'Today', uri: hub},
+      {name: '2026-04-13', uri: rowUri},
+    ]);
+    expect(stems.has('2026-04-13')).toBe(true);
+  });
+});
+
+describe('vaultTodayHubMarkdownRefUriMatchesExpectedRowUri', () => {
+  it('returns true for matching file paths', () => {
+    const hub = '/vault/Daily/Today.md';
+    const week = new Date(2026, 3, 13);
+    expect(
+      vaultTodayHubMarkdownRefUriMatchesExpectedRowUri(
+        hub,
+        '/vault/Daily/2026-04-13.md',
+        week,
+      ),
+    ).toBe(true);
   });
 });
 

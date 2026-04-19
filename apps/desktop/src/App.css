@@ -3123,7 +3123,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-escape-mark {
   display: none;
 }
 
@@ -3708,11 +3712,58 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar--footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding-block: 6px 8px;
+  /* Align with `.today-hub-canvas__row-cells` / date-bar-cols left inset. */
+  padding-inline-start: 20px;
   /* Match cell grid right inset: row padding (20) + date-bar bleed past row (56 + 22), minus 19px for week-end label. */
   padding-inline-end: calc(20px + 56px + 22px + 20px - 19px);
   padding-bottom: 30px; /* "gap" between rows */
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Footer strip: nudge week dots left to line up with hub cell content (desktop capture surface). */
+[data-app-surface='capture']
+  .today-hub-canvas__row-date-bar--footer
+  .today-hub-canvas__week-progress {
+  margin-left: 78px;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell {
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--today-hub-chrome-label-color);
+}
+
+/* Merged Sat–Sun: two unit cells plus one inter-cell gap (matches mobile TodayWeekProgressStrip CELL/GAP). */
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--weekend {
+  width: calc(10px + 10px + 3px);
+  min-width: calc(10px + 10px + 3px);
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--filled {
+  background: var(--today-hub-chrome-label-color);
+  border-color: transparent;
+}
+
+[data-app-surface='capture'] .today-hub-canvas__week-progress-cell--current {
+  background: var(--color-accent, var(--nb-editor-text));
+  border-color: transparent;
 }
 
 [data-app-surface='capture'] .today-hub-canvas__row-date-bar-cols {
@@ -3781,7 +3832,7 @@ button.primary.destructive {
 
 [data-app-surface='capture'] .today-hub-canvas__row-date {
   display: block;
-  padding-inline-start: var(--today-hub-header-pad-inline-start);
+  padding-inline-start: calc(var(--today-hub-header-pad-inline-start) - 3px);
 }
 
 [data-app-surface='capture'] .today-hub-canvas__cell {
@@ -3999,7 +4050,10 @@ button.primary.destructive {
   .cm-md-rel-link-href,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-escape-mark {
   display: none;
 }
 
@@ -4059,6 +4113,27 @@ button.primary.destructive {
  */
 [data-app-surface='capture'] .today-hub-canvas__cell-editor-stack--warm {
   overflow: hidden;
+}
+
+/*
+ * While actively editing, restore overflow so CodeMirror tooltips (emoji picker, autocomplete) can
+ * extend outside the cell boundary. The one-frame scroller-spill risk does not apply here: warm
+ * cells have their CM already laid out at the correct dimensions under the invisible underlay, so
+ * making the stack overflow:visible on the same frame as edit-start is safe.
+ *
+ * Also raise z-index above `row-date-bar` (z-index: 1) so the tooltip paints over the gray week
+ * separators in adjacent rows. Applies to all editing cells (warm and cold) because `isolation:
+ * isolate` on the stack creates a stacking context at z-index: auto by default, which is painted
+ * before any z-index: 1 element in the same parent stacking context.
+ */
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack:has(> .today-hub-canvas__cm-host--editing) {
+  z-index: 2;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack--warm:has(> .today-hub-canvas__cm-host--editing) {
+  overflow: visible;
 }
 
 /*
@@ -4555,7 +4630,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-escape-mark {
   display: none;
 }
 
@@ -4963,6 +5042,48 @@ button.primary.destructive {
   pointer-events: none;
   white-space: pre;
   padding-right: .125rem;
+}
+
+/* Marker-focus line: show source list character (`-`, `*`, `+`); hide decorative bullet. */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-eskerra-marker-focus-line
+  .cm-md-list-mark {
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-eskerra-marker-focus-line
+  .cm-md-list-mark::before {
+  content: none;
+}
+
+/*
+ * Several `ListMark` nodes on one line (e.g. `- - -`): each mark uses the same gutter pull, so
+ * decorative `::before` bullets stack; show literal markers with normal inline flow instead.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-md-list-line--multi-bullet-mark
+  .cm-md-list-mark {
+  display: inline;
+  box-sizing: content-box;
+  width: auto;
+  min-width: 0;
+  margin-inline-start: 0;
+  margin-inline-end: 0;
+  padding-right: 0;
+  text-align: start;
+  position: static;
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-md-list-line--multi-bullet-mark
+  .cm-md-list-mark::before {
+  content: none;
 }
 
 [data-app-surface='capture']

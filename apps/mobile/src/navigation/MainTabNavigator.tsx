@@ -70,7 +70,7 @@ const tabBarButton: BottomTabNavigationOptions['tabBarButton'] = props => (
 );
 
 function VaultTabBarButton(props: BottomTabBarButtonProps) {
-  const vaultToday = useVaultTodayHubContext();
+  const {resetWeekToCurrent} = useVaultTodayHubContext();
   /** BottomTabBarButtonProps does not include `navigation`; use tab context from the bar. */
   const tabNavigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const {onPress} = props;
@@ -78,11 +78,11 @@ function VaultTabBarButton(props: BottomTabBarButtonProps) {
     const state = tabNavigation.getState();
     const activeTab = state.routes[state.index];
     if (activeTab?.name === 'VaultTab') {
-      vaultToday.resetWeekToCurrent();
+      resetWeekToCurrent();
       tabNavigation.navigate('VaultTab', {screen: 'Vault', merge: true});
     }
     onPress?.();
-  }, [tabNavigation, onPress, vaultToday]);
+  }, [tabNavigation, onPress, resetWeekToCurrent]);
   return <TabBarButton {...props} onPress={handlePress} />;
 }
 
@@ -270,7 +270,7 @@ export function MainTabNavigator() {
       <PlayerProvider>
         <PlaylistR2PollingHost />
         <Tabs.Navigator
-          initialRouteName="PodcastsTab"
+          initialRouteName="VaultTab"
           screenOptions={{
             headerShown: true,
             headerStyle: styles.tabHeader,
@@ -284,6 +284,15 @@ export function MainTabNavigator() {
           }}
           tabBar={renderTabBar}>
           <Tabs.Screen
+            component={VaultStackScreen}
+            name="VaultTab"
+            options={{
+              tabBarButton: vaultTabBarButton,
+              tabBarIcon: vaultTabIcon,
+              title: 'Today',
+            }}
+          />
+          <Tabs.Screen
             component={PodcastsStackScreen}
             name="PodcastsTab"
             options={{
@@ -291,15 +300,6 @@ export function MainTabNavigator() {
               tabBarButton,
               tabBarIcon: podcastsTabIcon,
               title: 'Episodes',
-            }}
-          />
-          <Tabs.Screen
-            component={VaultStackScreen}
-            name="VaultTab"
-            options={{
-              tabBarButton: vaultTabBarButton,
-              tabBarIcon: vaultTabIcon,
-              title: 'Today',
             }}
           />
           <Tabs.Screen

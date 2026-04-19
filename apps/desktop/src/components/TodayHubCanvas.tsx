@@ -42,6 +42,7 @@ import {
   todayHubColumnCount,
   todayHubRowUri,
   todayHubWeekEndInclusive,
+  todayHubWeekProgress,
   touchWarmLru,
   type TodayHubWorkspaceBridge,
   type TodayHubSettings,
@@ -54,6 +55,7 @@ import type {
   VaultWikiLinkActivatePayload,
 } from '../editor/noteEditor/vaultLinkActivatePayload';
 import {TodayHubCellStaticRichText} from './TodayHubCellStaticRichText';
+import {TodayWeekProgressBar} from './TodayWeekProgressBar';
 
 /**
  * Cap simultaneous warm (read-only underlay) hub cells. Too few evictions churn CM mounts (flicker).
@@ -236,6 +238,9 @@ export function TodayHubCanvas({
   );
 
   const columnCount = todayHubColumnCount(hubSettings);
+
+  /** Stable "now" for week progress cells so rows do not disagree within one paint. */
+  const progressComparisonNow = useMemo(() => new Date(), []);
 
   const weekStarts = useMemo(
     () => enumerateTodayHubWeekStarts(new Date(), hubSettings.start),
@@ -923,6 +928,11 @@ export function TodayHubCanvas({
                 })}
               </div>
               <div className="today-hub-canvas__row-date-bar today-hub-canvas__row-date-bar--footer">
+                <TodayWeekProgressBar
+                  comparisonNow={progressComparisonNow}
+                  progress={todayHubWeekProgress(weekStart, progressComparisonNow)}
+                  weekStart={weekStart}
+                />
                 <span className="today-hub-canvas__row-date-end">
                   {formatHubWeekDate(weekEnd)}
                 </span>

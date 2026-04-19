@@ -1,17 +1,19 @@
 import {
   enumerateTodayHubWeekStarts,
+  formatTodayHubMondayStem,
   parseTodayHubFrontmatter,
   sortedTodayHubNoteUrisFromRefs,
   splitTodayRowIntoColumns,
   todayHubColumnCount,
   todayHubFolderLabelFromTodayNoteUri,
   todayHubRowUriFromTodayNoteUri,
+  todayHubWeekProgress,
   type TodayHubSettings,
 } from '@eskerra/core';
 import {useFocusEffect, useIsFocused} from '@react-navigation/native';
 import {StackScreenProps} from '@react-navigation/stack';
 import {Box, ScrollView, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, TouchableOpacity, View} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -20,6 +22,7 @@ import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultTodayHubContext} from '../context/VaultTodayHubContext';
 import {TodayHubPickerModal} from '../components/TodayHubPickerModal';
+import {TodayWeekProgressStrip} from '../components/TodayWeekProgressStrip';
 import {VaultReadonlyMarkdownBlock} from '../components/VaultReadonlyMarkdownBlock';
 import {useVaultMarkdownRefs} from '../hooks/useVaultMarkdownRefs';
 import {useNotes} from '../hooks/useNotes';
@@ -31,17 +34,14 @@ import {formatTodayHubWeekDateLong, formatTodayHubWeekRangeShort} from '../today
 
 type VaultScreenProps = StackScreenProps<VaultStackParamList, 'Vault'>;
 
-type HubLoadState =
+type HubIntroState =
   | {status: 'idle'}
   | {status: 'loading'}
   | {status: 'error'; message: string}
-  | {
-      status: 'ready';
-      intro: string;
-      row: string;
-      settings: TodayHubSettings;
-      weekStart: Date;
-    };
+  | {status: 'ready'; intro: string; settings: TodayHubSettings};
+
+/** Show week-nav loading spinner only if row fetch exceeds this (avoids flash on prefetch). */
+const ROW_NAV_LOADING_DELAY_MS = 200;
 
 export function VaultScreen({navigation}: VaultScreenProps) {
   const isScreenFocused = useIsFocused();
@@ -49,7 +49,13 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   const muted = colorMode === 'dark' ? '#cfcfcf' : '#616161';
   const {baseUri} = useVaultContext();
   const {read} = useNotes();
-  const vaultToday = useVaultTodayHubContext();
+  const {
+    resetWeekToCurrent,
+    selectedWeekStart,
+    setActiveTodayHubUri,
+    setWeekNavSubtitle,
+    syncWeekNavToCurrentWeek,
+  } = useVaultTodayHubContext();
   const {
     vaultMarkdownRefs,
     isVaultMarkdownRefsLoading,
@@ -87,30 +93,58 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         return picked;
       }
     }
-    if (persistedHubUri !== undefined) {
-      const fromStore = findInHubs(persistedHubUri);
-      if (fromStore) {
-        return fromStore;
-      }
+    /**
+     * Wait for the persisted active hub URI to resolve from AsyncStorage before falling back
+     * to the first hub alphabetically. Otherwise the initial cold-start render picks `hubs[0]`
+     * (possibly the wrong hub) and fires a live SAF read for a hub whose content was never
+     * prefetched by `prepareEskerraSession`, wasting I/O in parallel with the real hub read.
+     */
+    if (persistedHubUri === undefined) {
+      return null;
+    }
+    const fromStore = findInHubs(persistedHubUri);
+    if (fromStore) {
+      return fromStore;
     }
     return hubs[0] ?? null;
   }, [hubs, persistedHubUri, userPickedHubUri]);
 
+  /**
+   * Persist the effective active hub (persisted or first-hub fallback) so the next
+   * cold-start's native `prepareEskerraSession` prefetch includes the Today.md + week
+   * row bodies, avoiding a live SAF read on the first Today-tab tap.
+   */
   useEffect(() => {
-    vaultToday.setHasTodayHub(hubs.length > 0);
-  }, [hubs.length, vaultToday]);
+    if (activeHubUri == null || persistedHubUri === undefined) {
+      return;
+    }
+    const normalize = (u: string) => u.replace(/\\/g, '/');
+    if (persistedHubUri != null && normalize(persistedHubUri) === normalize(activeHubUri)) {
+      return;
+    }
+    persistActiveTodayHubUri(activeHubUri).catch(() => undefined);
+    setPersistedHubUri(activeHubUri);
+  }, [activeHubUri, persistedHubUri]);
 
-  const weekIndex = vaultToday.weekIndex;
+  useEffect(() => {
+    setActiveTodayHubUri(activeHubUri);
+  }, [activeHubUri, setActiveTodayHubUri]);
 
-  const [hubLoadState, setHubLoadState] = useState<HubLoadState>({status: 'idle'});
+  const [hubIntro, setHubIntro] = useState<HubIntroState>({status: 'idle'});
+  const [rowByWeek, setRowByWeek] = useState<Map<string, string>>(() => new Map());
+  const [renderedWeekStart, setRenderedWeekStart] = useState<Date | null>(null);
+  const [isNavLoading, setIsNavLoading] = useState(false);
+  const weekNavInitHubRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!activeHubUri) {
-      setHubLoadState({status: 'idle'});
+      setHubIntro({status: 'idle'});
+      setRowByWeek(new Map());
       return;
     }
     let cancelled = false;
-    setHubLoadState({status: 'loading'});
+    setHubIntro({status: 'loading'});
+    setRowByWeek(new Map());
     (async () => {
       try {
         const introNote = await read(activeHubUri);
@@ -119,55 +153,123 @@ export function VaultScreen({navigation}: VaultScreenProps) {
         }
         const settings = parseTodayHubFrontmatter(introNote.content);
         const weekStarts = enumerateTodayHubWeekStarts(new Date(), settings.start);
-        const ws = weekStarts[weekIndex]!;
-        const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, ws);
-        let rowContent = '';
-        try {
-          const rowNote = await read(rowUri);
-          rowContent = rowNote.content;
-        } catch {
-          rowContent = '';
+        const anchorWs = weekStarts[1]!;
+        if (weekNavInitHubRef.current !== activeHubUri) {
+          weekNavInitHubRef.current = activeHubUri;
+          syncWeekNavToCurrentWeek(anchorWs);
         }
         if (cancelled) {
           return;
         }
-        setHubLoadState({
+        setHubIntro({
           status: 'ready',
           intro: introNote.content,
-          row: rowContent,
           settings,
-          weekStart: ws,
         });
       } catch (e) {
         if (!cancelled) {
-          setHubLoadState({
+          setHubIntro({
             status: 'error',
             message: e instanceof Error ? e.message : 'Could not load Today hub.',
           });
+          setRowByWeek(new Map());
         }
       }
     })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [activeHubUri, read, weekIndex]);
+  }, [activeHubUri, read, syncWeekNavToCurrentWeek]);
 
-  const {setWeekNavSubtitle} = vaultToday;
   useEffect(() => {
-    if (hubLoadState.status === 'ready') {
-      setWeekNavSubtitle(formatTodayHubWeekRangeShort(hubLoadState.weekStart));
-    } else {
-      setWeekNavSubtitle('');
+    if (!activeHubUri || hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      return;
     }
-  }, [hubLoadState, setWeekNavSubtitle]);
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (rowByWeek.has(stem)) {
+      return;
+    }
+    let cancelled = false;
+    const rowUri = todayHubRowUriFromTodayNoteUri(activeHubUri, selectedWeekStart);
+    (async () => {
+      let rowContent = '';
+      try {
+        const rowNote = await read(rowUri);
+        rowContent = rowNote.content;
+      } catch {
+        rowContent = '';
+      }
+      if (cancelled) {
+        return;
+      }
+      setRowByWeek(prev => {
+        const next = new Map(prev);
+        next.set(stem, rowContent);
+        return next;
+      });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeHubUri, hubIntro.status, read, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (!activeHubUri || hubIntro.status !== 'ready') {
+      setRenderedWeekStart(null);
+      setIsNavLoading(false);
+    }
+  }, [activeHubUri, hubIntro.status]);
+
+  useEffect(() => {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      return;
+    }
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (!rowByWeek.has(stem)) {
+      return;
+    }
+    setRenderedWeekStart(prev => {
+      if (prev != null && formatTodayHubMondayStem(prev) === stem) {
+        return prev;
+      }
+      return selectedWeekStart;
+    });
+    setIsNavLoading(false);
+  }, [hubIntro.status, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (hubIntro.status !== 'ready' || selectedWeekStart == null) {
+      setIsNavLoading(false);
+      return;
+    }
+    const stem = formatTodayHubMondayStem(selectedWeekStart);
+    if (rowByWeek.has(stem)) {
+      setIsNavLoading(false);
+      return;
+    }
+    const id = setTimeout(() => {
+      setIsNavLoading(true);
+    }, ROW_NAV_LOADING_DELAY_MS);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [hubIntro.status, rowByWeek, selectedWeekStart]);
+
+  useEffect(() => {
+    if (selectedWeekStart == null) {
+      setWeekNavSubtitle('');
+    } else {
+      setWeekNavSubtitle(formatTodayHubWeekRangeShort(selectedWeekStart));
+    }
+  }, [selectedWeekStart, setWeekNavSubtitle]);
 
   const selectHub = useCallback(
     (uri: string) => {
       setUserPickedHubUri(uri);
-      vaultToday.resetWeekToCurrent();
+      resetWeekToCurrent();
       persistActiveTodayHubUri(uri).catch(() => undefined);
     },
-    [vaultToday],
+    [resetWeekToCurrent],
   );
 
   const [hubPickerOpen, setHubPickerOpen] = useState(false);
@@ -283,29 +385,34 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   );
 
   const columnSections = useMemo(() => {
-    if (hubLoadState.status !== 'ready') {
+    if (hubIntro.status !== 'ready' || renderedWeekStart == null) {
       return [];
     }
-    const count = todayHubColumnCount(hubLoadState.settings);
-    return splitTodayRowIntoColumns(hubLoadState.row, count);
-  }, [hubLoadState]);
+    const count = todayHubColumnCount(hubIntro.settings);
+    const stem = formatTodayHubMondayStem(renderedWeekStart);
+    const row = rowByWeek.get(stem) ?? '';
+    return splitTodayRowIntoColumns(row, count);
+  }, [hubIntro, rowByWeek, renderedWeekStart]);
 
   const columnHeaders = useMemo(() => {
-    if (hubLoadState.status !== 'ready') {
+    if (hubIntro.status !== 'ready' || renderedWeekStart == null) {
       return [];
     }
-    const {settings, weekStart} = hubLoadState;
+    const {settings} = hubIntro;
     const count = todayHubColumnCount(settings);
     const h: string[] = [];
     for (let c = 0; c < count; c++) {
       if (c === 0) {
-        h.push(formatTodayHubWeekDateLong(weekStart));
+        h.push(formatTodayHubWeekDateLong(renderedWeekStart));
       } else {
         h.push(settings.columns[c - 1] ?? `Column ${c + 1}`);
       }
     }
     return h;
-  }, [hubLoadState]);
+  }, [hubIntro, renderedWeekStart]);
+
+  /** Stable "now" for week progress so columns agree within one paint. */
+  const weekProgressComparisonNow = useMemo(() => new Date(), []);
 
   if (awaitingVaultMarkdownIndex) {
     return (
@@ -328,17 +435,19 @@ export function VaultScreen({navigation}: VaultScreenProps) {
     );
   }
 
+  const showHubIntroSpinner =
+    activeHubUri != null &&
+    (hubIntro.status === 'loading' || hubIntro.status === 'idle');
+
   return (
     <Box style={styles.container}>
-      {hubLoadState.status === 'loading' || hubLoadState.status === 'idle' ? (
-        <Spinner style={styles.spinner} />
-      ) : null}
-      {hubLoadState.status === 'error' ? (
+      {showHubIntroSpinner ? <Spinner style={styles.spinner} /> : null}
+      {hubIntro.status === 'error' ? (
         <Text style={[styles.empty, {color: muted, paddingHorizontal: LIST_HORIZONTAL_INSET}]}>
-          {hubLoadState.message}
+          {hubIntro.message}
         </Text>
       ) : null}
-      {hubLoadState.status === 'ready' ? (
+      {hubIntro.status === 'ready' ? (
         <ScrollView contentContainerStyle={styles.scrollContent} nestedScrollEnabled>
           {vaultMarkdownRefsError ? (
             <Text style={[styles.indexWarning, {color: muted}]}>
@@ -350,22 +459,37 @@ export function VaultScreen({navigation}: VaultScreenProps) {
             <Text style={[styles.indexHint, {color: muted}]}>Indexing vault notes for links…</Text>
           ) : null}
           <VaultReadonlyMarkdownBlock
-            markdownFullText={hubLoadState.intro}
+            markdownFullText={hubIntro.intro}
             noteUri={activeHubUri!}
             omitWikiIndexWarning
             onNavigateToVaultNote={onNavigateToVaultNote}
           />
           <View style={styles.columnsWrap}>
-            {columnSections.map((colBody, ci) => (
-              <VaultReadonlyMarkdownBlock
-                key={`col-${ci}`}
-                markdownFullText={colBody}
-                noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, hubLoadState.weekStart)}
-                omitWikiIndexWarning
-                sectionTitle={columnHeaders[ci] ?? ''}
-                onNavigateToVaultNote={onNavigateToVaultNote}
-              />
-            ))}
+            {isNavLoading ? <Spinner style={styles.spinner} /> : null}
+            {renderedWeekStart != null
+              ? columnSections.map((colBody, ci) => (
+                  <VaultReadonlyMarkdownBlock
+                    key={`col-${ci}`}
+                    markdownFullText={colBody}
+                    noteUri={todayHubRowUriFromTodayNoteUri(activeHubUri!, renderedWeekStart)}
+                    omitWikiIndexWarning
+                    sectionTitle={columnHeaders[ci] ?? ''}
+                    titleTrailing={
+                      ci === 0 ? (
+                        <TodayWeekProgressStrip
+                          comparisonNow={weekProgressComparisonNow}
+                          progress={todayHubWeekProgress(
+                            renderedWeekStart,
+                            weekProgressComparisonNow,
+                          )}
+                          weekStart={renderedWeekStart}
+                        />
+                      ) : undefined
+                    }
+                    onNavigateToVaultNote={onNavigateToVaultNote}
+                  />
+                ))
+              : null}
           </View>
         </ScrollView>
       ) : null}

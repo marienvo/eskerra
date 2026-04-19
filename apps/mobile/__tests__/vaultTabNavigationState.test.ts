@@ -37,8 +37,21 @@ describe('vaultStackRouteIsVaultHome', () => {
     ).toBe(false);
   });
 
-  it('is false for undefined state', () => {
-    expect(vaultStackRouteIsVaultHome(undefined)).toBe(false);
+  it('is true for undefined state (lazy stack not hydrated yet)', () => {
+    expect(vaultStackRouteIsVaultHome(undefined)).toBe(true);
+  });
+
+  it('is true when routes array is empty (unhydrated)', () => {
+    expect(
+      vaultStackRouteIsVaultHome({
+        index: 0,
+        key: 'vault',
+        routeNames: [],
+        routes: [],
+        stale: false,
+        type: 'stack',
+      }),
+    ).toBe(true);
   });
 });
 

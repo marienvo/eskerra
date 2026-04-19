@@ -1063,6 +1063,7 @@ export default function App() {
                       inboxPaneVisible={inboxPaneVisible}
                       onToggleInboxPane={() => setInboxPaneVisible(v => !v)}
                       onOpenInboxPane={() => setInboxPaneVisible(true)}
+                      onCloseInboxPane={() => setInboxPaneVisible(false)}
                       notificationsInboxStackTopHeightPx={
                         layouts.notificationsInboxStack.topHeightPx
                       }

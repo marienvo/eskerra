@@ -1,5 +1,4 @@
 import {
-  createNavigationContainerRef,
   DarkTheme,
   DefaultTheme,
   NavigationContainer,
@@ -9,12 +8,15 @@ import {useColorScheme} from 'react-native';
 
 import {appBreadcrumb} from '../core/observability';
 import {SetupScreen} from '../features/setup/screens/SetupScreen';
+import {
+  AndroidShareIntentBridge,
+  scheduleTryConsumeAndroidShareNavigation,
+} from './androidShareIntentNavigation';
 import {MainTabNavigator} from './MainTabNavigator';
+import {navigationRef} from './navigationContainerRef';
 import {RootStackParamList} from './types';
 
 const RootStack = createStackNavigator<RootStackParamList>();
-
-export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 type RootNavigatorProps = {
   initialRouteName: keyof RootStackParamList;
@@ -27,6 +29,9 @@ export function RootNavigator({initialRouteName}: RootNavigatorProps) {
     <NavigationContainer
       ref={navigationRef}
       theme={isDarkMode ? DarkTheme : DefaultTheme}
+      onReady={() => {
+        scheduleTryConsumeAndroidShareNavigation();
+      }}
       onStateChange={() => {
         const route = navigationRef.getCurrentRoute();
         if (!route) {
@@ -41,7 +46,9 @@ export function RootNavigator({initialRouteName}: RootNavigatorProps) {
             params_keys: params ? Object.keys(params) : [],
           },
         });
+        scheduleTryConsumeAndroidShareNavigation();
       }}>
+      <AndroidShareIntentBridge />
       <RootStack.Navigator
         initialRouteName={initialRouteName}
         screenOptions={{headerShown: false}}>
