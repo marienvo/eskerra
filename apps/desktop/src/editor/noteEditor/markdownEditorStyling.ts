@@ -528,6 +528,40 @@ function buildBlockLineDecorations(view: EditorView): DecorationSet {
   return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
 }
 
+const escapeMarkDeco = Decoration.mark({class: 'cm-md-escape-mark'});
+
+function buildEscapeMarkDecorations(view: EditorView): DecorationSet {
+  const tree = ensureSyntaxTree(view.state, view.state.doc.length, SYNTAX_TREE_BUDGET_MS);
+  if (!tree) return Decoration.none;
+  const ranges: Range<Decoration>[] = [];
+  tree.iterate({
+    enter(node) {
+      if (node.name === 'Escape') {
+        ranges.push(escapeMarkDeco.range(node.from, node.from + 1));
+        return false;
+      }
+    },
+  });
+  return ranges.length ? Decoration.set(ranges, true) : Decoration.none;
+}
+
+const markdownEscapeMarkPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = buildEscapeMarkDecorations(view);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
+        this.decorations = buildEscapeMarkDecorations(update.view);
+      }
+    }
+  },
+  {decorations: v => v.decorations},
+);
+
 const markdownBlockLineStyle = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -553,6 +587,7 @@ export const noteMarkdownEditorAppearance: Extension[] = [
   syntaxHighlighting(markdownHighlightStyle),
   syntaxHighlighting(noteMarkdownNestedCodeHighlighter),
   markdownBlockLineStyle,
+  markdownEscapeMarkPlugin,
   markdownCalloutsPlugin,
   markdownMarkerFocusLineExtension,
 ];

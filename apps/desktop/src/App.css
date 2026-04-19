@@ -3123,7 +3123,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-escape-mark {
   display: none;
 }
 
@@ -4046,7 +4050,10 @@ button.primary.destructive {
   .cm-md-rel-link-href,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-escape-mark {
   display: none;
 }
 
@@ -4623,7 +4630,11 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-external-href {
+  .cm-md-external-href,
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-escape-mark {
   display: none;
 }
 
