@@ -392,7 +392,7 @@ export function FrontmatterEditor({
         aria-expanded={false}
         aria-label={`Expand properties (${keysOrder.length})`}
       >
-        <IconGlyph name="expand_more" size={14} />
+        <IconGlyph name="expand_more" size={12} />
         <span className="frontmatter-editor__collapsed-label">Properties</span>
         <span className="frontmatter-editor__collapsed-count">
           {keysOrder.length}
@@ -410,7 +410,7 @@ export function FrontmatterEditor({
           onClick={() => setExpanded(false)}
           aria-label="Collapse properties"
         >
-          <IconGlyph name="expand_less" size={14} />
+          <IconGlyph name="expand_less" size={12} />
         </button>
         <DsText variant="title">Properties</DsText>
       </div>

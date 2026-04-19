@@ -31,14 +31,25 @@ export type LinkRichPreviewRefs = {
 const linkRichCacheBumpEffect = StateEffect.define<null>();
 
 class LinkRichPreviewWidget extends WidgetType {
+  readonly url: string;
+  readonly urlDocOffset: number;
+  readonly metadata: LinkRichMetadata | null;
+  readonly refs: LinkRichPreviewRefs;
+  readonly inline: boolean;
+
   constructor(
-    readonly url: string,
-    readonly urlDocOffset: number,
-    readonly metadata: LinkRichMetadata | null,
-    readonly refs: LinkRichPreviewRefs,
-    readonly inline: boolean = false,
+    url: string,
+    urlDocOffset: number,
+    metadata: LinkRichMetadata | null,
+    refs: LinkRichPreviewRefs,
+    inline: boolean = false,
   ) {
     super();
+    this.url = url;
+    this.urlDocOffset = urlDocOffset;
+    this.metadata = metadata;
+    this.refs = refs;
+    this.inline = inline;
   }
 
   eq(other: WidgetType): boolean {
