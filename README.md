@@ -1,8 +1,12 @@
-![Eskerra logo](./eskerra-logo.png)
+<p align="center">
+  <img src="./eskerra-logo-crop.png" alt="Eskerra logo" width="120"><br>
+</p>
 
-# Eskerra
+<h1 align="center">Eskerra</h1>
 
-Eskerra is a **notes + podcast** companion with two apps in one repo:
+<p align="center">
+  Eskerra is a <strong>notes + podcast</strong> companion with two apps in one repo:
+</p>
 
 | App | Location | Stack |
 | --- | --- | --- |
