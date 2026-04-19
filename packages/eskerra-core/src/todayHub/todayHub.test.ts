@@ -267,6 +267,17 @@ columns:
     expect(parseTodayHubFrontmatter(md).columns).toEqual(['A', 'B']);
     expect(todayHubColumnCount(parseTodayHubFrontmatter(md))).toBe(3);
   });
+
+  it('reads a single column as scalar on the same line as columns:', () => {
+    const md = `---
+columns: Next actions
+start: monday
+---
+`;
+    const s = parseTodayHubFrontmatter(md);
+    expect(s.columns).toEqual(['Next actions']);
+    expect(todayHubColumnCount(s)).toBe(2);
+  });
 });
 
 describe('splitTodayRowIntoColumns / mergeTodayRowColumns', () => {
