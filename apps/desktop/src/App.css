@@ -1004,9 +1004,8 @@ a:focus:not(:focus-visible) {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Symmetric thin gutter vs app-body (same token as panel grid); no leading-track margin. */
   margin-inline: 0;
-  padding-inline: var(--panel-grid-padding);
+  padding-inline: 0;
 }
 
 .main-shell-stage.panel-group.fill > .main-end-split,
@@ -1014,6 +1013,12 @@ a:focus:not(:focus-visible) {
   flex: 1;
   min-height: 0;
   min-width: 0;
+}
+
+.main-workspace-canvas > .main-end-split {
+  margin: 0 4px 4px;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 /* Inner vault/podcasts split: single outer padding from .main-shell-stage only. */
@@ -1103,10 +1108,10 @@ a:focus:not(:focus-visible) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.12);
   box-sizing: border-box;
   border-radius: var(--window-radius);
-  border: 1px solid color-mix(in srgb, #000 12%, var(--color-bg));
+  border: none;
   box-shadow:
     0 1px 2px color-mix(in srgb, var(--color-text) 6%, transparent),
     0 6px 20px color-mix(in srgb, var(--color-text) 7%, transparent);
@@ -5850,7 +5855,7 @@ button:disabled {
   border-radius: 6px;
   overflow: hidden;
   box-sizing: border-box;
-  background: var(--color-capture-panel);
+  background: transparent;
 }
 
 [data-app-surface='capture'] .panel-surface {
@@ -5858,8 +5863,61 @@ button:disabled {
 }
 
 [data-app-surface='capture'] .pane-header {
-  background: var(--color-capture-chrome);
-  border-bottom-color: var(--color-capture-border);
+  background: transparent;
+  border-bottom: none;
+}
+
+/* Dark-mode foreground on the capture editor toolbar (background stays transparent). */
+[data-app-surface='capture'] .pane-header--editor-toolbar {
+  color-scheme: dark;
+  color: var(--color-shell-icon);
+}
+
+[data-app-surface='capture'] .pane-header--editor-toolbar .pane-header-add-btn {
+  color: var(--color-shell-icon-muted);
+}
+
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .pane-header-add-btn:hover:not(:disabled) {
+  color: var(--color-shell-icon);
+}
+
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .pane-header-add-btn.icon-btn-ghost:hover:not(:disabled) {
+  background: var(--color-shell-hover-bg);
+}
+
+[data-app-surface='capture'] .pane-header--editor-toolbar .pane-title,
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .editor-workspace-toolbar__now-playing {
+  color: var(--color-shell-icon);
+}
+
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .editor-workspace-toolbar__now-playing-series {
+  color: var(--color-shell-icon-muted);
+}
+
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .app-playback-transport--toolbar
+  .app-playback-transport__time,
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .app-playback-transport--toolbar
+  .app-playback-chrome-btn {
+  color: var(--color-shell-icon-muted);
+}
+
+[data-app-surface='capture']
+  .pane-header--editor-toolbar
+  .app-playback-transport--toolbar
+  .app-playback-chrome-btn:not(:disabled):hover {
+  color: var(--color-shell-icon);
 }
 
 /* Borderless icon hit targets: default transparent; hover uses --color-icon-ghost-hover-bg (see index.css :root). */
