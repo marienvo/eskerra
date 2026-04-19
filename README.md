@@ -221,6 +221,8 @@ This project is built around that idea.
 | **iA Writer** ️ | Writing tool | Clean, focused experience | Limited features |
 | **Zettlr**  | Academic editor | Strong for long-form & research | Heavy, slower UI |
 
+---
+
 <p align="center">
    Apps fade. Markdown remains.<br> 
    Like stones in a riverbed.
