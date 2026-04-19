@@ -5867,9 +5867,8 @@ button:disabled {
   border-bottom: none;
 }
 
-/* Dark-mode foreground on the capture editor toolbar (background stays transparent). */
+/* Shell-style foreground on the capture editor toolbar; tokens follow ui-chrome theme. */
 [data-app-surface='capture'] .pane-header--editor-toolbar {
-  color-scheme: dark;
   color: var(--color-shell-icon);
 }
 
