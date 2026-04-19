@@ -1,3 +1,5 @@
+![Eskerra logo](./eskerra-logo.png)
+
 # Eskerra
 
 Eskerra is a **notes + podcast** companion with two apps in one repo:
