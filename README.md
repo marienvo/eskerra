@@ -211,8 +211,6 @@ No plugins required for the basics, no waiting, no hidden complexity.
 
 This project is built around that idea. 
 
-Apps fade. Markdown remains.
-Like stones in a riverbed.
 
 | Tool | Core Idea | Strength | Trade-off |
 |------|----------|----------|-----------|
@@ -222,3 +220,8 @@ Like stones in a riverbed.
 | **Logseq**  | Outliner / graph | Powerful linking & structure | Performance, learning curve |
 | **iA Writer** ️ | Writing tool | Clean, focused experience | Limited features |
 | **Zettlr**  | Academic editor | Strong for long-form & research | Heavy, slower UI |
+
+<p align="center">
+   Apps fade. Markdown remains.<br> 
+   Like stones in a riverbed.
+</p>
