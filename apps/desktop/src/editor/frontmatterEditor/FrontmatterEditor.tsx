@@ -156,6 +156,13 @@ export function FrontmatterEditor({
   const [addKeyDraft, setAddKeyDraft] = useState('');
   const [addKeyType, setAddKeyType] =
     useState<AddPropertyTypeChoice>('auto');
+  const [expanded, setExpanded] = useState(false);
+  const [prevCollapseRehydrateKey, setPrevCollapseRehydrateKey] =
+    useState(rehydrateKey);
+  if (prevCollapseRehydrateKey !== rehydrateKey) {
+    setPrevCollapseRehydrateKey(rehydrateKey);
+    setExpanded(false);
+  }
 
   /** Rehydrate when the parent source of truth changes (note switch / disk reload), not on echo. */
   useEffect(() => {
@@ -376,9 +383,35 @@ export function FrontmatterEditor({
     );
   }
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="frontmatter-editor frontmatter-editor--collapsed"
+        onClick={() => setExpanded(true)}
+        aria-expanded={false}
+        aria-label={`Expand properties (${keysOrder.length})`}
+      >
+        <IconGlyph name="expand_more" size={14} />
+        <span className="frontmatter-editor__collapsed-label">Properties</span>
+        <span className="frontmatter-editor__collapsed-count">
+          {keysOrder.length}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <DsSurface className="frontmatter-editor">
       <div className="frontmatter-editor__header">
+        <button
+          type="button"
+          className="frontmatter-editor__collapse-toggle"
+          onClick={() => setExpanded(false)}
+          aria-label="Collapse properties"
+        >
+          <IconGlyph name="expand_less" size={14} />
+        </button>
         <DsText variant="title">Properties</DsText>
       </div>
 
