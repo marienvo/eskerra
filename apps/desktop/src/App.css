@@ -4109,6 +4109,27 @@ button.primary.destructive {
 }
 
 /*
+ * While actively editing, restore overflow so CodeMirror tooltips (emoji picker, autocomplete) can
+ * extend outside the cell boundary. The one-frame scroller-spill risk does not apply here: warm
+ * cells have their CM already laid out at the correct dimensions under the invisible underlay, so
+ * making the stack overflow:visible on the same frame as edit-start is safe.
+ *
+ * Also raise z-index above `row-date-bar` (z-index: 1) so the tooltip paints over the gray week
+ * separators in adjacent rows. Applies to all editing cells (warm and cold) because `isolation:
+ * isolate` on the stack creates a stacking context at z-index: auto by default, which is painted
+ * before any z-index: 1 element in the same parent stacking context.
+ */
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack:has(> .today-hub-canvas__cm-host--editing) {
+  z-index: 2;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-editor-stack--warm:has(> .today-hub-canvas__cm-host--editing) {
+  overflow: visible;
+}
+
+/*
  * Warm hub cell: read-only CodeMirror sits under the static preview in the same `.cm-host` sibling
  * order as edit mode (see `TodayHubCanvasNonEmptyCell`) so warm→active does not remount the editor.
  * Underlay is invisible but still laid out (prewarm).
