@@ -3104,6 +3104,28 @@ export function useMainWindowWorkspace(options: {
     setPendingWikiLinkAmbiguityRename(null);
   }, []);
 
+  /**
+   * Shared "new-tab" routing used by wiki-link and relative-markdown-link activation.
+   *
+   * - If the target is already open in any tab, that tab is focused (no duplicate).
+   * - Otherwise a new tab is opened: foreground (`activateNewTab: true`) or background.
+   */
+  const openNoteRespectingExistingTab = useCallback(
+    async (uri: string, mode: 'foreground-new-tab' | 'background-new-tab') => {
+      const existingTabId = findTabIdWithCurrentUri(editorWorkspaceTabsRef.current, uri);
+      if (existingTabId != null) {
+        activateOpenTab(existingTabId);
+        return;
+      }
+      await openMarkdownInEditor(uri, {
+        newTab: true,
+        activateNewTab: mode === 'foreground-new-tab',
+        insertAfterActive: true,
+      });
+    },
+    [activateOpenTab, openMarkdownInEditor],
+  );
+
   const activateWikiLink = useCallback(
     async ({inner, at, openInBackgroundTab}: VaultWikiLinkActivatePayload) => {
       if (!vaultRoot) {
@@ -3157,19 +3179,8 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          const existingTabId = findTabIdWithCurrentUri(
-            editorWorkspaceTabsRef.current,
-            result.uri,
-          );
           if (openInBackgroundTab) {
-            if (existingTabId != null) {
-              return;
-            }
-            await openMarkdownInEditor(result.uri, {
-              newTab: true,
-              activateNewTab: false,
-              insertAfterActive: true,
-            });
+            await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
             return;
           }
           if (
@@ -3179,11 +3190,7 @@ export function useMainWindowWorkspace(options: {
               selectedUri: selectedUriRef.current,
             })
           ) {
-            await openMarkdownInEditor(result.uri, {
-              newTab: true,
-              activateNewTab: true,
-              insertAfterActive: true,
-            });
+            await openNoteRespectingExistingTab(result.uri, 'foreground-new-tab');
             return;
           }
           await openMarkdownInEditor(result.uri);
@@ -3207,7 +3214,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor, openNoteRespectingExistingTab],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -3270,19 +3277,8 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
-          const existingTabId = findTabIdWithCurrentUri(
-            editorWorkspaceTabsRef.current,
-            result.uri,
-          );
           if (openInBackgroundTab) {
-            if (existingTabId != null) {
-              return;
-            }
-            await openMarkdownInEditor(result.uri, {
-              newTab: true,
-              activateNewTab: false,
-              insertAfterActive: true,
-            });
+            await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
             return;
           }
           if (
@@ -3292,11 +3288,7 @@ export function useMainWindowWorkspace(options: {
               selectedUri: selectedUriRef.current,
             })
           ) {
-            await openMarkdownInEditor(result.uri, {
-              newTab: true,
-              activateNewTab: true,
-              insertAfterActive: true,
-            });
+            await openNoteRespectingExistingTab(result.uri, 'foreground-new-tab');
             return;
           }
           await openMarkdownInEditor(result.uri);
@@ -3307,7 +3299,7 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor],
+    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor, openNoteRespectingExistingTab],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
