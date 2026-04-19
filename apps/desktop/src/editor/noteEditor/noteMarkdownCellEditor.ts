@@ -52,7 +52,7 @@ import {
 } from './linkClickUseMousedownPosition';
 import {wikiLinkPointerActivatableInnerAtDocPosition} from './wikiLinkInnerAtDocPosition';
 import {multiCaretClickAddsSelectionRangeExtension} from './multiCaretClick';
-import {wikiEOLCaretPointerFixExtension} from './wikiEOLCaretPointerFix';
+import {eolMarkerCaretPointerFixExtension} from './eolMarkerCaretPointerFix';
 import {
   buildNoteMarkdownDeleteLineModYBindings,
   buildNoteMarkdownDuplicateLineModDBindings,
@@ -642,7 +642,7 @@ export function buildNoteMarkdownCellExtensions(
         borderLeftColor: 'inherit',
       },
     }),
-    wikiEOLCaretPointerFixExtension(),
+    eolMarkerCaretPointerFixExtension(),
     EditorView.updateListener.of(update => {
       if (update.docChanged) {
         onDocChanged();
