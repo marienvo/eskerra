@@ -13,6 +13,7 @@ const TYPE_OPTIONS: Array<{value: FrontmatterPropertyType | ''; label: string}> 
   {value: 'date', label: 'Date'},
   {value: 'datetime', label: 'Datetime'},
   {value: 'timestamp', label: 'Timestamp'},
+  {value: 'url', label: 'URL'},
   {value: 'list', label: 'List'},
   {value: 'tags', label: 'Tags'},
   {value: 'object', label: 'Object'},

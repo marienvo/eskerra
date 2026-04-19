@@ -19,6 +19,7 @@ const KNOWN_TYPES = new Set<FrontmatterPropertyType>([
   'date',
   'datetime',
   'timestamp',
+  'url',
   'list',
   'tags',
   'object',

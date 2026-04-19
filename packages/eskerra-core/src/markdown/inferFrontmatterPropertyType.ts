@@ -14,6 +14,10 @@ export function detectValueShapeType(value: FrontmatterValue): FrontmatterProper
   }
   if (typeof value === 'string') {
     const s = value;
+    /* `http:` / `https:` web URLs — not enum-suggested in the desktop editor. */
+    if (/^https?:\/\//i.test(s)) {
+      return 'url';
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
       return 'date';
     }

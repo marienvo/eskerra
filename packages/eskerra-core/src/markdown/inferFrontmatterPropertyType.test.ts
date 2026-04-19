@@ -53,4 +53,22 @@ describe('detectValueShapeType', () => {
     expect(detectValueShapeType('2026-04-19T14:30')).toBe('datetime');
     expect(detectValueShapeType('2026-04-19T12:30:00Z')).toBe('timestamp');
   });
+
+  it('classifies http(s) URLs', () => {
+    expect(detectValueShapeType('https://example.com/path?q=1')).toBe('url');
+    expect(detectValueShapeType('HTTP://LOCALHOST/')).toBe('url');
+    expect(detectValueShapeType('not a url')).toBe('text');
+  });
+
+  it('infers url from vault samples when majority agree', () => {
+    const samples = [
+      'https://a.example/',
+      'https://b.example/',
+      'https://c.example/',
+      'oops',
+    ];
+    expect(inferPropertyTypeFromVaultSamples({key: 'link', samples})).toBe(
+      'url',
+    );
+  });
 });

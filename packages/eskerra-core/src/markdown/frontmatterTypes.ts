@@ -13,6 +13,7 @@ export type FrontmatterPropertyType =
   | 'date'
   | 'datetime'
   | 'timestamp'
+  | 'url'
   | 'list'
   | 'tags'
   | 'object';

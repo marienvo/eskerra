@@ -9,6 +9,7 @@ const FM_PROPERTY_TYPES: ReadonlySet<FrontmatterPropertyType> = new Set([
   'date',
   'datetime',
   'timestamp',
+  'url',
   'list',
   'tags',
   'object',

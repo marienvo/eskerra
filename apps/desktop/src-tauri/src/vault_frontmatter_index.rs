@@ -117,6 +117,8 @@ static RE_DATETIME: LazyLock<Regex> =
 static RE_TS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$").unwrap()
 });
+static RE_HTTP_URL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^https?://").unwrap());
 
 fn split_frontmatter_inner(markdown: &str) -> Option<String> {
     let normalized = markdown.replace("\r\n", "\n");
@@ -377,11 +379,15 @@ enum Tv {
     Date,
     Datetime,
     Timestamp,
+    Url,
     List,
     Object,
 }
 
 fn classify_string_shape(s: &str) -> Tv {
+    if RE_HTTP_URL.is_match(s) {
+        return Tv::Url;
+    }
     if RE_DATE.is_match(s) {
         return Tv::Date;
     }
@@ -458,6 +464,7 @@ fn infer_property_type(key_name: &str, agg: &KeyAgg) -> &'static str {
         Tv::Date => "date",
         Tv::Datetime => "datetime",
         Tv::Timestamp => "timestamp",
+        Tv::Url => "url",
         Tv::List => "list",
         Tv::Object => "object",
     }

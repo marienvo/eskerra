@@ -58,6 +58,7 @@ const TYPE_CHOICES: Array<{
   {value: 'date', label: 'Date'},
   {value: 'datetime', label: 'Datetime'},
   {value: 'timestamp', label: 'Timestamp'},
+  {value: 'url', label: 'URL'},
   {value: 'list', label: 'List'},
   {value: 'tags', label: 'Tags'},
   {value: 'object', label: 'Object'},
@@ -111,6 +112,8 @@ function defaultValueForType(
     case 'datetime':
       return '';
     case 'timestamp':
+      return '';
+    case 'url':
       return '';
     default:
       return '';
@@ -211,12 +214,17 @@ export function FrontmatterEditor({
       if (o) {
         return o;
       }
+      const v = getValueAtPath(record, [key]);
+      const shape = v !== undefined ? detectValueShapeType(v) : undefined;
+      /* `https?://` values are always URL in the UI (no vault enum suggestions for that type). */
+      if (shape === 'url') {
+        return 'url';
+      }
       if (index.keys.includes(key)) {
         return index.inferredType(key);
       }
-      const v = getValueAtPath(record, [key]);
-      if (v !== undefined) {
-        return detectValueShapeType(v);
+      if (shape !== undefined) {
+        return shape;
       }
       return 'text';
     },
@@ -674,6 +682,22 @@ function PropertyValueControl({
           className="frontmatter-editor__scalar-input"
           disabled={readOnly}
           placeholder="ISO-8601 instant"
+          value={s}
+          onChange={e => onChange(e.target.value)}
+        />
+      );
+    }
+    case 'url': {
+      const s = typeof value === 'string' ? value : '';
+      return (
+        <input
+          type="url"
+          className="frontmatter-editor__scalar-input"
+          disabled={readOnly}
+          placeholder="https://…"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={s}
           onChange={e => onChange(e.target.value)}
         />

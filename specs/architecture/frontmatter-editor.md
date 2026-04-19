@@ -11,6 +11,7 @@ Property values are [`FrontmatterValue`](../../packages/eskerra-core/src/markdow
 - **`date`**: `YYYY-MM-DD` string.
 - **`datetime`**: local wall-clock, `YYYY-MM-DDTHH:mm` string (no timezone field).
 - **`timestamp`**: ISO instant with offset/`Z`, **or** numeric Unix epoch. The editor preserves the backing representation (ISO vs epoch) and does **not** silently convert between them. It never emits a bare date for a timestamp.
+- **`url`**: string values that look like `http://` or `https://` web URLs. Typed as **`url`** in YAML (still a plain string); the desktop editor uses a URL field **without** vault-wide enum autocomplete (other free-text keys still use suggestions when applicable).
 - **`list` / `tags`**: arrays of scalar items (autocomplete indexes **individual** list items).
 - **`object`**: mapping; v1 supports nested keys with a JSON textarea fallback for deep trees.
 
