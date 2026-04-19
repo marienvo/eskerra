@@ -2486,6 +2486,7 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-scroll--today-hub
   > .note-markdown-editor-page:first-of-type
+  > .note-markdown-editor-main-row
   > .note-markdown-editor-paper:not(.note-markdown-editor-paper--today-hub-shell) {
   box-shadow: none;
   border: none;
@@ -2493,8 +2494,7 @@ button.primary.destructive {
 }
 
 /*
- * Centered row: fold rail (panel gray only) + paper column. Fold chevrons render in the rail via a
- * negative-margin host shift (see `.note-markdown-editor-host`).
+ * Frontmatter stacks above the fold rail + paper row (see `.note-markdown-editor-main-row`).
  */
 .note-markdown-editor-page {
   width: 100%;
@@ -2504,10 +2504,29 @@ button.primary.destructive {
   margin-inline: auto;
   box-sizing: border-box;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
   flex: 1 0 0;
   /* Let outer .note-markdown-editor-scroll grow with editor + “Linked from” on long notes. */
+  min-height: min-content;
+}
+
+.note-markdown-editor-frontmatter-host {
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--nb-editor-paper-pad-block-start, 0.5rem)
+    calc(var(--nb-editor-paper-pad-inline, 1rem) + env(safe-area-inset-right, 0px))
+    0
+    calc(var(--nb-editor-paper-pad-inline, 1rem) + env(safe-area-inset-left, 0px));
+}
+
+.note-markdown-editor-main-row {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  flex: 1 0 auto;
   min-height: min-content;
 }
 

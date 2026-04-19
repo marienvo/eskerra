@@ -5,6 +5,7 @@ mod tiling_score;
 #[cfg(target_os = "linux")]
 mod tiling_gdk;
 mod vault;
+mod vault_frontmatter_index;
 mod vault_search;
 mod vault_search_index;
 mod vault_watch;
@@ -12,6 +13,7 @@ mod window_state_disk;
 
 use vault::VaultRootState;
 use vault_search::VaultSearchSessionState;
+use vault_frontmatter_index::VaultFrontmatterIndexState;
 use vault_search_index::VaultSearchIndexState;
 
 #[cfg(all(not(mobile), debug_assertions))]
@@ -41,6 +43,7 @@ pub fn run() {
         .manage(VaultRootState::default())
         .manage(VaultSearchSessionState::default())
         .manage(VaultSearchIndexState::default())
+        .manage(VaultFrontmatterIndexState::default())
         .manage(media::MediaSessionState::default());
 
     #[cfg(not(mobile))]
@@ -85,6 +88,10 @@ pub fn run() {
             vault_search::vault_search_cancel,
             vault_search_index::vault_search_index_schedule,
             vault_search_index::vault_search_index_touch_paths,
+            vault_frontmatter_index::vault_frontmatter_index_schedule,
+            vault_frontmatter_index::vault_frontmatter_index_snapshot,
+            vault_frontmatter_index::vault_frontmatter_index_values_for_key,
+            vault_frontmatter_index::vault_frontmatter_index_touch_paths,
             vault_watch::vault_start_watch,
             window_state_disk::eskerra_peek_window_state_file,
             media::media_set_metadata,
