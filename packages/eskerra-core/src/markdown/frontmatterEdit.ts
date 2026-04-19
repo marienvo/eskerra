@@ -1,4 +1,13 @@
-import {Document, isMap, isScalar, Pair, parseDocument, YAMLMap} from 'yaml';
+import {
+  Document,
+  isMap,
+  isScalar,
+  isSeq,
+  Pair,
+  parseDocument,
+  YAMLMap,
+  YAMLSeq,
+} from 'yaml';
 import type {ParsedNode} from 'yaml';
 
 import {scanDuplicateTopLevelKeys} from './frontmatterDuplicateKeys';
@@ -41,7 +50,47 @@ export function parseFrontmatterInner(inner: string): ParseFrontmatterInnerResul
   return {doc, record, duplicateKeys};
 }
 
+/** Prefer block-style YAML lists on disk (avoid `[a, b]` flow sequences). */
+function forceBlockStyleForTopLevelScalarSequences(
+  doc: Document<ParsedNode>,
+): void {
+  const root = doc.contents;
+  if (!isMap(root)) {
+    return;
+  }
+  const m = root as YAMLMap<ParsedNode, ParsedNode | null>;
+  for (const pair of m.items) {
+    const val = pair.value;
+    if (val == null || !isSeq(val)) {
+      continue;
+    }
+    const seq = val as YAMLSeq<ParsedNode>;
+    if (seq.items.length === 0) {
+      continue;
+    }
+    let allScalar = true;
+    for (const item of seq.items) {
+      if (item == null) {
+        continue;
+      }
+      if (!isScalar(item as ParsedNode)) {
+        allScalar = false;
+        break;
+      }
+    }
+    if (!allScalar) {
+      continue;
+    }
+    const hasItem = seq.items.some(i => i != null);
+    if (!hasItem) {
+      continue;
+    }
+    seq.flow = false;
+  }
+}
+
 export function serializeFrontmatterInner(doc: Document<ParsedNode>): string {
+  forceBlockStyleForTopLevelScalarSequences(doc);
   const s = String(doc.toString({lineWidth: 0}));
   return s.endsWith('\n') ? s.slice(0, -1) : s;
 }

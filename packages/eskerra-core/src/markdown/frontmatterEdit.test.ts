@@ -105,3 +105,15 @@ describe('deleteFrontmatterKey', () => {
     expect(plain.seo).toEqual({});
   });
 });
+
+describe('serializeFrontmatterInner (list block style)', () => {
+  it('emits top-level scalar lists as YAML block sequences', () => {
+    const {doc} = parseFrontmatterInner('authors: []\n');
+    setFrontmatterValue(doc, ['authors'], ['Alice', 'Bob']);
+    const out = serializeFrontmatterInner(doc);
+    expect(out).toContain('Alice');
+    expect(out).toContain('Bob');
+    expect(out).not.toContain('[');
+    expect(out).toMatch(/\n\s+-\s+Alice[\s\S]*\n\s+-\s+Bob/);
+  });
+});

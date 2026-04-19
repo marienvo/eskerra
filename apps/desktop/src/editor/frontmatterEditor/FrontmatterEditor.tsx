@@ -18,10 +18,19 @@ import {
   DsText,
   IconGlyph,
 } from '@eskerra/ds-desktop';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import type {RefObject} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {Document, isMap, isScalar, YAMLMap, type ParsedNode} from 'yaml';
 
 import {serializeFrontmatterInnerOrDropEmpty} from './frontmatterInnerSnapshot';
+import {splitListInput} from './splitListInput';
 
 import './FrontmatterEditor.css';
 
@@ -63,6 +72,13 @@ const TYPE_CHOICES: Array<{
   {value: 'tags', label: 'Tags'},
   {value: 'object', label: 'Object'},
 ];
+
+type AddPropertyTypeChoice = 'auto' | FrontmatterPropertyType;
+
+const ADD_PROPERTY_TYPE_CHOICES: Array<{
+  value: AddPropertyTypeChoice;
+  label: string;
+}> = [{value: 'auto', label: 'Auto'}, ...TYPE_CHOICES];
 
 function scalarKeyString(node: ParsedNode): string {
   return isScalar(node) ? String(node.value) : String(node);
@@ -138,7 +154,8 @@ export function FrontmatterEditor({
   >({});
   const [collisionError, setCollisionError] = useState<string | null>(null);
   const [addKeyDraft, setAddKeyDraft] = useState('');
-  const [creatingKey, setCreatingKey] = useState(false);
+  const [addKeyType, setAddKeyType] =
+    useState<AddPropertyTypeChoice>('auto');
 
   /** Rehydrate when the parent source of truth changes (note switch / disk reload), not on echo. */
   useEffect(() => {
@@ -158,7 +175,7 @@ export function FrontmatterEditor({
     setLocalTypeOverrides({});
     setCollisionError(null);
     setAddKeyDraft('');
-    setCreatingKey(false);
+    setAddKeyType('auto');
   }, [yamlInner, rehydrateKey]);
 
   useEffect(() => {
@@ -219,6 +236,10 @@ export function FrontmatterEditor({
       /* `https?://` values are always URL in the UI (no vault enum suggestions for that type). */
       if (shape === 'url') {
         return 'url';
+      }
+      /* Scalar-array shapes win over vault inference (avoid JSON text fallback). */
+      if (shape === 'list') {
+        return key.toLowerCase() === 'tags' ? 'tags' : 'list';
       }
       if (index.keys.includes(key)) {
         return index.inferredType(key);
@@ -293,22 +314,34 @@ export function FrontmatterEditor({
     if (!raw) {
       return;
     }
+    if (readOnly || duplicateKeys.length > 0) {
+      return;
+    }
+    if (doc.hasIn([raw])) {
+      setCollisionError(`Property "${raw}" already exists.`);
+      return;
+    }
+    const t: FrontmatterPropertyType =
+      addKeyType === 'auto' ? index.inferredType(raw) : addKeyType;
+    const shouldOverride = addKeyType !== 'auto';
     mutateDoc(d => {
-      try {
-        const t = creatingKey ? 'text' : index.inferredType(raw);
-        addFrontmatterKey(d, [], raw, defaultValueForType(t));
-        setCollisionError(null);
-        setAddKeyDraft('');
-        setCreatingKey(false);
-      } catch (e) {
-        if (e instanceof FrontmatterEditCollisionError) {
-          setCollisionError(`Property "${raw}" already exists.`);
-          return;
-        }
-        throw e;
-      }
+      addFrontmatterKey(d, [], raw, defaultValueForType(t));
+      setCollisionError(null);
     });
-  }, [addKeyDraft, creatingKey, index, mutateDoc]);
+    setAddKeyDraft('');
+    setAddKeyType('auto');
+    if (shouldOverride) {
+      setLocalTypeOverrides(prev => ({...prev, [raw]: t}));
+    }
+  }, [
+    addKeyDraft,
+    addKeyType,
+    doc,
+    duplicateKeys.length,
+    index,
+    mutateDoc,
+    readOnly,
+  ]);
 
   const showEmptyAffordance = yamlInner === null && !readOnly;
 
@@ -381,6 +414,23 @@ export function FrontmatterEditor({
                 setFrontmatterValue(d, [key], defaultValueForType(t));
               });
             }}
+            onConvertTextToList={() => {
+              const v = getValueAtPath(record, [key]);
+              const raw =
+                v === null || v === undefined
+                  ? ''
+                  : typeof v === 'string'
+                    ? v
+                    : JSON.stringify(v);
+              const arr = splitListInput(raw);
+              if (arr.length === 0) {
+                return;
+              }
+              setLocalTypeOverrides(prev => ({...prev, [key]: 'list'}));
+              mutateDoc(d => {
+                setFrontmatterValue(d, [key], arr);
+              });
+            }}
           />
         ))}
       </ul>
@@ -406,14 +456,20 @@ export function FrontmatterEditor({
               <option key={k} value={k} />
             ))}
           </datalist>
-          <label className="frontmatter-editor__create-inline">
-            <input
-              type="checkbox"
-              checked={creatingKey}
-              onChange={e => setCreatingKey(e.target.checked)}
-            />{' '}
-            New key
-          </label>
+          <select
+            className="frontmatter-editor__type-select frontmatter-editor__footer-type-select"
+            aria-label="New property type"
+            value={addKeyType}
+            onChange={e =>
+              setAddKeyType(e.target.value as AddPropertyTypeChoice)
+            }
+          >
+            {ADD_PROPERTY_TYPE_CHOICES.map(c => (
+              <option key={String(c.value)} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
           <DsButton variant="secondary" type="button" onClick={commitAddKey}>
             Add
           </DsButton>
@@ -437,6 +493,7 @@ type RowProps = {
   canMoveDown: boolean;
   onChangeValue: (v: FrontmatterValue) => void;
   onChangeType: (t: FrontmatterPropertyType) => void;
+  onConvertTextToList: () => void;
 };
 
 function TopLevelPropertyRow({
@@ -453,8 +510,11 @@ function TopLevelPropertyRow({
   canMoveDown,
   onChangeValue,
   onChangeType,
+  onConvertTextToList,
 }: RowProps) {
   const [nameDraft, setNameDraft] = useState(rowKey);
+  const pendingListFocusRef = useRef(false);
+  const listDraftInputRef = useRef<HTMLInputElement | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<
     Array<{value: string | number; count: number}>
@@ -471,6 +531,17 @@ function TopLevelPropertyRow({
   useEffect(() => {
     setNameDraft(rowKey);
   }, [rowKey]);
+
+  useLayoutEffect(() => {
+    if (!pendingListFocusRef.current) {
+      return;
+    }
+    if (propType !== 'list' && propType !== 'tags') {
+      return;
+    }
+    listDraftInputRef.current?.focus();
+    pendingListFocusRef.current = false;
+  }, [propType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -492,6 +563,20 @@ function TopLevelPropertyRow({
     if (nameDraft.trim() !== rowKey) {
       onRename(rowKey, nameDraft);
     }
+  };
+
+  const handleConvertTextToList = () => {
+    const raw =
+      value === null || value === undefined
+        ? ''
+        : typeof value === 'string'
+          ? value
+          : JSON.stringify(value);
+    if (splitListInput(raw).length === 0) {
+      return;
+    }
+    pendingListFocusRef.current = true;
+    onConvertTextToList();
   };
 
   return (
@@ -552,6 +637,10 @@ function TopLevelPropertyRow({
           onChange={onChangeValue}
           onSuggestPrefix={setTextPrefix}
           onSuggestOpenChange={setSuggestOpen}
+          listAddInputRef={listDraftInputRef}
+          onConvertToList={
+            propType === 'text' ? handleConvertTextToList : undefined
+          }
         />
         {suggestOpen && suggestions.length > 0 && suggestKind !== 'none' ? (
           <ul className="frontmatter-editor__suggest" role="listbox">
@@ -598,6 +687,8 @@ type ControlProps = {
   onChange: (v: FrontmatterValue) => void;
   onSuggestPrefix: (prefix: string) => void;
   onSuggestOpenChange: (open: boolean) => void;
+  onConvertToList?: () => void;
+  listAddInputRef?: RefObject<HTMLInputElement | null>;
 };
 
 function PropertyValueControl({
@@ -607,6 +698,8 @@ function PropertyValueControl({
   onChange,
   onSuggestPrefix,
   onSuggestOpenChange,
+  onConvertToList,
+  listAddInputRef,
 }: ControlProps) {
   switch (propType) {
     case 'checkbox': {
@@ -712,6 +805,7 @@ function PropertyValueControl({
           : [String(value)];
       return (
         <ListTagsEditor
+          inputRef={listAddInputRef}
           asTags={propType === 'tags'}
           items={arr}
           readOnly={readOnly}
@@ -742,25 +836,42 @@ function PropertyValueControl({
           : typeof value === 'string'
             ? value
             : JSON.stringify(value);
+      const showConvertHint =
+        Boolean(onConvertToList) &&
+        !readOnly &&
+        /[\n,;\t]/u.test(s);
       return (
-        <input
-          type="text"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          value={s}
-          onChange={e => {
-            onChange(e.target.value);
-            onSuggestPrefix(e.currentTarget.value.trim());
-          }}
-          onFocus={() => onSuggestOpenChange(true)}
-          onBlur={() => onSuggestOpenChange(false)}
-        />
+        <div className="frontmatter-editor__text-cell">
+          <input
+            type="text"
+            className="frontmatter-editor__scalar-input"
+            disabled={readOnly}
+            value={s}
+            onChange={e => {
+              onChange(e.target.value);
+              onSuggestPrefix(e.currentTarget.value.trim());
+            }}
+            onFocus={() => onSuggestOpenChange(true)}
+            onBlur={() => onSuggestOpenChange(false)}
+          />
+          {showConvertHint ? (
+            <button
+              type="button"
+              className="frontmatter-editor__convert-list"
+              disabled={readOnly}
+              onClick={() => onConvertToList?.()}
+            >
+              Convert to list
+            </button>
+          ) : null}
+        </div>
       );
     }
   }
 }
 
 function ListTagsEditor({
+  inputRef,
   asTags,
   items,
   readOnly,
@@ -768,6 +879,7 @@ function ListTagsEditor({
   onSuggestPrefix,
   onSuggestOpenChange,
 }: {
+  inputRef?: RefObject<HTMLInputElement | null>;
   asTags: boolean;
   items: string[];
   readOnly: boolean;
@@ -776,17 +888,32 @@ function ListTagsEditor({
   onSuggestOpenChange: (open: boolean) => void;
 }) {
   const [draft, setDraft] = useState('');
-  const commitDraft = () => {
-    const t = draft.trim();
-    if (!t) {
+  const mapItems = (pieces: readonly string[]) =>
+    asTags ? pieces.map(p => p.replace(/^#+/, '')) : [...pieces];
+
+  const commitPieces = (pieces: string[]) => {
+    if (pieces.length === 0) {
       return;
     }
-    const next = asTags ? [...items, t.replace(/^#+/, '')] : [...items, t];
-    onChange(next);
+    onChange([...items, ...mapItems(pieces)]);
     setDraft('');
   };
+
+  const commitDraft = () => {
+    const pieces = splitListInput(draft);
+    commitPieces(pieces);
+  };
+
+  const empty = items.length === 0;
+
   return (
-    <div className="frontmatter-editor__list">
+    <div
+      className={
+        empty && !readOnly
+          ? 'frontmatter-editor__list frontmatter-editor__list--empty'
+          : 'frontmatter-editor__list'
+      }
+    >
       <ul>
         {items.map((it, i) => (
           <li key={`${it}-${i}`}>
@@ -810,8 +937,17 @@ function ListTagsEditor({
       </ul>
       {!readOnly ? (
         <input
+          ref={inputRef}
           className="frontmatter-editor__scalar-input"
-          placeholder={asTags ? 'Add tag…' : 'Add item…'}
+          placeholder={
+            empty
+              ? asTags
+                ? 'Type a tag, press Enter…'
+                : 'Type an item, press Enter…'
+              : asTags
+                ? 'Add tag…'
+                : 'Add item…'
+          }
           value={draft}
           onChange={e => {
             setDraft(e.target.value);
@@ -821,7 +957,23 @@ function ListTagsEditor({
             if (e.key === 'Enter') {
               e.preventDefault();
               commitDraft();
+              return;
             }
+            if (e.key === ',' || e.key === ';' || e.key === 'Tab') {
+              e.preventDefault();
+              const sep = e.key === 'Tab' ? '\t' : e.key;
+              const combined = draft + sep;
+              const pieces = splitListInput(combined);
+              commitPieces(pieces);
+            }
+          }}
+          onPaste={e => {
+            const text = e.clipboardData?.getData('text/plain') ?? '';
+            if (!/[\n,;\t]/u.test(text)) {
+              return;
+            }
+            e.preventDefault();
+            commitPieces(splitListInput(text));
           }}
           onFocus={() => onSuggestOpenChange(true)}
           onBlur={() => {

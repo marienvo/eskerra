@@ -77,3 +77,55 @@ export function DuplicateKeysReadOnly() {
     </div>
   );
 }
+
+/** Vault index would infer `text` for this key, but the note’s value is a list — UI should show pills. */
+export function ListShapeOverIndex() {
+  const index: VaultFrontmatterIndexApi = {
+    ...mockIndex,
+    keys: ['authors', 'status', 'tags', 'created'],
+    inferredType: (key: string): FrontmatterPropertyType => {
+      if (key === 'authors') {
+        return 'text';
+      }
+      return mockIndex.inferredType(key);
+    },
+  };
+  return (
+    <div style={{maxWidth: 640, padding: 12}}>
+      <FrontmatterEditor
+        yamlInner={`authors:\n  - Alice\n  - Bob\n`}
+        onChange={() => {}}
+        index={index}
+        rehydrateKey="sandbox-shape-list"
+      />
+    </div>
+  );
+}
+
+/** Scalar text containing separators — optional “Convert to list” assisted action. */
+export function TextSuggestConvertToList() {
+  return (
+    <div style={{maxWidth: 640, padding: 12}}>
+      <FrontmatterEditor
+        yamlInner={`note: 'alpha, beta, gamma'`}
+        onChange={() => {}}
+        index={mockIndex}
+        rehydrateKey="sandbox-convert"
+      />
+    </div>
+  );
+}
+
+/** Empty list: dashed border + add field (try pasting multi-line / comma-separated). */
+export function EmptyListField() {
+  return (
+    <div style={{maxWidth: 640, padding: 12}}>
+      <FrontmatterEditor
+        yamlInner={`items: []`}
+        onChange={() => {}}
+        index={mockIndex}
+        rehydrateKey="sandbox-empty-list"
+      />
+    </div>
+  );
+}
