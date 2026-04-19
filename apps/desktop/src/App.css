@@ -3305,6 +3305,41 @@ button.primary.destructive {
   border-radius: 4px;
 }
 
+/* Section divider widget rendered in place of `::today-section::` lines (see todayHubSectionMarkerCodemirror). */
+.cm-today-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 0.1rem;
+  user-select: none;
+}
+
+.cm-today-section-divider::before,
+.cm-today-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--nb-editor-text, currentColor) 22%, transparent),
+    transparent
+  );
+}
+
+.cm-today-section-divider__dots {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.cm-today-section-divider__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nb-editor-text, currentColor) 40%, transparent);
+}
+
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table {
   box-sizing: border-box;
   width: 100%;

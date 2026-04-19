@@ -64,6 +64,7 @@ import {markdownEskerra} from './markdownEskerraLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {todayHubSectionMarkerExtension} from './todayHubSectionMarkerCodemirror';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
@@ -871,6 +872,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         resolvePreviewUrl: (vr, ap, src) =>
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
+      todayHubSectionMarkerExtension,
       EditorView.domEventHandlers({
         mousedown(event, view) {
           recordPrimaryPointerDownForLinkClick(view, event);
