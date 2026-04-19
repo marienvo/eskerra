@@ -630,6 +630,78 @@ describe('markdownSelectionSurround', () => {
     ).toBeNull();
   });
 
+  it('Mod-b with caret on a word wraps that word in **', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'hello world',
+      selection: EditorSelection.cursor(8),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello **world**');
+    expect(view!.state.selection.main.from).toBe(8);
+    expect(view!.state.selection.main.to).toBe(13);
+  });
+
+  it('Mod-b inserts empty ** markers with caret between when surrounded by whitespace', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'a  b',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('a **** b');
+    expect(view!.state.selection.main.head).toBe(4);
+
+    modBKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('a  b');
+    expect(view!.state.selection.main.head).toBe(2);
+  });
+
+  it('Mod-i with caret on a word wraps that word in *', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'hello world',
+      selection: EditorSelection.cursor(8),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modIKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('hello *world*');
+  });
+
+  it('Mod-i toggles empty italic markers and does not unwrap **word** opener', () => {
+    const parent = document.createElement('div');
+    document.body.append(parent);
+    const state = EditorState.create({
+      doc: 'x  y',
+      selection: EditorSelection.cursor(2),
+      extensions: minimalMarkdownExtensions(),
+    });
+    view = new EditorView({state, parent});
+
+    modIKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('x ** y');
+    modIKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('x  y');
+
+    view!.dispatch({
+      changes: {from: 0, to: view!.state.doc.length, insert: '**bold**'},
+      selection: EditorSelection.cursor(1),
+    });
+    modIKeydown(view!);
+    expect(view!.state.doc.toString()).toBe('**bold**');
+  });
+
   it('Mod-b toggles strong ** around selection', () => {
     const parent = document.createElement('div');
     document.body.append(parent);

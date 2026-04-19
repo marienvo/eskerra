@@ -1,6 +1,7 @@
 import {markdownLanguage} from '@codemirror/lang-markdown';
 import {syntaxTree} from '@codemirror/language';
 import {
+  CharCategory,
   EditorSelection,
   EditorState,
   type ChangeSet,
@@ -869,9 +870,165 @@ function mapAnchoredSelection(
   selFrom: number,
   selTo: number,
 ): SelectionRange {
-  const a = cs.mapPos(anchorFrom, 1) + (selFrom - anchorFrom);
-  const b = cs.mapPos(anchorFrom, 1) + (selTo - anchorFrom);
+  // Bias -1: for a pure insertion at `anchorFrom`, `mapPos(anchorFrom, 1)` jumps to the end of the
+  // inserted text; we anchor at the start of the insertion so caret offsets (e.g. middle of `****`)
+  // map correctly.
+  const mappedAnchor = cs.mapPos(anchorFrom, -1);
+  const a = mappedAnchor + (selFrom - anchorFrom);
+  const b = mappedAnchor + (selTo - anchorFrom);
   return EditorSelection.range(a, b);
+}
+
+/** True when the character before `pos` and after `pos` are both whitespace or line boundaries. */
+function caretBetweenWhitespaceBoundaries(doc: EditorState['doc'], pos: number): boolean {
+  const leftOk = pos === 0 || /\s/.test(doc.sliceString(pos - 1, pos));
+  const rightOk = pos === doc.length || /\s/.test(doc.sliceString(pos, pos + 1));
+  return leftOk && rightOk;
+}
+
+/**
+ * `**|**` with the caret between the two `**` pairs (empty strong).
+ */
+function tryUnwrapBoldEmptyMarkers(state: EditorState, head: number): SurroundChange | null {
+  const {doc} = state;
+  if (head < 2 || head + 2 > doc.length) {
+    return null;
+  }
+  if (doc.sliceString(head - 2, head) !== '**' || doc.sliceString(head, head + 2) !== '**') {
+    return null;
+  }
+  const delFrom = head - 2;
+  const delTo = head + 2;
+  return {
+    from: delFrom,
+    to: delTo,
+    insert: '',
+    selFrom: delFrom,
+    selTo: delFrom,
+  };
+}
+
+/**
+ * Empty italic from Mod-i: `*` + `*` with nothing between. Unwrap only when this is not the opening
+ * `**` of `**word**` (word may follow the second `*`).
+ */
+function tryUnwrapItalicEmptyMarkers(state: EditorState, head: number): SurroundChange | null {
+  const {doc} = state;
+  if (head < 1 || head >= doc.length) {
+    return null;
+  }
+  if (doc.sliceString(head - 1, head + 1) !== '**') {
+    return null;
+  }
+  if (head >= 2 && doc.sliceString(head - 2, head - 1) === '*') {
+    return null;
+  }
+  if (head + 1 < doc.length && doc.sliceString(head + 1, head + 2) === '*') {
+    return null;
+  }
+  if (head + 1 < doc.length) {
+    const ch = doc.sliceString(head + 1, head + 2);
+    if (state.charCategorizer(head + 1)(ch) === CharCategory.Word) {
+      return null;
+    }
+  }
+  const delFrom = head - 1;
+  const delTo = head + 1;
+  return {
+    from: delFrom,
+    to: delTo,
+    insert: '',
+    selFrom: delFrom,
+    selTo: delFrom,
+  };
+}
+
+function computeEmptyCaretSymmetricSurroundChange(
+  state: EditorState,
+  head: number,
+  cfg: SymmetricSurroundConfig,
+): SurroundChange | null {
+  if (!markdownLanguage.isActiveAt(state, head, 1)) {
+    return null;
+  }
+  if (selectionTouchesCodeBlock(state, head, head)) {
+    return null;
+  }
+
+  if (cfg.mode === 'pairedOnly' && cfg.double === '**') {
+    const u = tryUnwrapBoldEmptyMarkers(state, head);
+    if (u) {
+      return u;
+    }
+  }
+
+  if (
+    cfg.mode === 'singleDouble'
+    && cfg.single === '*'
+    && cfg.double === '**'
+    && cfg.outerSingleUnwrapsInsteadOfUpgrade
+  ) {
+    const u = tryUnwrapItalicEmptyMarkers(state, head);
+    if (u) {
+      return u;
+    }
+  }
+
+  const w = state.wordAt(head);
+  if (w && w.from < w.to) {
+    return computeSymmetricSurroundChange(state, w, cfg);
+  }
+
+  if (!caretBetweenWhitespaceBoundaries(state.doc, head)) {
+    return null;
+  }
+
+  if (cfg.mode === 'pairedOnly' && cfg.double === '**') {
+    return {
+      from: head,
+      to: head,
+      insert: '****',
+      selFrom: head + 2,
+      selTo: head + 2,
+    };
+  }
+
+  if (
+    cfg.mode === 'singleDouble'
+    && cfg.outerSingleUnwrapsInsteadOfUpgrade
+    && cfg.single === '*'
+    && cfg.double === '**'
+  ) {
+    return {
+      from: head,
+      to: head,
+      insert: '**',
+      selFrom: head + 1,
+      selTo: head + 1,
+    };
+  }
+
+  return null;
+}
+
+function tryMarkdownSymmetricSurroundEmptyCaret(
+  view: EditorView,
+  cfg: SymmetricSurroundConfig,
+): boolean {
+  const state = view.state;
+  const ranges = state.selection.ranges;
+  if (!ranges.length || ranges.some(r => !r.empty)) {
+    return false;
+  }
+  const planned: SurroundChange[] = [];
+  for (const r of ranges) {
+    const c = computeEmptyCaretSymmetricSurroundChange(state, r.head, cfg);
+    if (!c) {
+      return false;
+    }
+    planned.push(c);
+  }
+  return dispatchSurround(view, planned);
 }
 
 function dispatchSurround(
@@ -911,7 +1068,10 @@ function trySymmetricSurround(view: EditorView, cfg: SymmetricSurroundConfig): b
 
 /** Toggle `**…**` around non-empty markdown-plain selections (vault note + table cells). */
 export function runMarkdownBoldSurround(view: EditorView): boolean {
-  return trySymmetricSurround(view, SURROUND_BOLD_STAR);
+  if (trySymmetricSurround(view, SURROUND_BOLD_STAR)) {
+    return true;
+  }
+  return tryMarkdownSymmetricSurroundEmptyCaret(view, SURROUND_BOLD_STAR);
 }
 
 /**
@@ -919,7 +1079,10 @@ export function runMarkdownBoldSurround(view: EditorView): boolean {
  * (differs from typing `*`).
  */
 export function runMarkdownItalicSurround(view: EditorView): boolean {
-  return trySymmetricSurround(view, SURROUND_STAR_ITALIC_SHORTCUT);
+  if (trySymmetricSurround(view, SURROUND_STAR_ITALIC_SHORTCUT)) {
+    return true;
+  }
+  return tryMarkdownSymmetricSurroundEmptyCaret(view, SURROUND_STAR_ITALIC_SHORTCUT);
 }
 
 /** Toggle `~~…~~` around selections. */
