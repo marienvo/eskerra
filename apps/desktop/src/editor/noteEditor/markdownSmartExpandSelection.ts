@@ -986,6 +986,26 @@ function rangesEqualDocBounds(main: SelectionRange, from: number, to: number): b
   return ma === from && mb === to;
 }
 
+function candidateHeadingText(state: EditorState, main: SelectionRange): SelectionRange | null {
+  ensureSyntaxTree(state, state.doc.length);
+  let n: SyntaxNode | null = syntaxTree(state).resolveInner(main.head, -1);
+  while (n && !/^ATXHeading\d$/.test(n.type.name)) {
+    n = n.parent;
+  }
+  if (!n) return null;
+  // Find the HeaderMark child (the `##` + space) and use everything after it.
+  let mark: SyntaxNode | null = n.firstChild;
+  while (mark && mark.type.name !== 'HeaderMark') {
+    mark = mark.nextSibling;
+  }
+  let textFrom = mark ? mark.to : n.from;
+  // Skip the single space between `##` and the heading text.
+  const slice = state.sliceDoc(textFrom, textFrom + 1);
+  if (slice === ' ') textFrom += 1;
+  const r = asRange(textFrom, n.to);
+  return strictlyWider(r, main) ? r : null;
+}
+
 function candidateLines(state: EditorState, main: SelectionRange): SelectionRange | null {
   const a = Math.min(main.anchor, main.head);
   const b = Math.max(main.anchor, main.head);
@@ -1252,6 +1272,7 @@ function computeNextExpandRange(
     candidateSentenceBody,
     candidateSentenceFull,
     candidateSyntaxInner,
+    candidateHeadingText,
     candidateLines,
     candidateListItem,
     candidateListSiblingGroup,
