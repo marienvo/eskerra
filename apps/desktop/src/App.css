@@ -5033,6 +5033,48 @@ button.primary.destructive {
   padding-right: .125rem;
 }
 
+/* Marker-focus line: show source list character (`-`, `*`, `+`); hide decorative bullet. */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-eskerra-marker-focus-line
+  .cm-md-list-mark {
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-eskerra-marker-focus-line
+  .cm-md-list-mark::before {
+  content: none;
+}
+
+/*
+ * Several `ListMark` nodes on one line (e.g. `- - -`): each mark uses the same gutter pull, so
+ * decorative `::before` bullets stack; show literal markers with normal inline flow instead.
+ */
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-md-list-line--multi-bullet-mark
+  .cm-md-list-mark {
+  display: inline;
+  box-sizing: content-box;
+  width: auto;
+  min-width: 0;
+  margin-inline-start: 0;
+  margin-inline-end: 0;
+  padding-right: 0;
+  text-align: start;
+  position: static;
+  color: color-mix(in srgb, var(--nb-editor-text) 22%, var(--nb-editor-hash-tone) 78%);
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line.cm-md-list-line--bullet.cm-md-list-line--multi-bullet-mark
+  .cm-md-list-mark::before {
+  content: none;
+}
+
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line.cm-md-list-line--ordered

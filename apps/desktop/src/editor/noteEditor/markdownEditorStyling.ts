@@ -472,7 +472,29 @@ export function markdownEditorBlockLineClasses(doc: Text, tree: Tree): Map<numbe
     },
   });
 
+  addMultiListMarkBulletLineClass(doc, tree, lineClasses);
+
   return lineClasses;
+}
+
+/** More than one `ListMark` on a line (e.g. `- - -`): decorative bullets overlap; show source glyphs. */
+function addMultiListMarkBulletLineClass(doc: Text, tree: Tree, lineClasses: Map<number, Set<string>>) {
+  const listMarkCountByLineFrom = new Map<number, number>();
+  tree.iterate({
+    enter(node) {
+      if (node.name !== 'ListMark') return;
+      const line = doc.lineAt(node.from);
+      listMarkCountByLineFrom.set(
+        line.from,
+        (listMarkCountByLineFrom.get(line.from) ?? 0) + 1,
+      );
+    },
+  });
+  for (const [lineFrom, count] of listMarkCountByLineFrom) {
+    if (count > 1) {
+      addLineClass(lineClasses, lineFrom, 'cm-md-list-line--multi-bullet-mark');
+    }
+  }
 }
 
 function headingLevelFromNode(name: string): string | null {
