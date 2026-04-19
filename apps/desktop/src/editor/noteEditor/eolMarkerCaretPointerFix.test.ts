@@ -29,11 +29,6 @@ function lineOf(state: EditorState, n = 1) {
   return {from: ln.from, to: ln.to, text: ln.text};
 }
 
-function lineOfDoc(doc: Text, n = 1) {
-  const ln = doc.line(n);
-  return {from: ln.from, to: ln.to, text: ln.text};
-}
-
 describe('planCaretPastEOLMarkers — wiki links', () => {
   it('returns line.to when head is on first closing bracket', () => {
     const state = makeState('prefix [[Husqvarna]]');
