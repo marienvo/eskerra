@@ -1,3 +1,4 @@
+mod crash_log;
 mod link_rich_metadata;
 mod media;
 mod r2_http;
@@ -96,6 +97,7 @@ pub fn run() {
             vault_frontmatter_index::vault_frontmatter_index_touch_paths,
             vault_watch::vault_start_watch,
             window_state_disk::eskerra_peek_window_state_file,
+            crash_log::eskerra_append_crash_log,
             media::media_set_metadata,
             media::media_set_playback,
             media::media_clear_session,

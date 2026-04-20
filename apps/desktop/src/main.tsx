@@ -11,22 +11,21 @@ import '@eskerra/tokens/desktop-root.css';
 
 import {AppRoot} from './Root.tsx';
 import {ErrorBoundary} from './ErrorBoundary';
-import {captureException} from './observability/sentryClient';
+import {registerGlobalErrorHandlers} from './observability/registerGlobalErrorHandlers';
+import {reportCrash} from './observability/reportCrash';
 
 import './index.css';
 
-function captureRootError(error: unknown): void {
-  const err = error instanceof Error ? error : new Error(String(error));
-  captureException(err);
-}
+registerGlobalErrorHandlers();
+
+type ReactErrorInfo = {componentStack?: string | null};
 
 createRoot(document.getElementById('root')!, {
-  // React 19: these fire for errors that bypass componentDidCatch (e.g. event handler throws).
-  onCaughtError(error) {
-    captureRootError(error);
+  onCaughtError(error, info: ReactErrorInfo) {
+    reportCrash('react-caught', error, {componentStack: info?.componentStack ?? null});
   },
-  onUncaughtError(error) {
-    captureRootError(error);
+  onUncaughtError(error, info: ReactErrorInfo) {
+    reportCrash('react-uncaught', error, {componentStack: info?.componentStack ?? null});
   },
 }).render(
   <StrictMode>
