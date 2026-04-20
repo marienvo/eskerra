@@ -54,8 +54,26 @@ export function useVaultFrontmatterIndex(options: {
   }, [options.vaultRoot]);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!isTauri() || !options.vaultRoot) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale snapshot when vault is deselected
+      setSnapshot(null);
+      return;
+    }
+    let cancelled = false;
+    vaultFrontmatterIndexSnapshot()
+      .then(s => {
+        if (!cancelled) {
+          setSnapshot(s);
+          setRefreshNonce(n => n + 1);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [options.vaultRoot]);
 
   useEffect(() => {
     if (!isTauri() || !options.vaultRoot) {

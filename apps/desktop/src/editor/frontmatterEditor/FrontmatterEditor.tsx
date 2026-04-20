@@ -164,6 +164,7 @@ export function FrontmatterEditor({
     setExpanded(false);
   }
 
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional rehydration: resets local edit state when the external source of truth changes */
   /** Rehydrate when the parent source of truth changes (note switch / disk reload), not on echo. */
   useEffect(() => {
     if (rehydrateKey !== lastRehydrateKeyRef.current) {
@@ -184,6 +185,7 @@ export function FrontmatterEditor({
     setAddKeyDraft('');
     setAddKeyType('auto');
   }, [yamlInner, rehydrateKey]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     return () => {
