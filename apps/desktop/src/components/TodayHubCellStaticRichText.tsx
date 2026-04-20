@@ -11,6 +11,8 @@ import {
   buildTodayHubCellStaticViewModel,
   clipSegmentsToRange,
 } from '../lib/todayHubCellStaticView';
+import {parseLoneLinkLine} from '../lib/parseLoneLinkLine';
+import {LinkRichPreviewCard} from './LinkRichPreviewCard';
 import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
@@ -161,6 +163,28 @@ export function TodayHubCellStaticRichText({
         }}
       >
         {lines.map(line => {
+          const loneLinkInfo = parseLoneLinkLine(line.text);
+          if (loneLinkInfo) {
+            const prefix = line.text.slice(0, loneLinkInfo.urlOffset);
+            const hasPrefix = /\S/.test(prefix);
+            return (
+              <div
+                key={line.from}
+                className={line.lineClassName}
+                data-doc-line-from={line.from}
+              >
+                {hasPrefix && <span>{prefix}</span>}
+                <LinkRichPreviewCard
+                  key={loneLinkInfo.url}
+                  url={loneLinkInfo.url}
+                  at={line.from + loneLinkInfo.urlOffset}
+                  inline={hasPrefix}
+                  onOpenLink={onMarkdownExternalLinkOpen}
+                />
+              </div>
+            );
+          }
+
           const rangeEnd = line.from + line.text.length;
           const lineSegments = clipSegmentsToRange(segments, line.from, rangeEnd);
           return (
