@@ -262,15 +262,18 @@ export function linkRichPreviewExtension(refs: LinkRichPreviewRefs): Extension {
     class {
       unsubscribe: () => void;
       pending = false;
+      destroyed = false;
       constructor(view: EditorView) {
         this.unsubscribe = subscribeLinkRichPreviewUpdates(() => {
-          if (this.pending) {
+          if (this.pending || this.destroyed) {
             return;
           }
           this.pending = true;
           queueMicrotask(() => {
             this.pending = false;
-            view.dispatch({effects: linkRichCacheBumpEffect.of(null)});
+            if (!this.destroyed) {
+              view.dispatch({effects: linkRichCacheBumpEffect.of(null)});
+            }
           });
         });
       }
@@ -278,6 +281,7 @@ export function linkRichPreviewExtension(refs: LinkRichPreviewRefs): Extension {
         /* no-op; rebuild is driven by StateField */
       }
       destroy() {
+        this.destroyed = true;
         this.unsubscribe();
       }
     },
