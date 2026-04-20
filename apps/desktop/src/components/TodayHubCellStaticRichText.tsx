@@ -28,6 +28,14 @@ import type {
 
 const HIT_TREE_MS = 200;
 
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 export type TodayHubCellStaticRichTextProps = {
   cellText: string;
   rowUri: string;
@@ -39,6 +47,8 @@ export type TodayHubCellStaticRichTextProps = {
     payload: VaultRelativeMarkdownLinkActivatePayload,
   ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
 /**
@@ -54,6 +64,8 @@ export function TodayHubCellStaticRichText({
   onWikiLinkActivate,
   onMarkdownRelativeLinkActivate,
   onMarkdownExternalLinkOpen,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
 }: TodayHubCellStaticRichTextProps): ReactElement | null {
   const {hitState, lines, segments} = useMemo(
     () =>
@@ -164,7 +176,9 @@ export function TodayHubCellStaticRichText({
       >
         {lines.map(line => {
           const loneLinkInfo = parseLoneLinkLine(line.text);
-          if (loneLinkInfo) {
+          const isBlocked = loneLinkInfo != null && linkSnippetBlockedDomains != null &&
+            linkSnippetBlockedDomains.includes(hostnameOf(loneLinkInfo.url));
+          if (loneLinkInfo && !isBlocked) {
             const prefix = line.text.slice(0, loneLinkInfo.urlOffset);
             const hasPrefix = /\S/.test(prefix);
             return (
@@ -180,6 +194,7 @@ export function TodayHubCellStaticRichText({
                   at={line.from + loneLinkInfo.urlOffset}
                   inline={hasPrefix}
                   onOpenLink={onMarkdownExternalLinkOpen}
+                  onMuteDomain={onMuteLinkSnippetDomain}
                 />
               </div>
             );

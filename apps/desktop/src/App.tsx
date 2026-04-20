@@ -74,6 +74,7 @@ import {
 } from './lib/doubleShiftKeySequence';
 import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
+import {writeVaultSettings} from './lib/vaultBootstrap';
 
 import './App.css';
 
@@ -212,6 +213,19 @@ export default function App() {
       selectNoteInNewActiveTab(uri, {insertAfterActive: true});
     },
     [selectNoteInNewActiveTab],
+  );
+
+  const handleMuteLinkSnippetDomain = useCallback(
+    async (domain: string) => {
+      if (!vaultRoot || !vaultSettings) return;
+      const current = new Set(vaultSettings.linkSnippetBlockedDomains ?? []);
+      if (current.has(domain)) return;
+      current.add(domain);
+      const next = {...vaultSettings, linkSnippetBlockedDomains: [...current]};
+      setVaultSettings(next);
+      await writeVaultSettings(vaultRoot, fs, next);
+    },
+    [vaultRoot, vaultSettings, fs, setVaultSettings],
   );
 
   const appRootClassName = useMemo(() => {
@@ -1188,6 +1202,8 @@ export default function App() {
                       persistTodayHubRow={persistTodayHubRow}
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
+                      linkSnippetBlockedDomains={vaultSettings?.linkSnippetBlockedDomains}
+                      onMuteLinkSnippetDomain={handleMuteLinkSnippetDomain}
                     />
                   )}
                 </main>

@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState} from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 
 import {
   getCachedLinkRichEntry,
@@ -21,13 +22,14 @@ type Props = {
   at: number;
   inline?: boolean;
   onOpenLink: (payload: {href: string; at: number}) => void;
+  onMuteDomain?: (domain: string) => void;
 };
 
 /**
  * Rich-link preview card for read-mode surfaces. Mirrors the CodeMirror `LinkRichPreviewWidget`
  * visually; uses the same IndexedDB cache and subscriber mechanism.
  */
-export function LinkRichPreviewCard({url, at, inline = false, onOpenLink}: Props): React.ReactElement {
+export function LinkRichPreviewCard({url, at, inline = false, onOpenLink, onMuteDomain}: Props): React.ReactElement {
   const [metadata, setMetadata] = useState<LinkRichMetadata | null>(() => {
     const entry = getCachedLinkRichEntry(url);
     return entry?.status === 'ok' ? entry.metadata : null;
@@ -68,7 +70,7 @@ export function LinkRichPreviewCard({url, at, inline = false, onOpenLink}: Props
     .filter(Boolean)
     .join(' ');
 
-  return (
+  const card = (
     <a
       className={className}
       href={url}
@@ -109,5 +111,26 @@ export function LinkRichPreviewCard({url, at, inline = false, onOpenLink}: Props
         </div>
       </div>
     </a>
+  );
+
+  if (!onMuteDomain) {
+    return card;
+  }
+
+  const domain = hostnameOf(url);
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>{card}</ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className="note-list-context-menu" collisionPadding={8}>
+          <ContextMenu.Item
+            className="note-list-context-menu__item"
+            onSelect={() => onMuteDomain(domain)}
+          >
+            Hide snippets from {domain}
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }

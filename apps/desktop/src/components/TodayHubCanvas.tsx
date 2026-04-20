@@ -89,6 +89,8 @@ type TodayHubCanvasProps = {
   ) => Promise<void>;
   /** When true for a week row URI, skip cleaning that row (disk conflict). */
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
 function normUri(u: string): string {
@@ -231,6 +233,8 @@ export function TodayHubCanvas({
   prehydrateTodayHubRows,
   persistTodayHubRow,
   todayHubCleanRowBlocked,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
 }: TodayHubCanvasProps) {
   const hubDirectoryUri = useMemo(
     () => normUri(todayNoteUri).replace(/\/[^/]+$/, ''),
@@ -847,6 +851,8 @@ export function TodayHubCanvas({
                             onMarkdownRelativeLinkActivate
                           }
                           onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                          linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                          onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
                         />
                       ) : null}
                     </>
@@ -885,6 +891,8 @@ export function TodayHubCanvas({
                       }
                       placeholder="Write markdown…"
                       busy={false}
+                      linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                      onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
                     />
                   );
 

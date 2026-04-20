@@ -65,7 +65,7 @@ import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
 import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
 import {todayHubSectionMarkerExtension} from './todayHubSectionMarkerCodemirror';
-import {linkRichPreviewExtension} from './linkRichPreviewCodemirror';
+import {linkRichPreviewExtension, linkRichBlockedDomainsBumpEffect, type LinkRichPreviewRefs} from './linkRichPreviewCodemirror';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
@@ -244,6 +244,10 @@ export type NoteMarkdownEditorProps = {
    * Same extensions and update path as the full editor; toggled via a Compartment (no duplicate mode).
    */
   readOnly?: boolean;
+  /** Hostnames for which rich link snippet cards are suppressed. */
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  /** Called when the user chooses to hide snippets from a domain via the context menu. */
+  onMuteLinkSnippetDomain?: (domain: string) => void;
   /**
    * Fires after the editable editor loses focus (skipped when `readOnly`). Deferred one microtask so
    * focus moved into CodeMirror tooltips/panels or the markdown context menu does not count. Today
@@ -309,6 +313,8 @@ const NoteMarkdownEditorImpl = forwardRef<
     onFoldableRangesPresentChange,
     readOnly: readOnlyProp = false,
     onEditableBlur,
+    linkSnippetBlockedDomains,
+    onMuteLinkSnippetDomain,
   } = props;
 
   const readOnly = readOnlyProp;
@@ -398,6 +404,27 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const wikiLinkCompletionCandidatesRef = useRef(wikiLinkCompletionCandidates);
   wikiLinkCompletionCandidatesRef.current = wikiLinkCompletionCandidates;
+
+  const onMuteLinkSnippetDomainRef = useRef(onMuteLinkSnippetDomain);
+  useEffect(() => {
+    onMuteLinkSnippetDomainRef.current = onMuteLinkSnippetDomain;
+  }, [onMuteLinkSnippetDomain]);
+
+  const linkRichPreviewRefsRef = useRef<LinkRichPreviewRefs | null>(null);
+  if (linkRichPreviewRefsRef.current === null) {
+    linkRichPreviewRefsRef.current = {
+      onOpenLink: (href, at) =>
+        onMarkdownExternalLinkOpenRef.current({href, at}),
+      blockedDomains: new Set(),
+    };
+  }
+
+  useEffect(() => {
+    const refs = linkRichPreviewRefsRef.current;
+    if (!refs) return;
+    refs.blockedDomains = new Set(linkSnippetBlockedDomains ?? []);
+    viewRef.current?.dispatch({effects: linkRichBlockedDomainsBumpEffect.of(null)});
+  }, [linkSnippetBlockedDomains]);
 
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
@@ -874,10 +901,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       todayHubSectionMarkerExtension,
-      linkRichPreviewExtension({
-        onOpenLink: (href, at) =>
-          onMarkdownExternalLinkOpenRef.current({href, at}),
-      }),
+      linkRichPreviewExtension(linkRichPreviewRefsRef.current!),
       EditorView.domEventHandlers({
         mousedown(event, view) {
           recordPrimaryPointerDownForLinkClick(view, event);
@@ -1416,6 +1440,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         busy={busy}
         readClipboardText={readMarkdownEditorClipboard}
         onCleanNote={onCleanNote}
+        onMuteDomain={onMuteLinkSnippetDomain ? (domain) => onMuteLinkSnippetDomainRef.current?.(domain) : undefined}
       >
         <div
           ref={hostRef}
