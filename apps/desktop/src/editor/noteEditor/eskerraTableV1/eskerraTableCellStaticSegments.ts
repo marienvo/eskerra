@@ -231,6 +231,39 @@ function collectExternalMdIntervals(state: EditorState): StyledInterval[] {
   return out;
 }
 
+/**
+ * Re-emit `cm-md-equal-highlight` at priority 2 so it merges with link intervals instead of
+ * being dropped by them. Lezer emits it at priority 0; `mergeStyledIntervals` only keeps the
+ * highest-priority classes per position, so without this the highlight background disappears on
+ * any text that is simultaneously inside a link label.
+ */
+function collectEqualHighlightIntervals(
+  tree: ReturnType<typeof syntaxTree>,
+  textLen: number,
+): StyledInterval[] {
+  const out: StyledInterval[] = [];
+  tree.iterate({
+    enter(ref) {
+      if (ref.name !== 'EqualHighlight') {
+        return;
+      }
+      const node = ref.node;
+      let contentFrom = ref.from;
+      let contentTo = ref.to;
+      const first = node.firstChild;
+      if (first?.name === 'EqualHighlightMark') contentFrom = first.to;
+      const last = node.lastChild;
+      if (last?.name === 'EqualHighlightMark') contentTo = last.from;
+      const a = Math.max(0, contentFrom);
+      const b = Math.min(textLen, contentTo);
+      if (a < b) {
+        out.push({from: a, to: b, priority: 2, classes: 'cm-md-equal-highlight'});
+      }
+    },
+  });
+  return out;
+}
+
 function collectBareBrowserStyledIntervals(state: EditorState): StyledInterval[] {
   const g = CM_MD_EXTERNAL_LINK_GLYPH_CLASS;
   const out: StyledInterval[] = [];
@@ -278,6 +311,7 @@ export function buildCellStaticSegments(
   const tree = syntaxTree(state);
   const intervals: StyledInterval[] = [
     ...collectLezerIntervals(textLen, tree),
+    ...collectEqualHighlightIntervals(tree, textLen),
     ...collectWikiIntervals(state.doc, resolve.wikiTargetIsResolved),
     ...collectRelativeMdIntervals(state, resolve.relativeMarkdownLinkHrefIsResolved),
     ...collectExternalMdIntervals(state),
