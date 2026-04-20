@@ -3201,8 +3201,9 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       try {
-        const wikiParent =
-          todayHubWikiNavParentRef.current ?? selectedUriRef.current;
+        const wikiParent = showTodayHubCanvasRef.current
+          ? (todayHubWikiNavParentRef.current ?? selectedUriRef.current)
+          : selectedUriRef.current;
         const todayHubNewNoteParent =
           showTodayHubCanvasRef.current && !composingNewEntryRef.current
             ? getGeneralDirectoryUri(normalizeVaultBaseUri(vaultRoot))
@@ -3296,7 +3297,7 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       const base = normalizeVaultBaseUri(vaultRoot);
-      const relParent = todayHubWikiNavParentRef.current;
+      const relParent = showTodayHubCanvasRef.current ? todayHubWikiNavParentRef.current : null;
       const sourceMarkdownUriOrDir = composingNewEntryRef.current
         ? getInboxDirectoryUri(base)
         : showTodayHubCanvasRef.current && !composingNewEntryRef.current
