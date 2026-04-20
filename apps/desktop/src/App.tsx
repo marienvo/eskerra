@@ -32,6 +32,7 @@ import {
   AppSetupTagline,
   AppStatusBar,
 } from './components/AppStatusBar';
+import {ToastStack} from './components/ToastStack';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
 import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
@@ -958,8 +959,6 @@ export default function App() {
     dismissItem: dismissNotification,
     clearAll: clearAllNotifications,
     highlightId: notificationHighlightId,
-    linkedNotificationId,
-    openPanelAndHighlight,
   } = useSessionNotifications(
     {
       statusBarCenter,
@@ -970,13 +969,6 @@ export default function App() {
     {onOpenPanel: openNotificationsPanel},
   );
 
-  const onReadMoreStatusMessage = useCallback(() => {
-    if (linkedNotificationId) {
-      openPanelAndHighlight(linkedNotificationId);
-    } else {
-      setNotificationsPanelVisible(true);
-    }
-  }, [linkedNotificationId, openPanelAndHighlight]);
 
   const startupOverlay =
     isTauri() && startupSplashPhase !== 'done' ? (
@@ -1257,9 +1249,11 @@ export default function App() {
           ) : null}
 
           <AppStatusBar
-            center={statusBarCenter}
             onOpenSettings={() => setActivePage('settings')}
-            onReadMoreStatusMessage={onReadMoreStatusMessage}
+          />
+          <ToastStack
+            items={notificationItems}
+            onDismiss={dismissNotification}
           />
           <QuickOpenNotePalette
             open={quickOpenOpen}

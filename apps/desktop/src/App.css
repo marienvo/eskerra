@@ -653,72 +653,72 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-tagline);
 }
 
-/* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
-.app-status-bar-message {
-  margin: 0;
-  max-width: 100%;
+/* Toast stack: fixed bottom-right floating notifications (see ToastStack). */
+.toast-stack {
+  position: fixed;
+  bottom: 48px;
+  right: 16px;
+  z-index: 9000;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  line-height: 1.2;
-  min-width: 0;
-  box-sizing: border-box;
-  user-select: none;
-  -webkit-user-select: none;
-  pointer-events: auto;
-  padding: 0.2rem 0.65rem;
-  border-radius: 9999px;
-  border: 1px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  flex-direction: column;
+  gap: 8px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
 }
 
-.app-status-bar-message.app-status-bar-center--error {
+.toast {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.toast--error {
   background: var(--color-shell-status-error-bg);
   border-color: var(--color-shell-status-error-border);
   color: var(--color-shell-status-error);
 }
 
-.app-status-bar-message.app-status-bar-center--info {
+.toast--info {
   background: var(--color-shell-status-info-bg);
   border-color: var(--color-shell-status-info-border);
   color: var(--color-shell-status-info);
 }
 
-.app-status-bar-message__icon {
+.toast__icon {
   flex-shrink: 0;
-  opacity: 0.92;
+  margin-top: 0.1rem;
+  opacity: 0.9;
 }
 
-.app-status-bar-message__text {
+.toast__text {
+  flex: 1 1 auto;
+  margin: 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
-.app-status-bar-read-more {
+.toast__dismiss {
   flex-shrink: 0;
-  border: none;
-  background: none;
+  margin-top: -0.08rem;
   color: inherit;
-  font: inherit;
-  font-weight: 500;
-  text-decoration: underline;
-  cursor: default;
-  padding: 0.06rem 0.12rem;
-  border-radius: 4px;
+  opacity: 0.65;
 }
 
-.app-status-bar-message.app-status-bar-center--error .app-status-bar-read-more:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error) 16%, transparent);
-}
-
-.app-status-bar-message.app-status-bar-center--info .app-status-bar-read-more:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+.toast__dismiss:hover:not(:disabled) {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .app-status-bar-trailing {

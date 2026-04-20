@@ -1,8 +1,5 @@
-import {useLayoutEffect, useRef, useState} from 'react';
-
-import type {AppStatusBarCenter} from '../lib/resolveAppStatusBarCenter';
-
 import {MaterialIcon} from './MaterialIcon';
+
 /** Shared with {@link AppSetupTagline} and main {@link AppStatusBar}. */
 export const APP_SHELL_TAGLINE = 'Think. Compose. Nothing else.';
 
@@ -16,115 +13,16 @@ export function AppSetupTagline() {
 }
 
 type AppStatusBarProps = {
-  center: AppStatusBarCenter;
   onOpenSettings: () => void;
-  /** When the status message overflows, user can open the notifications panel. */
-  onReadMoreStatusMessage?: () => void;
 };
 
-function AppStatusBarMessageCenter({
-  tone,
-  text,
-  onReadMore,
-}: {
-  tone: 'error' | 'info';
-  text: string;
-  onReadMore: () => void;
-}) {
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [readMore, setReadMore] = useState(false);
-
-  useLayoutEffect(() => {
-    const el = textRef.current;
-    if (!el) {
-      return;
-    }
-    const run = () => {
-      if (readMore) {
-        return;
-      }
-      if (el.scrollWidth > el.clientWidth + 1) {
-        setReadMore(true);
-      }
-    };
-    run();
-    const ro = new ResizeObserver(run);
-    ro.observe(el);
-    window.addEventListener('resize', run);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', run);
-    };
-  }, [text, tone, readMore]);
-
-  const toneClass =
-    tone === 'error' ? 'app-status-bar-center--error' : 'app-status-bar-center--info';
-
-  return (
-    <div
-      className={`app-status-bar-message ${toneClass}`}
-      {...(tone === 'error' ? {role: 'alert' as const} : {'aria-live': 'polite' as const})}
-    >
-      <MaterialIcon
-        name={tone === 'error' ? 'error_outline' : 'info'}
-        size={12}
-        className="app-status-bar-message__icon"
-        aria-hidden
-      />
-      <span ref={textRef} className="app-status-bar-message__text">
-        {text}
-      </span>
-      {readMore ? (
-        <button
-          type="button"
-          className="app-status-bar-read-more app-tooltip-trigger"
-          aria-label="Read full message in Notifications"
-          data-tooltip="Open in Notifications"
-          data-tooltip-placement="inline-end"
-          onClick={onReadMore}
-        >
-          Read more
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function AppStatusBarCenterRegion({
-  center,
-  onReadMoreStatusMessage,
-}: {
-  center: AppStatusBarCenter;
-  onReadMoreStatusMessage?: () => void;
-}) {
-  if (center.kind === 'tagline') {
-    return (
-      <p className="app-status-bar-center-line app-status-bar-center--tagline">{center.text}</p>
-    );
-  }
-
-  return (
-    <AppStatusBarMessageCenter
-      key={`${center.tone}:${center.text}`}
-      tone={center.tone}
-      text={center.text}
-      onReadMore={onReadMoreStatusMessage ?? (() => undefined)}
-    />
-  );
-}
-
-export function AppStatusBar({
-  center,
-  onOpenSettings,
-  onReadMoreStatusMessage,
-}: AppStatusBarProps) {
+export function AppStatusBar({onOpenSettings}: AppStatusBarProps) {
   return (
     <footer className="app-status-bar">
       <div className="app-status-bar-center-stack">
-        <AppStatusBarCenterRegion
-          center={center}
-          onReadMoreStatusMessage={onReadMoreStatusMessage}
-        />
+        <p className="app-status-bar-center-line app-status-bar-center--tagline">
+          {APP_SHELL_TAGLINE}
+        </p>
       </div>
       <div className="app-status-bar-trailing">
         <button
