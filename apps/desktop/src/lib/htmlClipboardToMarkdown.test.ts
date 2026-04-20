@@ -73,6 +73,18 @@ describe('clipboardHtmlToMarkdown', () => {
     const md = clipboardHtmlToMarkdown('<p><del>gone</del></p>');
     expect(md).toContain('~~gone~~');
   });
+
+  it('preserves wiki links unescaped', () => {
+    const md = clipboardHtmlToMarkdown('<p>See [[My Note]] for details.</p>');
+    expect(md).toContain('[[My Note]]');
+    expect(md).not.toContain('\\[');
+  });
+
+  it('preserves wiki links in list items', () => {
+    const md = clipboardHtmlToMarkdown('<ul><li>[[Note A]] and [[Note B]]</li></ul>');
+    expect(md).toContain('[[Note A]]');
+    expect(md).toContain('[[Note B]]');
+  });
 });
 
 describe('tryClipboardHtmlToMarkdownInsert', () => {

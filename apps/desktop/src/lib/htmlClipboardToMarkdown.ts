@@ -137,7 +137,12 @@ function looselySameMarkdownAsPlain(md: string, plain: string): boolean {
 
 export function clipboardHtmlToMarkdown(html: string): string {
   const cleaned = preprocessClipboardHtmlFragment(html);
-  return getTurndown().turndown(cleaned);
+  // Turndown escapes [ and ] individually, turning [[wiki link]] into \[\[wiki link\]\].
+  // Undo that for double-bracket sequences so wiki links survive paste.
+  return getTurndown()
+    .turndown(cleaned)
+    .replace(/\\\[\\\[/g, '[[')
+    .replace(/\\\]\\\]/g, ']]');
 }
 
 /**

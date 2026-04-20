@@ -20,7 +20,7 @@ export function ToastStack({items, onDismiss}: ToastStackProps) {
         >
           <MaterialIcon
             name={item.tone === 'error' ? 'error_outline' : 'info'}
-            size={14}
+            size={12}
             className="toast__icon"
             aria-hidden
           />
