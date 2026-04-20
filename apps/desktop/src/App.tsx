@@ -120,6 +120,8 @@ export default function App() {
   const {
     vaultRoot,
     vaultSettings,
+    inboxYamlFrontmatterInner,
+    applyFrontmatterInnerChange,
     setVaultSettings,
     settingsName,
     notes,
@@ -1049,6 +1051,10 @@ export default function App() {
                     <VaultTab
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
+                      vaultSettings={vaultSettings}
+                      inboxYamlFrontmatterInner={inboxYamlFrontmatterInner}
+                      applyFrontmatterInnerChange={applyFrontmatterInnerChange}
+                      diskConflict={diskConflict}
                       fs={fs}
                       fsRefreshNonce={fsRefreshNonce}
                       inboxEditorRef={inboxEditorRef}

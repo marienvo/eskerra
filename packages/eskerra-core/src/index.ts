@@ -73,7 +73,38 @@ export {
   resolveCallout,
 } from './markdown/callouts';
 export {mergeYamlFrontmatterBody} from './markdown/mergeYamlFrontmatterBody';
+export {
+  fencedFrontmatterBlockToInner,
+  innerToFencedFrontmatterBlock,
+} from './markdown/fencedFrontmatterBlock';
 export {splitYamlFrontmatter} from './markdown/splitYamlFrontmatter';
+export {scanDuplicateTopLevelKeys} from './markdown/frontmatterDuplicateKeys';
+export {
+  FrontmatterEditCollisionError,
+  FrontmatterPathError,
+} from './markdown/frontmatterEditErrors';
+export {
+  addFrontmatterKey,
+  deleteFrontmatterKey,
+  frontmatterValueToPlain,
+  parseFrontmatterInner,
+  type ParseFrontmatterInnerResult,
+  renameFrontmatterKey,
+  reorderFrontmatterKeys,
+  serializeFrontmatterInner,
+  setFrontmatterValue,
+} from './markdown/frontmatterEdit';
+export {
+  detectValueShapeType,
+  inferPropertyTypeFromVaultSamples,
+} from './markdown/inferFrontmatterPropertyType';
+export {resolveEffectiveFrontmatterPropertyType} from './markdown/resolveEffectiveFrontmatterPropertyType';
+export type {
+  FrontmatterPath,
+  FrontmatterPropertyType,
+  FrontmatterScalar,
+  FrontmatterValue,
+} from './markdown/frontmatterTypes';
 export type {
   EskerraTableAlignment,
   EskerraTableModelV1,

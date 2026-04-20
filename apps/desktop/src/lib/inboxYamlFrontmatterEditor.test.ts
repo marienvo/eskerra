@@ -4,20 +4,14 @@ import {inboxEditorSliceToFullMarkdown} from './inboxYamlFrontmatterEditor';
 
 describe('inboxEditorSliceToFullMarkdown', () => {
   it('passes through when composing', () => {
-    expect(
-      inboxEditorSliceToFullMarkdown('# Hi', null, true, '---\nx\n---', ''),
-    ).toBe('# Hi');
+    expect(inboxEditorSliceToFullMarkdown('# Hi', null, true, 'x', '')).toBe(
+      '# Hi',
+    );
   });
 
-  it('merges when block is set and uri is a normal note path', () => {
+  it('merges when inner YAML is set and uri is a normal note path', () => {
     expect(
-      inboxEditorSliceToFullMarkdown(
-        '\nBody',
-        '/vault/Inbox/N.md',
-        false,
-        '---\nk: v\n---',
-        '',
-      ),
+      inboxEditorSliceToFullMarkdown('\nBody', '/vault/Inbox/N.md', false, 'k: v', ''),
     ).toBe('---\nk: v\n---\n\nBody');
   });
 
@@ -27,7 +21,7 @@ describe('inboxEditorSliceToFullMarkdown', () => {
         '# Doc',
         '/vault/Work/Today.md',
         false,
-        '---\nperpetualType: weekly\n---',
+        'perpetualType: weekly',
         '',
       ),
     ).toBe('---\nperpetualType: weekly\n---\n# Doc');

@@ -1,6 +1,12 @@
-# Eskerra
+<p align="center">
+  <img src="./eskerra-logo-crop.png" alt="Eskerra logo" width="120"><br>
+</p>
 
-Eskerra is a **notes + podcast** companion with two apps in one repo:
+<h1 align="center">Eskerra</h1>
+
+<p align="center">
+  Eskerra is a <strong>notes + podcast</strong> companion with two apps in one repo:
+</p>
 
 | App | Location | Stack |
 | --- | --- | --- |
@@ -203,7 +209,8 @@ This is a short summary, not legal advice. For exact terms, read [`LICENSE`](LIC
 I want a Markdown app that is fast, predictable, and works out of the box. 
 No plugins required for the basics, no waiting, no hidden complexity.
 
-This project is built around that idea.
+This project is built around that idea. 
+
 
 | Tool | Core Idea | Strength | Trade-off |
 |------|----------|----------|-----------|
@@ -213,3 +220,10 @@ This project is built around that idea.
 | **Logseq**  | Outliner / graph | Powerful linking & structure | Performance, learning curve |
 | **iA Writer** ️ | Writing tool | Clean, focused experience | Limited features |
 | **Zettlr**  | Academic editor | Strong for long-form & research | Heavy, slower UI |
+
+---
+
+<p align="center">
+   Apps fade. Markdown remains.<br> 
+   Like stones in a riverbed.
+</p>

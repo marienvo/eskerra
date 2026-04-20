@@ -28,6 +28,7 @@ import {
   getInboxDirectoryUri,
   getNoteTitle,
   normalizeVaultBaseUri,
+  type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
 } from '@eskerra/core';
@@ -38,6 +39,13 @@ import {
   NOTIFICATIONS_PANEL,
 } from '../lib/layoutStore';
 import type {SessionNotification} from '../lib/sessionNotifications';
+
+import {
+  FrontmatterEditor,
+  type VaultFrontmatterIndexApi,
+} from '../editor/frontmatterEditor/FrontmatterEditor';
+import {normalizeEditorDocUri} from '../lib/editorDocumentHistory';
+import {useVaultFrontmatterIndex} from '../hooks/useVaultFrontmatterIndex';
 
 import {
   NoteMarkdownEditor,
@@ -89,8 +97,15 @@ type WikiLinkAmbiguityRenamePrompt = {
   skippedAmbiguousLinkCount: number;
 };
 
+type DiskConflictPayload = {uri: string};
+
 type VaultTabProps = {
   vaultRoot: string;
+  vaultSettings: EskerraSettings | null;
+  inboxYamlFrontmatterInner: string | null;
+  applyFrontmatterInnerChange: (nextInner: string | null) => void;
+  /** Blocks structured frontmatter edits while a hard conflict is open on the selected note. */
+  diskConflict: DiskConflictPayload | null;
   fs: VaultFilesystem;
   fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
@@ -214,6 +229,11 @@ type EditorPaneBodyProps = {
   inboxContentByUri: Record<string, string>;
   composingNewEntry: boolean;
   selectedUri: string | null;
+  inboxYamlFrontmatterInner: string | null;
+  applyFrontmatterInnerChange: (nextInner: string | null) => void;
+  vaultFrontmatterIndex: VaultFrontmatterIndexApi;
+  vaultSettings: EskerraSettings | null;
+  diskConflict: DiskConflictPayload | null;
   editorBody: string;
   inboxEditorResetNonce: number;
   onEditorChange: VaultTabProps['onEditorChange'];
@@ -337,6 +357,11 @@ function EditorPaneBody({
   prehydrateTodayHubRows,
   persistTodayHubRow,
   todayHubCleanRowBlocked,
+  inboxYamlFrontmatterInner,
+  applyFrontmatterInnerChange,
+  vaultFrontmatterIndex,
+  vaultSettings,
+  diskConflict,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -395,6 +420,15 @@ function EditorPaneBody({
     todayHubSettings != null &&
     !composingNewEntry;
 
+  const frontmatterReadOnly =
+    busy ||
+    Boolean(
+      diskConflict &&
+        selectedUri &&
+        normalizeEditorDocUri(diskConflict.uri) ===
+          normalizeEditorDocUri(selectedUri),
+    );
+
   return (
     <div className="editor note-markdown-editor-wrap">
         <div
@@ -406,6 +440,19 @@ function EditorPaneBody({
           }
         >
           <div className="note-markdown-editor-page">
+            {selectedUri && !composingNewEntry ? (
+              <div className="note-markdown-editor-frontmatter-host">
+                <FrontmatterEditor
+                  yamlInner={inboxYamlFrontmatterInner}
+                  onChange={applyFrontmatterInnerChange}
+                  index={vaultFrontmatterIndex}
+                  propertyOverrides={vaultSettings?.frontmatterProperties}
+                  readOnly={frontmatterReadOnly}
+                  rehydrateKey={`${selectedUri}:${inboxEditorResetNonce}`}
+                />
+              </div>
+            ) : null}
+            <div className="note-markdown-editor-main-row">
             <div className="note-markdown-editor-fold-rail">
               {editorHasFoldedRanges || editorHasFoldableRanges ? (
                 <div className="note-markdown-editor-fold-bulk-anchor">
@@ -486,6 +533,7 @@ function EditorPaneBody({
                 </div>
               ) : null}
             </div>
+            </div>
           </div>
           {showTodayHubCanvas &&
           selectedUri &&
@@ -495,6 +543,7 @@ function EditorPaneBody({
               ref={todayHubSidecarRef}
               className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
             >
+              <div className="note-markdown-editor-main-row">
               <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
               <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
                 <TodayHubCanvas
@@ -517,6 +566,7 @@ function EditorPaneBody({
                   todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                 />
               </div>
+              </div>
             </div>
           ) : null}
         </div>
@@ -526,6 +576,10 @@ function EditorPaneBody({
 
 export function VaultTab({
   vaultRoot,
+  vaultSettings,
+  inboxYamlFrontmatterInner,
+  applyFrontmatterInnerChange,
+  diskConflict,
   fs,
   fsRefreshNonce,
   inboxEditorRef,
@@ -673,6 +727,10 @@ export function VaultTab({
     setRevealTreeNonce(n => n + 1);
   }, [selectedUri, inboxDirectoryUriForTree, onOpenInboxPane]);
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
+  const vaultFrontmatterIndex = useVaultFrontmatterIndex({
+    vaultRoot,
+    overrides: vaultSettings?.frontmatterProperties,
+  });
   const [confirmDeleteUri, setConfirmDeleteUri] = useState<string | null>(null);
   const [confirmDeleteFolderUri, setConfirmDeleteFolderUri] = useState<string | null>(
     null,
@@ -1405,6 +1463,11 @@ export function VaultTab({
                       inboxContentByUri={inboxContentByUri}
                       composingNewEntry={composingNewEntry}
                       selectedUri={selectedUri}
+                      inboxYamlFrontmatterInner={inboxYamlFrontmatterInner}
+                      applyFrontmatterInnerChange={applyFrontmatterInnerChange}
+                      vaultFrontmatterIndex={vaultFrontmatterIndex}
+                      vaultSettings={vaultSettings}
+                      diskConflict={diskConflict}
                       editorBody={editorBody}
                       inboxEditorResetNonce={inboxEditorResetNonce}
                       onEditorChange={onEditorChange}

@@ -14,9 +14,10 @@ import {
 
 import {MaterialIcon} from './MaterialIcon';
 import {SettingsContent} from './SettingsContent';
+import {PropertiesTab} from './settings/PropertiesTab';
 import {ThemesTab} from './settings/ThemesTab';
 
-export type SettingsTabId = 'sync' | 'themes';
+export type SettingsTabId = 'sync' | 'themes' | 'properties';
 
 type SettingsPageProps = {
   onClose: () => void;
@@ -123,6 +124,12 @@ export function SettingsPage({
             onClick={() => setTab('themes')}>
             Themes
           </button>
+          <button
+            type="button"
+            className={tab === 'properties' ? 'is-active' : undefined}
+            onClick={() => setTab('properties')}>
+            Properties
+          </button>
         </nav>
 
         <div className="settings-page-panel">
@@ -141,8 +148,15 @@ export function SettingsPage({
               onRefreshVault={() => void refreshFromDisk()}
               busy={busy}
             />
-          ) : (
+          ) : tab === 'themes' ? (
             <ThemesTab vaultRoot={vaultRoot} fs={fs} />
+          ) : (
+            <PropertiesTab
+              vaultRoot={vaultRoot}
+              fs={fs}
+              vaultSettings={vaultSettings}
+              setVaultSettings={setVaultSettings}
+            />
           )}
         </div>
       </div>

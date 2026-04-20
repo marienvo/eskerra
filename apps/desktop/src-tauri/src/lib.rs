@@ -1,3 +1,4 @@
+mod link_rich_metadata;
 mod media;
 mod r2_http;
 mod tiling;
@@ -5,6 +6,7 @@ mod tiling_score;
 #[cfg(target_os = "linux")]
 mod tiling_gdk;
 mod vault;
+mod vault_frontmatter_index;
 mod vault_search;
 mod vault_search_index;
 mod vault_watch;
@@ -12,6 +14,7 @@ mod window_state_disk;
 
 use vault::VaultRootState;
 use vault_search::VaultSearchSessionState;
+use vault_frontmatter_index::VaultFrontmatterIndexState;
 use vault_search_index::VaultSearchIndexState;
 
 #[cfg(all(not(mobile), debug_assertions))]
@@ -41,6 +44,7 @@ pub fn run() {
         .manage(VaultRootState::default())
         .manage(VaultSearchSessionState::default())
         .manage(VaultSearchIndexState::default())
+        .manage(VaultFrontmatterIndexState::default())
         .manage(media::MediaSessionState::default());
 
     #[cfg(not(mobile))]
@@ -69,6 +73,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             tiling::get_window_tiling_detection,
             r2_http::r2_signed_fetch,
+            link_rich_metadata::fetch_link_rich_metadata,
             vault::vault_set_session,
             vault::vault_get_session,
             vault::vault_exists,
@@ -85,6 +90,10 @@ pub fn run() {
             vault_search::vault_search_cancel,
             vault_search_index::vault_search_index_schedule,
             vault_search_index::vault_search_index_touch_paths,
+            vault_frontmatter_index::vault_frontmatter_index_schedule,
+            vault_frontmatter_index::vault_frontmatter_index_snapshot,
+            vault_frontmatter_index::vault_frontmatter_index_values_for_key,
+            vault_frontmatter_index::vault_frontmatter_index_touch_paths,
             vault_watch::vault_start_watch,
             window_state_disk::eskerra_peek_window_state_file,
             media::media_set_metadata,

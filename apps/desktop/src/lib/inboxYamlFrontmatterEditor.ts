@@ -1,4 +1,4 @@
-import {mergeYamlFrontmatterBody} from '@eskerra/core';
+import {innerToFencedFrontmatterBlock, mergeYamlFrontmatterBody} from '@eskerra/core';
 import type {MutableRefObject} from 'react';
 
 /**
@@ -9,19 +9,23 @@ export function inboxEditorSliceToFullMarkdown(
   editorSlice: string,
   selectedUri: string | null,
   composingNewEntry: boolean,
-  yamlBlock: string | null,
+  yamlInner: string | null,
   yamlLeading: string,
 ): string {
   if (!selectedUri || composingNewEntry) {
     return editorSlice.replace(/\r\n/g, '\n');
   }
+  const yamlBlock =
+    yamlInner == null ? null : innerToFencedFrontmatterBlock(yamlInner);
   return mergeYamlFrontmatterBody(yamlBlock, editorSlice, yamlLeading);
 }
 
 export function clearInboxYamlFrontmatterEditorRefs(args: {
-  block: MutableRefObject<string | null>;
+  inner: MutableRefObject<string | null>;
   leading: MutableRefObject<string>;
+  setInner: (inner: string | null) => void;
 }): void {
-  args.block.current = null;
+  args.inner.current = null;
   args.leading.current = '';
+  args.setInner(null);
 }

@@ -57,7 +57,7 @@ function scalarAfterColon(line: string): string {
 
 /**
  * Reads the first YAML frontmatter block only. Unknown keys ignored.
- * `columns` list items: lines `  - value` after `columns:`.
+ * `columns`: either `columns: Name` (single column label) or a list (`columns:` then `  - value` lines).
  */
 export function parseTodayHubFrontmatter(markdown: string): TodayHubSettings {
   const normalized = markdown.replace(/\r\n/g, '\n');
@@ -102,6 +102,12 @@ export function parseTodayHubFrontmatter(markdown: string): TodayHubSettings {
     }
     if (key === 'columns') {
       const cols: string[] = [];
+      const inline = scalarAfterColon(raw)
+        .trim()
+        .replace(/^["']|["']$/g, '');
+      if (inline) {
+        cols.push(inline);
+      }
       let k = j + 1;
       while (k < fmLines.length) {
         const indent = fmLines[k].match(/^(\s*)-/);

@@ -21,6 +21,8 @@ import {
   getInboxDirectoryUri,
   markdownContainsTransientImageUrls,
   mergeYamlFrontmatterBody,
+  fencedFrontmatterBlockToInner,
+  innerToFencedFrontmatterBlock,
   normalizeVaultBaseUri,
   parseComposeInput,
   sanitizeInboxNoteStem,
@@ -87,6 +89,10 @@ import {
   setVaultSession,
   startVaultWatch,
 } from '../lib/tauriVault';
+import {
+  vaultFrontmatterIndexSchedule,
+  vaultFrontmatterIndexTouchPaths,
+} from '../lib/tauriVaultFrontmatter';
 import {vaultSearchIndexSchedule, vaultSearchIndexTouchPaths} from '../lib/tauriVaultSearch';
 import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
 import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
@@ -447,6 +453,15 @@ export type UseMainWindowWorkspaceResult = {
    * (active-hub Today visible without a tab row entry for that URI).
    */
   workspaceSelectShowsActiveTabPill: boolean;
+  /** YAML between `---` fences (or `null` if the note has no block). */
+  inboxYamlFrontmatterInner: string | null;
+  /** User / UI frontmatter edits: updates state, ref, and the normal debounced autosave path. */
+  applyFrontmatterInnerChange: (nextInner: string | null) => void;
+  /**
+   * Sync from disk / load / merge (not a direct user edit). Keeps `inboxYamlFrontmatterInner` aligned
+   * with the ref and leading text.
+   */
+  syncFrontmatterStateFromDisk: (nextInner: string | null, leading: string) => void;
 };
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
@@ -549,8 +564,11 @@ export function useMainWindowWorkspace(options: {
   const saveActiveRef = useRef(false);
   const eagerEditorLoadUriRef = useRef<string | null>(null);
   const suppressEditorOnChangeRef = useRef(false);
-  /** When set, CodeMirror holds only post-frontmatter body; merge via {@link inboxEditorSliceToFullMarkdown}. */
-  const inboxEditorYamlFrontmatterBlockRef = useRef<string | null>(null);
+  /** YAML inner (between `---` fences); paired ref for autosave hot path. */
+  const [inboxYamlFrontmatterInner, setInboxYamlFrontmatterInner] = useState<
+    string | null
+  >(null);
+  const inboxYamlFrontmatterInnerRef = useRef<string | null>(null);
   const inboxEditorYamlLeadingBeforeFrontmatterRef = useRef('');
   const autosaveSchedulerRef = useRef(
     createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
@@ -580,6 +598,30 @@ export function useMainWindowWorkspace(options: {
   /** Invalidates in-flight `openMarkdownInEditor` work when a newer open supersedes it. */
   const openMarkdownGenerationRef = useRef(0);
   const inboxBacklinksDeferAfterLoadRafRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    inboxYamlFrontmatterInnerRef.current = inboxYamlFrontmatterInner;
+  }, [inboxYamlFrontmatterInner]);
+
+  const syncFrontmatterStateFromDisk = useCallback(
+    (nextInner: string | null, leading: string) => {
+      inboxYamlFrontmatterInnerRef.current = nextInner;
+      setInboxYamlFrontmatterInner(nextInner);
+      inboxEditorYamlLeadingBeforeFrontmatterRef.current = leading;
+    },
+    [],
+  );
+
+  const applyFrontmatterInnerChange = useCallback((nextInner: string | null) => {
+    if (composingNewEntryRef.current) {
+      return;
+    }
+    if (!selectedUriRef.current) {
+      return;
+    }
+    inboxYamlFrontmatterInnerRef.current = nextInner;
+    setInboxYamlFrontmatterInner(nextInner);
+  }, []);
 
   useLayoutEffect(() => {
     diskConflictRef.current = diskConflict;
@@ -614,8 +656,7 @@ export function useMainWindowWorkspace(options: {
     ) => {
       const composing = composingNewEntryRef.current;
       if (!uri || composing) {
-        inboxEditorYamlFrontmatterBlockRef.current = null;
-        inboxEditorYamlLeadingBeforeFrontmatterRef.current = '';
+        syncFrontmatterStateFromDisk(null, '');
         suppressEditorOnChangeRef.current = true;
         inboxEditorRef.current?.loadMarkdown(full, {selection});
         suppressEditorOnChangeRef.current = false;
@@ -625,16 +666,21 @@ export function useMainWindowWorkspace(options: {
       }
       const {frontmatter, body, leadingBeforeFrontmatter} =
         splitYamlFrontmatter(full);
-      inboxEditorYamlFrontmatterBlockRef.current = frontmatter;
-      inboxEditorYamlLeadingBeforeFrontmatterRef.current =
-        frontmatter !== null ? leadingBeforeFrontmatter : '';
+      const inner =
+        frontmatter !== null
+          ? fencedFrontmatterBlockToInner(frontmatter)
+          : null;
+      syncFrontmatterStateFromDisk(
+        inner,
+        frontmatter !== null ? leadingBeforeFrontmatter : '',
+      );
       suppressEditorOnChangeRef.current = true;
       inboxEditorRef.current?.loadMarkdown(body, {selection});
       suppressEditorOnChangeRef.current = false;
       setEditorBody(body);
       editorBodyRef.current = body;
     },
-    [inboxEditorRef, setEditorBody],
+    [inboxEditorRef, setEditorBody, syncFrontmatterStateFromDisk],
   );
 
   useLayoutEffect(() => {
@@ -871,11 +917,11 @@ export function useMainWindowWorkspace(options: {
       editorBody,
       selectedUri,
       composingNewEntry,
-      inboxEditorYamlFrontmatterBlockRef.current,
+      inboxYamlFrontmatterInnerRef.current,
       inboxEditorYamlLeadingBeforeFrontmatterRef.current,
     );
     return parseTodayHubFrontmatter(full);
-  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry]);
+  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry, inboxYamlFrontmatterInner]);
 
   useLayoutEffect(() => {
     todayHubSettingsRef.current = todayHubSettings;
@@ -1011,7 +1057,7 @@ export function useMainWindowWorkspace(options: {
         inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
         selectedUriRef.current,
         composingNewEntryRef.current,
-        inboxEditorYamlFrontmatterBlockRef.current,
+        inboxYamlFrontmatterInnerRef.current,
         inboxEditorYamlLeadingBeforeFrontmatterRef.current,
       );
       const prev = lastPersistedRef.current;
@@ -1362,7 +1408,7 @@ export function useMainWindowWorkspace(options: {
               snapMdForSlice,
               curUri,
               false,
-              inboxEditorYamlFrontmatterBlockRef.current,
+              inboxYamlFrontmatterInnerRef.current,
               inboxEditorYamlLeadingBeforeFrontmatterRef.current,
             )
           : undefined;
@@ -1672,8 +1718,9 @@ export function useMainWindowWorkspace(options: {
               setSelectedUri(null);
               setComposingNewEntry(false);
               clearInboxYamlFrontmatterEditorRefs({
-                block: inboxEditorYamlFrontmatterBlockRef,
+                inner: inboxYamlFrontmatterInnerRef,
                 leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+                setInner: setInboxYamlFrontmatterInner,
               });
               setEditorBody('');
               setInboxEditorResetNonce(n => n + 1);
@@ -1693,8 +1740,9 @@ export function useMainWindowWorkspace(options: {
           setSelectedUri(null);
           setComposingNewEntry(false);
           clearInboxYamlFrontmatterEditorRefs({
-            block: inboxEditorYamlFrontmatterBlockRef,
+            inner: inboxYamlFrontmatterInnerRef,
             leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+            setInner: setInboxYamlFrontmatterInner,
           });
           setEditorBody('');
           setInboxEditorResetNonce(n => n + 1);
@@ -1776,8 +1824,9 @@ export function useMainWindowWorkspace(options: {
       setSelectedUri(null);
       setComposingNewEntry(false);
       clearInboxYamlFrontmatterEditorRefs({
-        block: inboxEditorYamlFrontmatterBlockRef,
+        inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+        setInner: setInboxYamlFrontmatterInner,
       });
       setEditorBody('');
       setInboxEditorResetNonce(n => n + 1);
@@ -1850,8 +1899,9 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         lastPersistedRef.current = null;
@@ -1863,6 +1913,7 @@ export function useMainWindowWorkspace(options: {
         await startVaultWatch();
         queueMicrotask(() => {
           void vaultSearchIndexSchedule().catch(() => undefined);
+          void vaultFrontmatterIndexSchedule().catch(() => undefined);
         });
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -1960,8 +2011,9 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -2041,7 +2093,7 @@ export function useMainWindowWorkspace(options: {
           inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
           normTab,
           composingNewEntryRef.current,
-          inboxEditorYamlFrontmatterBlockRef.current,
+          inboxYamlFrontmatterInnerRef.current,
           inboxEditorYamlLeadingBeforeFrontmatterRef.current,
         );
         const lp = lastPersistedRef.current;
@@ -2235,6 +2287,7 @@ export function useMainWindowWorkspace(options: {
       const paths = event.payload?.paths ?? [];
       if (paths.length > 0) {
         void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
+        void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
       }
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
@@ -2337,8 +2390,9 @@ export function useMainWindowWorkspace(options: {
     } else {
       clearInboxBacklinksDeferAfterLoad();
       clearInboxYamlFrontmatterEditorRefs({
-        block: inboxEditorYamlFrontmatterBlockRef,
+        inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+        setInner: setInboxYamlFrontmatterInner,
       });
       setEditorBody('');
       lastPersistedRef.current = null;
@@ -2363,7 +2417,8 @@ export function useMainWindowWorkspace(options: {
     if (inboxContentByUriRef.current[selectedUri] !== undefined) {
       return;
     }
-    inboxEditorYamlFrontmatterBlockRef.current = null;
+    inboxYamlFrontmatterInnerRef.current = null;
+    setInboxYamlFrontmatterInner(null);
     inboxEditorYamlLeadingBeforeFrontmatterRef.current = '';
     inboxEditorRef.current?.loadMarkdown('', {selection: 'start'});
     scheduleBacklinksDeferOneFrameAfterLoad();
@@ -2391,7 +2446,7 @@ export function useMainWindowWorkspace(options: {
         editorBody,
         selectedUri,
         composingNewEntry,
-        inboxEditorYamlFrontmatterBlockRef.current,
+        inboxYamlFrontmatterInnerRef.current,
         inboxEditorYamlLeadingBeforeFrontmatterRef.current,
       );
       if (backlinksActiveBodyRef.current === liveFull) {
@@ -2400,7 +2455,7 @@ export function useMainWindowWorkspace(options: {
       setBacklinksActiveBody(liveFull);
     }, INBOX_BACKLINK_BODY_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
-  }, [editorBody, selectedUri, composingNewEntry]);
+  }, [editorBody, selectedUri, composingNewEntry, inboxYamlFrontmatterInner]);
 
   useEffect(() => {
     if (!vaultRoot || !selectedUri) {
@@ -2426,7 +2481,7 @@ export function useMainWindowWorkspace(options: {
             editorBodyRef.current,
             selectedUri,
             composingNewEntryRef.current,
-            inboxEditorYamlFrontmatterBlockRef.current,
+            inboxYamlFrontmatterInnerRef.current,
             inboxEditorYamlLeadingBeforeFrontmatterRef.current,
           );
           if (normalized !== currentFull) {
@@ -2473,7 +2528,7 @@ export function useMainWindowWorkspace(options: {
       editorBody,
       selectedUri,
       composingNewEntry,
-      inboxEditorYamlFrontmatterBlockRef.current,
+      inboxYamlFrontmatterInnerRef.current,
       inboxEditorYamlLeadingBeforeFrontmatterRef.current,
     );
     if (prev && prev.uri === selectedUri && prev.markdown === liveFull) {
@@ -2491,6 +2546,7 @@ export function useMainWindowWorkspace(options: {
     selectedUri,
     composingNewEntry,
     editorBody,
+    inboxYamlFrontmatterInner,
     enqueueInboxPersist,
     diskConflict,
   ]);
@@ -2533,8 +2589,9 @@ export function useMainWindowWorkspace(options: {
       setComposingNewEntry(true);
       setSelectedUri(null);
       clearInboxYamlFrontmatterEditorRefs({
-        block: inboxEditorYamlFrontmatterBlockRef,
+        inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+        setInner: setInboxYamlFrontmatterInner,
       });
       setEditorBody('');
       lastPersistedRef.current = null;
@@ -2547,8 +2604,9 @@ export function useMainWindowWorkspace(options: {
       await flushInboxSaveRef.current();
       setComposingNewEntry(false);
       clearInboxYamlFrontmatterEditorRefs({
-        block: inboxEditorYamlFrontmatterBlockRef,
+        inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+        setInner: setInboxYamlFrontmatterInner,
       });
       setEditorBody('');
       setInboxEditorResetNonce(n => n + 1);
@@ -2618,8 +2676,9 @@ export function useMainWindowWorkspace(options: {
         composingNewEntryRef.current = false;
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -2747,8 +2806,9 @@ export function useMainWindowWorkspace(options: {
       inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
     const cleanedSlice = cleanNoteMarkdownBody(slice, uri);
     if (cleanedSlice !== slice) {
+      const innerFm = inboxYamlFrontmatterInnerRef.current;
       const full = mergeYamlFrontmatterBody(
-        inboxEditorYamlFrontmatterBlockRef.current,
+        innerFm == null ? null : innerToFencedFrontmatterBlock(innerFm),
         cleanedSlice,
         inboxEditorYamlLeadingBeforeFrontmatterRef.current,
       );
@@ -2834,8 +2894,9 @@ export function useMainWindowWorkspace(options: {
           setSelectedUri(null);
           setComposingNewEntry(false);
           clearInboxYamlFrontmatterEditorRefs({
-            block: inboxEditorYamlFrontmatterBlockRef,
+            inner: inboxYamlFrontmatterInnerRef,
             leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+            setInner: setInboxYamlFrontmatterInner,
           });
           setEditorBody('');
           setInboxEditorResetNonce(n => n + 1);
@@ -2892,7 +2953,7 @@ export function useMainWindowWorkspace(options: {
                 inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
                 activeUri,
                 composingNewEntryRef.current,
-                inboxEditorYamlFrontmatterBlockRef.current,
+                inboxYamlFrontmatterInnerRef.current,
                 inboxEditorYamlLeadingBeforeFrontmatterRef.current,
               )
             : '';
@@ -3340,8 +3401,9 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -3636,8 +3698,9 @@ export function useMainWindowWorkspace(options: {
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -3809,8 +3872,9 @@ export function useMainWindowWorkspace(options: {
         const uri = snap.entries[snap.index]!;
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
-          block: inboxEditorYamlFrontmatterBlockRef,
+          inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+          setInner: setInboxYamlFrontmatterInner,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -4245,5 +4309,8 @@ export function useMainWindowWorkspace(options: {
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
     workspaceSelectShowsActiveTabPill,
+    inboxYamlFrontmatterInner,
+    applyFrontmatterInnerChange,
+    syncFrontmatterStateFromDisk,
   };
 }

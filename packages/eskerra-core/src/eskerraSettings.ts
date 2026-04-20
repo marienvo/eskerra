@@ -1,5 +1,19 @@
+import type {FrontmatterPropertyType} from './markdown/frontmatterTypes';
 import {parseThemePreference} from './themePreference';
 import type {ThemePreference} from './themePreference';
+
+const FM_PROPERTY_TYPES: ReadonlySet<FrontmatterPropertyType> = new Set([
+  'text',
+  'number',
+  'checkbox',
+  'date',
+  'datetime',
+  'timestamp',
+  'url',
+  'list',
+  'tags',
+  'object',
+]);
 
 /** R2 bucket jurisdiction; EU/FedRAMP buckets must use the matching S3 API hostname. */
 export type R2Jurisdiction = 'default' | 'eu' | 'fedramp';
@@ -21,6 +35,8 @@ export type EskerraSettings = {
    * Omitted from disk when R2 playlist sync is active (preference lives in the bucket).
    */
   themePreference?: ThemePreference;
+  /** Optional per-property type overrides for vault frontmatter (desktop Properties UI). */
+  frontmatterProperties?: Record<string, {type: FrontmatterPropertyType}>;
 };
 
 function parseR2Block(value: unknown): EskerraR2Config {
@@ -199,7 +215,31 @@ export function buildEskerraSettingsFromForm(
     settings.themePreference = previousShared.themePreference;
   }
 
+  if (previousShared?.frontmatterProperties) {
+    settings.frontmatterProperties = previousShared.frontmatterProperties;
+  }
+
   return {ok: true, settings};
+}
+
+function parseFrontmatterPropertiesBlock(
+  raw: unknown,
+): Record<string, {type: FrontmatterPropertyType}> | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return undefined;
+  }
+  const out: Record<string, {type: FrontmatterPropertyType}> = {};
+  for (const [key, entry] of Object.entries(raw)) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue;
+    }
+    const t = (entry as {type?: unknown}).type;
+    if (typeof t !== 'string' || !FM_PROPERTY_TYPES.has(t as FrontmatterPropertyType)) {
+      continue;
+    }
+    out[key] = {type: t as FrontmatterPropertyType};
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**
@@ -224,6 +264,13 @@ export function parseEskerraSettings(rawSettings: string): EskerraSettings {
       throw new Error('settings-shared.json has an invalid themePreference.');
     }
     out.themePreference = tp;
+  }
+
+  if (parsed.frontmatterProperties !== undefined) {
+    const fm = parseFrontmatterPropertiesBlock(parsed.frontmatterProperties);
+    if (fm) {
+      out.frontmatterProperties = fm;
+    }
   }
 
   return out;
