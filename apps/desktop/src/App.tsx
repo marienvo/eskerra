@@ -143,6 +143,7 @@ export default function App() {
     vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
+    podcastFsNonce,
     deviceInstanceId,
     wikiRenameNotice,
     renameLinkProgress,
@@ -476,7 +477,7 @@ export default function App() {
   const podcastCatalog = useDesktopPodcastCatalog({
     vaultRoot,
     fs,
-    fsRefreshNonce,
+    fsRefreshNonce: podcastFsNonce,
     onError: setErr,
   });
 

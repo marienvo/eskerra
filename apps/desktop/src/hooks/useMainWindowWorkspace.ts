@@ -141,6 +141,13 @@ import {
   workspaceSelectShowsActiveTabPillState,
 } from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
+import {isPodcastFile} from '../lib/podcasts/podcastParser';
+
+const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
+function isPodcastRelevantPath(p: string): boolean {
+  const name = p.replace(/\\/g, '/').split('/').pop() ?? '';
+  return isPodcastFile(name) || RSS_EPISODE_FILE_PATTERN.test(name);
+}
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
 import {
@@ -329,6 +336,8 @@ export type UseMainWindowWorkspaceResult = {
   vaultMarkdownRefs: VaultMarkdownRef[];
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
+  /** Increments only when files in `General/` change — used to scope podcast catalog rescans. */
+  podcastFsNonce: number;
   deviceInstanceId: string;
   wikiRenameNotice: string | null;
   renameLinkProgress: RenameLinkProgress | null;
@@ -517,6 +526,7 @@ export function useMainWindowWorkspace(options: {
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
+  const [podcastFsNonce, setPodcastFsNonce] = useState(0);
   const [vaultTreeSelectionClearNonce, setVaultTreeSelectionClearNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
@@ -2293,6 +2303,10 @@ export function useMainWindowWorkspace(options: {
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
+      // Only rescan podcast catalog when podcast-relevant files change (YYYY podcasts.md or 📻 *.md).
+      if (paths.some(p => isPodcastRelevantPath(p))) {
+        setPodcastFsNonce(n => n + 1);
+      }
       void (async () => {
         try {
           const next = await readVaultSettings(vaultRoot, fs);
@@ -4249,6 +4263,7 @@ export function useMainWindowWorkspace(options: {
     vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
+    podcastFsNonce,
     deviceInstanceId,
     wikiRenameNotice,
     renameLinkProgress,
