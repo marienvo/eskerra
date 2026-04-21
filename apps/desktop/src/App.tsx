@@ -725,9 +725,17 @@ export default function App() {
   ]);
 
   useEffect(() => {
+    // In browser (non-Tauri), remove the HTML splash immediately — no startup flow needed.
+    if (!isTauri()) {
+      document.getElementById('splash-html')?.remove();
+    }
+  }, []);
+
+  useEffect(() => {
     if (!isTauri() || startupSplashPhase !== 'artwork' || !appStartupReady) {
       return;
     }
+    document.getElementById('splash-html')?.remove();
     setStartupSplashPhase('scrim');
   }, [appStartupReady, startupSplashPhase]);
 
