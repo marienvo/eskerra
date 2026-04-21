@@ -17,63 +17,80 @@ fn souvlaki_io(e: souvlaki::Error) -> io::Error {
     io::Error::new(io::ErrorKind::Other, format!("{:?}", e))
 }
 
+#[cfg(target_os = "linux")]
+struct MediaSessionInner {
+    controls: Option<MediaControls>,
+    app_handle: Option<AppHandle>,
+}
+
 pub struct MediaSessionState {
     #[cfg(target_os = "linux")]
-    controls: Mutex<Option<MediaControls>>,
+    inner: Mutex<MediaSessionInner>,
 }
 
 impl Default for MediaSessionState {
     fn default() -> Self {
         Self {
             #[cfg(target_os = "linux")]
-            controls: Mutex::new(None),
+            inner: Mutex::new(MediaSessionInner {
+                controls: None,
+                app_handle: None,
+            }),
         }
     }
+}
+
+/// Creates and attaches a fresh `MediaControls` instance.
+/// The D-Bus name is derived from the PID and leaked once for its `'static` lifetime requirement.
+#[cfg(target_os = "linux")]
+fn make_controls(app_handle: &AppHandle) -> io::Result<MediaControls> {
+    static DBUS_NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+    let dbus_name = DBUS_NAME.get_or_init(|| {
+        Box::leak(
+            format!("eskerra.instance{}", std::process::id()).into_boxed_str(),
+        )
+    });
+    let config = PlatformConfig {
+        dbus_name,
+        display_name: "Eskerra",
+        hwnd: None,
+    };
+    let mut controls = MediaControls::new(config).map_err(souvlaki_io)?;
+    let handle = app_handle.clone();
+    controls
+        .attach(move |event: MediaControlEvent| {
+            let action: &'static str = match event {
+                MediaControlEvent::Play => "play",
+                MediaControlEvent::Pause => "pause",
+                MediaControlEvent::Toggle => "toggle",
+                MediaControlEvent::Stop => "stop",
+                MediaControlEvent::Next => "next",
+                MediaControlEvent::Previous => "previous",
+                MediaControlEvent::Seek(_) | MediaControlEvent::SeekBy(_, _) => "seek",
+                MediaControlEvent::SetPosition(_) => "set-position",
+                MediaControlEvent::SetVolume(_) => "volume",
+                MediaControlEvent::OpenUri(_) => "open-uri",
+                MediaControlEvent::Raise => "raise",
+                MediaControlEvent::Quit => "quit",
+            };
+            let _ = handle.emit("media-control", action);
+        })
+        .map_err(souvlaki_io)?;
+    Ok(controls)
 }
 
 pub fn init_media_session(app: &App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "linux")]
     {
-        // MPRIS well-known names must be unique per session. A fixed `dbus_name` clashes when
-        // another Eskerra (or crashed) process still owns `org.mpris.MediaPlayer2.<name>`;
-        // souvlaki's background thread unwraps registration errors and would abort the app.
-        //
-        // Use `<app>.instance<pid>` so GNOME Shell strips the suffix and resolves `eskerra.desktop`
-        // for the media widget app icon (see MPRIS instance naming).
-        let dbus_name = format!("eskerra.instance{}", std::process::id());
-        let dbus_name: &'static str = Box::leak(dbus_name.into_boxed_str());
-        let config = PlatformConfig {
-            dbus_name,
-            display_name: "Eskerra",
-            hwnd: None,
-        };
-        let mut controls = MediaControls::new(config).map_err(souvlaki_io)?;
-        let handle = app.handle().clone();
-        controls
-            .attach(move |event: MediaControlEvent| {
-                let action: &'static str = match event {
-                    MediaControlEvent::Play => "play",
-                    MediaControlEvent::Pause => "pause",
-                    MediaControlEvent::Toggle => "toggle",
-                    MediaControlEvent::Stop => "stop",
-                    MediaControlEvent::Next => "next",
-                    MediaControlEvent::Previous => "previous",
-                    MediaControlEvent::Seek(_) | MediaControlEvent::SeekBy(_, _) => "seek",
-                    MediaControlEvent::SetPosition(_) => "set-position",
-                    MediaControlEvent::SetVolume(_) => "volume",
-                    MediaControlEvent::OpenUri(_) => "open-uri",
-                    MediaControlEvent::Raise => "raise",
-                    MediaControlEvent::Quit => "quit",
-                };
-                let _ = handle.emit("media-control", action);
-            })
-            .map_err(souvlaki_io)?;
+        // Store the handle for lazy MediaControls creation on first playback.
+        // We intentionally do NOT register on D-Bus here so GNOME does not show
+        // an empty player widget before any audio has started.
         let state = app.state::<MediaSessionState>();
-        *state
-            .controls
+        let mut inner = state
+            .inner
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "media session mutex poisoned"))? =
-            Some(controls);
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "media session mutex poisoned"))?;
+        inner.app_handle = Some(app.handle().clone());
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -92,8 +109,14 @@ pub fn media_set_metadata(
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        let mut guard = state.controls.lock().map_err(|e| e.to_string())?;
-        let Some(controls) = guard.as_mut() else {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        if inner.controls.is_none() {
+            // Lazy: register on D-Bus only when playback actually starts.
+            if let Some(handle) = inner.app_handle.as_ref() {
+                inner.controls = Some(make_controls(handle).map_err(|e| e.to_string())?);
+            }
+        }
+        let Some(controls) = inner.controls.as_mut() else {
             return Ok(());
         };
         let meta = MediaMetadata {
@@ -120,8 +143,8 @@ pub fn media_set_playback(
 ) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        let mut guard = state.controls.lock().map_err(|e| e.to_string())?;
-        let Some(controls) = guard.as_mut() else {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let Some(controls) = inner.controls.as_mut() else {
             return Ok(());
         };
         let progress = Some(MediaPosition(Duration::from_millis(position_ms)));
@@ -143,13 +166,9 @@ pub fn media_set_playback(
 pub fn media_clear_session(state: State<'_, MediaSessionState>) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
-        let mut guard = state.controls.lock().map_err(|e| e.to_string())?;
-        let Some(controls) = guard.as_mut() else {
-            return Ok(());
-        };
-        controls
-            .set_playback(MediaPlayback::Stopped)
-            .map_err(|e| format!("{:?}", e))?;
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        // Drop MediaControls to unregister from D-Bus — GNOME removes the player widget.
+        inner.controls = None;
     }
     #[cfg(not(target_os = "linux"))]
     {
