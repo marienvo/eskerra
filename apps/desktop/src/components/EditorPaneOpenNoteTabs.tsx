@@ -377,11 +377,6 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
       if (!strip || !tab) {
         return;
       }
-      try {
-        strip.setPointerCapture(e.pointerId);
-      } catch {
-        /* ignore */
-      }
 
       const insertBefore = readInsertBeforeIndexFromClientX(strip, e.clientX);
       dragLiveRef.current = {
@@ -410,6 +405,11 @@ export const EditorPaneOpenNoteTabs = memo(function EditorPaneOpenNoteTabs({
           }
           d.dragActive = true;
           document.body.classList.add('editor-tab-strip--dragging');
+          try {
+            s.setPointerCapture(d.pointerId);
+          } catch {
+            /* ignore */
+          }
         }
         d.insertBefore = readInsertBeforeIndexFromClientX(s, ev.clientX);
         setDragSurface({
