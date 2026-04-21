@@ -3111,7 +3111,8 @@ button.primary.destructive {
  * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
- * take no space.
+ * take no space. `==` highlight delimiters use visibility:hidden instead so they stay in layout
+ * (stable geometry for highlights / selection).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -3128,10 +3129,6 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-percent-mark,
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-line:not(.cm-eskerra-marker-focus-line)
-  .cm-md-equal-highlight-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
@@ -3152,6 +3149,13 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -4191,9 +4195,6 @@ button.primary.destructive {
   .cm-md-percent-mark,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
-  .cm-md-equal-highlight-mark,
-[data-app-surface='capture']
-  .today-hub-canvas__cell-static-rich
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
@@ -4207,6 +4208,12 @@ button.primary.destructive {
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -4771,10 +4778,6 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-equal-highlight-mark,
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-eskerra-table-shell__cell-static-rich
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -4792,6 +4795,13 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -5130,6 +5140,22 @@ button.primary.destructive {
   -webkit-box-decoration-break: clone;
 }
 
+/* drawSelection paints below .cm-content; opaque span background hides selection. Fill is drawn in
+ * `markdownCodeBackgroundLayer` as `.cm-md-equal-highlight-bg` (see markdownCodeBackgroundLayer.ts). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-content .cm-md-equal-highlight {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight-bg {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--nb-editor-equal-highlight-bg, #fff59d);
+  border-radius: 2px;
+}
+
 /* ATX heading hashes (HeaderMark): fixed-width left column, hashes right-aligned to meet body text. */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-header-mark {
   display: inline-block;
@@ -5330,11 +5356,15 @@ button.primary.destructive {
 
 /*
  * CodeMirror draws `.cm-selectionLayer` below `.cm-content`; opaque backgrounds on tokens/lines
- * hide selection. Fence + inline code fills render here (z-index under selection).
+ * hide selection. Fence + inline code fills render in this layer.
+ * Do not set `z-index` here: `LayerView` assigns inline `z-index` from `layerOrder`; a forced value
+ * (especially `!important`) can tie-break equal to `.cm-selectionLayer` so the yellow fill paints on
+ * top of the drawn selection.
  */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-codeBackgroundLayer {
-  z-index: -2 !important;
-  contain: strict;
+  /* Match CodeMirror `.cm-layer` (`contain: size style`). `strict` adds paint containment and can
+     clip absolutely positioned pill rects when the layer’s measured box is still 0×0. */
+  contain: size style;
   pointer-events: none;
 }
 
