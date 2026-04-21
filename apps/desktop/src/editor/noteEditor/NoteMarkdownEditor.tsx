@@ -29,6 +29,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
@@ -1432,6 +1433,25 @@ const NoteMarkdownEditorImpl = forwardRef<
     return r.kind === 'text' ? r.text : null;
   }, [attachmentHost, vaultRoot]);
 
+  /**
+   * Click in the host padding / flex spacer below `.cm-editor`: jump the caret to end of doc and focus.
+   * Gated on `e.target === e.currentTarget` so clicks inside CM (incl. panels) are untouched.
+   */
+  const onHostMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (readOnlyRef.current) return;
+    if (e.button !== 0) return;
+    if (e.target !== e.currentTarget) return;
+    const view = viewRef.current;
+    if (!view) return;
+    e.preventDefault();
+    const end = view.state.doc.length;
+    view.dispatch({
+      selection: EditorSelection.cursor(end),
+      scrollIntoView: true,
+    });
+    view.focus();
+  }, []);
+
   return (
     <>
       <NoteMarkdownEditorContextMenu
@@ -1446,6 +1466,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           ref={hostRef}
           className={hostClassName}
           data-note-markdown-editor
+          onMouseDown={onHostMouseDown}
         >
           <div ref={parentRef} className="note-markdown-editor-cm-root" />
         </div>

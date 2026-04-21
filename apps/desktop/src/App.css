@@ -4236,6 +4236,8 @@ button.primary.destructive {
   position: relative;
   width: 100%;
   min-height: 6rem;
+  /* Fill stretched grid cell so CM host (and readonly overlay) covers leftover white below shorter content when a neighboring column is taller (end-of-doc caret jump). */
+  height: 100%;
   /*
    * Single grid cell stacks CM host + readonly overlay so toggling edit mode does not swap
    * `position: relative` ↔ `absolute` between the CM host and the warm underlay.
@@ -4367,6 +4369,8 @@ button.primary.destructive {
   width: 100%;
   box-sizing: border-box;
   min-height: 5.5rem;
+  /* Fill the stretched grid cell so clicks below `.cm-editor` still land on the host (end-of-doc caret jump). */
+  height: 100%;
   padding: 0;
 }
 

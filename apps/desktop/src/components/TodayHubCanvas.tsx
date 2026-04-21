@@ -832,7 +832,7 @@ export function TodayHubCanvas({
                             )
                           : null;
                       const caret =
-                        caretFromRich ?? (!chunk.trim() ? 0 : null);
+                        caretFromRich ?? (chunk.trim() ? chunk.length : 0);
                       openCell(uri, ci, caret);
                     },
                   };
