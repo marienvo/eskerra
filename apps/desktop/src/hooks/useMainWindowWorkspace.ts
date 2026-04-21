@@ -2888,18 +2888,23 @@ export function useMainWindowWorkspace(options: {
         if (nextAfterRemove) {
           await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
         } else {
-          selectedUriRef.current = null;
-          composingNewEntryRef.current = false;
-          lastPersistedRef.current = null;
-          setSelectedUri(null);
-          setComposingNewEntry(false);
-          clearInboxYamlFrontmatterEditorRefs({
-            inner: inboxYamlFrontmatterInnerRef,
-            leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-            setInner: setInboxYamlFrontmatterInner,
-          });
-          setEditorBody('');
-          setInboxEditorResetNonce(n => n + 1);
+          const shellHub = activeTodayHubUriRef.current;
+          if (shellHub && shellHub !== norm) {
+            await openMarkdownInEditor(shellHub, {workspaceShell: true});
+          } else {
+            selectedUriRef.current = null;
+            composingNewEntryRef.current = false;
+            lastPersistedRef.current = null;
+            setSelectedUri(null);
+            setComposingNewEntry(false);
+            clearInboxYamlFrontmatterEditorRefs({
+              inner: inboxYamlFrontmatterInnerRef,
+              leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+              setInner: setInboxYamlFrontmatterInner,
+            });
+            setEditorBody('');
+            setInboxEditorResetNonce(n => n + 1);
+          }
         }
       }
 
