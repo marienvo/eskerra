@@ -30,13 +30,16 @@ function themesDirHit(vaultRoot: string, changedPaths: readonly string[]): boole
 
 export function useVaultThemes({vaultRoot, fs}: UseVaultThemesParams): {
   items: VaultThemeListItem[];
+  ready: boolean;
   reload: () => Promise<void>;
 } {
   const [items, setItems] = useState<VaultThemeListItem[]>([]);
+  const [ready, setReady] = useState(false);
 
   const reload = useCallback(async () => {
     if (!vaultRoot) {
       setItems([]);
+      setReady(true);
       return;
     }
     try {
@@ -45,6 +48,7 @@ export function useVaultThemes({vaultRoot, fs}: UseVaultThemesParams): {
     } catch {
       setItems([]);
     }
+    setReady(true);
   }, [vaultRoot, fs]);
 
   useEffect(() => {
@@ -78,5 +82,5 @@ export function useVaultThemes({vaultRoot, fs}: UseVaultThemesParams): {
     };
   }, [vaultRoot, reload]);
 
-  return useMemo(() => ({items, reload}), [items, reload]);
+  return useMemo(() => ({items, ready, reload}), [items, ready, reload]);
 }

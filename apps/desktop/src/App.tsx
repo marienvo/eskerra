@@ -456,15 +456,19 @@ export default function App() {
   const [startupSplashPhase, setStartupSplashPhase] = useState<StartupSplashPhase>(
     () => (!isTauri() ? 'done' : 'artwork'),
   );
+  const [themeReady, setThemeReady] = useState(!isTauri());
+  const onThemeReady = useCallback(() => setThemeReady(true), []);
 
   const appStartupReady = useMemo(
     () =>
       initialVaultHydrateAttemptDone &&
       layoutsReady &&
+      themeReady &&
       (vaultRoot ? inboxShellRestored : true),
     [
       initialVaultHydrateAttemptDone,
       layoutsReady,
+      themeReady,
       vaultRoot,
       inboxShellRestored,
     ],
@@ -991,7 +995,8 @@ export default function App() {
       vaultRoot={vaultRoot}
       vaultSettings={vaultSettings}
       setVaultSettings={setVaultSettings}
-      fs={fs}>
+      fs={fs}
+      onThemeReady={onThemeReady}>
       {node}
     </ThemeProvider>
   );

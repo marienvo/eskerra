@@ -29,11 +29,20 @@ export function useThemePreference({
   fs,
 }: UseThemePreferenceParams): {
   preference: ThemePreference;
+  preferenceLoaded: boolean;
   setPreferenceLocal: (next: ThemePreference) => void;
   persistPreference: (next: ThemePreference) => Promise<void>;
 } {
   const [preference, setPreference] = useState<ThemePreference>(DEFAULT_THEME_PREFERENCE);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
   const migratedSharedToR2Ref = useRef(false);
+
+  // No vault — defaults are final, nothing async to wait for.
+  useEffect(() => {
+    if (!vaultRoot) {
+      setPreferenceLoaded(true);
+    }
+  }, [vaultRoot]);
 
   // Sync from shared file when not using R2 (vault watcher updates vaultSettings).
   useEffect(() => {
@@ -44,14 +53,13 @@ export function useThemePreference({
       return;
     }
     const fromFile = vaultSettings.themePreference ?? DEFAULT_THEME_PREFERENCE;
-    queueMicrotask(() => {
-      setPreference(prev => {
-        if (prev.themeId === fromFile.themeId && prev.mode === fromFile.mode) {
-          return prev;
-        }
-        return fromFile;
-      });
+    setPreference(prev => {
+      if (prev.themeId === fromFile.themeId && prev.mode === fromFile.mode) {
+        return prev;
+      }
+      return fromFile;
     });
+    setPreferenceLoaded(true);
   }, [vaultRoot, vaultSettings]);
 
   // Initial R2 fetch + migrate shared → R2 once.
@@ -92,6 +100,9 @@ export function useThemePreference({
           setPreference(DEFAULT_THEME_PREFERENCE);
         }
       }
+      if (!cancelled) {
+        setPreferenceLoaded(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -119,5 +130,5 @@ export function useThemePreference({
     setPreference(next);
   }, []);
 
-  return {preference, setPreferenceLocal, persistPreference};
+  return {preference, preferenceLoaded, setPreferenceLocal, persistPreference};
 }
