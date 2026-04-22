@@ -3,7 +3,7 @@ import {getAutosyncBackupRootUri, splitYamlFrontmatter} from '@eskerra/core';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
-import {applyHunkToText, buildDiffSegments, computeOtherHunkRange} from '../lib/buildMarkdownLineDiff';
+import {applyHunkToText, buildDiffSegments, computeOtherHunkRange, removeConflictBackupWarningLine} from '../lib/buildMarkdownLineDiff';
 import {splitLines} from '../lib/lineLcs';
 
 export type MergePanelSource =
@@ -181,7 +181,12 @@ export function BackupMergePanel({
           await fs.removeTree(root);
         }
       }
-      onClose();
+      const cleaned = removeConflictBackupWarningLine(rightText);
+      if (cleaned !== rightText) {
+        await onApplyMergedBody(cleaned);
+      } else {
+        onClose();
+      }
     } catch (e) {
       setDeleteErr(e instanceof Error ? e.message : String(e));
     } finally {

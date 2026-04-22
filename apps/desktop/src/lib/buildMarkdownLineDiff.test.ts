@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {applyHunkToText, buildDiffSegments, computeOtherHunkRange} from './buildMarkdownLineDiff';
+import {applyHunkToText, buildDiffSegments, computeOtherHunkRange, removeConflictBackupWarningLine} from './buildMarkdownLineDiff';
 import {splitLines} from './lineLcs';
 
 describe('buildDiffSegments', () => {
@@ -115,5 +115,32 @@ describe('computeOtherHunkRange', () => {
     const {start, end} = computeOtherHunkRange(hunks, 0);
     const newLeft = applyHunkToText(left, {start, end, lines: rightLines});
     expect(newLeft).toBe(right);
+  });
+});
+
+describe('removeConflictBackupWarningLine', () => {
+  it('removes the warning line alone when no surrounding blank lines', () => {
+    const body = 'first\n> [!warning] Conflict backup: [[note]]\nlast';
+    expect(removeConflictBackupWarningLine(body)).toBe('first\nlast');
+  });
+
+  it('removes the warning line and adjacent blank lines above and below', () => {
+    const body = 'first\n\n> [!warning] Conflict backup: [[note]]\n\nlast';
+    expect(removeConflictBackupWarningLine(body)).toBe('first\nlast');
+  });
+
+  it('removes multiple trailing blank lines below but only contiguous ones', () => {
+    const body = 'first\n\n> [!warning] Conflict backup: [[note]]\n\n\nlast';
+    expect(removeConflictBackupWarningLine(body)).toBe('first\nlast');
+  });
+
+  it('is a no-op when no warning line is present', () => {
+    const body = 'just\nnormal\ntext';
+    expect(removeConflictBackupWarningLine(body)).toBe(body);
+  });
+
+  it('removes warning line at start of body', () => {
+    const body = '> [!warning] Conflict backup: [[note]]\n\nsome text';
+    expect(removeConflictBackupWarningLine(body)).toBe('some text');
   });
 });

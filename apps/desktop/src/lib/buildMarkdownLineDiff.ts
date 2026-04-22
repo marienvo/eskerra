@@ -62,6 +62,27 @@ export function applyHunkToText(baseText: string, hunk: LineEditHunk): string {
   return lines.join('\n');
 }
 
+const CONFLICT_BACKUP_WARNING_RE = /^> \[!warning\] Conflict backup:/;
+
+/**
+ * Removes the `> [!warning] Conflict backup:` line and any immediately adjacent
+ * blank lines (above and below) from the given body text.
+ */
+export function removeConflictBackupWarningLine(body: string): string {
+  const lines = splitLines(body);
+  const idx = lines.findIndex(l => CONFLICT_BACKUP_WARNING_RE.test(l));
+  if (idx === -1) return body;
+
+  let start = idx;
+  let end = idx + 1;
+
+  while (start > 0 && lines[start - 1]!.trim() === '') start--;
+  while (end < lines.length && lines[end]!.trim() === '') end++;
+
+  lines.splice(start, end - start);
+  return lines.join('\n');
+}
+
 /**
  * Returns the `{start, end}` range in the OTHER (right) text that corresponds to
  * `hunks[hunkIdx].lines`. Needed to apply an inverse hunk (accept-right).
