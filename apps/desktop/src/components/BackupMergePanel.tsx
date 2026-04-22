@@ -1,6 +1,6 @@
 import type {VaultFilesystem} from '@eskerra/core';
 import {splitYamlFrontmatter} from '@eskerra/core';
-import {useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
 import {applyHunkToText, buildDiffSegments} from '../lib/buildMarkdownLineDiff';
@@ -44,11 +44,13 @@ export function BackupMergePanel({
   const [loadedText, setLoadedText] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [localBody, setLocalBody] = useState(currentBody);
+  const [focusedHunkIdx, setFocusedHunkIdx] = useState(0);
 
-  // Re-sync localBody when the panel is opened for a new note (currentBody changes identity).
-  // We only reset if there are no local hunk edits yet, detected by comparing to current.
+  const hunkEls = useRef<HTMLDivElement[]>([]);
+
   useEffect(() => {
     setLocalBody(currentBody);
+    setFocusedHunkIdx(0);
   }, [currentBody]);
 
   useEffect(() => {
@@ -88,23 +90,49 @@ export function BackupMergePanel({
   );
 
   const hunkCount = hunks.length;
+
+  useEffect(() => {
+    setFocusedHunkIdx(prev => (hunkCount === 0 ? 0 : Math.min(prev, hunkCount - 1)));
+  }, [hunkCount]);
+
+  const scrollToHunk = useCallback((idx: number) => {
+    hunkEls.current[idx]?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  }, []);
+
+  const goPrev = useCallback(() => {
+    setFocusedHunkIdx(prev => {
+      const next = Math.max(0, prev - 1);
+      scrollToHunk(next);
+      return next;
+    });
+  }, [scrollToHunk]);
+
+  const goNext = useCallback(() => {
+    setFocusedHunkIdx(prev => {
+      const next = Math.min(hunkCount - 1, prev + 1);
+      scrollToHunk(next);
+      return next;
+    });
+  }, [hunkCount, scrollToHunk]);
+
   const canApplyToEditor = otherText != null && !loadErr && !busy;
   const canApplyHunk = !busy && otherText != null;
 
   const title = source.kind === 'disk' ? 'Compare with disk version' : 'Merge with backup';
   const applyAllLabel = source.kind === 'disk' ? 'Use disk version' : 'Use entire backup file';
+  const otherColLabel = source.kind === 'disk' ? 'Disk version' : 'Backup';
 
   const subLabel = useMemo(() => {
     if (source.kind === 'backup') {
       const rel = pathRelativeToVault(vaultRoot, source.backupUri) || source.backupUri;
       return (
         <>
-          This note (left) vs. backup on disk:{' '}
-          <span className="backup-merge-panel__path">{rel}</span>
+          Backup (left): <span className="backup-merge-panel__path">{rel}</span>
+          {' — '}your note (right).
         </>
       );
     }
-    return 'This note (left) vs. version on disk (right). Apply individual changes or use one side entirely.';
+    return 'Disk version (left) vs. your note (right). Apply individual changes or use one side entirely.';
   }, [source, vaultRoot]);
 
   function handleApplyHunk(hunkIndex: number) {
@@ -113,15 +141,57 @@ export function BackupMergePanel({
     setLocalBody(prev => applyHunkToText(prev, hunk));
   }
 
+  const hunkSegments = segments.filter(s => s.kind === 'hunk');
+  let hunkRenderIdx = 0;
+  hunkEls.current = [];
+
   return (
     <div
       className="backup-merge-panel"
       data-app-surface="capture"
       role="region"
       aria-label="Compare note versions"
+      onKeyDown={e => {
+        if (e.key === 'j' || (e.key === 'ArrowDown' && e.altKey)) {
+          e.preventDefault();
+          goNext();
+        } else if (e.key === 'k' || (e.key === 'ArrowUp' && e.altKey)) {
+          e.preventDefault();
+          goPrev();
+        }
+      }}
     >
       <div className="backup-merge-panel__header">
-        <h2 className="backup-merge-panel__title">{title}</h2>
+        <div className="backup-merge-panel__header-top">
+          <h2 className="backup-merge-panel__title">{title}</h2>
+          {hunkCount > 0 ? (
+            <div className="backup-merge-panel__hunk-nav">
+              <span className="backup-merge-panel__hunk-count muted">
+                {hunkCount} {hunkCount === 1 ? 'change' : 'changes'}
+              </span>
+              <button
+                type="button"
+                className="ghost backup-merge-panel__hunk-nav-btn"
+                disabled={hunkCount === 0 || focusedHunkIdx === 0}
+                onClick={goPrev}
+                title="Previous change (k)"
+                aria-label="Previous change"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="ghost backup-merge-panel__hunk-nav-btn"
+                disabled={hunkCount === 0 || focusedHunkIdx >= hunkCount - 1}
+                onClick={goNext}
+                title="Next change (j)"
+                aria-label="Next change"
+              >
+                ↓
+              </button>
+            </div>
+          ) : null}
+        </div>
         <p className="backup-merge-panel__sub muted">{subLabel}</p>
         <div className="backup-merge-panel__header-actions">
           <button
@@ -152,8 +222,7 @@ export function BackupMergePanel({
               void onApplyMergedBody(localBody);
             }}
           >
-            Apply to editor
-            {hunkCount === 0 && otherText != null ? ' (no changes)' : ''}
+            Apply to editor{hunkCount === 0 && otherText != null ? ' (identical)' : ''}
           </button>
           <button
             type="button"
@@ -174,8 +243,8 @@ export function BackupMergePanel({
       ) : null}
       <div className="backup-merge-panel__diff-view">
         <div className="backup-merge-panel__diff-col-labels">
-          <span>Current note (body)</span>
-          <span>{source.kind === 'disk' ? 'Disk version' : 'Backup'} (read-only)</span>
+          <span>{otherColLabel}</span>
+          <span>Current</span>
         </div>
         <div className="backup-merge-panel__diff-body">
           {otherText == null && loadErr == null ? (
@@ -183,28 +252,51 @@ export function BackupMergePanel({
           ) : null}
           {segments.map((seg, i) => {
             if (seg.kind === 'context') {
+              const isEllipsis = seg.lines.length === 1 && seg.lines[0]!.startsWith('…');
+              if (isEllipsis) {
+                return (
+                  <div key={i} className="backup-merge-panel__context-ellipsis">
+                    {seg.lines[0]}
+                  </div>
+                );
+              }
               return (
                 <div key={i} className="backup-merge-panel__context">
-                  {seg.lines.map((line, j) => (
-                    <div key={j} className="backup-merge-panel__context-line">
-                      {line}
-                    </div>
-                  ))}
+                  <pre className="backup-merge-panel__context-col">
+                    {seg.lines.map((line, j) => (
+                      <div key={j} className="backup-merge-panel__context-line">{line}</div>
+                    ))}
+                  </pre>
+                  <pre className="backup-merge-panel__context-col">
+                    {seg.lines.map((line, j) => (
+                      <div key={j} className="backup-merge-panel__context-line">{line}</div>
+                    ))}
+                  </pre>
                 </div>
               );
             }
-            const isDelete = seg.leftLines.length > 0 && seg.rightLines.length === 0;
-            const isInsert = seg.leftLines.length === 0 && seg.rightLines.length > 0;
-            const isReplace = !isDelete && !isInsert;
-            const hunkLabel = isDelete
-              ? 'Deletion'
-              : isInsert
-                ? 'Insertion'
-                : isReplace
-                  ? 'Change'
-                  : 'Change';
+
+            // Hunk: left = other (seg.rightLines), right = current (seg.leftLines)
+            const otherLines = seg.rightLines;
+            const currentLines = seg.leftLines;
+            const isAddition = otherLines.length > 0 && currentLines.length === 0;
+            const isDeletion = otherLines.length === 0 && currentLines.length > 0;
+            const hunkLabel = isAddition ? 'Addition' : isDeletion ? 'Deletion' : 'Change';
+            const thisHunkRenderIdx = hunkRenderIdx++;
+            const isFocused = thisHunkRenderIdx === focusedHunkIdx;
+
             return (
-              <div key={i} className="backup-merge-panel__hunk">
+              <div
+                key={i}
+                ref={el => {
+                  if (el) hunkEls.current[thisHunkRenderIdx] = el;
+                }}
+                className={
+                  isFocused
+                    ? 'backup-merge-panel__hunk backup-merge-panel__hunk--focused'
+                    : 'backup-merge-panel__hunk'
+                }
+              >
                 <div className="backup-merge-panel__hunk-header">
                   <span className="backup-merge-panel__hunk-label muted">{hunkLabel}</span>
                   <button
@@ -212,29 +304,29 @@ export function BackupMergePanel({
                     className="backup-merge-panel__hunk-apply"
                     disabled={!canApplyHunk}
                     onClick={() => handleApplyHunk(seg.index)}
-                    title="Apply this change to the current note"
+                    title="Apply this change to your note"
                   >
-                    Apply →
+                    ← Apply
                   </button>
                 </div>
                 <div className="backup-merge-panel__hunk-cols">
                   <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--left">
-                    {seg.leftLines.length === 0 ? (
+                    {otherLines.length === 0 ? (
                       <div className="backup-merge-panel__hunk-empty">(empty)</div>
                     ) : (
-                      seg.leftLines.map((line, j) => (
-                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--del">
+                      otherLines.map((line, j) => (
+                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--ins">
                           {line}
                         </div>
                       ))
                     )}
                   </pre>
                   <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--right">
-                    {seg.rightLines.length === 0 ? (
+                    {currentLines.length === 0 ? (
                       <div className="backup-merge-panel__hunk-empty">(empty)</div>
                     ) : (
-                      seg.rightLines.map((line, j) => (
-                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--ins">
+                      currentLines.map((line, j) => (
+                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--del">
                           {line}
                         </div>
                       ))
@@ -245,10 +337,17 @@ export function BackupMergePanel({
             );
           })}
           {otherText != null && hunkCount === 0 ? (
-            <p className="muted backup-merge-panel__no-diff">No differences — both sides are identical.</p>
+            <p className="muted backup-merge-panel__no-diff">
+              No differences — both sides are identical.
+            </p>
           ) : null}
         </div>
       </div>
+      {hunkSegments.length > 0 ? (
+        <div className="backup-merge-panel__footer-hint muted">
+          j / Alt+↓ next change &nbsp;·&nbsp; k / Alt+↑ previous change
+        </div>
+      ) : null}
     </div>
   );
 }
