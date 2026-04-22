@@ -21,7 +21,15 @@ import type {VaultImagePreviewRefs} from './vaultImagePreviewTypes';
 
 export const toggleVaultImageExpand = StateEffect.define<{lineFrom: number}>();
 
+/** Dispatched when `vaultRoot` / `activeNotePath` (or resolver) changes so previews re-read refs. */
+export const vaultImagePreviewContextBumpEffect = StateEffect.define<null>();
+
 export type {VaultImagePreviewRefs} from './vaultImagePreviewTypes';
+
+/** Snapshot for [`WidgetType.eq`](https://codemirror.net/docs/ref/#view.WidgetType.eq) so context-only bumps still remount previews. */
+function vaultImagePreviewContextStamp(refs: VaultImagePreviewRefs): string {
+  return `${refs.vaultRoot.current}\0${refs.activeNotePath.current ?? ''}`;
+}
 
 /** Marker value for [`EditorView.atomicRanges`](https://codemirror.net/docs/ref/#view.EditorView^atomicRanges). */
 class VaultImageAtomicSpan extends RangeValue {
@@ -111,6 +119,8 @@ class VaultImageBlockWidget extends WidgetType {
   mode: 'collapsed' | 'trailing';
   alt: string;
   src: string;
+  /** Vault root + active note path when this widget was built (invalidates DOM on context bump). */
+  previewContextStamp: string;
   refs: VaultImagePreviewRefs;
 
   constructor(
@@ -118,6 +128,7 @@ class VaultImageBlockWidget extends WidgetType {
     mode: 'collapsed' | 'trailing',
     alt: string,
     src: string,
+    previewContextStamp: string,
     refs: VaultImagePreviewRefs,
   ) {
     super();
@@ -125,6 +136,7 @@ class VaultImageBlockWidget extends WidgetType {
     this.mode = mode;
     this.alt = alt;
     this.src = src;
+    this.previewContextStamp = previewContextStamp;
     this.refs = refs;
   }
 
@@ -134,7 +146,8 @@ class VaultImageBlockWidget extends WidgetType {
       this.lineFrom === other.lineFrom &&
       this.mode === other.mode &&
       this.alt === other.alt &&
-      this.src === other.src
+      this.src === other.src &&
+      this.previewContextStamp === other.previewContextStamp
     );
   }
 
@@ -161,11 +174,10 @@ class VaultImageBlockWidget extends WidgetType {
     img.alt = this.alt;
     img.className = 'cm-vault-image-preview__img';
     img.decoding = 'async';
-    img.src = this.refs.resolvePreviewUrl(
-      this.refs.vaultRoot.current,
-      this.refs.activeNotePath.current,
-      this.src,
-    );
+    const vr = this.refs.vaultRoot.current;
+    const ap = this.refs.activeNotePath.current;
+    const previewUrl = this.refs.resolvePreviewUrl(vr, ap, this.src);
+    img.src = previewUrl;
 
     const toggle = (e: Event) => {
       e.preventDefault();
@@ -223,6 +235,7 @@ function buildVaultImageDecorations(
             'trailing',
             parsed.alt,
             parsed.src,
+            vaultImagePreviewContextStamp(refs),
             refs,
           ),
           block: true,
@@ -243,6 +256,7 @@ function buildVaultImageDecorations(
             'collapsed',
             parsed.alt,
             parsed.src,
+            vaultImagePreviewContextStamp(refs),
             refs,
           ),
           block: true,
@@ -259,7 +273,13 @@ function buildVaultImageDecorations(
 }
 
 function transactionAffectsVaultImagePreview(tr: Transaction): boolean {
-  return tr.docChanged || tr.effects.some(e => e.is(toggleVaultImageExpand));
+  return (
+    tr.docChanged ||
+    tr.effects.some(
+      e =>
+        e.is(toggleVaultImageExpand) || e.is(vaultImagePreviewContextBumpEffect),
+    )
+  );
 }
 
 /**

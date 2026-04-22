@@ -64,7 +64,10 @@ import {
 import {markdownEskerra} from './markdownEskerraLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
-import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {
+  vaultImagePreviewContextBumpEffect,
+  vaultImagePreviewExtension,
+} from './vaultImagePreviewCodemirror';
 import {todayHubSectionMarkerExtension} from './todayHubSectionMarkerCodemirror';
 import {linkRichPreviewExtension, linkRichBlockedDomainsBumpEffect, type LinkRichPreviewRefs} from './linkRichPreviewCodemirror';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
@@ -426,6 +429,16 @@ const NoteMarkdownEditorImpl = forwardRef<
     refs.blockedDomains = new Set(linkSnippetBlockedDomains ?? []);
     viewRef.current?.dispatch({effects: linkRichBlockedDomainsBumpEffect.of(null)});
   }, [linkSnippetBlockedDomains]);
+
+  useEffect(() => {
+    const v = viewRef.current;
+    if (!v) {
+      return;
+    }
+    const spec = {effects: vaultImagePreviewContextBumpEffect.of(null)};
+    v.dispatch(spec);
+    dispatchEskerraTableNestedCellEditors(v, spec);
+  }, [vaultRoot, props.activeNotePath]);
 
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
