@@ -16,7 +16,7 @@ body {
   -webkit-user-select: none;
 }
 
-/* Transparent shell behind rounded .app-root — only while main shell is active (see App.tsx). */
+/* Transparent shell behind rounded .app-root — Tauri desktop frameless (see App.tsx). */
 html.tauri-main-chrome {
   background: transparent;
 }

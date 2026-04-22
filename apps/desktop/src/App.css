@@ -132,21 +132,7 @@
   outline-offset: -2px;
 }
 
-/*
- * Vault picker / layout loading: native OS title bar (see App.tsx setDecorations).
- * Square client area; no faux floating frame drawn in the webview.
- */
-.app-root--tauri.app-root--setup {
-  border-radius: 0;
-}
-
-.app-root--tauri.app-root--setup:not(.app-root--tiled-left):not(
-    .app-root--tiled-right
-  ):not(.app-root--maximized)::after {
-  content: none !important;
-}
-
-/* Tauri frameless main shell: declarative drag on title bar; keep controls scrollable. */
+/* Tauri frameless (all phases): declarative drag on title bar; keep controls scrollable. */
 .app-root--tauri button,
 .app-root--tauri input,
 .app-root--tauri textarea,

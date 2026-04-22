@@ -90,7 +90,7 @@ const MAIN_WINDOW_LABEL = 'main';
 
 /**
  * Wayland often fails `set_position` inside window-state; plugin aborts before `set_size` if POSITION runs first.
- * Omit DECORATIONS so persisted `decorated: false` from the old frameless build does not disable native chrome.
+ * Omit DECORATIONS so persisted window-state does not override decoration mode (always frameless).
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
@@ -252,8 +252,6 @@ export default function App() {
     }
     return parts.join(' ');
   }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
-
-  const mainShellReady = Boolean(vaultRoot && layoutsReady);
 
   const titleBarTodayHubSelect = useMemo(() => {
     if (
@@ -560,35 +558,37 @@ export default function App() {
     ],
   );
 
-  /* Setup / loading: native OS decorations; main shell: frameless + transparent HTML chrome. */
+  /* Always frameless; native titlebar never shown (custom WindowTitleBar on all routes). */
   useLayoutEffect(() => {
     if (!isTauri()) {
       return;
     }
-    void getCurrentWindow().setDecorations(!mainShellReady);
-  }, [mainShellReady]);
+    void (async () => {
+      try {
+        await getCurrentWindow().setDecorations(false);
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
     if (!isTauri()) {
-      return;
-    }
-    if (mainShellReady) {
-      root.classList.add('tauri-main-chrome');
-    } else {
       root.classList.remove('tauri-main-chrome');
+      return () => {
+        root.classList.remove('tauri-main-chrome');
+      };
     }
+    root.classList.add('tauri-main-chrome');
     return () => {
       root.classList.remove('tauri-main-chrome');
     };
-  }, [mainShellReady]);
+  }, []);
 
-  /* Modal dim: match frameless rounded mask; only used when tauri-main-chrome is active. */
+  /* Modal dim: match frameless rounded mask (all Tauri phases). */
   useLayoutEffect(() => {
     if (!isTauri()) {
-      return;
-    }
-    if (!mainShellReady) {
       document.documentElement.style.removeProperty('--shell-overlay-radius');
       return () => {
         document.documentElement.style.removeProperty('--shell-overlay-radius');
@@ -603,7 +603,7 @@ export default function App() {
     return () => {
       document.documentElement.style.removeProperty('--shell-overlay-radius');
     };
-  }, [mainShellReady, maximized, tiling]);
+  }, [maximized, tiling]);
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: !desktopPlayback.localPlaybackActive,
@@ -1008,6 +1008,7 @@ export default function App() {
         <div ref={appRootRef} className={appRootClassName}>
           <ThemedChromeBackground />
           <div className="app-root-chrome">
+            <WindowTitleBar tiling={tiling} />
             <div className="shell setup-shell">
               <h1>{settingsName}</h1>
               <p className="muted">Choose your notes folder (vault root). Settings are stored in `.eskerra/` inside it.</p>
@@ -1030,6 +1031,7 @@ export default function App() {
         <div ref={appRootRef} className={appRootClassName}>
           <ThemedChromeBackground />
           <div className="app-root-chrome">
+            <WindowTitleBar tiling={tiling} />
             <div className="shell setup-shell">
               <p className="muted">Loading…</p>
             </div>
