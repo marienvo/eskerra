@@ -123,6 +123,32 @@ describe('inboxWikiLinkTargetIsResolved', () => {
     expect(inboxWikiLinkTargetIsResolved([], 'foo/bar')).toBe(false);
   });
 
+  it('is true for path-shaped .md wiki when href resolves under the vault', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'Missing.md', uri: '/vault/General/Missing.md'}],
+        '_autosync-backup-nuc/General/b.md',
+        {
+          vaultRoot: '/vault',
+          sourceMarkdownUriOrDir: '/vault/General/Missing.md',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when path wiki href does not resolve (e.g. hard-excluded directory)', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'Missing.md', uri: '/vault/General/Missing.md'}],
+        '../Assets/nope.md',
+        {
+          vaultRoot: '/vault',
+          sourceMarkdownUriOrDir: '/vault/General/Missing.md',
+        },
+      ),
+    ).toBe(false);
+  });
+
   it('is false for empty target', () => {
     expect(inboxWikiLinkTargetIsResolved([], '  ')).toBe(false);
   });
@@ -389,6 +415,27 @@ describe('openOrCreateVaultRelativeMarkdownLink', () => {
       sourceMarkdownUriOrDir: `${vaultRoot}/Inbox`,
     });
     expect(result).toEqual({kind: 'unsupported'});
+  });
+
+  it('opens when the file exists on disk but is not in the markdown ref index', async () => {
+    const backup = `${vaultRoot}/General/_autosync-backup-nuc/General/b.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '# H'],
+      [`${vaultRoot}/General/_autosync-backup-nuc`, 'dir'],
+      [`${vaultRoot}/General/_autosync-backup-nuc/General`, 'dir'],
+      [backup, '# Backup'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: '_autosync-backup-nuc/General/b.md',
+      notes,
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: backup});
   });
 });
 

@@ -4,7 +4,7 @@ import {
   MARKDOWN_EXTENSION,
 } from './vaultLayout';
 import {
-  tryAssertVaultMarkdownNoteUriForCrud,
+  tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink,
 } from './vaultMarkdownPaths';
 import {vaultPathDirname} from './vaultVisibility';
 
@@ -169,7 +169,7 @@ export function resolveVaultRelativeMarkdownHref(
   const joined = decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
     : posixResolveRelativeToDirectory(dir, pathPart);
-  const validated = tryAssertVaultMarkdownNoteUriForCrud(base, joined);
+  const validated = tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(base, joined);
   if (!validated) {
     return null;
   }

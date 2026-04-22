@@ -70,6 +70,41 @@ export function tryAssertVaultMarkdownNoteUriForCrud(
 }
 
 /**
+ * Validates a `.md` URI under the vault for resolving relative / path-shaped wiki links.
+ * Allows underscore- and dot-prefixed path segments (hidden / backup folders) but still rejects
+ * hard-excluded product directories ({@link VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES}).
+ */
+export function tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+  vaultRootUri: string,
+  noteUri: string,
+): string | null {
+  const base = normalizeSlashes(normalizeVaultBaseUri(vaultRootUri)).replace(/\/+$/, '');
+  const uri = normalizeSlashes(noteUri);
+  if (uri !== base && !uri.startsWith(`${base}/`)) {
+    return null;
+  }
+  const relative = uri === base ? '' : uri.slice(base.length + 1);
+  if (!relative) {
+    return null;
+  }
+  const segments = relative.split('/').filter(Boolean);
+  if (segments.length === 0) {
+    return null;
+  }
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i]!;
+    if (isVaultTreeHardExcludedDirectoryName(seg)) {
+      return null;
+    }
+  }
+  const fileName = segments[segments.length - 1]!;
+  if (!fileName.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
+    return null;
+  }
+  return uri;
+}
+
+/**
  * Validates a vault directory path for tree CRUD (rename / delete folder). Does not require `.md`;
  * rejects vault root, ignored segments, and hard-excluded directories.
  */

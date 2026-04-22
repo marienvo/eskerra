@@ -296,10 +296,19 @@ export function TodayHubCanvas({
     return m;
   }, [rowUris, noteRefs, vaultRoot]);
 
-  const wikiLinkTargetIsResolvedFn = useMemo(
-    () => (inner: string) => inboxWikiLinkTargetIsResolved(noteRefs, inner),
-    [noteRefs],
-  );
+  const wikiLinkTargetIsResolvedByRowUri = useMemo(() => {
+    const m = new Map<string, (inner: string) => boolean>();
+    for (const ru of rowUris) {
+      const k = normUri(ru);
+      m.set(k, inner =>
+        inboxWikiLinkTargetIsResolved(noteRefs, inner, {
+          vaultRoot,
+          sourceMarkdownUriOrDir: k,
+        }),
+      );
+    }
+    return m;
+  }, [rowUris, noteRefs, vaultRoot]);
 
   const inboxAttachmentHost = useMemo(() => createNoteInboxAttachmentHost(), []);
   const [localRowSections, setLocalRowSections] = useState<Record<string, string[]>>(
@@ -778,6 +787,8 @@ export function TodayHubCanvas({
                   const emptyReadonly = !editing && !isWarm && !chunk.trim();
                   const relResolved =
                     relativeMarkdownLinkHrefIsResolvedByRowUri.get(uri)!;
+                  const wikiResolved =
+                    wikiLinkTargetIsResolvedByRowUri.get(uri)!;
 
                   const readonlyInteractiveProps = {
                     role: 'button' as const,
@@ -879,7 +890,7 @@ export function TodayHubCanvas({
                         onMarkdownRelativeLinkActivate
                       }
                       onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                      wikiLinkTargetIsResolved={wikiLinkTargetIsResolvedFn}
+                      wikiLinkTargetIsResolved={wikiResolved}
                       wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
                       onSaveShortcut={onSaveShortcut}
                       onEditableBlur={

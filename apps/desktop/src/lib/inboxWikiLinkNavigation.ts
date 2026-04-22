@@ -9,6 +9,7 @@ import {
   stemFromMarkdownFileName,
   vaultPathDirname,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveResult,
   type VaultFilesystem,
@@ -92,16 +93,38 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
 
 /**
  * True when `inner` resolves to exactly one existing inbox note (same rule as navigation `open`),
- * or when the target is a browser-openable `http` / `https` / `mailto` URL (desktop external wiki).
+ * or when the target is a browser-openable `http` / `https` / `mailto` URL (desktop external wiki),
+ * or when `vaultPathContext` is set and `inner` is a path-shaped `.md` target that resolves as a
+ * vault-relative markdown link from `sourceMarkdownUriOrDir`.
  */
 export function inboxWikiLinkTargetIsResolved(
   notes: ReadonlyArray<InboxWikiLinkNoteRef>,
   inner: string,
+  vaultPathContext?: {
+    vaultRoot: string;
+    sourceMarkdownUriOrDir: string;
+  },
 ): boolean {
   if (wikiLinkInnerBrowserOpenableHref(inner) != null) {
     return true;
   }
-  return resolveInboxWikiLinkTarget(notes, inner).kind === 'open';
+  if (resolveInboxWikiLinkTarget(notes, inner).kind === 'open') {
+    return true;
+  }
+  if (vaultPathContext) {
+    const href = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+    if (href != null) {
+      return (
+        resolveVaultRelativeMarkdownHref(
+          vaultPathContext.vaultRoot,
+          vaultPathContext.sourceMarkdownUriOrDir,
+          href,
+          notes,
+        ) != null
+      );
+    }
+  }
+  return false;
 }
 
 export type InboxRelativeMarkdownLinkNavigationResult =
@@ -141,6 +164,14 @@ export async function openOrCreateVaultRelativeMarkdownLink(options: {
   );
 
   if (exists) {
+    return {
+      kind: 'open',
+      uri: resolved.uri,
+      canonicalHref: resolved.canonicalHref,
+    };
+  }
+
+  if (await fs.exists(resolved.uri)) {
     return {
       kind: 'open',
       uri: resolved.uri,

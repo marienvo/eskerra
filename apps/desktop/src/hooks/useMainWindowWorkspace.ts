@@ -31,6 +31,7 @@ import {
   SubtreeMarkdownPresenceCache,
   isBrowserOpenableMarkdownHref,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
@@ -3284,12 +3285,84 @@ export function useMainWindowWorkspace(options: {
           );
           return;
         }
-        if (result.reason === 'path_not_supported') {
-          setErr(
-            `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
-          );
-        } else {
+        if (result.kind === 'unsupported') {
+          if (result.reason === 'path_not_supported') {
+            const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+            if (pathHref != null) {
+              const base = normalizeVaultBaseUri(vaultRoot);
+              const relParent = showTodayHubCanvasRef.current
+                ? todayHubWikiNavParentRef.current
+                : null;
+              const sourceMarkdownUriOrDir = composingNewEntryRef.current
+                ? getInboxDirectoryUri(base)
+                : showTodayHubCanvasRef.current && !composingNewEntryRef.current
+                  ? getGeneralDirectoryUri(base)
+                  : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+              const relResult = await openOrCreateVaultRelativeMarkdownLink({
+                href: pathHref,
+                notes: vaultMarkdownRefsRef.current.map(r => ({
+                  name: r.name,
+                  uri: r.uri,
+                })),
+                vaultRoot,
+                fs,
+                sourceMarkdownUriOrDir,
+              });
+              if (relResult.kind === 'open' || relResult.kind === 'created') {
+                if (relResult.kind === 'created') {
+                  subtreeMarkdownCacheRef.current.invalidateForMutation(
+                    vaultRoot,
+                    relResult.uri,
+                    'file',
+                  );
+                  await refreshNotes(vaultRoot);
+                  setFsRefreshNonce(n => n + 1);
+                } else if (relResult.canonicalHref) {
+                  const pipeAt = inner.indexOf('|');
+                  const replacementInner =
+                    pipeAt >= 0
+                      ? `${relResult.canonicalHref}${inner.slice(pipeAt)}`
+                      : relResult.canonicalHref;
+                  const hubEd = todayHubCellEditorRef.current;
+                  if (hubEd && todayHubWikiNavParentRef.current) {
+                    hubEd.replaceWikiLinkInnerAt({
+                      at,
+                      expectedInner: inner,
+                      replacementInner,
+                    });
+                  } else {
+                    inboxEditorRef.current?.replaceWikiLinkInnerAt({
+                      at,
+                      expectedInner: inner,
+                      replacementInner,
+                    });
+                  }
+                }
+                if (openInBackgroundTab) {
+                  await openNoteRespectingExistingTab(relResult.uri, 'background-new-tab');
+                  return;
+                }
+                if (
+                  isActiveWorkspaceTodayLinkSurface({
+                    composingNewEntry: composingNewEntryRef.current,
+                    activeTodayHubUri: activeTodayHubUriRef.current,
+                    selectedUri: selectedUriRef.current,
+                  })
+                ) {
+                  await openNoteRespectingExistingTab(relResult.uri, 'foreground-new-tab');
+                  return;
+                }
+                await openMarkdownInEditor(relResult.uri);
+                return;
+              }
+            }
+            setErr(
+              `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
+            );
+            return;
+          }
           setErr('Wiki link target is empty.');
+          return;
         }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));

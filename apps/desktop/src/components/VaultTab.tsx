@@ -891,15 +891,6 @@ export function VaultTab({
     return () => window.clearTimeout(id);
   }, [renameFolderUri]);
 
-  const wikiLinkTargetIsResolved = useMemo(
-    () => (inner: string) =>
-      inboxWikiLinkTargetIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        inner,
-      ),
-    [vaultMarkdownRefs],
-  );
-
   const relativeMarkdownSourceUriOrDir = useMemo(() => {
     const base = normalizeVaultBaseUri(vaultRoot);
     if (composingNewEntry) {
@@ -910,6 +901,16 @@ export function VaultTab({
     }
     return selectedUri ?? getInboxDirectoryUri(base);
   }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
+
+  const wikiLinkTargetIsResolved = useMemo(
+    () => (inner: string) =>
+      inboxWikiLinkTargetIsResolved(
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
+        inner,
+        {vaultRoot, sourceMarkdownUriOrDir: relativeMarkdownSourceUriOrDir},
+      ),
+    [vaultMarkdownRefs, vaultRoot, relativeMarkdownSourceUriOrDir],
+  );
 
   const relativeMarkdownLinkHrefIsResolved = useMemo(
     () => (href: string) =>

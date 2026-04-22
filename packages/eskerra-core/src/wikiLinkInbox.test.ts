@@ -5,6 +5,7 @@ import {
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerVaultRelativeMarkdownHref,
 } from './wikiLinkInbox';
 
 const NOTES = [
@@ -161,6 +162,30 @@ describe('wikiLinkInnerBrowserOpenableHref', () => {
 
   it('returns null for disallowed schemes', () => {
     expect(wikiLinkInnerBrowserOpenableHref('javascript:alert(1)')).toBeNull();
+  });
+});
+
+describe('wikiLinkInnerVaultRelativeMarkdownHref', () => {
+  it('returns path for conflict-style backup targets', () => {
+    expect(
+      wikiLinkInnerVaultRelativeMarkdownHref(
+        '_autosync-backup-nuc/General/123--20260315-145001.md',
+      ),
+    ).toBe('_autosync-backup-nuc/General/123--20260315-145001.md');
+  });
+
+  it('strips display text and optional inbox prefix', () => {
+    expect(
+      wikiLinkInnerVaultRelativeMarkdownHref(
+        'Inbox/sub/Note.md|Backup',
+      ),
+    ).toBe('sub/Note.md');
+  });
+
+  it('returns null without slashes, without .md, or when empty', () => {
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('Note.md')).toBeNull();
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('a/b')).toBeNull();
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('  ')).toBeNull();
   });
 });
 

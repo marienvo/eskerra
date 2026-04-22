@@ -1,4 +1,5 @@
 import {sanitizeInboxNoteStem, stemFromMarkdownFileName} from './inboxMarkdown';
+import {MARKDOWN_EXTENSION} from './vaultLayout';
 import {isBrowserOpenableMarkdownHref} from './vaultRelativeMarkdownLink';
 
 export type InboxWikiLinkNoteRef = {
@@ -44,6 +45,26 @@ export function wikiLinkInnerBrowserOpenableHref(inner: string): string | null {
   const parsed = splitWikiLinkInner(inner);
   const href = parsed.targetText.trim();
   return isBrowserOpenableMarkdownHref(href) ? href : null;
+}
+
+/**
+ * When a wiki link points at a vault `.md` via a relative path (contains '/' or '\\' before the
+ * extension), returns the `href` string to pass to {@link resolveVaultRelativeMarkdownHref}.
+ * Uses the same optional `Inbox/` prefix stripping as {@link resolveInboxWikiLinkTarget}.
+ */
+export function wikiLinkInnerVaultRelativeMarkdownHref(inner: string): string | null {
+  const parsed = splitWikiLinkInner(inner);
+  const pathless = stripInboxPrefixCaseInsensitive(parsed.targetText.trim());
+  if (pathless === '') {
+    return null;
+  }
+  if (!pathless.includes('/') && !pathless.includes('\\')) {
+    return null;
+  }
+  if (!pathless.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
+    return null;
+  }
+  return pathless;
 }
 
 function stripInboxPrefixCaseInsensitive(target: string): string {

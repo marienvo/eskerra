@@ -70,7 +70,11 @@ export function TodayHubCellStaticRichText({
   const {hitState, lines, segments} = useMemo(
     () =>
       buildTodayHubCellStaticViewModel(cellText, {
-        wikiTargetIsResolved: inner => inboxWikiLinkTargetIsResolved(noteRefs, inner),
+        wikiTargetIsResolved: inner =>
+          inboxWikiLinkTargetIsResolved(noteRefs, inner, {
+            vaultRoot,
+            sourceMarkdownUriOrDir: rowUri,
+          }),
         relativeMarkdownLinkHrefIsResolved: href =>
           inboxRelativeMarkdownLinkHrefIsResolved(noteRefs, rowUri, vaultRoot, href),
       }),

@@ -4,6 +4,7 @@ import {
   resolveVaultRelativeMarkdownHref,
   stemFromMarkdownFileName,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type VaultMarkdownRef,
 } from '@eskerra/core';
 import type {VaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
@@ -176,11 +177,33 @@ function handleLinkPress(href: string, options: VaultReadonlyMarkdownRuleOptions
       return;
     }
     if (resolved.kind === 'unsupported') {
-      const detail =
-        resolved.reason === 'empty_target'
-          ? 'This wiki link has an empty target.'
-          : 'This wiki link uses a path target, which is not supported here.';
-      Alert.alert('Unsupported link', detail);
+      if (resolved.reason === 'empty_target') {
+        Alert.alert('Unsupported link', 'This wiki link has an empty target.');
+        return;
+      }
+      const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(wikiInner);
+      const root = options.vaultRoot?.trim();
+      if (pathHref != null && root) {
+        const rel = resolveVaultRelativeMarkdownHref(
+          root,
+          options.currentNoteUri,
+          pathHref,
+          options.noteRefs,
+        );
+        if (rel != null) {
+          options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
+          return;
+        }
+        Alert.alert(
+          'Note not found',
+          'This wiki link path does not match a note in this vault.',
+        );
+        return;
+      }
+      Alert.alert(
+        'Unsupported link',
+        'This wiki link uses a path target, which is not supported here.',
+      );
       return;
     }
     if (resolved.kind === 'create') {

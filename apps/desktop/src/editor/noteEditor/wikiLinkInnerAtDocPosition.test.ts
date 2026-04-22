@@ -79,4 +79,19 @@ describe('wikiLinkPointerActivatableInnerAtDocPosition', () => {
       'alpha note',
     );
   });
+
+  it('treats hits on hidden [[ and ]] as inside the link for path-shaped .md wiki targets', () => {
+    const inner = '_autosync/a/b.md';
+    const doc = Text.of([`x [[${inner}]] y`]);
+    const line = doc.line(1);
+    const open = line.from + line.text.indexOf('[[');
+    const firstClose = line.from + line.text.indexOf(']]');
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, open)).toBe(inner);
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, open + 1)).toBe(inner);
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, firstClose)).toBe(inner);
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, firstClose + 1)).toBe(
+      inner,
+    );
+    expect(wikiLinkPointerActivatableInnerAtDocPosition(doc, firstClose + 2)).toBeNull();
+  });
 });
