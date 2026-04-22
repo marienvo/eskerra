@@ -1,5 +1,5 @@
-import type {VaultFilesystem} from '@eskerra/core';
-import {splitYamlFrontmatter} from '@eskerra/core';
+import type {VaultFilesystem, VaultDirEntry} from '@eskerra/core';
+import {getAutosyncBackupRootUri, splitYamlFrontmatter} from '@eskerra/core';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
@@ -21,6 +21,23 @@ type BackupMergePanelProps = {
   onKeepLocal?: () => void;
   busy: boolean;
 };
+
+async function hasAnyFiles(fs: VaultFilesystem, dirUri: string): Promise<boolean> {
+  let entries: VaultDirEntry[];
+  try {
+    entries = await fs.listFiles(dirUri);
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (entry.type === 'directory') {
+      if (await hasAnyFiles(fs, entry.uri)) return true;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
 
 function pathRelativeToVault(vaultRoot: string, fileUri: string): string {
   const r = vaultRoot.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -44,6 +61,8 @@ export function BackupMergePanel({
 }: BackupMergePanelProps) {
   const [loadedText, setLoadedText] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   // rightText = working copy of the current note (target being built)
   // leftText  = working copy of the other side (backup or disk), can be modified by accept-right
@@ -148,6 +167,27 @@ export function BackupMergePanel({
     }
     return 'Disk version (left) vs. your note (right). Accept changes per block or use one side entirely.';
   }, [source, vaultRoot]);
+
+  async function handleDeleteBackup() {
+    if (source.kind !== 'backup') return;
+    try {
+      setDeleteErr(null);
+      setDeleteBusy(true);
+      await fs.unlink(source.backupUri);
+      const root = getAutosyncBackupRootUri(source.backupUri);
+      if (root) {
+        const empty = !(await hasAnyFiles(fs, root));
+        if (empty) {
+          await fs.removeTree(root);
+        }
+      }
+      onClose();
+    } catch (e) {
+      setDeleteErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   function handleAcceptLeft(hunkIdx: number) {
     const hunk = hunks[hunkIdx];
@@ -259,6 +299,21 @@ export function BackupMergePanel({
           </button>
         </div>
       </div>
+      {source.kind === 'backup' ? (
+        <div className="backup-merge-panel__delete-row">
+          <button
+            type="button"
+            className="ghost backup-merge-panel__delete-btn"
+            disabled={busy || deleteBusy}
+            onClick={() => { void handleDeleteBackup(); }}
+          >
+            {deleteBusy ? 'Deleting…' : 'Delete backup'}
+          </button>
+          {deleteErr != null ? (
+            <span className="backup-merge-panel__err" role="alert">{deleteErr}</span>
+          ) : null}
+        </div>
+      ) : null}
       {loadErr != null ? (
         <p className="backup-merge-panel__err" role="alert">
           {loadErr}

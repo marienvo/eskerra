@@ -15,3 +15,19 @@ export function isVaultPathUnderAutosyncBackup(vaultFileOrDirUri: string): boole
   }
   return false;
 }
+
+/**
+ * Returns the URI of the `_autosync-backup[-*]` root directory that contains
+ * the given file, or `null` if the file is not inside such a directory.
+ */
+export function getAutosyncBackupRootUri(uri: string): string | null {
+  const normalized = uri.trim().replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  for (let i = 0; i < parts.length; i++) {
+    const seg = parts[i]!;
+    if (seg === '_autosync-backup' || seg.startsWith('_autosync-backup-')) {
+      return parts.slice(0, i + 1).join('/');
+    }
+  }
+  return null;
+}
