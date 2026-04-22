@@ -87,6 +87,7 @@ import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
 import {BackupMergePanel} from './BackupMergePanel';
+import type {MergePanelSource} from './BackupMergePanel';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -214,9 +215,13 @@ type VaultTabProps = {
   titleBarEditorTabsHost?: HTMLElement | null;
   linkSnippetBlockedDomains?: ReadonlyArray<string>;
   onMuteLinkSnippetDomain?: (domain: string) => void;
-  mergeView: null | {baseUri: string; backupUri: string};
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
   onCloseMergeView: () => void;
   onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onKeepMyEditsFromMerge?: () => void;
 };
 
 type InboxBacklinksSectionProps = {
@@ -228,9 +233,13 @@ type InboxBacklinksSectionProps = {
 
 type EditorPaneBodyProps = {
   fs: VaultFilesystem;
-  mergeView: null | {baseUri: string; backupUri: string};
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
   onCloseMergeView: () => void;
   onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onKeepMyEditsFromMerge?: () => void;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxAttachmentHost: ReturnType<typeof createNoteInboxAttachmentHost>;
@@ -340,6 +349,7 @@ function EditorPaneBody({
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
+  onKeepMyEditsFromMerge,
   inboxEditorRef,
   inboxEditorShellScrollRef,
   inboxAttachmentHost,
@@ -490,10 +500,15 @@ function EditorPaneBody({
               <BackupMergePanel
                 vaultRoot={vaultRoot}
                 fs={fs}
-                backupUri={mergeView.backupUri}
+                source={
+                  mergeView.kind === 'backup'
+                    ? ({kind: 'backup', backupUri: mergeView.backupUri} satisfies MergePanelSource)
+                    : ({kind: 'disk', diskMarkdown: mergeView.diskMarkdown} satisfies MergePanelSource)
+                }
                 currentBody={mergeCurrentBody}
                 onClose={onCloseMergeView}
-                onApplyFullBackup={onApplyFullBackupFromMerge}
+                onApplyOther={onApplyFullBackupFromMerge}
+                onKeepLocal={mergeView.kind === 'diskConflict' ? onKeepMyEditsFromMerge : undefined}
                 busy={busy}
               />
             ) : null}
@@ -722,6 +737,7 @@ export function VaultTab({
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
+  onKeepMyEditsFromMerge,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
@@ -1518,6 +1534,7 @@ export function VaultTab({
                       mergeView={mergeView}
                       onCloseMergeView={onCloseMergeView}
                       onApplyFullBackupFromMerge={onApplyFullBackupFromMerge}
+                      onKeepMyEditsFromMerge={onKeepMyEditsFromMerge}
                       inboxEditorRef={inboxEditorRef}
                       inboxEditorShellScrollRef={inboxEditorShellScrollRef}
                       inboxAttachmentHost={inboxAttachmentHost}

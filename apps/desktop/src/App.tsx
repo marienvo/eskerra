@@ -205,6 +205,8 @@ export default function App() {
     mergeView,
     closeMergeView,
     applyFullBackupFromMerge,
+    keepMyEditsFromMerge,
+    enterDiskConflictMergeView,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -1218,6 +1220,7 @@ export default function App() {
                       mergeView={mergeView}
                       onCloseMergeView={closeMergeView}
                       onApplyFullBackupFromMerge={applyFullBackupFromMerge}
+                      onKeepMyEditsFromMerge={keepMyEditsFromMerge}
                     />
                   )}
                 </main>
@@ -1232,6 +1235,12 @@ export default function App() {
                 choose.
               </span>
               <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  onClick={() => enterDiskConflictMergeView()}
+                >
+                  Compare / merge…
+                </button>
                 <button
                   type="button"
                   className="primary"
@@ -1256,6 +1265,12 @@ export default function App() {
                 save. Open full resolve only if you need to reconcile with disk.
               </span>
               <span className="conflict-banner__actions">
+                <button
+                  type="button"
+                  onClick={() => enterDiskConflictMergeView()}
+                >
+                  Compare / merge…
+                </button>
                 <button
                   type="button"
                   className="primary"

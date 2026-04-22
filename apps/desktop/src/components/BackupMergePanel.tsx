@@ -5,13 +5,18 @@ import {useEffect, useMemo, useState} from 'react';
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
 import {splitLines} from '../lib/lineLcs';
 
+export type MergePanelSource =
+  | {kind: 'backup'; backupUri: string}
+  | {kind: 'disk'; diskMarkdown: string};
+
 type BackupMergePanelProps = {
   vaultRoot: string;
   fs: VaultFilesystem;
-  backupUri: string;
+  source: MergePanelSource;
   currentBody: string;
   onClose: () => void;
-  onApplyFullBackup: () => void | Promise<void>;
+  onApplyOther: () => void | Promise<void>;
+  onKeepLocal?: () => void;
   busy: boolean;
 };
 
@@ -27,42 +32,50 @@ function pathRelativeToVault(vaultRoot: string, fileUri: string): string {
 export function BackupMergePanel({
   vaultRoot,
   fs,
-  backupUri,
+  source,
   currentBody,
   onClose,
-  onApplyFullBackup,
+  onApplyOther,
+  onKeepLocal,
   busy,
 }: BackupMergePanelProps) {
-  const [backupText, setBackupText] = useState<string | null>(null);
+  const [loadedText, setLoadedText] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
 
   useEffect(() => {
+    if (source.kind !== 'backup') {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {
-        const raw = await fs.readFile(backupUri, {encoding: 'utf8'});
-        if (cancelled) {
-          return;
-        }
+        const raw = await fs.readFile(source.backupUri, {encoding: 'utf8'});
+        if (cancelled) return;
         const {body} = splitYamlFrontmatter(raw);
-        setBackupText(normalizeVaultMarkdownDiskRead(body));
+        setLoadedText(normalizeVaultMarkdownDiskRead(body));
         setLoadErr(null);
       } catch (e) {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
         setLoadErr(e instanceof Error ? e.message : String(e));
-        setBackupText(null);
+        setLoadedText(null);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [fs, backupUri]);
+  }, [fs, source]);
+
+  const otherText = useMemo(() => {
+    if (source.kind === 'disk') {
+      const {body} = splitYamlFrontmatter(source.diskMarkdown);
+      return normalizeVaultMarkdownDiskRead(body);
+    }
+    return loadedText;
+  }, [source, loadedText]);
 
   const {leftLines, rightLines} = useMemo(() => {
     const a = splitLines(currentBody);
-    const b = backupText != null ? splitLines(backupText) : [];
+    const b = otherText != null ? splitLines(otherText) : [];
     const n = Math.max(a.length, b.length, 1);
     const l: string[] = [];
     const r: string[] = [];
@@ -71,27 +84,40 @@ export function BackupMergePanel({
       r.push(b[i] ?? '');
     }
     return {leftLines: l, rightLines: r};
-  }, [currentBody, backupText]);
+  }, [currentBody, otherText]);
 
-  const canApply = backupText != null && !loadErr && !busy;
-  const backupFileName = useMemo(
-    () => pathRelativeToVault(vaultRoot, backupUri) || backupUri,
-    [vaultRoot, backupUri],
-  );
+  const canApply = otherText != null && !loadErr && !busy;
+
+  const title =
+    source.kind === 'disk' ? 'Compare with disk version' : 'Merge with backup';
+  const otherColLabel =
+    source.kind === 'disk' ? 'Disk version (read-only)' : 'Backup (read-only)';
+  const applyLabel =
+    source.kind === 'disk' ? 'Use disk version' : 'Use entire backup file';
+
+  const subLabel = useMemo(() => {
+    if (source.kind === 'backup') {
+      const rel = pathRelativeToVault(vaultRoot, source.backupUri) || source.backupUri;
+      return (
+        <>
+          This note (left) vs. backup on disk:{' '}
+          <span className="backup-merge-panel__path">{rel}</span>
+        </>
+      );
+    }
+    return 'This note (left) vs. version on disk (right). Choose which to keep.';
+  }, [source, vaultRoot]);
 
   return (
     <div
       className="backup-merge-panel"
       data-app-surface="capture"
       role="region"
-      aria-label="Compare note with conflict backup"
+      aria-label="Compare note versions"
     >
       <div className="backup-merge-panel__header">
-        <h2 className="backup-merge-panel__title">Merge with backup</h2>
-        <p className="backup-merge-panel__sub muted">
-          This note (left) vs. backup on disk:{' '}
-          <span className="backup-merge-panel__path">{backupFileName}</span>
-        </p>
+        <h2 className="backup-merge-panel__title">{title}</h2>
+        <p className="backup-merge-panel__sub muted">{subLabel}</p>
         <div className="backup-merge-panel__header-actions">
           <button
             type="button"
@@ -103,15 +129,26 @@ export function BackupMergePanel({
           >
             Close
           </button>
+          {onKeepLocal != null ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                onKeepLocal();
+              }}
+            >
+              Keep my edits
+            </button>
+          ) : null}
           <button
             type="button"
             className="primary"
             disabled={!canApply}
             onClick={() => {
-              void onApplyFullBackup();
+              void onApplyOther();
             }}
           >
-            Use entire backup file
+            {applyLabel}
           </button>
         </div>
       </div>
@@ -139,7 +176,7 @@ export function BackupMergePanel({
           </pre>
         </div>
         <div className="backup-merge-panel__col">
-          <div className="backup-merge-panel__col-label">Backup (read-only)</div>
+          <div className="backup-merge-panel__col-label">{otherColLabel}</div>
           <pre className="backup-merge-panel__pre">
             {rightLines.map((line, i) => (
               <div

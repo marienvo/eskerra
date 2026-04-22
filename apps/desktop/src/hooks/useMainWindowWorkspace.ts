@@ -476,12 +476,20 @@ export type UseMainWindowWorkspaceResult = {
    */
   syncFrontmatterStateFromDisk: (nextInner: string | null, leading: string) => void;
   /**
-   * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`).
+   * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`),
+   * or comparing editor draft with a disk version from a disk conflict.
    */
-  mergeView: null | {baseUri: string; backupUri: string};
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
   closeMergeView: () => void;
-  /** Replaces the base note on disk and in the editor with the full backup file contents, then saves. */
+  /** Replaces the base note on disk and in the editor with the full backup file contents, then saves. For disk conflict kind: loads disk version and resolves the conflict. */
   applyFullBackupFromMerge: () => Promise<void>;
+  /** For disk conflict merge view: marks local edits as primary and resolves the conflict. */
+  keepMyEditsFromMerge: () => void;
+  /** Opens the merge panel for the current disk conflict (hard or soft; promotes soft to hard). */
+  enterDiskConflictMergeView: () => void;
 };
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
@@ -567,7 +575,11 @@ export function useMainWindowWorkspace(options: {
     Record<string, TodayHubWorkspaceSnapshot>
   >({});
   const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
-  const [mergeView, setMergeView] = useState<null | {baseUri: string; backupUri: string}>(null);
+  const [mergeView, setMergeView] = useState<
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string}
+  >(null);
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
@@ -1674,7 +1686,7 @@ export function useMainWindowWorkspace(options: {
       if (cur !== normBase) {
         await openMarkdownInEditor(normBase, {skipHistory: true});
       }
-      setMergeView({baseUri: normBase, backupUri: normBackup});
+      setMergeView({kind: 'backup', baseUri: normBase, backupUri: normBackup});
       return true;
     },
     [openMarkdownInEditor],
@@ -1683,6 +1695,11 @@ export function useMainWindowWorkspace(options: {
   const applyFullBackupFromMerge = useCallback(async () => {
     const mv = mergeView;
     if (!mv) {
+      return;
+    }
+    if (mv.kind === 'diskConflict') {
+      resolveDiskConflictReloadFromDisk();
+      setMergeView(null);
       return;
     }
     const normBase = normalizeEditorDocUri(mv.baseUri);
@@ -1727,12 +1744,41 @@ export function useMainWindowWorkspace(options: {
     }
   }, [
     mergeView,
+    resolveDiskConflictReloadFromDisk,
     fs,
     loadFullMarkdownIntoInboxEditor,
     inboxEditorRef,
     enqueuePersistOutgoingNoteMarkdown,
     scheduleBacklinksDeferOneFrameAfterLoad,
   ]);
+
+  const keepMyEditsFromMerge = useCallback(() => {
+    resolveDiskConflictKeepLocal();
+    setMergeView(null);
+  }, [resolveDiskConflictKeepLocal]);
+
+  const enterDiskConflictMergeView = useCallback(() => {
+    const uri = selectedUriRef.current;
+    if (!uri) return;
+    const normUri = normalizeEditorDocUri(uri);
+
+    const dc = diskConflictRef.current;
+    if (dc && normalizeEditorDocUri(dc.uri) === normUri) {
+      setMergeView({kind: 'diskConflict', baseUri: normUri, diskMarkdown: dc.diskMarkdown});
+      return;
+    }
+
+    const s = diskConflictSoftRef.current;
+    if (s && normalizeEditorDocUri(s.uri) === normUri) {
+      autosaveSchedulerRef.current.cancel();
+      const hard: DiskConflictState = {uri: s.uri, diskMarkdown: s.diskMarkdown};
+      setDiskConflict(hard);
+      diskConflictRef.current = hard;
+      setDiskConflictSoft(null);
+      diskConflictSoftRef.current = null;
+      setMergeView({kind: 'diskConflict', baseUri: normUri, diskMarkdown: s.diskMarkdown});
+    }
+  }, []);
 
   const activateOpenTab = useCallback(
     (tabId: string) => {
@@ -4553,5 +4599,7 @@ export function useMainWindowWorkspace(options: {
     mergeView,
     closeMergeView,
     applyFullBackupFromMerge,
+    keepMyEditsFromMerge,
+    enterDiskConflictMergeView,
   };
 }
