@@ -933,7 +933,7 @@ export function useMainWindowWorkspace(options: {
       inboxEditorYamlLeadingBeforeFrontmatterRef.current,
     );
     return parseTodayHubFrontmatter(full);
-  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry, inboxYamlFrontmatterInner]);
+  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry]);
 
   useLayoutEffect(() => {
     todayHubSettingsRef.current = todayHubSettings;
