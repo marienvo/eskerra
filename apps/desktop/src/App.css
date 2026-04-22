@@ -6629,3 +6629,119 @@ button.small {
     transparent
   );
 }
+
+.backup-merge-panel__diff-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.backup-merge-panel__diff-col-labels {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--color-muted, var(--color-text));
+  opacity: 0.9;
+  flex: 0 0 auto;
+  margin-bottom: 0.25rem;
+}
+
+.backup-merge-panel__diff-col-labels > span {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.backup-merge-panel__diff-body {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg, #fff);
+  max-height: min(70vh, 36rem);
+}
+
+.backup-merge-panel__context {
+  padding: 0 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-bg, #fff);
+}
+
+.backup-merge-panel__context-line {
+  padding: 0;
+  opacity: 0.65;
+}
+
+.backup-merge-panel__hunk {
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  margin: -1px 0 0;
+}
+
+.backup-merge-panel__hunk-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  background: color-mix(in srgb, var(--color-surface, #f4f4f4) 60%, transparent);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.backup-merge-panel__hunk-label {
+  font-size: 0.75rem;
+  flex: 1;
+}
+
+.backup-merge-panel__hunk-apply {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  cursor: default;
+}
+
+.backup-merge-panel__hunk-cols {
+  display: flex;
+  gap: 0;
+}
+
+.backup-merge-panel__hunk-pre {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.backup-merge-panel__hunk-pre--left {
+  border-right: 1px solid var(--color-border);
+}
+
+.backup-merge-panel__line--del {
+  background: color-mix(in srgb, var(--color-destructive-text, #c00) 12%, transparent);
+}
+
+.backup-merge-panel__line--ins {
+  background: color-mix(in srgb, var(--color-confirm, #16a34a) 12%, transparent);
+}
+
+.backup-merge-panel__hunk-empty {
+  opacity: 0.4;
+  font-style: italic;
+}
+
+.backup-merge-panel__loading,
+.backup-merge-panel__no-diff {
+  padding: 0.6rem 0.45rem;
+  font-size: 0.85rem;
+  margin: 0;
+}

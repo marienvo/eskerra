@@ -207,6 +207,7 @@ export default function App() {
     applyFullBackupFromMerge,
     keepMyEditsFromMerge,
     enterDiskConflictMergeView,
+    applyMergedBodyFromMerge,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -1220,6 +1221,7 @@ export default function App() {
                       mergeView={mergeView}
                       onCloseMergeView={closeMergeView}
                       onApplyFullBackupFromMerge={applyFullBackupFromMerge}
+                      onApplyMergedBodyFromMerge={applyMergedBodyFromMerge}
                       onKeepMyEditsFromMerge={keepMyEditsFromMerge}
                     />
                   )}

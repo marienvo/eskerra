@@ -221,6 +221,7 @@ type VaultTabProps = {
     | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
   onCloseMergeView: () => void;
   onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onApplyMergedBodyFromMerge: (body: string) => void;
   onKeepMyEditsFromMerge?: () => void;
 };
 
@@ -239,6 +240,7 @@ type EditorPaneBodyProps = {
     | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
   onCloseMergeView: () => void;
   onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onApplyMergedBodyFromMerge: (body: string) => void;
   onKeepMyEditsFromMerge?: () => void;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
@@ -349,6 +351,7 @@ function EditorPaneBody({
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
+  onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
   inboxEditorRef,
   inboxEditorShellScrollRef,
@@ -508,6 +511,7 @@ function EditorPaneBody({
                 currentBody={mergeCurrentBody}
                 onClose={onCloseMergeView}
                 onApplyOther={onApplyFullBackupFromMerge}
+                onApplyMergedBody={onApplyMergedBodyFromMerge}
                 onKeepLocal={mergeView.kind === 'diskConflict' ? onKeepMyEditsFromMerge : undefined}
                 busy={busy}
               />
@@ -737,6 +741,7 @@ export function VaultTab({
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
+  onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
@@ -1534,6 +1539,7 @@ export function VaultTab({
                       mergeView={mergeView}
                       onCloseMergeView={onCloseMergeView}
                       onApplyFullBackupFromMerge={onApplyFullBackupFromMerge}
+                      onApplyMergedBodyFromMerge={onApplyMergedBodyFromMerge}
                       onKeepMyEditsFromMerge={onKeepMyEditsFromMerge}
                       inboxEditorRef={inboxEditorRef}
                       inboxEditorShellScrollRef={inboxEditorShellScrollRef}

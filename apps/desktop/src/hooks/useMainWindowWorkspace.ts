@@ -490,6 +490,8 @@ export type UseMainWindowWorkspaceResult = {
   keepMyEditsFromMerge: () => void;
   /** Opens the merge panel for the current disk conflict (hard or soft; promotes soft to hard). */
   enterDiskConflictMergeView: () => void;
+  /** Applies a manually merged body to the editor, resolves any disk conflict, and saves. */
+  applyMergedBodyFromMerge: (body: string) => void;
 };
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
@@ -1779,6 +1781,67 @@ export function useMainWindowWorkspace(options: {
       setMergeView({kind: 'diskConflict', baseUri: normUri, diskMarkdown: s.diskMarkdown});
     }
   }, []);
+
+  const applyMergedBodyFromMerge = useCallback(
+    (body: string) => {
+      const mv = mergeView;
+      if (!mv) return;
+      const normBase = normalizeEditorDocUri(mv.baseUri);
+
+      if (mv.kind === 'diskConflict') {
+        autosaveSchedulerRef.current.cancel();
+        const dc = diskConflictRef.current;
+        if (dc) {
+          lastPersistedRef.current = {uri: dc.uri, markdown: dc.diskMarkdown};
+        }
+        setDiskConflict(null);
+        diskConflictRef.current = null;
+        setDiskConflictSoft(null);
+        diskConflictSoftRef.current = null;
+      } else {
+        const dc = diskConflictRef.current;
+        if (dc && normalizeEditorDocUri(dc.uri) === normBase) {
+          setErr('Resolve the disk conflict on this note before applying a merge.');
+          return;
+        }
+      }
+
+      suppressEditorOnChangeRef.current = true;
+      inboxEditorRef.current?.loadMarkdown(body, {selection: 'preserve'});
+      suppressEditorOnChangeRef.current = false;
+      setEditorBody(body);
+      editorBodyRef.current = body;
+
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        normBase,
+        body,
+      );
+      if (nextCache) {
+        inboxContentByUriRef.current = nextCache;
+        setInboxContentByUri(prev => mergeInboxNoteBodyIntoCache(prev, normBase, body) ?? prev);
+      }
+      backlinksActiveBodyRef.current = body;
+      setBacklinksActiveBody(body);
+      setMergeView(null);
+
+      const full = inboxEditorSliceToFullMarkdown(
+        body,
+        normBase,
+        false,
+        inboxYamlFrontmatterInnerRef.current,
+        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+      );
+      enqueuePersistOutgoingNoteMarkdown(normBase, full);
+      scheduleBacklinksDeferOneFrameAfterLoad();
+    },
+    [
+      mergeView,
+      inboxEditorRef,
+      enqueuePersistOutgoingNoteMarkdown,
+      scheduleBacklinksDeferOneFrameAfterLoad,
+    ],
+  );
 
   const activateOpenTab = useCallback(
     (tabId: string) => {
@@ -4601,5 +4664,6 @@ export function useMainWindowWorkspace(options: {
     applyFullBackupFromMerge,
     keepMyEditsFromMerge,
     enterDiskConflictMergeView,
+    applyMergedBodyFromMerge,
   };
 }
