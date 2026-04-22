@@ -75,6 +75,7 @@ export function useThemePreference({
       return;
     }
     let cancelled = false;
+    // Defer so we do not call setState synchronously in the effect body (react-hooks/set-state-in-effect).
     queueMicrotask(() => {
       if (!cancelled) {
         setR2Loaded(false);
@@ -135,8 +136,8 @@ export function useThemePreference({
         return;
       }
       const merged: EskerraSettings = {...vaultSettings, themePreference: next};
-      setVaultSettings(merged);
       await writeVaultSettings(vaultRoot, fs, merged);
+      setVaultSettings(merged);
     },
     [vaultRoot, vaultSettings, fs, setVaultSettings],
   );

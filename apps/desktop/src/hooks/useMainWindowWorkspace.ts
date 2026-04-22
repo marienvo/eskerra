@@ -921,6 +921,8 @@ export function useMainWindowWorkspace(options: {
     setShowTodayHubCanvas(vaultUriIsTodayMarkdownFile(normSel));
   }, [vaultRoot, selectedUri, composingNewEntry]);
 
+  // Use `inboxYamlFrontmatterInner` state in the merge (not only the ref) so deps match and Today hub
+  // refreshes on frontmatter-only edits. Leading still comes from the ref (updated with inner on disk sync).
   const todayHubSettings = useMemo((): TodayHubSettings | null => {
     if (!showTodayHubCanvas || !selectedUri) {
       return null;
@@ -929,11 +931,11 @@ export function useMainWindowWorkspace(options: {
       editorBody,
       selectedUri,
       composingNewEntry,
-      inboxYamlFrontmatterInnerRef.current,
+      inboxYamlFrontmatterInner,
       inboxEditorYamlLeadingBeforeFrontmatterRef.current,
     );
     return parseTodayHubFrontmatter(full);
-  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry]);
+  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry, inboxYamlFrontmatterInner]);
 
   useLayoutEffect(() => {
     todayHubSettingsRef.current = todayHubSettings;
