@@ -13,6 +13,7 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-set-size",
+    "core:window:allow-set-decorations",
     "store:default",
     "dialog:default",
     "opener:default",
