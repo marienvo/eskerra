@@ -459,7 +459,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       );
     };
 
-    void tryRegistryThenDeferWalk();
+    tryRegistryThenDeferWalk();
 
     return () => {
       ac.abort();
@@ -639,7 +639,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     }
     const trimmed = baseUri.trim();
     requestVaultSearchIndexWarmup(trimmed);
-    void eskerraVaultSearch.persistActiveVaultUriForWorker(trimmed).catch(() => undefined);
+    eskerraVaultSearch.persistActiveVaultUriForWorker(trimmed).catch(() => undefined);
     return installVaultSearchAutoRefresh(() => baseUriRef.current);
   }, [baseUri]);
 

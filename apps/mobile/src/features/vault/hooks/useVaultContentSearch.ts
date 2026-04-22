@@ -604,7 +604,7 @@ export function useVaultContentSearch({
             Date.now() - lastRec > RECONCILE_STALE_MS;
           if (ready && stale) {
             /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
-            void eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
+            eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
           }
         }
         await eskerraVaultSearch.start(baseUri, id, q).catch(() => {

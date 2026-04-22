@@ -107,14 +107,14 @@ export function runVaultSearchIndexMaintenance(baseUri: string): Promise<VaultSe
           message: 'vault.search.maintenance.partial_resume_reconcile',
           data: {indexed_notes: full.indexedNotes},
         });
-        void eskerraVaultSearch.reconcile(trimmed).catch(() => undefined);
+        eskerraVaultSearch.reconcile(trimmed).catch(() => undefined);
       } else if (shouldReconcile(full, Date.now())) {
         appBreadcrumb({
           category: 'vault_search',
           message: 'vault.search.maintenance.reconcile',
           data: {last_reconciled_at: full.lastReconciledAt},
         });
-        void eskerraVaultSearch.reconcile(trimmed).catch(() => undefined);
+        eskerraVaultSearch.reconcile(trimmed).catch(() => undefined);
       } else {
         appBreadcrumb({
           category: 'vault_search',
@@ -148,7 +148,7 @@ export function requestVaultSearchIndexWarmup(baseUri: string | null | undefined
   }
   const trimmed = baseUri.trim();
   InteractionManager.runAfterInteractions(() => {
-    void runVaultSearchIndexMaintenance(trimmed);
+    runVaultSearchIndexMaintenance(trimmed);
   });
 }
 
@@ -161,7 +161,7 @@ export function installVaultSearchAutoRefresh(getBaseUri: () => string | null | 
     if (next === 'active') {
       const u = getBaseUri()?.trim();
       if (u) {
-        void runVaultSearchIndexMaintenance(u);
+        runVaultSearchIndexMaintenance(u);
       }
     }
   };
@@ -172,7 +172,7 @@ export function installVaultSearchAutoRefresh(getBaseUri: () => string | null | 
     }
     const u = getBaseUri()?.trim();
     if (u) {
-      void runVaultSearchIndexMaintenance(u);
+      runVaultSearchIndexMaintenance(u);
     }
   }, FOREGROUND_INDEX_REFRESH_MS);
   return () => {
