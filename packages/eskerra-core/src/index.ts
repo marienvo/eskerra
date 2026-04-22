@@ -256,6 +256,7 @@ export {
   tryAssertVaultMarkdownNoteUriForCrud,
   tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink,
 } from './vaultMarkdownPaths';
+export {isVaultPathUnderAutosyncBackup} from './vaultAutosyncBackupPath';
 export {
   extractInlineMarkdownLinksFromMarkdown,
   isBrowserOpenableMarkdownHref,

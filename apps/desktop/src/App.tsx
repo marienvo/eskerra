@@ -202,6 +202,9 @@ export default function App() {
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
     workspaceSelectShowsActiveTabPill,
+    mergeView,
+    closeMergeView,
+    applyFullBackupFromMerge,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -1212,6 +1215,9 @@ export default function App() {
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                       linkSnippetBlockedDomains={vaultSettings?.linkSnippetBlockedDomains}
                       onMuteLinkSnippetDomain={handleMuteLinkSnippetDomain}
+                      mergeView={mergeView}
+                      onCloseMergeView={closeMergeView}
+                      onApplyFullBackupFromMerge={applyFullBackupFromMerge}
                     />
                   )}
                 </main>
