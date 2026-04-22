@@ -78,8 +78,9 @@ pub struct VaultSearchDonePayload {
     pub progress: VaultSearchProgressDto,
 }
 
+/// Dot-prefixed only (parity with `vaultVisibility.ts`); `_autosync-backup-*` etc. stay visible.
 pub(crate) fn is_vault_tree_ignored_entry_name(name: &str) -> bool {
-    name.starts_with('.') || name.starts_with('_')
+    name.starts_with('.')
 }
 
 pub(crate) fn is_vault_tree_hard_excluded_directory_name(name: &str) -> bool {
@@ -314,23 +315,25 @@ mod tests {
         assert!(is_eligible_vault_markdown_file_name("Note.md"));
         assert!(!is_eligible_vault_markdown_file_name("Note.txt"));
         assert!(!is_eligible_vault_markdown_file_name(".Note.md"));
-        assert!(!is_eligible_vault_markdown_file_name("_Note.md"));
+        assert!(is_eligible_vault_markdown_file_name("_Note.md"));
         assert!(!is_eligible_vault_markdown_file_name(
             "Note sync-conflict-abc.md"
         ));
     }
 
     #[test]
-    fn walk_skips_hidden_and_assets_tree() {
+    fn walk_skips_dot_hidden_and_assets_tree() {
         let tmp = tempfile::tempdir().unwrap();
         fs::write(tmp.path().join("ok.md"), "").unwrap();
+        fs::write(tmp.path().join("_underscore.md"), "").unwrap();
         fs::write(tmp.path().join(".hide.md"), "").unwrap();
         fs::create_dir_all(tmp.path().join("Assets")).unwrap();
         fs::write(tmp.path().join("Assets/nope.md"), "").unwrap();
         let mut paths = Vec::new();
         collect_eligible_paths(tmp.path(), &mut paths).unwrap();
-        assert_eq!(paths.len(), 1);
-        assert!(paths[0].ends_with("ok.md"));
+        assert_eq!(paths.len(), 2);
+        assert!(paths.iter().any(|p| p.ends_with("ok.md")));
+        assert!(paths.iter().any(|p| p.ends_with("_underscore.md")));
     }
 
     #[test]

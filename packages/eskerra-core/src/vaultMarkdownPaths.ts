@@ -71,8 +71,9 @@ export function tryAssertVaultMarkdownNoteUriForCrud(
 
 /**
  * Validates a `.md` URI under the vault for resolving relative / path-shaped wiki links.
- * Allows underscore- and dot-prefixed path segments (hidden / backup folders) but still rejects
- * hard-excluded product directories ({@link VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES}).
+ * Does not apply {@link isVaultTreeIgnoredEntryName} (so existing targets under any segment name can resolve);
+ * still rejects hard-excluded product directories ({@link VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES}).
+ * Creating or editing notes uses {@link assertVaultMarkdownNoteUriForCrud}, which rejects dot-prefixed segments.
  */
 export function tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
   vaultRootUri: string,

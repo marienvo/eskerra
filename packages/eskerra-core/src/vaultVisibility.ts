@@ -11,8 +11,9 @@ export const VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES = [
 
 const HARD_EXCLUDED_SET = new Set<string>(VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES);
 
+/** Dot-prefixed only (hidden / tooling); underscore-prefixed dirs like `_autosync-backup-*` stay visible and navigable. */
 export function isVaultTreeIgnoredEntryName(name: string): boolean {
-  return name.startsWith('.') || name.startsWith('_');
+  return name.startsWith('.');
 }
 
 export function isVaultTreeHardExcludedDirectoryName(name: string): boolean {

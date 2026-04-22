@@ -27,6 +27,7 @@ export {
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerPathResolutionSourceDirectoryUri,
   wikiLinkInnerVaultRelativeMarkdownHref,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveLookup,

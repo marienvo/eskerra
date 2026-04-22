@@ -1,6 +1,13 @@
 import {sanitizeInboxNoteStem, stemFromMarkdownFileName} from './inboxMarkdown';
-import {MARKDOWN_EXTENSION} from './vaultLayout';
-import {isBrowserOpenableMarkdownHref} from './vaultRelativeMarkdownLink';
+import {
+  getInboxDirectoryUri,
+  MARKDOWN_EXTENSION,
+  normalizeVaultBaseUri,
+} from './vaultLayout';
+import {
+  isBrowserOpenableMarkdownHref,
+  stripMarkdownLinkHrefToPathPart,
+} from './vaultRelativeMarkdownLink';
 
 export type InboxWikiLinkNoteRef = {
   name: string;
@@ -65,6 +72,37 @@ export function wikiLinkInnerVaultRelativeMarkdownHref(inner: string): string | 
     return null;
   }
   return pathless;
+}
+
+/**
+ * Directory URI passed as `sourceMarkdownUriOrDir` to {@link resolveVaultRelativeMarkdownHref} for
+ * path-shaped wiki links `[[.../note.md]]`.
+ *
+ * - Paths without leading `./` or `../` are resolved from the **vault root** so backup-style paths
+ *   like `_autosync-backup-nuc/General/x.md` are not nested under the open note’s folder (e.g. Today hub `General`).
+ * - Optional `Inbox/` prefix on the wiki target uses the **Inbox** directory (the stripped href is relative to Inbox).
+ * - Leading `./` or `../` uses `fallbackSourceMarkdownUriOrDir` (open note URI or directory), matching normal relative links.
+ */
+export function wikiLinkInnerPathResolutionSourceDirectoryUri(
+  vaultRoot: string,
+  inner: string,
+  fallbackSourceMarkdownUriOrDir: string,
+): string {
+  const href = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+  if (href == null) {
+    return fallbackSourceMarkdownUriOrDir;
+  }
+  const pathPart = stripMarkdownLinkHrefToPathPart(href);
+  if (pathPart.startsWith('./') || pathPart.startsWith('../')) {
+    return fallbackSourceMarkdownUriOrDir;
+  }
+  const parsed = splitWikiLinkInner(inner);
+  const trimmedTarget = parsed.targetText.trim();
+  if (hasInboxPrefixCaseInsensitive(trimmedTarget)) {
+    const base = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+    return getInboxDirectoryUri(base);
+  }
+  return normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
 }
 
 function stripInboxPrefixCaseInsensitive(target: string): string {

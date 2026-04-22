@@ -4,6 +4,7 @@ import {
   resolveVaultRelativeMarkdownHref,
   stemFromMarkdownFileName,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerPathResolutionSourceDirectoryUri,
   wikiLinkInnerVaultRelativeMarkdownHref,
   type VaultMarkdownRef,
 } from '@eskerra/core';
@@ -184,15 +185,38 @@ function handleLinkPress(href: string, options: VaultReadonlyMarkdownRuleOptions
       const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(wikiInner);
       const root = options.vaultRoot?.trim();
       if (pathHref != null && root) {
-        const rel = resolveVaultRelativeMarkdownHref(
+        const fallback = options.currentNoteUri;
+        const vaultSource = wikiLinkInnerPathResolutionSourceDirectoryUri(
           root,
-          options.currentNoteUri,
-          pathHref,
-          options.noteRefs,
+          wikiInner,
+          fallback,
         );
-        if (rel != null) {
-          options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
-          return;
+        const norm = (u: string) => u.trim().replace(/\\/g, '/').toLowerCase();
+        const sources =
+          norm(vaultSource) === norm(fallback) ? [fallback] : [vaultSource, fallback];
+
+        const resolveFrom = (sourceDir: string) =>
+          resolveVaultRelativeMarkdownHref(root, sourceDir, pathHref, options.noteRefs);
+
+        for (const sd of sources) {
+          const rel = resolveFrom(sd);
+          if (rel == null) {
+            continue;
+          }
+          const inIndex = options.noteRefs.some(
+            r => norm(r.uri) === norm(rel.uri),
+          );
+          if (inIndex) {
+            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
+            return;
+          }
+        }
+        for (const sd of sources) {
+          const rel = resolveFrom(sd);
+          if (rel != null) {
+            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
+            return;
+          }
         }
         Alert.alert(
           'Note not found',

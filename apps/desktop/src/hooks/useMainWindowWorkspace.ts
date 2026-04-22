@@ -45,6 +45,7 @@ import type {
 import {
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
+  openOrCreateVaultWikiPathMarkdownLink,
 } from '../lib/inboxWikiLinkNavigation';
 import {openSystemBrowserUrl} from '../lib/openSystemBrowserUrl';
 import {
@@ -3286,28 +3287,34 @@ export function useMainWindowWorkspace(options: {
           return;
         }
         if (result.kind === 'unsupported') {
-          if (result.reason === 'path_not_supported') {
-            const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
-            if (pathHref != null) {
-              const base = normalizeVaultBaseUri(vaultRoot);
-              const relParent = showTodayHubCanvasRef.current
-                ? todayHubWikiNavParentRef.current
-                : null;
-              const sourceMarkdownUriOrDir = composingNewEntryRef.current
-                ? getInboxDirectoryUri(base)
-                : showTodayHubCanvasRef.current && !composingNewEntryRef.current
-                  ? getGeneralDirectoryUri(base)
-                  : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
-              const relResult = await openOrCreateVaultRelativeMarkdownLink({
-                href: pathHref,
-                notes: vaultMarkdownRefsRef.current.map(r => ({
-                  name: r.name,
-                  uri: r.uri,
-                })),
-                vaultRoot,
-                fs,
-                sourceMarkdownUriOrDir,
-              });
+            if (result.reason === 'path_not_supported') {
+              const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+              if (pathHref != null) {
+                const base = normalizeVaultBaseUri(vaultRoot);
+                const relParent = showTodayHubCanvasRef.current
+                  ? todayHubWikiNavParentRef.current
+                  : null;
+                const wikiPathFallbackSource = composingNewEntryRef.current
+                  ? getInboxDirectoryUri(base)
+                  : showTodayHubCanvasRef.current && !composingNewEntryRef.current
+                    ? getGeneralDirectoryUri(base)
+                    : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+                const relResult = await openOrCreateVaultWikiPathMarkdownLink({
+                  inner,
+                  notes: vaultMarkdownRefsRef.current.map(r => ({
+                    name: r.name,
+                    uri: r.uri,
+                  })),
+                  vaultRoot,
+                  fs,
+                  fallbackSourceMarkdownUriOrDir: wikiPathFallbackSource,
+                });
+              if (relResult.kind === 'cannot_create_parent') {
+                setErr(
+                  'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
+                );
+                return;
+              }
               if (relResult.kind === 'open' || relResult.kind === 'created') {
                 if (relResult.kind === 'created') {
                   subtreeMarkdownCacheRef.current.invalidateForMutation(
@@ -3446,6 +3453,12 @@ export function useMainWindowWorkspace(options: {
             return;
           }
           await openMarkdownInEditor(result.uri);
+          return;
+        }
+        if (result.kind === 'cannot_create_parent') {
+          setErr(
+            'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
+          );
           return;
         }
         setErr('This link is not a relative vault markdown note.');
