@@ -3,7 +3,8 @@ import {splitYamlFrontmatter} from '@eskerra/core';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
-import {applyHunkToText, buildDiffSegments} from '../lib/buildMarkdownLineDiff';
+import {applyHunkToText, buildDiffSegments, computeOtherHunkRange} from '../lib/buildMarkdownLineDiff';
+import {splitLines} from '../lib/lineLcs';
 
 export type MergePanelSource =
   | {kind: 'backup'; backupUri: string}
@@ -43,13 +44,17 @@ export function BackupMergePanel({
 }: BackupMergePanelProps) {
   const [loadedText, setLoadedText] = useState<string | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
-  const [localBody, setLocalBody] = useState(currentBody);
-  const [focusedHunkIdx, setFocusedHunkIdx] = useState(0);
 
+  // rightText = working copy of the current note (target being built)
+  // leftText  = working copy of the other side (backup or disk), can be modified by accept-right
+  const [rightText, setRightText] = useState(currentBody);
+  const [leftText, setLeftText] = useState<string | null>(null);
+
+  const [focusedHunkIdx, setFocusedHunkIdx] = useState(0);
   const hunkEls = useRef<HTMLDivElement[]>([]);
 
   useEffect(() => {
-    setLocalBody(currentBody);
+    setRightText(currentBody);
     setFocusedHunkIdx(0);
   }, [currentBody]);
 
@@ -84,9 +89,18 @@ export function BackupMergePanel({
     return loadedText;
   }, [source, loadedText]);
 
+  // Sync leftText when otherText becomes available or changes (new backup loaded / source changed)
+  useEffect(() => {
+    setLeftText(otherText);
+    setFocusedHunkIdx(0);
+  }, [otherText]);
+
   const {segments, hunks} = useMemo(
-    () => (otherText != null ? buildDiffSegments(localBody, otherText) : {segments: [], hunks: []}),
-    [localBody, otherText],
+    () =>
+      leftText != null
+        ? buildDiffSegments(rightText, leftText)
+        : {segments: [], hunks: []},
+    [rightText, leftText],
   );
 
   const hunkCount = hunks.length;
@@ -115,8 +129,8 @@ export function BackupMergePanel({
     });
   }, [hunkCount, scrollToHunk]);
 
-  const canApplyToEditor = otherText != null && !loadErr && !busy;
-  const canApplyHunk = !busy && otherText != null;
+  const canApplyToEditor = leftText != null && !loadErr && !busy;
+  const canAccept = !busy && leftText != null;
 
   const title = source.kind === 'disk' ? 'Compare with disk version' : 'Merge with backup';
   const applyAllLabel = source.kind === 'disk' ? 'Use disk version' : 'Use entire backup file';
@@ -132,16 +146,25 @@ export function BackupMergePanel({
         </>
       );
     }
-    return 'Disk version (left) vs. your note (right). Apply individual changes or use one side entirely.';
+    return 'Disk version (left) vs. your note (right). Accept changes per block or use one side entirely.';
   }, [source, vaultRoot]);
 
-  function handleApplyHunk(hunkIndex: number) {
-    const hunk = hunks[hunkIndex];
+  function handleAcceptLeft(hunkIdx: number) {
+    const hunk = hunks[hunkIdx];
     if (!hunk) return;
-    setLocalBody(prev => applyHunkToText(prev, hunk));
+    // Take left side into right: apply hunk to rightText
+    setRightText(prev => applyHunkToText(prev, hunk));
   }
 
-  const hunkSegments = segments.filter(s => s.kind === 'hunk');
+  function handleAcceptRight(hunkIdx: number) {
+    const hunk = hunks[hunkIdx];
+    if (!hunk) return;
+    // Take right side into left: apply inverse hunk to leftText
+    const rightLines = splitLines(rightText).slice(hunk.start, hunk.end);
+    const {start: oStart, end: oEnd} = computeOtherHunkRange(hunks, hunkIdx);
+    setLeftText(prev => (prev != null ? applyHunkToText(prev, {start: oStart, end: oEnd, lines: rightLines}) : prev));
+  }
+
   let hunkRenderIdx = 0;
   hunkEls.current = [];
 
@@ -219,10 +242,10 @@ export function BackupMergePanel({
             type="button"
             disabled={!canApplyToEditor}
             onClick={() => {
-              void onApplyMergedBody(localBody);
+              void onApplyMergedBody(rightText);
             }}
           >
-            Apply to editor{hunkCount === 0 && otherText != null ? ' (identical)' : ''}
+            Apply to editor{hunkCount === 0 && leftText != null ? ' (identical)' : ''}
           </button>
           <button
             type="button"
@@ -247,7 +270,7 @@ export function BackupMergePanel({
           <span>Current</span>
         </div>
         <div className="backup-merge-panel__diff-body">
-          {otherText == null && loadErr == null ? (
+          {leftText == null && loadErr == null ? (
             <p className="muted backup-merge-panel__loading">Loading…</p>
           ) : null}
           {segments.map((seg, i) => {
@@ -276,7 +299,7 @@ export function BackupMergePanel({
               );
             }
 
-            // Hunk: left = other (seg.rightLines), right = current (seg.leftLines)
+            // Left col = other/backup (seg.rightLines), right col = current (seg.leftLines)
             const otherLines = seg.rightLines;
             const currentLines = seg.leftLines;
             const isAddition = otherLines.length > 0 && currentLines.length === 0;
@@ -301,12 +324,21 @@ export function BackupMergePanel({
                   <span className="backup-merge-panel__hunk-label muted">{hunkLabel}</span>
                   <button
                     type="button"
-                    className="backup-merge-panel__hunk-apply"
-                    disabled={!canApplyHunk}
-                    onClick={() => handleApplyHunk(seg.index)}
-                    title="Apply this change to your note"
+                    className="backup-merge-panel__hunk-accept"
+                    disabled={!canAccept}
+                    onClick={() => handleAcceptLeft(seg.index)}
+                    title="Accept left — use this version from backup/disk"
                   >
-                    ← Apply
+                    ← Accept left
+                  </button>
+                  <button
+                    type="button"
+                    className="backup-merge-panel__hunk-accept"
+                    disabled={!canAccept}
+                    onClick={() => handleAcceptRight(seg.index)}
+                    title="Accept right — keep your current version"
+                  >
+                    Accept right →
                   </button>
                 </div>
                 <div className="backup-merge-panel__hunk-cols">
@@ -336,14 +368,14 @@ export function BackupMergePanel({
               </div>
             );
           })}
-          {otherText != null && hunkCount === 0 ? (
+          {leftText != null && hunkCount === 0 ? (
             <p className="muted backup-merge-panel__no-diff">
               No differences — both sides are identical.
             </p>
           ) : null}
         </div>
       </div>
-      {hunkSegments.length > 0 ? (
+      {hunkCount > 0 ? (
         <div className="backup-merge-panel__footer-hint muted">
           j / Alt+↓ next change &nbsp;·&nbsp; k / Alt+↑ previous change
         </div>

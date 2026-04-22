@@ -61,3 +61,23 @@ export function applyHunkToText(baseText: string, hunk: LineEditHunk): string {
   lines.splice(hunk.start, hunk.end - hunk.start, ...hunk.lines);
   return lines.join('\n');
 }
+
+/**
+ * Returns the `{start, end}` range in the OTHER (right) text that corresponds to
+ * `hunks[hunkIdx].lines`. Needed to apply an inverse hunk (accept-right).
+ */
+export function computeOtherHunkRange(
+  hunks: LineEditHunk[],
+  hunkIdx: number,
+): {start: number; end: number} {
+  let bPos = 0;
+  let oPos = 0;
+  for (let i = 0; i < hunkIdx; i++) {
+    const h = hunks[i]!;
+    oPos += h.start - bPos + h.lines.length;
+    bPos = h.end;
+  }
+  const h = hunks[hunkIdx]!;
+  oPos += h.start - bPos;
+  return {start: oPos, end: oPos + h.lines.length};
+}

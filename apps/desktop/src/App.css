@@ -6759,7 +6759,7 @@ button.small {
   flex: 1;
 }
 
-.backup-merge-panel__hunk-apply {
+.backup-merge-panel__hunk-accept {
   font-size: 0.75rem;
   padding: 0.1rem 0.5rem;
   cursor: default;

@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest';
-import {applyHunkToText, buildDiffSegments} from './buildMarkdownLineDiff';
+import {applyHunkToText, buildDiffSegments, computeOtherHunkRange} from './buildMarkdownLineDiff';
+import {splitLines} from './lineLcs';
 
 describe('buildDiffSegments', () => {
   it('returns no hunks when texts are identical', () => {
@@ -75,5 +76,44 @@ describe('applyHunkToText', () => {
     const {hunks: remaining} = buildDiffSegments(after, other);
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.lines).toEqual(['D']);
+  });
+});
+
+describe('computeOtherHunkRange', () => {
+  it('returns correct range for first hunk with leading context', () => {
+    const {hunks} = buildDiffSegments('a\nb\nc', 'a\nB\nc');
+    // hunk 0: start=1,end=2,lines=['B'] → in other: position 1..2
+    expect(computeOtherHunkRange(hunks, 0)).toEqual({start: 1, end: 2});
+  });
+
+  it('returns correct range for second hunk', () => {
+    const {hunks} = buildDiffSegments('a\nb\nc\nd', 'a\nB\nc\nD');
+    // hunk 0: start=1,end=2,lines=['B'] (in other: 1..2)
+    // hunk 1: start=3,end=4,lines=['D'] → 1 equal before + 1 ins + 1 equal → oPos=1+1+1=3
+    expect(computeOtherHunkRange(hunks, 1)).toEqual({start: 3, end: 4});
+  });
+
+  it('accept-right makes both sides identical (replace scenario)', () => {
+    const right = 'a\nb\nc';
+    const left = 'a\nB\nc';
+    const {hunks} = buildDiffSegments(right, left);
+    expect(hunks).toHaveLength(1);
+    // Accept right: update left to match right for this hunk
+    const rightLines = splitLines(right).slice(hunks[0]!.start, hunks[0]!.end);
+    const {start, end} = computeOtherHunkRange(hunks, 0);
+    const newLeft = applyHunkToText(left, {start, end, lines: rightLines});
+    expect(newLeft).toBe(right);
+    expect(buildDiffSegments(right, newLeft).hunks).toHaveLength(0);
+  });
+
+  it('accept-right makes both sides identical (insertion scenario)', () => {
+    const right = 'a\nc';
+    const left = 'a\nb\nc';
+    const {hunks} = buildDiffSegments(right, left);
+    expect(hunks).toHaveLength(1);
+    const rightLines = splitLines(right).slice(hunks[0]!.start, hunks[0]!.end);
+    const {start, end} = computeOtherHunkRange(hunks, 0);
+    const newLeft = applyHunkToText(left, {start, end, lines: rightLines});
+    expect(newLeft).toBe(right);
   });
 });
