@@ -1,4 +1,5 @@
 import type {Text} from '@codemirror/state';
+import {wikiLinkInnerVaultRelativeMarkdownHref} from '@eskerra/core';
 
 import {
   wikiLinkInnerAtLineColumn,
@@ -58,10 +59,13 @@ export function wikiLinkActivatableInnerAtDocPosition(
 }
 
 /**
- * Wiki link inner for **pointer** activation only (`innerFrom` <= pos < `innerTo`), excluding
- * the document offset of the first closing `]`. On non-marker-focus lines `]]` uses
- * `display: none`, so coordinates just past the visible label can map onto that offset; **Mod-Enter**
- * still uses {@link wikiLinkActivatableInnerAtDocPosition} so the caret slot before `]]` keeps working.
+ * Wiki link inner for **pointer** activation. By default `innerFrom` <= pos < `innerTo` (first `]`),
+ * so plain wiki labels still ignore clicks that map onto the first closing bracket (avoids stray
+ * opens when `]]` is `display: none`). **Mod-Enter** uses {@link wikiLinkActivatableInnerAtDocPosition}
+ * and still includes the caret slot before `]]`.
+ *
+ * For **path-shaped `.md` targets** (sync backup style), the valid range includes hidden `[[` and
+ * `]]` so clicks that map onto those offsets (common with `display: none` brackets) still activate.
  */
 export function wikiLinkPointerActivatableInnerAtDocPosition(
   doc: Text,
@@ -71,7 +75,10 @@ export function wikiLinkPointerActivatableInnerAtDocPosition(
   if (match == null) {
     return null;
   }
-  if (pos < match.innerFrom || pos >= match.innerTo) {
+  const extendForPathWiki = wikiLinkInnerVaultRelativeMarkdownHref(match.inner) != null;
+  const inclusiveStart = extendForPathWiki ? match.innerFrom - 2 : match.innerFrom;
+  const exclusiveEnd = extendForPathWiki ? match.innerTo + 2 : match.innerTo;
+  if (pos < inclusiveStart || pos >= exclusiveEnd) {
     return null;
   }
   return match.inner;

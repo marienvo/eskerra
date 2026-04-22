@@ -11,10 +11,23 @@ import '@eskerra/tokens/desktop-root.css';
 
 import {AppRoot} from './Root.tsx';
 import {ErrorBoundary} from './ErrorBoundary';
+import {registerGlobalErrorHandlers} from './observability/registerGlobalErrorHandlers';
+import {reportCrash} from './observability/reportCrash';
 
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(
+registerGlobalErrorHandlers();
+
+type ReactErrorInfo = {componentStack?: string | null};
+
+createRoot(document.getElementById('root')!, {
+  onCaughtError(error, info: ReactErrorInfo) {
+    reportCrash('react-caught', error, {componentStack: info?.componentStack ?? null});
+  },
+  onUncaughtError(error, info: ReactErrorInfo) {
+    reportCrash('react-uncaught', error, {componentStack: info?.componentStack ?? null});
+  },
+}).render(
   <StrictMode>
     <ErrorBoundary>
       <AppRoot />

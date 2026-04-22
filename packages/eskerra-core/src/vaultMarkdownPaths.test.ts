@@ -7,7 +7,7 @@ import {
 
 /**
  * Policy: vault markdown CRUD allows **nested** paths anywhere under the vault root (except
- * hard-excluded dirs and ignored name segments). The Inbox **list** UI remains top-level-only;
+ * hard-excluded dirs and dot-prefixed ignored name segments). The Inbox **list** UI remains top-level-only;
  * `assertVaultMarkdownNoteUriForCrud` is the gate for delete/rename on arbitrary vault `.md` paths.
  */
 describe('assertVaultMarkdownNoteUriForCrud (nested vault markdown)', () => {
@@ -30,10 +30,16 @@ describe('assertVaultMarkdownNoteUriForCrud (nested vault markdown)', () => {
     );
   });
 
-  it('rejects path segments with ignored name prefixes', () => {
-    expect(() => assertVaultMarkdownNoteUriForCrud('/vault', '/vault/_hidden/x.md')).toThrow(
+  it('rejects path segments with dot-prefixed ignored names', () => {
+    expect(() => assertVaultMarkdownNoteUriForCrud('/vault', '/vault/.hidden/x.md')).toThrow(
       'Invalid note path.',
     );
+  });
+
+  it('accepts markdown under underscore-prefixed directories', () => {
+    expect(
+      assertVaultMarkdownNoteUriForCrud('/vault', '/vault/General/_autosync-backup/x.md'),
+    ).toBe('/vault/General/_autosync-backup/x.md');
   });
 });
 

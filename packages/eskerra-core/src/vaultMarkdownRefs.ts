@@ -14,7 +14,7 @@ export type CollectVaultMarkdownRefsOptions = {
 
 /**
  * Vault-wide eligible `.md` paths for async wiki index (`{ name, uri }[]`). Walks the vault using the
- * same directory filtering rules as the vault tree (ignored names, hard-excluded dirs). Does not
+ * same directory filtering rules as the vault tree (dot-prefixed ignored names, hard-excluded dirs). Does not
  * block callers; run in the background with `AbortSignal` per vault session.
  */
 export async function collectVaultMarkdownRefs(

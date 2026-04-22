@@ -11,6 +11,8 @@ import {
   buildTodayHubCellStaticViewModel,
   clipSegmentsToRange,
 } from '../lib/todayHubCellStaticView';
+import {parseLoneLinkLine} from '../lib/parseLoneLinkLine';
+import {LinkRichPreviewCard} from './LinkRichPreviewCard';
 import {
   inboxRelativeMarkdownLinkHrefIsResolved,
   inboxWikiLinkTargetIsResolved,
@@ -26,6 +28,14 @@ import type {
 
 const HIT_TREE_MS = 200;
 
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 export type TodayHubCellStaticRichTextProps = {
   cellText: string;
   rowUri: string;
@@ -37,6 +47,8 @@ export type TodayHubCellStaticRichTextProps = {
     payload: VaultRelativeMarkdownLinkActivatePayload,
   ) => void;
   onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
 /**
@@ -52,11 +64,17 @@ export function TodayHubCellStaticRichText({
   onWikiLinkActivate,
   onMarkdownRelativeLinkActivate,
   onMarkdownExternalLinkOpen,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
 }: TodayHubCellStaticRichTextProps): ReactElement | null {
   const {hitState, lines, segments} = useMemo(
     () =>
       buildTodayHubCellStaticViewModel(cellText, {
-        wikiTargetIsResolved: inner => inboxWikiLinkTargetIsResolved(noteRefs, inner),
+        wikiTargetIsResolved: inner =>
+          inboxWikiLinkTargetIsResolved(noteRefs, inner, {
+            vaultRoot,
+            sourceMarkdownUriOrDir: rowUri,
+          }),
         relativeMarkdownLinkHrefIsResolved: href =>
           inboxRelativeMarkdownLinkHrefIsResolved(noteRefs, rowUri, vaultRoot, href),
       }),
@@ -161,6 +179,31 @@ export function TodayHubCellStaticRichText({
         }}
       >
         {lines.map(line => {
+          const loneLinkInfo = parseLoneLinkLine(line.text);
+          const isBlocked = loneLinkInfo != null && linkSnippetBlockedDomains != null &&
+            linkSnippetBlockedDomains.includes(hostnameOf(loneLinkInfo.url));
+          if (loneLinkInfo && !isBlocked) {
+            const prefix = line.text.slice(0, loneLinkInfo.urlOffset);
+            const hasPrefix = /\S/.test(prefix);
+            return (
+              <div
+                key={line.from}
+                className={line.lineClassName}
+                data-doc-line-from={line.from}
+              >
+                {hasPrefix && <span>{prefix}</span>}
+                <LinkRichPreviewCard
+                  key={loneLinkInfo.url}
+                  url={loneLinkInfo.url}
+                  at={line.from + loneLinkInfo.urlOffset}
+                  inline={hasPrefix}
+                  onOpenLink={onMarkdownExternalLinkOpen}
+                  onMuteDomain={onMuteLinkSnippetDomain}
+                />
+              </div>
+            );
+          }
+
           const rangeEnd = line.from + line.text.length;
           const lineSegments = clipSegmentsToRange(segments, line.from, rangeEnd);
           return (

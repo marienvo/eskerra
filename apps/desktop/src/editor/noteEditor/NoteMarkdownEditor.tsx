@@ -29,6 +29,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 
 import {MIDDLE_CLICK_BLOCK_PASTE_WINDOW_MS} from '../../hooks/middleClickPasteBlock';
@@ -63,9 +64,12 @@ import {
 import {markdownEskerra} from './markdownEskerraLanguage';
 import {foldableRangesPresent, nestedCollapseAllFolds} from './nestedFoldAll';
 import type {VaultImagePreviewUrlResolver} from './vaultImagePreviewTypes';
-import {vaultImagePreviewExtension} from './vaultImagePreviewCodemirror';
+import {
+  vaultImagePreviewContextBumpEffect,
+  vaultImagePreviewExtension,
+} from './vaultImagePreviewCodemirror';
 import {todayHubSectionMarkerExtension} from './todayHubSectionMarkerCodemirror';
-import {linkRichPreviewExtension} from './linkRichPreviewCodemirror';
+import {linkRichPreviewExtension, linkRichBlockedDomainsBumpEffect, type LinkRichPreviewRefs} from './linkRichPreviewCodemirror';
 import {markdownBareBrowserUrlAtPosition} from './markdownBareUrl';
 import {markdownActivatableRelativeMdLinkAtPosition} from './markdownActivatableRelativeMdLinkAtPosition';
 import {markdownInlineLinkUrlAtPosition} from './markdownInlineLinkUrlAtPosition';
@@ -244,6 +248,10 @@ export type NoteMarkdownEditorProps = {
    * Same extensions and update path as the full editor; toggled via a Compartment (no duplicate mode).
    */
   readOnly?: boolean;
+  /** Hostnames for which rich link snippet cards are suppressed. */
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  /** Called when the user chooses to hide snippets from a domain via the context menu. */
+  onMuteLinkSnippetDomain?: (domain: string) => void;
   /**
    * Fires after the editable editor loses focus (skipped when `readOnly`). Deferred one microtask so
    * focus moved into CodeMirror tooltips/panels or the markdown context menu does not count. Today
@@ -309,6 +317,8 @@ const NoteMarkdownEditorImpl = forwardRef<
     onFoldableRangesPresentChange,
     readOnly: readOnlyProp = false,
     onEditableBlur,
+    linkSnippetBlockedDomains,
+    onMuteLinkSnippetDomain,
   } = props;
 
   const readOnly = readOnlyProp;
@@ -398,6 +408,37 @@ const NoteMarkdownEditorImpl = forwardRef<
 
   const wikiLinkCompletionCandidatesRef = useRef(wikiLinkCompletionCandidates);
   wikiLinkCompletionCandidatesRef.current = wikiLinkCompletionCandidates;
+
+  const onMuteLinkSnippetDomainRef = useRef(onMuteLinkSnippetDomain);
+  useEffect(() => {
+    onMuteLinkSnippetDomainRef.current = onMuteLinkSnippetDomain;
+  }, [onMuteLinkSnippetDomain]);
+
+  const linkRichPreviewRefsRef = useRef<LinkRichPreviewRefs | null>(null);
+  if (linkRichPreviewRefsRef.current === null) {
+    linkRichPreviewRefsRef.current = {
+      onOpenLink: (href, at) =>
+        onMarkdownExternalLinkOpenRef.current({href, at}),
+      blockedDomains: new Set(),
+    };
+  }
+
+  useEffect(() => {
+    const refs = linkRichPreviewRefsRef.current;
+    if (!refs) return;
+    refs.blockedDomains = new Set(linkSnippetBlockedDomains ?? []);
+    viewRef.current?.dispatch({effects: linkRichBlockedDomainsBumpEffect.of(null)});
+  }, [linkSnippetBlockedDomains]);
+
+  useEffect(() => {
+    const v = viewRef.current;
+    if (!v) {
+      return;
+    }
+    const spec = {effects: vaultImagePreviewContextBumpEffect.of(null)};
+    v.dispatch(spec);
+    dispatchEskerraTableNestedCellEditors(v, spec);
+  }, [vaultRoot, props.activeNotePath]);
 
   const wikiLinkCompartmentRef = useRef<Compartment | null>(null);
   if (wikiLinkCompartmentRef.current === null) {
@@ -874,10 +915,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           resolveVaultImagePreviewUrlRef.current(vr, ap, src),
       }),
       todayHubSectionMarkerExtension,
-      linkRichPreviewExtension({
-        onOpenLink: (href, at) =>
-          onMarkdownExternalLinkOpenRef.current({href, at}),
-      }),
+      linkRichPreviewExtension(linkRichPreviewRefsRef.current!),
       EditorView.domEventHandlers({
         mousedown(event, view) {
           recordPrimaryPointerDownForLinkClick(view, event);
@@ -1408,6 +1446,25 @@ const NoteMarkdownEditorImpl = forwardRef<
     return r.kind === 'text' ? r.text : null;
   }, [attachmentHost, vaultRoot]);
 
+  /**
+   * Click in the host padding / flex spacer below `.cm-editor`: jump the caret to end of doc and focus.
+   * Gated on `e.target === e.currentTarget` so clicks inside CM (incl. panels) are untouched.
+   */
+  const onHostMouseDown = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    if (readOnlyRef.current) return;
+    if (e.button !== 0) return;
+    if (e.target !== e.currentTarget) return;
+    const view = viewRef.current;
+    if (!view) return;
+    e.preventDefault();
+    const end = view.state.doc.length;
+    view.dispatch({
+      selection: EditorSelection.cursor(end),
+      scrollIntoView: true,
+    });
+    view.focus();
+  }, []);
+
   return (
     <>
       <NoteMarkdownEditorContextMenu
@@ -1416,11 +1473,13 @@ const NoteMarkdownEditorImpl = forwardRef<
         busy={busy}
         readClipboardText={readMarkdownEditorClipboard}
         onCleanNote={onCleanNote}
+        onMuteDomain={onMuteLinkSnippetDomain ? (domain) => onMuteLinkSnippetDomainRef.current?.(domain) : undefined}
       >
         <div
           ref={hostRef}
           className={hostClassName}
           data-note-markdown-editor
+          onMouseDown={onHostMouseDown}
         >
           <div ref={parentRef} className="note-markdown-editor-cm-root" />
         </div>

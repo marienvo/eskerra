@@ -211,6 +211,8 @@ type VaultTabProps = {
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
 type InboxBacklinksSectionProps = {
@@ -263,6 +265,8 @@ type EditorPaneBodyProps = {
     columnCount: number,
   ) => Promise<void>;
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
+  linkSnippetBlockedDomains?: ReadonlyArray<string>;
+  onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
 function InboxBacklinksSection({
@@ -362,6 +366,8 @@ function EditorPaneBody({
   vaultFrontmatterIndex,
   vaultSettings,
   diskConflict,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
 }: EditorPaneBodyProps) {
   const [editorHasFoldedRanges, setEditorHasFoldedRanges] = useState(false);
   const [editorHasFoldableRanges, setEditorHasFoldableRanges] = useState(false);
@@ -521,6 +527,8 @@ function EditorPaneBody({
                 busy={busy}
                 onFoldedRangesPresentChange={onFoldedRangesPresentChange}
                 onFoldableRangesPresentChange={onFoldableRangesPresentChange}
+                linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
               />
               {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
                 <div ref={backlinksSidecarRef} className="note-sidecar-group">
@@ -564,6 +572,8 @@ function EditorPaneBody({
                   prehydrateTodayHubRows={prehydrateTodayHubRows}
                   persistTodayHubRow={persistTodayHubRow}
                   todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+                  linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                  onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
                 />
               </div>
               </div>
@@ -664,6 +674,8 @@ export function VaultTab({
   persistTodayHubRow,
   todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
@@ -879,15 +891,6 @@ export function VaultTab({
     return () => window.clearTimeout(id);
   }, [renameFolderUri]);
 
-  const wikiLinkTargetIsResolved = useMemo(
-    () => (inner: string) =>
-      inboxWikiLinkTargetIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        inner,
-      ),
-    [vaultMarkdownRefs],
-  );
-
   const relativeMarkdownSourceUriOrDir = useMemo(() => {
     const base = normalizeVaultBaseUri(vaultRoot);
     if (composingNewEntry) {
@@ -898,6 +901,16 @@ export function VaultTab({
     }
     return selectedUri ?? getInboxDirectoryUri(base);
   }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
+
+  const wikiLinkTargetIsResolved = useMemo(
+    () => (inner: string) =>
+      inboxWikiLinkTargetIsResolved(
+        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
+        inner,
+        {vaultRoot, sourceMarkdownUriOrDir: relativeMarkdownSourceUriOrDir},
+      ),
+    [vaultMarkdownRefs, vaultRoot, relativeMarkdownSourceUriOrDir],
+  );
 
   const relativeMarkdownLinkHrefIsResolved = useMemo(
     () => (href: string) =>
@@ -1495,6 +1508,8 @@ export function VaultTab({
                       prehydrateTodayHubRows={prehydrateTodayHubRows}
                       persistTodayHubRow={persistTodayHubRow}
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+                      linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                      onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
                     />
                     {composingNewEntry ? (
                       <div className="pane-footer">

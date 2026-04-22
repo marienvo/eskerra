@@ -132,21 +132,7 @@
   outline-offset: -2px;
 }
 
-/*
- * Vault picker / layout loading: native OS title bar (see App.tsx setDecorations).
- * Square client area; no faux floating frame drawn in the webview.
- */
-.app-root--tauri.app-root--setup {
-  border-radius: 0;
-}
-
-.app-root--tauri.app-root--setup:not(.app-root--tiled-left):not(
-    .app-root--tiled-right
-  ):not(.app-root--maximized)::after {
-  content: none !important;
-}
-
-/* Tauri frameless main shell: declarative drag on title bar; keep controls scrollable. */
+/* Tauri frameless (all phases): declarative drag on title bar; keep controls scrollable. */
 .app-root--tauri button,
 .app-root--tauri input,
 .app-root--tauri textarea,
@@ -653,72 +639,72 @@ a:focus:not(:focus-visible) {
   color: var(--color-shell-tagline);
 }
 
-/* Status message row: banner-like chip on chrome + ellipsis + optional Read more (see AppStatusBar). */
-.app-status-bar-message {
-  margin: 0;
-  max-width: 100%;
+/* Toast stack: fixed bottom-right floating notifications (see ToastStack). */
+.toast-stack {
+  position: fixed;
+  bottom: 48px;
+  right: 16px;
+  z-index: 9000;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  font-weight: 500;
-  line-height: 1.2;
-  min-width: 0;
-  box-sizing: border-box;
-  user-select: none;
-  -webkit-user-select: none;
-  pointer-events: auto;
-  padding: 0.2rem 0.65rem;
-  border-radius: 9999px;
-  border: 1px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  flex-direction: column;
+  gap: 8px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
 }
 
-.app-status-bar-message.app-status-bar-center--error {
+.toast {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem 0.55rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 1px 4px rgba(0, 0, 0, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.toast--error {
   background: var(--color-shell-status-error-bg);
   border-color: var(--color-shell-status-error-border);
   color: var(--color-shell-status-error);
 }
 
-.app-status-bar-message.app-status-bar-center--info {
+.toast--info {
   background: var(--color-shell-status-info-bg);
   border-color: var(--color-shell-status-info-border);
   color: var(--color-shell-status-info);
 }
 
-.app-status-bar-message__icon {
+.toast__icon {
   flex-shrink: 0;
-  opacity: 0.92;
+  margin-top: 0.1rem;
+  opacity: 0.9;
 }
 
-.app-status-bar-message__text {
+.toast__text {
+  flex: 1 1 auto;
+  margin: 0;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
-.app-status-bar-read-more {
+.toast__dismiss {
   flex-shrink: 0;
-  border: none;
-  background: none;
+  margin-top: -0.08rem;
   color: inherit;
-  font: inherit;
-  font-weight: 500;
-  text-decoration: underline;
-  cursor: default;
-  padding: 0.06rem 0.12rem;
-  border-radius: 4px;
+  opacity: 0.65;
 }
 
-.app-status-bar-message.app-status-bar-center--error .app-status-bar-read-more:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error) 16%, transparent);
-}
-
-.app-status-bar-message.app-status-bar-center--info .app-status-bar-read-more:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+.toast__dismiss:hover:not(:disabled) {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .app-status-bar-trailing {
@@ -3111,7 +3097,8 @@ button.primary.destructive {
  * Markdown syntax markers on non-focus lines (cm-eskerra-marker-focus-line from
  * markdownMarkerFocusLine.ts): ATX heading `#` marks keep gutter layout but are invisible; list
  * bullets/numbers (cm-md-list-mark) stay always visible; other markers use display:none so they
- * take no space.
+ * take no space. `==` highlight delimiters use visibility:hidden instead so they stay in layout
+ * (stable geometry for highlights / selection).
  */
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -3128,10 +3115,6 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-percent-mark,
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-line:not(.cm-eskerra-marker-focus-line)
-  .cm-md-equal-highlight-mark,
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
@@ -3152,6 +3135,13 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-line:not(.cm-eskerra-marker-focus-line)
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-line:not(.cm-eskerra-marker-focus-line)
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -4191,9 +4181,6 @@ button.primary.destructive {
   .cm-md-percent-mark,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
-  .cm-md-equal-highlight-mark,
-[data-app-surface='capture']
-  .today-hub-canvas__cell-static-rich
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
@@ -4207,6 +4194,12 @@ button.primary.destructive {
 [data-app-surface='capture']
   .today-hub-canvas__cell-static-rich
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .today-hub-canvas__cell-static-rich
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -4236,6 +4229,8 @@ button.primary.destructive {
   position: relative;
   width: 100%;
   min-height: 6rem;
+  /* Fill stretched grid cell so CM host (and readonly overlay) covers leftover white below shorter content when a neighboring column is taller (end-of-doc caret jump). */
+  height: 100%;
   /*
    * Single grid cell stacks CM host + readonly overlay so toggling edit mode does not swap
    * `position: relative` ↔ `absolute` between the CM host and the warm underlay.
@@ -4367,6 +4362,8 @@ button.primary.destructive {
   width: 100%;
   box-sizing: border-box;
   min-height: 5.5rem;
+  /* Fill the stretched grid cell so clicks below `.cm-editor` still land on the host (end-of-doc caret jump). */
+  height: 100%;
   padding: 0;
 }
 
@@ -4767,10 +4764,6 @@ button.primary.destructive {
 [data-app-surface='capture']
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
-  .cm-md-equal-highlight-mark,
-[data-app-surface='capture']
-  .note-markdown-editor-host
-  .cm-eskerra-table-shell__cell-static-rich
   .cm-md-wiki-bracket,
 [data-app-surface='capture']
   .note-markdown-editor-host
@@ -4788,6 +4781,13 @@ button.primary.destructive {
   .note-markdown-editor-host
   .cm-eskerra-table-shell__cell-static-rich
   .cm-md-escape-mark {
+  display: none;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__cell-static-rich
+  .cm-md-equal-highlight-mark {
   display: none;
 }
 
@@ -5126,6 +5126,22 @@ button.primary.destructive {
   -webkit-box-decoration-break: clone;
 }
 
+/* drawSelection paints below .cm-content; opaque span background hides selection. Fill is drawn in
+ * `markdownCodeBackgroundLayer` as `.cm-md-equal-highlight-bg` (see markdownCodeBackgroundLayer.ts). */
+[data-app-surface='capture'] .note-markdown-editor-host .cm-content .cm-md-equal-highlight {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+[data-app-surface='capture'] .note-markdown-editor-host .cm-md-equal-highlight-bg {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--nb-editor-equal-highlight-bg, #fff59d);
+  border-radius: 2px;
+}
+
 /* ATX heading hashes (HeaderMark): fixed-width left column, hashes right-aligned to meet body text. */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-header-mark {
   display: inline-block;
@@ -5326,11 +5342,15 @@ button.primary.destructive {
 
 /*
  * CodeMirror draws `.cm-selectionLayer` below `.cm-content`; opaque backgrounds on tokens/lines
- * hide selection. Fence + inline code fills render here (z-index under selection).
+ * hide selection. Fence + inline code fills render in this layer.
+ * Do not set `z-index` here: `LayerView` assigns inline `z-index` from `layerOrder`; a forced value
+ * (especially `!important`) can tie-break equal to `.cm-selectionLayer` so the yellow fill paints on
+ * top of the drawn selection.
  */
 [data-app-surface='capture'] .note-markdown-editor-host .cm-md-codeBackgroundLayer {
-  z-index: -2 !important;
-  contain: strict;
+  /* Match CodeMirror `.cm-layer` (`contain: size style`). `strict` adds paint containment and can
+     clip absolutely positioned pill rects when the layer’s measured box is still 0×0. */
+  contain: size style;
   pointer-events: none;
 }
 

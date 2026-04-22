@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./eskerra-logo-crop.png" alt="Eskerra logo" width="120"><br>
+  <img src="./eskerra-logo.png" alt="Eskerra logo" width="120"><br>
 </p>
 
 <h1 align="center">Eskerra</h1>

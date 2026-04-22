@@ -37,6 +37,8 @@ export type EskerraSettings = {
   themePreference?: ThemePreference;
   /** Optional per-property type overrides for vault frontmatter (desktop Properties UI). */
   frontmatterProperties?: Record<string, {type: FrontmatterPropertyType}>;
+  /** Hostnames for which rich link snippet cards are suppressed. */
+  linkSnippetBlockedDomains?: string[];
 };
 
 function parseR2Block(value: unknown): EskerraR2Config {
@@ -219,6 +221,10 @@ export function buildEskerraSettingsFromForm(
     settings.frontmatterProperties = previousShared.frontmatterProperties;
   }
 
+  if (previousShared?.linkSnippetBlockedDomains?.length) {
+    settings.linkSnippetBlockedDomains = previousShared.linkSnippetBlockedDomains;
+  }
+
   return {ok: true, settings};
 }
 
@@ -270,6 +276,15 @@ export function parseEskerraSettings(rawSettings: string): EskerraSettings {
     const fm = parseFrontmatterPropertiesBlock(parsed.frontmatterProperties);
     if (fm) {
       out.frontmatterProperties = fm;
+    }
+  }
+
+  if (Array.isArray(parsed.linkSnippetBlockedDomains)) {
+    const domains = parsed.linkSnippetBlockedDomains.filter(
+      (d): d is string => typeof d === 'string' && d.length > 0,
+    );
+    if (domains.length > 0) {
+      out.linkSnippetBlockedDomains = domains;
     }
   }
 

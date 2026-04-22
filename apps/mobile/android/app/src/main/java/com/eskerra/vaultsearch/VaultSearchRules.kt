@@ -8,7 +8,7 @@ object VaultSearchRules {
   private val HARD_EXCLUDED = setOf("Assets", "Excalidraw", "Scripts", "Templates")
   private const val SYNC_MARKER = "sync-conflict"
 
-  fun isIgnored(name: String): Boolean = name.startsWith('.') || name.startsWith('_')
+    fun isIgnored(name: String): Boolean = name.startsWith('.')
 
   fun isHardExcluded(name: String): Boolean = HARD_EXCLUDED.contains(name)
 

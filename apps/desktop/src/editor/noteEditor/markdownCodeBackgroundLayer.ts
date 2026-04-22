@@ -1,39 +1,40 @@
 import {ensureSyntaxTree, syntaxTree} from '@codemirror/language';
 import {EditorSelection, Prec, type Extension} from '@codemirror/state';
 import {
-  Direction,
   EditorView,
   RectangleMarker,
   layer,
   type LayerMarker,
 } from '@codemirror/view';
 
-const SYNTAX_TREE_BUDGET_MS = 200;
+import {layerBaseOffset} from './markdownEditorLayerCoords';
+import {
+  equalHighlightPaintRange,
+  finalizeEqualHighlightBackgroundMarkers,
+} from './markdownEqualHighlightGeometry';
+
+/** Enough for long notes so `EqualHighlight` exists when the code-background layer builds. */
+const SYNTAX_TREE_BUDGET_MS = 1000;
 
 /** Class on {@link RectangleMarker}s for inline `` `code` `` backgrounds (styled in App.css). */
 export const markdownInlineCodeBackgroundClass = 'cm-md-inline-code-bg';
 
-/** Same coordinate space as CodeMirror's `getBase` in `@codemirror/view` (layer vs client rects). */
-function layerBaseOffset(view: EditorView): {left: number; top: number} {
-  const rect = view.scrollDOM.getBoundingClientRect();
-  const left =
-    view.textDirection === Direction.LTR
-      ? rect.left
-      : rect.right - view.scrollDOM.clientWidth * view.scaleX;
-  return {
-    left: left - view.scrollDOM.scrollLeft * view.scaleX,
-    top: rect.top - view.scrollDOM.scrollTop * view.scaleY,
-  };
-}
+/** Class on {@link RectangleMarker}s for `==highlight==` backgrounds (styled in App.css). */
+export const markdownEqualHighlightBackgroundClass = 'cm-md-equal-highlight-bg';
 
 /**
  * `RectangleMarker.forRange` returns [] when the range does not overlap `view.viewport` (including
  * a degenerate `viewport.to <= viewport.from` before the first layout) or when coords are missing.
  * These fallbacks keep inline pills visible once DOM positions exist.
  */
-function inlineCodeBackgroundMarkers(view: EditorView, from: number, to: number): LayerMarker[] {
+function inlineRangeBackgroundMarkers(
+  view: EditorView,
+  from: number,
+  to: number,
+  cls: string,
+): LayerMarker[] {
   const range = EditorSelection.range(from, to);
-  const primary = [...RectangleMarker.forRange(view, markdownInlineCodeBackgroundClass, range)];
+  const primary = [...RectangleMarker.forRange(view, cls, range)];
   if (primary.length > 0) {
     return primary;
   }
@@ -48,7 +49,7 @@ function inlineCodeBackgroundMarkers(view: EditorView, from: number, to: number)
     const bottom = Math.max(c1.bottom, c2.bottom) - base.top;
     return [
       new RectangleMarker(
-        markdownInlineCodeBackgroundClass,
+        cls,
         left,
         top,
         Math.max(0, right - left),
@@ -76,7 +77,7 @@ function inlineCodeBackgroundMarkers(view: EditorView, from: number, to: number)
       }
       out.push(
         new RectangleMarker(
-          markdownInlineCodeBackgroundClass,
+          cls,
           r.left - base.left,
           r.top - base.top,
           r.width,
@@ -148,7 +149,7 @@ function buildMarkdownCodeBackgroundMarkers(view: EditorView): LayerMarker[] {
     from: 0,
     to: docLen,
     enter(cursor) {
-      const name = cursor.type.name;
+      const name = cursor.name;
       if (name === 'FencedCode' || name === 'CodeBlock') {
         const blockFrom = cursor.from;
         const blockTo = Math.min(cursor.to, docLen);
@@ -166,7 +167,40 @@ function buildMarkdownCodeBackgroundMarkers(view: EditorView): LayerMarker[] {
         return false;
       }
       if (name === 'InlineCode') {
-        for (const m of inlineCodeBackgroundMarkers(view, cursor.from, cursor.to)) {
+        for (const m of inlineRangeBackgroundMarkers(view, cursor.from, cursor.to, markdownInlineCodeBackgroundClass)) {
+          out.push(m);
+        }
+      }
+      if (name === 'EqualHighlight') {
+        /* Prefer inner text (skips `==` when present) so coords stay valid when delimiter spans are
+         * `display:none` off the marker-focus line. If the tree node is already inner-only, the
+         * slice guard leaves the range unchanged. */
+        const {from: paintFrom, to: paintTo} = equalHighlightPaintRange(doc, cursor.from, cursor.to);
+        let markers = inlineRangeBackgroundMarkers(
+          view,
+          paintFrom,
+          paintTo,
+          markdownEqualHighlightBackgroundClass,
+        );
+        if (
+          markers.length === 0
+          && (paintFrom !== cursor.from || paintTo !== cursor.to)
+        ) {
+          markers = inlineRangeBackgroundMarkers(
+            view,
+            cursor.from,
+            cursor.to,
+            markdownEqualHighlightBackgroundClass,
+          );
+        }
+        markers = finalizeEqualHighlightBackgroundMarkers(
+          view,
+          paintFrom,
+          paintTo,
+          markers,
+          markdownEqualHighlightBackgroundClass,
+        );
+        for (const m of markers) {
           out.push(m);
         }
       }
@@ -184,7 +218,13 @@ export const markdownCodeBackgroundLayer: Extension = Prec.low(
   layer({
     above: false,
     class: 'cm-md-codeBackgroundLayer',
-    update: u => u.docChanged || u.viewportChanged || u.geometryChanged,
+    update: u =>
+      u.docChanged
+      || u.viewportChanged
+      || u.geometryChanged
+      || u.heightChanged
+      || u.selectionSet
+      || u.focusChanged,
     markers: view => buildMarkdownCodeBackgroundMarkers(view),
   }),
 );

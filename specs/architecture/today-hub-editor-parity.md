@@ -50,6 +50,30 @@ Hub static preview used **`white-space: pre-wrap`** without an explicit `tab-siz
 
 **Rule:** `.today-hub-canvas__cell-static-rich` must use **`white-space: break-spaces`** and **`tab-size: 4`** so list lines match the editor’s horizontal spacing.
 
+## Link snippet parity
+
+When a cell line contains **only** a bare `http(s)://` URL (optionally preceded by a list marker or
+GFM task checkbox — i.e. the same set that `parseLoneLinkLine()` matches), both modes must render a
+rich link preview card:
+
+- **Edit mode:** `linkRichPreviewExtension()` in
+  [`linkRichPreviewCodemirror.ts`](../../apps/desktop/src/editor/noteEditor/linkRichPreviewCodemirror.ts)
+  decorates the line with a `LinkRichPreviewWidget`.
+- **Read mode:** `TodayHubCellStaticRichText` calls `parseLoneLinkLine()` on each line and renders a
+  [`LinkRichPreviewCard`](../../apps/desktop/src/components/LinkRichPreviewCard.tsx) in place of the
+  normal span segments.
+
+Both use the **same** IndexedDB + memory cache (`linkRichPreviewCache.ts`) and the same CSS classes
+(`cm-link-rich-preview`, `cm-link-rich-preview--inline`, `cm-link-rich-preview--with-image`,
+`cm-link-rich-preview--no-image`).
+
+**Rule:** Any change to the card's visual structure, the lone-link-line detection heuristic
+(`parseLoneLinkLine`), or the cache API must be applied to **both** the CodeMirror widget and the
+React component. The two entry points are:
+
+1. `LinkRichPreviewWidget.toDOM()` — imperative DOM build in `linkRichPreviewCodemirror.ts`
+2. `LinkRichPreviewCard` — declarative React in `LinkRichPreviewCard.tsx`
+
 ## Debug checklist
 
 1. Compare `getComputedStyle(.cm-scroller)` vs `getComputedStyle(.today-hub-canvas__cell-static-rich)` for `font-size` and `line-height`.

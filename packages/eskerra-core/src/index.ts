@@ -27,6 +27,8 @@ export {
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerPathResolutionSourceDirectoryUri,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type InboxWikiLinkNoteRef,
   type InboxWikiLinkResolveLookup,
   type InboxWikiLinkResolveResult,
@@ -252,6 +254,7 @@ export {
   assertVaultMarkdownNoteUriForCrud,
   assertVaultTreeDirectoryUriForCrud,
   tryAssertVaultMarkdownNoteUriForCrud,
+  tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink,
 } from './vaultMarkdownPaths';
 export {
   extractInlineMarkdownLinksFromMarkdown,

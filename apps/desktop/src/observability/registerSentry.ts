@@ -48,6 +48,10 @@ function init(): void {
     return;
   }
   if (!dsn) {
+    console.warn(
+      '[eskerra:Sentry] VITE_SENTRY_DSN not configured — errors will not be reported to Sentry. '
+        + 'Local crash log still writes to app_log_dir/crash.log.',
+    );
     return;
   }
 
@@ -65,6 +69,7 @@ function init(): void {
         return scrubBreadcrumb(crumb);
       },
     });
+    console.info(`[eskerra:Sentry] initialized (release eskerra-desktop@${packageJson.version})`);
   } catch (error) {
     console.error('[eskerra:Sentry] desktop init failed', error);
   }

@@ -4,6 +4,8 @@ import {
   resolveVaultRelativeMarkdownHref,
   stemFromMarkdownFileName,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerPathResolutionSourceDirectoryUri,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type VaultMarkdownRef,
 } from '@eskerra/core';
 import type {VaultReadonlyMarkdownLinkColors} from '@eskerra/tokens';
@@ -176,11 +178,56 @@ function handleLinkPress(href: string, options: VaultReadonlyMarkdownRuleOptions
       return;
     }
     if (resolved.kind === 'unsupported') {
-      const detail =
-        resolved.reason === 'empty_target'
-          ? 'This wiki link has an empty target.'
-          : 'This wiki link uses a path target, which is not supported here.';
-      Alert.alert('Unsupported link', detail);
+      if (resolved.reason === 'empty_target') {
+        Alert.alert('Unsupported link', 'This wiki link has an empty target.');
+        return;
+      }
+      const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(wikiInner);
+      const root = options.vaultRoot?.trim();
+      if (pathHref != null && root) {
+        const fallback = options.currentNoteUri;
+        const vaultSource = wikiLinkInnerPathResolutionSourceDirectoryUri(
+          root,
+          wikiInner,
+          fallback,
+        );
+        const norm = (u: string) => u.trim().replace(/\\/g, '/').toLowerCase();
+        const sources =
+          norm(vaultSource) === norm(fallback) ? [fallback] : [vaultSource, fallback];
+
+        const resolveFrom = (sourceDir: string) =>
+          resolveVaultRelativeMarkdownHref(root, sourceDir, pathHref, options.noteRefs);
+
+        for (const sd of sources) {
+          const rel = resolveFrom(sd);
+          if (rel == null) {
+            continue;
+          }
+          const inIndex = options.noteRefs.some(
+            r => norm(r.uri) === norm(rel.uri),
+          );
+          if (inIndex) {
+            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
+            return;
+          }
+        }
+        for (const sd of sources) {
+          const rel = resolveFrom(sd);
+          if (rel != null) {
+            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
+            return;
+          }
+        }
+        Alert.alert(
+          'Note not found',
+          'This wiki link path does not match a note in this vault.',
+        );
+        return;
+      }
+      Alert.alert(
+        'Unsupported link',
+        'This wiki link uses a path target, which is not supported here.',
+      );
       return;
     }
     if (resolved.kind === 'create') {

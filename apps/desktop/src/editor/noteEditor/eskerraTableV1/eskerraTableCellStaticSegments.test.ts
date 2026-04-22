@@ -100,6 +100,31 @@ describe('buildCellStaticSegments', () => {
     expect(segs.some(s => s.className.includes('cm-wiki-link--resolved'))).toBe(true);
   });
 
+  it('preserves equal-highlight class on an external link label', () => {
+    // ==label== wrapping a markdown link — highlight must survive the link priority overlay
+    const text = '==[link](https://example.com)==';
+    const {segments: segs} = buildCellStaticSegments(text, {
+      wikiTargetIsResolved: alwaysFalse,
+      relativeMarkdownLinkHrefIsResolved: alwaysFalse,
+    });
+    const labelSeg = segs.find(
+      s => text.slice(s.from, s.to) === 'link',
+    );
+    expect(labelSeg?.className).toContain('cm-md-equal-highlight');
+    expect(labelSeg?.className).toContain('cm-md-external-link');
+  });
+
+  it('preserves equal-highlight class on a wiki link inner', () => {
+    const text = '==[[My Note]]==';
+    const {segments: segs} = buildCellStaticSegments(text, {
+      wikiTargetIsResolved: alwaysTrue,
+      relativeMarkdownLinkHrefIsResolved: alwaysFalse,
+    });
+    const innerSeg = segs.find(s => text.slice(s.from, s.to) === 'My Note');
+    expect(innerSeg?.className).toContain('cm-md-equal-highlight');
+    expect(innerSeg?.className).toContain('cm-wiki-link');
+  });
+
   it('styles activatable relative markdown link label and href', () => {
     const {segments: segs} = buildCellStaticSegments('[n](other.md)', {
       wikiTargetIsResolved: alwaysFalse,

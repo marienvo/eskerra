@@ -39,4 +39,16 @@ describe('serializeFrontmatterInner merge path — body stability', () => {
     expect(hub.start).toBe('saturday');
     expect(hub.perpetualType).toBe('weekly');
   });
+
+  it('Today hub YAML-only edits change parsed settings while body stays the same', () => {
+    const body = '# Today';
+    const innerMon = 'start: monday\nperpetualType: weekly';
+    const innerSat = 'start: saturday\nperpetualType: weekly';
+    const fullMon = inboxEditorSliceToFullMarkdown(body, '/vault/Today.md', false, innerMon, '');
+    const fullSat = inboxEditorSliceToFullMarkdown(body, '/vault/Today.md', false, innerSat, '');
+    expect(fullMon.endsWith(body)).toBe(true);
+    expect(fullSat.endsWith(body)).toBe(true);
+    expect(parseTodayHubFrontmatter(fullMon).start).toBe('monday');
+    expect(parseTodayHubFrontmatter(fullSat).start).toBe('saturday');
+  });
 });

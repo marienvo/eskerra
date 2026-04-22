@@ -7,6 +7,7 @@ import {
   inboxWikiLinkTargetIsResolved,
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
+  openOrCreateVaultWikiPathMarkdownLink,
 } from './inboxWikiLinkNavigation';
 
 function createMemoryVaultFs(
@@ -121,6 +122,32 @@ describe('inboxWikiLinkTargetIsResolved', () => {
 
   it('is false for path-like targets', () => {
     expect(inboxWikiLinkTargetIsResolved([], 'foo/bar')).toBe(false);
+  });
+
+  it('is true for path-shaped .md wiki when href resolves under the vault', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'Missing.md', uri: '/vault/General/Missing.md'}],
+        '_autosync-backup-nuc/General/b.md',
+        {
+          vaultRoot: '/vault',
+          sourceMarkdownUriOrDir: '/vault/General/Missing.md',
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('is false when path wiki href does not resolve (e.g. hard-excluded directory)', () => {
+    expect(
+      inboxWikiLinkTargetIsResolved(
+        [{name: 'Missing.md', uri: '/vault/General/Missing.md'}],
+        '../Assets/nope.md',
+        {
+          vaultRoot: '/vault',
+          sourceMarkdownUriOrDir: '/vault/General/Missing.md',
+        },
+      ),
+    ).toBe(false);
   });
 
   it('is false for empty target', () => {
@@ -389,6 +416,136 @@ describe('openOrCreateVaultRelativeMarkdownLink', () => {
       sourceMarkdownUriOrDir: `${vaultRoot}/Inbox`,
     });
     expect(result).toEqual({kind: 'unsupported'});
+  });
+
+  it('opens vault-root backup path when wiki path targets _autosync at vault root (not under General)', async () => {
+    const backup = `${vaultRoot}/_autosync-backup-nuc/General/b.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '# H'],
+      [`${vaultRoot}/_autosync-backup-nuc`, 'dir'],
+      [`${vaultRoot}/_autosync-backup-nuc/General`, 'dir'],
+      [backup, '# Backup'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultWikiPathMarkdownLink({
+      inner: '_autosync-backup-nuc/General/b.md',
+      notes,
+      vaultRoot,
+      fs,
+      fallbackSourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: backup});
+  });
+
+  it('opens General-nested backup when the file exists only under General (fallback resolution)', async () => {
+    const nested = `${vaultRoot}/General/_autosync-backup-nuc/General/b.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '# H'],
+      [`${vaultRoot}/General/_autosync-backup-nuc`, 'dir'],
+      [`${vaultRoot}/General/_autosync-backup-nuc/General`, 'dir'],
+      [nested, '# Backup'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultWikiPathMarkdownLink({
+      inner: '_autosync-backup-nuc/General/b.md',
+      notes,
+      vaultRoot,
+      fs,
+      fallbackSourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: nested});
+  });
+
+  it('returns cannot_create_parent when the file is missing under a dot-prefixed folder', async () => {
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '# H'],
+      [`${vaultRoot}/General/.backup`, 'dir'],
+      [`${vaultRoot}/General/.backup/sub`, 'dir'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: '.backup/sub/missing.md',
+      notes,
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({
+      kind: 'cannot_create_parent',
+      resolvedUri: `${vaultRoot}/General/.backup/sub/missing.md`,
+    });
+  });
+
+  it('opens when only an NFD filename variant exists on disk', async () => {
+    const nfdUri = `${vaultRoot}/Inbox/u\u0308.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/Inbox`, 'dir'],
+      [`${vaultRoot}/Inbox/a.md`, '# A'],
+      [nfdUri, '# NFD'],
+    ]);
+    const notes = [
+      {name: 'a.md', uri: `${vaultRoot}/Inbox/a.md`},
+      {name: 'b.md', uri: `${vaultRoot}/Inbox/b.md`},
+    ];
+    const result = await openOrCreateVaultRelativeMarkdownLink({
+      href: `./${'\u00fc'}.md`,
+      notes,
+      vaultRoot,
+      fs,
+      sourceMarkdownUriOrDir: `${vaultRoot}/Inbox/a.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: nfdUri});
+  });
+
+  it('opens backup-style file when list-dir matches unique suffix --YYYYMMDD-HHMMSS.md', async () => {
+    const parent = `${vaultRoot}/General/_backup/General`;
+    const onDisk = `${parent}/Real Name--20260422-174503.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '#'],
+      [`${vaultRoot}/General/_backup`, 'dir'],
+      [parent, 'dir'],
+      [onDisk, '#'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultWikiPathMarkdownLink({
+      inner: '_backup/General/Wrong Name--20260422-174503.md',
+      notes,
+      vaultRoot,
+      fs,
+      fallbackSourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: onDisk});
+  });
+
+  it('opens when rough basename matches one file (emoji glyph differs)', async () => {
+    const parent = `${vaultRoot}/General/_backup/General`;
+    const onDisk = `${parent}/\uD83D\uDC4DOnly--20260422-174503.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '#'],
+      [`${vaultRoot}/General/_backup`, 'dir'],
+      [parent, 'dir'],
+      [onDisk, '#'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultWikiPathMarkdownLink({
+      inner: '_backup/General/\uD83D\uDC49\uFE0FOnly--20260422-174503.md',
+      notes,
+      vaultRoot,
+      fs,
+      fallbackSourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: onDisk});
   });
 });
 

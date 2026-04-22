@@ -31,6 +31,7 @@ import {
   SubtreeMarkdownPresenceCache,
   isBrowserOpenableMarkdownHref,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerVaultRelativeMarkdownHref,
   type EskerraSettings,
   type VaultFilesystem,
   type VaultMarkdownRef,
@@ -44,6 +45,7 @@ import type {
 import {
   openOrCreateInboxWikiLinkTarget,
   openOrCreateVaultRelativeMarkdownLink,
+  openOrCreateVaultWikiPathMarkdownLink,
 } from '../lib/inboxWikiLinkNavigation';
 import {openSystemBrowserUrl} from '../lib/openSystemBrowserUrl';
 import {
@@ -141,6 +143,13 @@ import {
   workspaceSelectShowsActiveTabPillState,
 } from '../lib/workspaceShellToday';
 import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
+import {isPodcastFile} from '../lib/podcasts/podcastParser';
+
+const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
+function isPodcastRelevantPath(p: string): boolean {
+  const name = p.replace(/\\/g, '/').split('/').pop() ?? '';
+  return isPodcastFile(name) || RSS_EPISODE_FILE_PATTERN.test(name);
+}
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
 import {
@@ -329,6 +338,8 @@ export type UseMainWindowWorkspaceResult = {
   vaultMarkdownRefs: VaultMarkdownRef[];
   selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
+  /** Increments only when files in `General/` change — used to scope podcast catalog rescans. */
+  podcastFsNonce: number;
   deviceInstanceId: string;
   wikiRenameNotice: string | null;
   renameLinkProgress: RenameLinkProgress | null;
@@ -517,6 +528,7 @@ export function useMainWindowWorkspace(options: {
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
+  const [podcastFsNonce, setPodcastFsNonce] = useState(0);
   const [vaultTreeSelectionClearNonce, setVaultTreeSelectionClearNonce] = useState(0);
   const [deviceInstanceId, setDeviceInstanceId] = useState('');
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
@@ -909,6 +921,8 @@ export function useMainWindowWorkspace(options: {
     setShowTodayHubCanvas(vaultUriIsTodayMarkdownFile(normSel));
   }, [vaultRoot, selectedUri, composingNewEntry]);
 
+  // Use `inboxYamlFrontmatterInner` state in the merge (not only the ref) so deps match and Today hub
+  // refreshes on frontmatter-only edits. Leading still comes from the ref (updated with inner on disk sync).
   const todayHubSettings = useMemo((): TodayHubSettings | null => {
     if (!showTodayHubCanvas || !selectedUri) {
       return null;
@@ -917,7 +931,7 @@ export function useMainWindowWorkspace(options: {
       editorBody,
       selectedUri,
       composingNewEntry,
-      inboxYamlFrontmatterInnerRef.current,
+      inboxYamlFrontmatterInner,
       inboxEditorYamlLeadingBeforeFrontmatterRef.current,
     );
     return parseTodayHubFrontmatter(full);
@@ -2293,6 +2307,10 @@ export function useMainWindowWorkspace(options: {
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
+      // Only rescan podcast catalog when podcast-relevant files change (YYYY podcasts.md or 📻 *.md).
+      if (paths.some(p => isPodcastRelevantPath(p))) {
+        setPodcastFsNonce(n => n + 1);
+      }
       void (async () => {
         try {
           const next = await readVaultSettings(vaultRoot, fs);
@@ -2888,18 +2906,23 @@ export function useMainWindowWorkspace(options: {
         if (nextAfterRemove) {
           await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
         } else {
-          selectedUriRef.current = null;
-          composingNewEntryRef.current = false;
-          lastPersistedRef.current = null;
-          setSelectedUri(null);
-          setComposingNewEntry(false);
-          clearInboxYamlFrontmatterEditorRefs({
-            inner: inboxYamlFrontmatterInnerRef,
-            leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-            setInner: setInboxYamlFrontmatterInner,
-          });
-          setEditorBody('');
-          setInboxEditorResetNonce(n => n + 1);
+          const shellHub = activeTodayHubUriRef.current;
+          if (shellHub && shellHub !== norm) {
+            await openMarkdownInEditor(shellHub, {workspaceShell: true});
+          } else {
+            selectedUriRef.current = null;
+            composingNewEntryRef.current = false;
+            lastPersistedRef.current = null;
+            setSelectedUri(null);
+            setComposingNewEntry(false);
+            clearInboxYamlFrontmatterEditorRefs({
+              inner: inboxYamlFrontmatterInnerRef,
+              leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+              setInner: setInboxYamlFrontmatterInner,
+            });
+            setEditorBody('');
+            setInboxEditorResetNonce(n => n + 1);
+          }
         }
       }
 
@@ -3201,8 +3224,9 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       try {
-        const wikiParent =
-          todayHubWikiNavParentRef.current ?? selectedUriRef.current;
+        const wikiParent = showTodayHubCanvasRef.current
+          ? (todayHubWikiNavParentRef.current ?? selectedUriRef.current)
+          : selectedUriRef.current;
         const todayHubNewNoteParent =
           showTodayHubCanvasRef.current && !composingNewEntryRef.current
             ? getGeneralDirectoryUri(normalizeVaultBaseUri(vaultRoot))
@@ -3264,12 +3288,90 @@ export function useMainWindowWorkspace(options: {
           );
           return;
         }
-        if (result.reason === 'path_not_supported') {
-          setErr(
-            `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
-          );
-        } else {
+        if (result.kind === 'unsupported') {
+            if (result.reason === 'path_not_supported') {
+              const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+              if (pathHref != null) {
+                const base = normalizeVaultBaseUri(vaultRoot);
+                const relParent = showTodayHubCanvasRef.current
+                  ? todayHubWikiNavParentRef.current
+                  : null;
+                const wikiPathFallbackSource = composingNewEntryRef.current
+                  ? getInboxDirectoryUri(base)
+                  : showTodayHubCanvasRef.current && !composingNewEntryRef.current
+                    ? getGeneralDirectoryUri(base)
+                    : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+                const relResult = await openOrCreateVaultWikiPathMarkdownLink({
+                  inner,
+                  notes: vaultMarkdownRefsRef.current.map(r => ({
+                    name: r.name,
+                    uri: r.uri,
+                  })),
+                  vaultRoot,
+                  fs,
+                  fallbackSourceMarkdownUriOrDir: wikiPathFallbackSource,
+                });
+              if (relResult.kind === 'cannot_create_parent') {
+                setErr(
+                  'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
+                );
+                return;
+              }
+              if (relResult.kind === 'open' || relResult.kind === 'created') {
+                if (relResult.kind === 'created') {
+                  subtreeMarkdownCacheRef.current.invalidateForMutation(
+                    vaultRoot,
+                    relResult.uri,
+                    'file',
+                  );
+                  await refreshNotes(vaultRoot);
+                  setFsRefreshNonce(n => n + 1);
+                } else if (relResult.canonicalHref) {
+                  const pipeAt = inner.indexOf('|');
+                  const replacementInner =
+                    pipeAt >= 0
+                      ? `${relResult.canonicalHref}${inner.slice(pipeAt)}`
+                      : relResult.canonicalHref;
+                  const hubEd = todayHubCellEditorRef.current;
+                  if (hubEd && todayHubWikiNavParentRef.current) {
+                    hubEd.replaceWikiLinkInnerAt({
+                      at,
+                      expectedInner: inner,
+                      replacementInner,
+                    });
+                  } else {
+                    inboxEditorRef.current?.replaceWikiLinkInnerAt({
+                      at,
+                      expectedInner: inner,
+                      replacementInner,
+                    });
+                  }
+                }
+                if (openInBackgroundTab) {
+                  await openNoteRespectingExistingTab(relResult.uri, 'background-new-tab');
+                  return;
+                }
+                if (
+                  isActiveWorkspaceTodayLinkSurface({
+                    composingNewEntry: composingNewEntryRef.current,
+                    activeTodayHubUri: activeTodayHubUriRef.current,
+                    selectedUri: selectedUriRef.current,
+                  })
+                ) {
+                  await openNoteRespectingExistingTab(relResult.uri, 'foreground-new-tab');
+                  return;
+                }
+                await openMarkdownInEditor(relResult.uri);
+                return;
+              }
+            }
+            setErr(
+              `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
+            );
+            return;
+          }
           setErr('Wiki link target is empty.');
+          return;
         }
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -3296,7 +3398,7 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       const base = normalizeVaultBaseUri(vaultRoot);
-      const relParent = todayHubWikiNavParentRef.current;
+      const relParent = showTodayHubCanvasRef.current ? todayHubWikiNavParentRef.current : null;
       const sourceMarkdownUriOrDir = composingNewEntryRef.current
         ? getInboxDirectoryUri(base)
         : showTodayHubCanvasRef.current && !composingNewEntryRef.current
@@ -3353,6 +3455,12 @@ export function useMainWindowWorkspace(options: {
             return;
           }
           await openMarkdownInEditor(result.uri);
+          return;
+        }
+        if (result.kind === 'cannot_create_parent') {
+          setErr(
+            'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
+          );
           return;
         }
         setErr('This link is not a relative vault markdown note.');
@@ -4243,6 +4351,7 @@ export function useMainWindowWorkspace(options: {
     vaultMarkdownRefs,
     selectedNoteBacklinkUris,
     fsRefreshNonce,
+    podcastFsNonce,
     deviceInstanceId,
     wikiRenameNotice,
     renameLinkProgress,

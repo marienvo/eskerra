@@ -25,10 +25,15 @@ import {parseLoneLinkLine} from '../../lib/parseLoneLinkLine';
 export type LinkRichPreviewRefs = {
   /** Called when the user clicks the card. Should open the URL in the system browser. */
   onOpenLink: (href: string, at: number) => void;
+  /** Hostnames for which snippet cards are suppressed. */
+  blockedDomains?: ReadonlySet<string>;
 };
 
 /** Dispatched by the cache-listener ViewPlugin when new metadata is available. */
 const linkRichCacheBumpEffect = StateEffect.define<null>();
+
+/** Dispatched when `blockedDomains` changes to trigger a decoration rebuild. */
+export const linkRichBlockedDomainsBumpEffect = StateEffect.define<null>();
 
 class LinkRichPreviewWidget extends WidgetType {
   readonly url: string;
@@ -176,6 +181,9 @@ function buildLinkRichDecorations(
     if (!parsed) {
       continue;
     }
+    if (refs.blockedDomains?.has(hostnameOf(parsed.url))) {
+      continue;
+    }
     const entry = getCachedLinkRichEntry(parsed.url);
     const metadata = entry && entry.status === 'ok' ? entry.metadata : null;
     if (!entry) {
@@ -241,7 +249,8 @@ export function linkRichPreviewExtension(refs: LinkRichPreviewRefs): Extension {
     },
     update(value, tr) {
       const cacheBumped = tr.effects.some(e => e.is(linkRichCacheBumpEffect));
-      if (!tr.docChanged && tr.selection === undefined && !cacheBumped) {
+      const blockedBumped = tr.effects.some(e => e.is(linkRichBlockedDomainsBumpEffect));
+      if (!tr.docChanged && tr.selection === undefined && !cacheBumped && !blockedBumped) {
         return value;
       }
       return buildLinkRichDecorations(tr.state, refs);
@@ -253,15 +262,18 @@ export function linkRichPreviewExtension(refs: LinkRichPreviewRefs): Extension {
     class {
       unsubscribe: () => void;
       pending = false;
+      destroyed = false;
       constructor(view: EditorView) {
         this.unsubscribe = subscribeLinkRichPreviewUpdates(() => {
-          if (this.pending) {
+          if (this.pending || this.destroyed) {
             return;
           }
           this.pending = true;
           queueMicrotask(() => {
             this.pending = false;
-            view.dispatch({effects: linkRichCacheBumpEffect.of(null)});
+            if (!this.destroyed) {
+              view.dispatch({effects: linkRichCacheBumpEffect.of(null)});
+            }
           });
         });
       }
@@ -269,6 +281,7 @@ export function linkRichPreviewExtension(refs: LinkRichPreviewRefs): Extension {
         /* no-op; rebuild is driven by StateField */
       }
       destroy() {
+        this.destroyed = true;
         this.unsubscribe();
       }
     },

@@ -14,9 +14,9 @@ import {
 } from './vaultVisibility';
 
 describe('vault tree name rules', () => {
-  it('ignores dot and underscore prefixes', () => {
+  it('ignores dot-prefixed names only (underscore prefixes stay visible)', () => {
     expect(isVaultTreeIgnoredEntryName('.git')).toBe(true);
-    expect(isVaultTreeIgnoredEntryName('_draft')).toBe(true);
+    expect(isVaultTreeIgnoredEntryName('_draft')).toBe(false);
     expect(isVaultTreeIgnoredEntryName('note')).toBe(false);
   });
 
@@ -27,10 +27,11 @@ describe('vault tree name rules', () => {
     expect(VAULT_TREE_HARD_EXCLUDED_DIRECTORY_NAMES).toContain('Templates');
   });
 
-  it('eligible markdown files exclude conflicts and ignored names', () => {
+  it('eligible markdown files exclude conflicts and dot-prefixed names', () => {
     expect(isEligibleVaultMarkdownFileName('a.md')).toBe(true);
     expect(isEligibleVaultMarkdownFileName('a.sync-conflict.md')).toBe(false);
-    expect(isEligibleVaultMarkdownFileName('_x.md')).toBe(false);
+    expect(isEligibleVaultMarkdownFileName('_x.md')).toBe(true);
+    expect(isEligibleVaultMarkdownFileName('.x.md')).toBe(false);
     expect(isEligibleVaultMarkdownFileName('a.txt')).toBe(false);
   });
 });
@@ -41,10 +42,12 @@ describe('filterVaultTreeDirEntries', () => {
       {name: 'Inbox', uri: '/v/Inbox', type: 'directory', lastModified: null},
       {name: 'Assets', uri: '/v/Assets', type: 'directory', lastModified: null},
       {name: '.stfolder', uri: '/v/.stfolder', type: 'directory', lastModified: null},
+      {name: '_autosync', uri: '/v/_autosync', type: 'directory', lastModified: null},
       {name: 'ok.md', uri: '/v/ok.md', type: 'file', lastModified: null},
     ];
     expect(filterVaultTreeDirEntries(entries)).toEqual([
       {name: 'Inbox', uri: '/v/Inbox', type: 'directory', lastModified: null},
+      {name: '_autosync', uri: '/v/_autosync', type: 'directory', lastModified: null},
       {name: 'ok.md', uri: '/v/ok.md', type: 'file', lastModified: null},
     ]);
   });

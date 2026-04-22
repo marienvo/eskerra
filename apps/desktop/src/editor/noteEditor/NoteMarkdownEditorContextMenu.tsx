@@ -1,10 +1,19 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import type {ReactNode} from 'react';
+import {useState} from 'react';
 
 import type {EditorView} from '@codemirror/view';
 
 import {cleanNoteMenuShortcutLabel} from '../../lib/desktopShortcutLabels';
 import {bindMarkdownEditorContextMenuHandlers} from './markdownEditorContextMenuActions';
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
 
 export type NoteMarkdownEditorContextMenuProps = {
   children: ReactNode;
@@ -13,19 +22,29 @@ export type NoteMarkdownEditorContextMenuProps = {
   busy: boolean;
   readClipboardText: () => Promise<string | null>;
   onCleanNote?: () => void;
+  onMuteDomain?: (domain: string) => void;
 };
 
 export function NoteMarkdownEditorContextMenu(
   props: NoteMarkdownEditorContextMenuProps,
 ) {
-  const {children, getView, readOnly, busy, readClipboardText, onCleanNote} = props;
+  const {children, getView, readOnly, busy, readClipboardText, onCleanNote, onMuteDomain} = props;
   const blockEdit = readOnly || busy;
   const h = bindMarkdownEditorContextMenuHandlers(getView, readClipboardText, {
     blockEdit,
   });
+  const [contextLinkDomain, setContextLinkDomain] = useState<string | null>(null);
 
   return (
-    <ContextMenu.Root>
+    <div
+      style={{display: 'contents'}}
+      onContextMenu={e => {
+        const card = (e.target as Element).closest('.cm-link-rich-preview');
+        const dataUrl = card?.getAttribute('data-url') ?? null;
+        setContextLinkDomain(dataUrl ? hostnameOf(dataUrl) : null);
+      }}
+    >
+    <ContextMenu.Root onOpenChange={open => { if (!open) setContextLinkDomain(null); }}>
       <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content
@@ -158,8 +177,20 @@ export function NoteMarkdownEditorContextMenu(
           >
             Select all
           </ContextMenu.Item>
+          {contextLinkDomain && onMuteDomain ? (
+            <>
+              <ContextMenu.Separator className="note-markdown-editor-context-menu__sep" />
+              <ContextMenu.Item
+                className="note-list-context-menu__item"
+                onSelect={() => onMuteDomain(contextLinkDomain)}
+              >
+                Hide snippets from {contextLinkDomain}
+              </ContextMenu.Item>
+            </>
+          ) : null}
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>
+    </div>
   );
 }

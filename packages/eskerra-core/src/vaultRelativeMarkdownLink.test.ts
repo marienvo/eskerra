@@ -137,6 +137,31 @@ describe('resolveVaultRelativeMarkdownHref', () => {
       ),
     ).toBeNull();
   });
+
+  it('resolves through underscore-prefixed backup-style directories', () => {
+    const extended: InboxWikiLinkNoteRef[] = [
+      ...notes,
+      {name: 'b.md', uri: '/vault/General/_autosync-backup-nuc/General/b.md'},
+    ];
+    const r = resolveVaultRelativeMarkdownHref(
+      vaultRoot,
+      '/vault/General/Missing.md',
+      '_autosync-backup-nuc/General/b.md',
+      extended,
+    );
+    expect(r?.uri).toBe('/vault/General/_autosync-backup-nuc/General/b.md');
+  });
+
+  it('rejects hard-excluded directories in relative link targets', () => {
+    expect(
+      resolveVaultRelativeMarkdownHref(
+        vaultRoot,
+        '/vault/Inbox/a.md',
+        '../Assets/hidden.md',
+        notes,
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('extractInlineMarkdownLinksFromMarkdown', () => {

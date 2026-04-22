@@ -5,6 +5,8 @@ import {
   resolveInboxWikiLinkTarget,
   resolveInboxWikiLinkTargetWithLookup,
   wikiLinkInnerBrowserOpenableHref,
+  wikiLinkInnerPathResolutionSourceDirectoryUri,
+  wikiLinkInnerVaultRelativeMarkdownHref,
 } from './wikiLinkInbox';
 
 const NOTES = [
@@ -161,6 +163,81 @@ describe('wikiLinkInnerBrowserOpenableHref', () => {
 
   it('returns null for disallowed schemes', () => {
     expect(wikiLinkInnerBrowserOpenableHref('javascript:alert(1)')).toBeNull();
+  });
+});
+
+describe('wikiLinkInnerVaultRelativeMarkdownHref', () => {
+  it('returns path for conflict-style backup targets', () => {
+    expect(
+      wikiLinkInnerVaultRelativeMarkdownHref(
+        '_autosync-backup-nuc/General/123--20260315-145001.md',
+      ),
+    ).toBe('_autosync-backup-nuc/General/123--20260315-145001.md');
+  });
+
+  it('strips display text and optional inbox prefix', () => {
+    expect(
+      wikiLinkInnerVaultRelativeMarkdownHref(
+        'Inbox/sub/Note.md|Backup',
+      ),
+    ).toBe('sub/Note.md');
+  });
+
+  it('returns null without slashes, without .md, or when empty', () => {
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('Note.md')).toBeNull();
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('a/b')).toBeNull();
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('  ')).toBeNull();
+  });
+});
+
+describe('wikiLinkInnerPathResolutionSourceDirectoryUri', () => {
+  const vaultRoot = '/vault';
+  const fallback = `${vaultRoot}/General/hub.md`;
+
+  it('uses vault root for backup-style paths so they are not nested under the open note folder', () => {
+    expect(
+      wikiLinkInnerPathResolutionSourceDirectoryUri(
+        vaultRoot,
+        '_autosync-backup-nuc/General/x.md',
+        fallback,
+      ),
+    ).toBe(vaultRoot);
+  });
+
+  it('uses Inbox directory when the wiki target has an Inbox/ prefix', () => {
+    expect(
+      wikiLinkInnerPathResolutionSourceDirectoryUri(
+        vaultRoot,
+        'Inbox/sub/Note.md|Label',
+        fallback,
+      ),
+    ).toBe(`${vaultRoot}/Inbox`);
+  });
+
+  it('uses fallback when the path href starts with ./', () => {
+    expect(
+      wikiLinkInnerPathResolutionSourceDirectoryUri(
+        vaultRoot,
+        './sibling.md',
+        fallback,
+      ),
+    ).toBe(fallback);
+  });
+
+  it('uses fallback when the path href starts with ../', () => {
+    expect(
+      wikiLinkInnerPathResolutionSourceDirectoryUri(
+        vaultRoot,
+        '../Daily/x.md',
+        fallback,
+      ),
+    ).toBe(fallback);
+  });
+
+  it('returns fallback for non-path wiki inners', () => {
+    expect(wikiLinkInnerPathResolutionSourceDirectoryUri(vaultRoot, 'Plain title', fallback)).toBe(
+      fallback,
+    );
   });
 });
 

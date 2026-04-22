@@ -29,40 +29,58 @@ export function useThemePreference({
   fs,
 }: UseThemePreferenceParams): {
   preference: ThemePreference;
+  preferenceLoaded: boolean;
   setPreferenceLocal: (next: ThemePreference) => void;
   persistPreference: (next: ThemePreference) => Promise<void>;
 } {
-  const [preference, setPreference] = useState<ThemePreference>(DEFAULT_THEME_PREFERENCE);
+  const [noVaultPreference, setNoVaultPreference] = useState<ThemePreference>(DEFAULT_THEME_PREFERENCE);
+  const [r2Preference, setR2Preference] = useState<ThemePreference>(DEFAULT_THEME_PREFERENCE);
+  const [r2Loaded, setR2Loaded] = useState(false);
   const migratedSharedToR2Ref = useRef(false);
 
-  // Sync from shared file when not using R2 (vault watcher updates vaultSettings).
-  useEffect(() => {
-    if (!vaultRoot || !vaultSettings) {
-      return;
+  const isR2 = Boolean(vaultSettings && isVaultR2PlaylistConfigured(vaultSettings));
+
+  const preference: ThemePreference = (() => {
+    if (vaultRoot === null) {
+      return noVaultPreference;
     }
-    if (isVaultR2PlaylistConfigured(vaultSettings)) {
-      return;
+    if (vaultSettings === null) {
+      return DEFAULT_THEME_PREFERENCE;
     }
-    const fromFile = vaultSettings.themePreference ?? DEFAULT_THEME_PREFERENCE;
-    queueMicrotask(() => {
-      setPreference(prev => {
-        if (prev.themeId === fromFile.themeId && prev.mode === fromFile.mode) {
-          return prev;
-        }
-        return fromFile;
-      });
-    });
-  }, [vaultRoot, vaultSettings]);
+    if (!isR2) {
+      return vaultSettings.themePreference ?? DEFAULT_THEME_PREFERENCE;
+    }
+    return r2Preference;
+  })();
+
+  const preferenceLoaded: boolean = (() => {
+    if (vaultRoot === null) {
+      return true;
+    }
+    if (vaultSettings === null) {
+      return false;
+    }
+    if (!isR2) {
+      return true;
+    }
+    return r2Loaded;
+  })();
 
   // Initial R2 fetch + migrate shared → R2 once.
   useEffect(() => {
-    if (!vaultRoot || !vaultSettings) {
+    if (vaultRoot === null || vaultSettings === null) {
       return;
     }
     if (!isVaultR2PlaylistConfigured(vaultSettings)) {
       return;
     }
     let cancelled = false;
+    // Defer so we do not call setState synchronously in the effect body (react-hooks/set-state-in-effect).
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setR2Loaded(false);
+      }
+    });
     void (async () => {
       try {
         const fromR2 = await getR2ThemePreferenceObject(vaultSettings.r2, R2_HTTP);
@@ -72,25 +90,30 @@ export function useThemePreference({
         const sharedPref = vaultSettings.themePreference;
         if (sharedPref && !migratedSharedToR2Ref.current) {
           migratedSharedToR2Ref.current = true;
-          if (!fromR2) {
+          if (fromR2 == null) {
             await putR2ThemePreferenceObject(vaultSettings.r2, sharedPref, R2_HTTP);
           }
           const cleared: EskerraSettings = {...vaultSettings};
           delete cleared.themePreference;
           await writeVaultSettings(vaultRoot, fs, cleared);
-          if (!cancelled) {
-            setVaultSettings(cleared);
-            setPreference(fromR2 ?? sharedPref);
+          if (cancelled) {
+            return;
           }
+          setVaultSettings(cleared);
+          setR2Preference(fromR2 ?? sharedPref);
+          setR2Loaded(true);
           return;
         }
         if (!cancelled) {
-          setPreference(fromR2 ?? DEFAULT_THEME_PREFERENCE);
+          setR2Preference(fromR2 ?? DEFAULT_THEME_PREFERENCE);
         }
       } catch {
         if (!cancelled) {
-          setPreference(DEFAULT_THEME_PREFERENCE);
+          setR2Preference(DEFAULT_THEME_PREFERENCE);
         }
+      }
+      if (!cancelled) {
+        setR2Loaded(true);
       }
     })();
     return () => {
@@ -100,11 +123,15 @@ export function useThemePreference({
 
   const persistPreference = useCallback(
     async (next: ThemePreference) => {
-      setPreference(next);
-      if (!vaultRoot || !vaultSettings) {
+      if (vaultRoot === null) {
+        setNoVaultPreference(next);
+        return;
+      }
+      if (vaultSettings === null) {
         return;
       }
       if (isVaultR2PlaylistConfigured(vaultSettings)) {
+        setR2Preference(next);
         await putR2ThemePreferenceObject(vaultSettings.r2, next, R2_HTTP);
         return;
       }
@@ -116,8 +143,8 @@ export function useThemePreference({
   );
 
   const setPreferenceLocal = useCallback((next: ThemePreference) => {
-    setPreference(next);
+    setR2Preference(next);
   }, []);
 
-  return {preference, setPreferenceLocal, persistPreference};
+  return {preference, preferenceLoaded, setPreferenceLocal, persistPreference};
 }
