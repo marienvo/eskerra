@@ -60,4 +60,8 @@ export default defineConfig({
       '@eskerra/brand': path.resolve(__dirname, '../../assets/brand'),
     },
   },
+  /** Patched via root `patch-package`; excluding avoids stale `.vite/deps` prebundle without the patch. */
+  optimizeDeps: {
+    exclude: ['@codemirror/view'],
+  },
 });

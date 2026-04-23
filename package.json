@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "patch-package",
     "apk-release": "npm run apk-release -w @eskerra/mobile",
     "mobile": "npm run start -w @eskerra/mobile",
     "mobile:android": "npm run android -w @eskerra/mobile",
@@ -25,7 +26,8 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "patch-package": "^8.0.1"
   },
   "engines": {
     "node": ">= 22.11.0"
