@@ -1,67 +1,67 @@
 # Feature Blocks
 
-Each block has a title, a one-line hook, and 1–2 sentences of concrete supporting copy. Written to make the reader feel what using Eskerra is like.
+Each block: title, one-line hook, 1–2 sentences of concrete product reality.
 
 ---
 
-## Your Files. Real Files.
+## Catch the Thought Before It's Gone
 
-Your notes are plain Markdown files living in a folder you choose.
+Open the mobile app, write the note, put your phone away. Done in ten seconds.
 
-Open them in any editor. Move them around. Back them up however you like. Eskerra reads and writes the same files — it does not mediate between you and your own writing.
-
----
-
-## Fast Enough to Keep Up
-
-Open the app, start writing. Switch notes, keep going.
-
-Eskerra is built to feel immediate. No startup ritual. No indexing spinner before you can work. The gap between having a thought and capturing it stays as small as possible.
+The capture experience on mobile is fast by design — fast to open, fast to type, fast to dismiss. Whether you are on a platform, in a meeting, or half-asleep at midnight, the thought has somewhere to go.
 
 ---
 
-## Desktop Built for Deep Work
+## Continue When You Sit Down
 
-The desktop app is organized around the editor, not around panels competing for attention.
+Open your laptop. The note from earlier is right there.
 
-Write long-form, restructure notes, link ideas, search your vault. When you sit down at the desktop, the environment is ready to receive serious work.
-
----
-
-## Mobile Built for the Moment
-
-Pull out your phone, capture the idea, put it away.
-
-The mobile app is designed for speed and focus — quick capture, easy reading, light review. It does not try to be a small desktop. It is a capable companion for the moments between.
+No import step, no sync ritual to wait for, no hunting for where the thought ended up. You captured it on your phone; you continue it on desktop. Eskerra keeps the thread.
 
 ---
 
-## A Calm Place to Think
+## Desktop for the Work That Takes Time
 
-No sidebar demanding attention. No suggestion engine nudging you sideways. No dashboard asking to be filled in.
+The desktop app is built around the editor. Everything else is in service of that.
 
-Eskerra is quiet on purpose. The editor is the experience.
-
----
-
-## Smart Tools, Honest Format
-
-Edit tables with a real interface. Browse frontmatter without touching raw syntax. Preview images inline.
-
-Everything writes back to clean, standard Markdown. The file on disk looks exactly like you would expect it to.
+Write long-form. Restructure ideas. Follow a chain of linked notes. Search across months of writing. When you have uninterrupted time, the desktop is where it goes deep.
 
 ---
 
-## Files That Last
+## Always Within Reach
 
-Plain Markdown is readable today, next year, and in ten years.
+Your notes are available on your phone, at your desk, and wherever you bring your laptop.
 
-You do not need Eskerra installed to open your notes. You do not need to export anything. The files are already there, in a format anyone can read.
+There is no single device that holds the canonical version. The vault is shared. What you wrote on the couch is there at the office, and what you drafted at midnight is there in the morning.
 
 ---
 
-## Ready Without Configuration
+## Fast Enough to Not Break the Moment
 
-Install Eskerra and it works.
+The app opens before you have time to reconsider.
 
-No plugin hunting. No theme marketplace setup. No "getting started" checklist before you can feel the product. The fundamentals ship complete.
+Switching notes is immediate. Searching is quick. The speed is consistent — on first launch and two years later, on a new phone and an old one. The gap between needing a note and having it stays as small as possible.
+
+---
+
+## Quiet Enough to Think In
+
+The editor fills the screen. There is nothing else competing for your attention.
+
+No suggestion engine nudging you sideways. No sidebar with tasks and notifications. Eskerra is deliberately quiet — because the thinking is the point, and everything else is a distraction from it.
+
+---
+
+## A Better Editor. The Same Notes.
+
+Tables you can actually edit. Frontmatter you can browse without touching raw syntax. Images that preview inline.
+
+Every change writes back to standard Markdown. The note is the same note — just easier to work with.
+
+---
+
+## Notes You Can Trust in Ten Years
+
+Your notes are plain text. They open without Eskerra, without an account, and without an internet connection.
+
+What you write today will be readable in any editor, on any operating system, long after apps and services have come and gone. No export needed. The files were always yours.
