@@ -103,10 +103,18 @@ async function attachRingBufferTailOnce(): Promise<void> {
     if (tail.length === 0) {
       return;
     }
-    Sentry.withScope(scope => {
-      scope.setExtra('ring_tail', JSON.stringify(tail).slice(0, 8000));
-      scope.setFingerprint(['ring-buffer-tail']);
-      Sentry.captureMessage('eskerra.ring_buffer.tail', 'info');
+    // Do not use `captureMessage`: Sentry groups info-level messages as issues (e.g. REACT-NATIVE-2).
+    // Attach tail to scope so the next real error/session includes it for triage.
+    const tailJson = JSON.stringify(tail).slice(0, 8000);
+    Sentry.setContext('ring_buffer_tail', {
+      line_count: tail.length,
+      tail_json: tailJson,
+    });
+    Sentry.addBreadcrumb({
+      category: 'eskerra.observability',
+      level: 'info',
+      message: 'ring_buffer_tail_loaded',
+      data: {line_count: tail.length},
     });
     await setLastRingSentTimestamp(Date.now());
   } catch {
