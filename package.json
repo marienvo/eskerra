@@ -34,6 +34,13 @@
   },
   "overrides": {
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "patch-package": {
+      "find-yarn-workspace-root": {
+        "micromatch": {
+          "picomatch": "2.3.2"
+        }
+      }
+    }
   }
 }
