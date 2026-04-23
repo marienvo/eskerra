@@ -1,57 +1,63 @@
 # Philosophy
 
-Eskerra is a markdown-first workspace built around ownership, speed, and clarity.
-
-Many modern note apps ask you to trade control for convenience. Your notes end up inside proprietary formats, hidden databases, slow interfaces, or feature-heavy ecosystems that become harder to trust over time.
-
-Eskerra takes a different path.
+Eskerra is a markdown-first workspace built around three things: ownership, speed, and clarity.
 
 ---
 
-## Your Files Stay Yours
+## Your files belong to you
 
-Markdown is the source of truth.
+When you write a note in Eskerra, it saves as a plain Markdown file in a folder you control.
 
-Notes remain normal files on your filesystem — not data trapped inside the app. No hidden database. No proprietary format. No vendor lock-in. The files are understandable and portable regardless of whether Eskerra is installed.
+That is not a technical detail. It is a choice about trust. Your writing is not stored in someone else's database or locked into a format that requires the app to stay installed. The files are yours the way a notebook is yours — open them, move them, back them up, use them anywhere.
 
----
-
-## Speed Matters
-
-Performance is not a feature to add later. It is a form of respect.
-
-A slow app puts a small tax on every thought. Opening a note, switching files, searching the vault, typing without lag — these moments stack up. Eskerra treats speed as part of what it means to be a well-made tool.
+Eskerra reads and writes those files. It does not own them.
 
 ---
 
-## Different Devices, Different Roles
+## Speed is a form of respect
 
-Desktop and mobile are not forced into the same shape.
+A tool that keeps you waiting is a tool that interrupts thinking.
 
-**Desktop** focuses on writing, structuring, and deep work. It is built around the editor, not around dashboards or views competing for attention.
-
-**Mobile** focuses on capture, reading, and quick interaction. It does its own job well instead of trying to be a smaller desktop.
+Eskerra opens fast, switches notes fast, and stays out of the way when you are in a flow. Performance is not something added after features are finished. It is part of what the product is. Every second of unnecessary friction is a small cost to clear thought, and those costs add up.
 
 ---
 
-## Better UX Without Lock-In
+## Desktop and mobile each have their own job
 
-Eskerra can improve workflows — table editing, metadata, previews, note navigation — while still keeping portable Markdown underneath.
+Most cross-platform apps treat every device as the same surface, just resized. The result is usually a mediocre compromise that fits neither context well.
 
-Better ergonomics, not betrayal of the source format.
+Eskerra gives desktop and mobile genuinely different roles.
 
----
+**On desktop**, the focus is depth. Writing long-form, restructuring, editing, organizing. The editor is the center of the experience. Everything else is in service of that.
 
-## Calm Software
-
-No plugin dependency for the basics. No unnecessary complexity. No hidden behavior. No feature circus demanding attention.
-
-The core should already be strong, clear, and dependable.
+**On mobile**, the focus is motion. Capturing an idea before it disappears. Reading a note on the go. Quick review before a meeting. Mobile does not try to replicate the desktop — it does its own job, and it does it well.
 
 ---
 
-## The Goal
+## Ergonomics without compromise
 
-A fast, durable, trustworthy place to think and write.
+Markdown can be improved without being replaced.
 
-One that respects your files, your time, and your ownership.
+Eskerra adds better interfaces for things like table editing, metadata, and previews. But the underlying file never changes shape. The Markdown on disk is clean and standard. The interface makes working easier. The format stays durable.
+
+Better tools should serve the writing, not substitute for it.
+
+---
+
+## Calm by design
+
+Good software should feel settled.
+
+Eskerra does not have a plugin ecosystem you need to configure before the basics work. It does not have a dashboard competing with the editor. The behavior is predictable — notes open the way you expect, files save the way you expect, nothing rewrites your content behind your back.
+
+That reliability is not a lack of ambition. It is a deliberate choice. A workspace you can trust is worth more than one that constantly surprises you.
+
+---
+
+## Built for the long run
+
+The technology choices in Eskerra are made to last.
+
+Plain Markdown files are readable without the app. A folder-based vault works with any sync solution. Nothing in the system requires a subscription, a server, or continued support from us to remain useful.
+
+Eskerra is designed to be a tool you can rely on for years — and to get out of your way when you eventually move on.
