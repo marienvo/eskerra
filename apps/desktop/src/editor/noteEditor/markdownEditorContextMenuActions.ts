@@ -11,6 +11,10 @@ import {
   runMarkdownStrikethroughSurround,
 } from './markdownSelectionSurround';
 import {
+  MARKDOWN_INPUT_CUT_USER_EVENT,
+  MARKDOWN_INPUT_PASTE_USER_EVENT,
+} from './markdownEditorUserEvents';
+import {
   insertMarkdownExternalLinkTemplate,
   insertMarkdownLinkTemplate,
 } from './noteMarkdownLinkInsert';
@@ -167,6 +171,7 @@ export function bindMarkdownEditorContextMenuHandlers(
           changes: {from, to, insert: ''},
           selection: {anchor: from},
           scrollIntoView: true,
+          userEvent: MARKDOWN_INPUT_CUT_USER_EVENT,
         });
         view.focus();
       });
@@ -212,6 +217,7 @@ export function bindMarkdownEditorContextMenuHandlers(
           changes: {from: insertFrom, to: insertTo, insert: text},
           selection: {anchor: insertFrom + text.length},
           scrollIntoView: true,
+          userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
         });
         view.focus();
       })();

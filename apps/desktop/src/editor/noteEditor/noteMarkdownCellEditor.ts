@@ -31,6 +31,7 @@ import {tryClipboardHtmlToMarkdownInsert} from '../../lib/htmlClipboardToMarkdow
 import type {NoteInboxAttachmentHost} from '../../lib/noteInboxAttachmentHost';
 import {isActivatableRelativeMarkdownHref} from './markdownActivatableRelativeHref';
 import {markdownCodeBackgroundLayer} from './markdownCodeBackgroundLayer';
+import {MARKDOWN_INPUT_PASTE_USER_EVENT} from './markdownEditorUserEvents';
 import {
   noteMarkdownEditorAppearance,
   noteMarkdownIndentUnit,
@@ -311,6 +312,7 @@ export function buildNoteMarkdownCellExtensions(
           changes: {from: insertFrom, to: insertTo, insert},
           selection: EditorSelection.cursor(insertFrom + insert.length),
           scrollIntoView: true,
+          userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
         });
       } catch (err) {
         onReportError(err instanceof Error ? err.message : String(err));
@@ -336,6 +338,7 @@ export function buildNoteMarkdownCellExtensions(
             changes: {from: insertFrom, to: insertTo, insert: text},
             selection: EditorSelection.cursor(insertFrom + text.length),
             scrollIntoView: true,
+            userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
           });
         }
         return;
@@ -354,6 +357,7 @@ export function buildNoteMarkdownCellExtensions(
           changes: {from: insertFrom, to: insertTo, insert},
           selection: EditorSelection.cursor(insertFrom + insert.length),
           scrollIntoView: true,
+          userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
         });
       } catch (pipeErr) {
         onReportError(
@@ -449,6 +453,7 @@ export function buildNoteMarkdownCellExtensions(
                 view.dispatch({
                   changes: {from: f, to: t, insert: cleaned},
                   selection: {anchor: f + cleaned.length},
+                  userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
                 });
                 return true;
               }
@@ -480,6 +485,7 @@ export function buildNoteMarkdownCellExtensions(
               view.dispatch({
                 changes: {from: f, to: t, insert: cleaned},
                 selection: {anchor: f + cleaned.length},
+                userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
               });
               return true;
             }
@@ -501,6 +507,7 @@ export function buildNoteMarkdownCellExtensions(
           view.dispatch({
             changes: {from: f, to: t, insert: cleaned},
             selection: {anchor: f + cleaned.length},
+            userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
           });
         }
         return true;

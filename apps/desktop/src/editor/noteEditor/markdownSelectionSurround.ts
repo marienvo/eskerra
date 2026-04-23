@@ -12,6 +12,8 @@ import {
 } from '@codemirror/state';
 import {EditorView, keymap} from '@codemirror/view';
 
+import {MARKDOWN_SURROUND_USER_EVENT} from './markdownEditorUserEvents';
+
 /**
  * Same intent as `@codemirror/lang-markdown` pasteURLAsLink, but omit plain `mark` (would match
  * Lezer names like `EmphasisMark`). HTML `Mark` is still excluded via word-boundary-safe checks below.
@@ -1045,6 +1047,7 @@ function dispatchSurround(
     changes: cs,
     selection: EditorSelection.create(newRanges, state.selection.mainIndex),
     scrollIntoView: true,
+    userEvent: MARKDOWN_SURROUND_USER_EVENT,
   });
   return true;
 }
@@ -1245,6 +1248,7 @@ function dispatchWiki(view: EditorView, kind: WikiClass): boolean {
     changes: cs,
     selection: EditorSelection.create(newRanges, state.selection.mainIndex),
     scrollIntoView: true,
+    userEvent: MARKDOWN_SURROUND_USER_EVENT,
   });
   return true;
 }

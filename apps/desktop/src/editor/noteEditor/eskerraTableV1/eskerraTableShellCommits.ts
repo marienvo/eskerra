@@ -11,6 +11,7 @@ import {
   buildEskerraTableInsertWithBlankLines,
   neededNewlinesBeforeTable,
 } from './eskerraTableV1DocBlocks';
+import {MARKDOWN_TABLE_DOC_SYNC_USER_EVENT} from '../markdownEditorUserEvents';
 import {closeTableShellEffect, suppressTableWidgetAt} from './eskerraTableShellEffects';
 
 /**
@@ -34,6 +35,7 @@ export function flushTableDraftToDocumentSilent(
     view.dispatch({
       changes: {from: block.from, to: block.to, insert},
       scrollIntoView: false,
+      userEvent: MARKDOWN_TABLE_DOC_SYNC_USER_EVENT,
     });
     return headerLineFrom;
   }
@@ -54,6 +56,7 @@ export function restoreTableBaseline(
     changes: {from: block.from, to: block.to, insert: baselineText},
     effects: closeTableShellEffect.of(null),
     scrollIntoView: true,
+    userEvent: MARKDOWN_TABLE_DOC_SYNC_USER_EVENT,
   });
 }
 

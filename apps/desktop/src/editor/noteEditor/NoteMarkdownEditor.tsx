@@ -123,6 +123,7 @@ import {
   caretJumpDetectorExtension,
   endProgrammaticMarkdownLoad,
 } from './caretJumpDetector';
+import {MARKDOWN_INPUT_PASTE_USER_EVENT} from './markdownEditorUserEvents';
 import {
   computeMinimalEditorChanges,
   mapPositionThroughDiff,
@@ -508,6 +509,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             changes: {from: insertFrom, to: insertTo, insert},
             selection: EditorSelection.cursor(insertFrom + insert.length),
             scrollIntoView: true,
+            userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
           });
         } catch (err) {
           reportEditorError(
@@ -543,6 +545,7 @@ const NoteMarkdownEditorImpl = forwardRef<
                 insertFrom + result.text.length,
               ),
               scrollIntoView: true,
+              userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
             });
           }
           return;
@@ -562,6 +565,7 @@ const NoteMarkdownEditorImpl = forwardRef<
             changes: {from: insertFrom, to: insertTo, insert},
             selection: EditorSelection.cursor(insertFrom + insert.length),
             scrollIntoView: true,
+            userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
           });
         } catch (pipeErr) {
           reportEditorError(
@@ -605,6 +609,7 @@ const NoteMarkdownEditorImpl = forwardRef<
         changes: {from: insertFrom, to: insertTo, insert},
         selection: EditorSelection.cursor(insertFrom + insert.length),
         scrollIntoView: true,
+        userEvent: MARKDOWN_INPUT_PASTE_USER_EVENT,
       });
       return true;
     };
