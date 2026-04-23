@@ -30,6 +30,7 @@ import {
   stemFromMarkdownFileName,
   SubtreeMarkdownPresenceCache,
   isBrowserOpenableMarkdownHref,
+  isVaultPathUnderAutosyncBackup,
   wikiLinkInnerBrowserOpenableHref,
   wikiLinkInnerVaultRelativeMarkdownHref,
   type EskerraSettings,
@@ -167,6 +168,7 @@ import {
   shouldSkipOutgoingPersistAfterNoteLeave,
   shouldSkipOutgoingPersistBeforeWrite,
 } from './inboxNoteBodyCache';
+import {resolveVaultLinkBaseMarkdownUri} from '../lib/resolveVaultLinkBaseMarkdownUri';
 
 /** Skip showing an immediate blocking disk conflict if the user just edited; one deferred re-check follows. */
 const DISK_CONFLICT_RECENCY_MS = 2000;
@@ -473,6 +475,23 @@ export type UseMainWindowWorkspaceResult = {
    * with the ref and leading text.
    */
   syncFrontmatterStateFromDisk: (nextInner: string | null, leading: string) => void;
+  /**
+   * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`),
+   * or comparing editor draft with a disk version from a disk conflict.
+   */
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
+  closeMergeView: () => void;
+  /** Replaces the base note on disk and in the editor with the full backup file contents, then saves. For disk conflict kind: loads disk version and resolves the conflict. */
+  applyFullBackupFromMerge: () => Promise<void>;
+  /** For disk conflict merge view: marks local edits as primary and resolves the conflict. */
+  keepMyEditsFromMerge: () => void;
+  /** Opens the merge panel for the current disk conflict (hard or soft; promotes soft to hard). */
+  enterDiskConflictMergeView: () => void;
+  /** Applies a manually merged body to the editor, resolves any disk conflict, and saves. */
+  applyMergedBodyFromMerge: (body: string) => void;
 };
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
@@ -558,6 +577,11 @@ export function useMainWindowWorkspace(options: {
     Record<string, TodayHubWorkspaceSnapshot>
   >({});
   const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
+  const [mergeView, setMergeView] = useState<
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string}
+  >(null);
 
   const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
   /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
@@ -1357,6 +1381,7 @@ export function useMainWindowWorkspace(options: {
     ) => {
       const openGen = ++openMarkdownGenerationRef.current;
       const targetNorm = normalizeEditorDocUri(uri);
+      setMergeView(null);
       autosaveSchedulerRef.current.cancel();
       const hubBridge = todayHubBridgeRef.current;
       const needHubFlush =
@@ -1637,6 +1662,187 @@ export function useMainWindowWorkspace(options: {
     ],
   );
 
+  const closeMergeView = useCallback(() => {
+    setMergeView(null);
+  }, []);
+
+  const tryEnterBackupMergeView = useCallback(
+    async (backupUri: string): Promise<boolean> => {
+      if (!isVaultPathUnderAutosyncBackup(backupUri)) {
+        return false;
+      }
+      const baseUri = resolveVaultLinkBaseMarkdownUri({
+        composingNewEntry: composingNewEntryRef.current,
+        showTodayHubCanvas: showTodayHubCanvasRef.current,
+        todayHubWikiNavParentUri: todayHubWikiNavParentRef.current,
+        selectedUri: selectedUriRef.current,
+      });
+      if (!baseUri) {
+        return false;
+      }
+      const normBase = normalizeEditorDocUri(baseUri);
+      const normBackup = normalizeEditorDocUri(backupUri);
+      const cur = selectedUriRef.current
+        ? normalizeEditorDocUri(selectedUriRef.current)
+        : null;
+      if (cur !== normBase) {
+        await openMarkdownInEditor(normBase, {skipHistory: true});
+      }
+      setMergeView({kind: 'backup', baseUri: normBase, backupUri: normBackup});
+      return true;
+    },
+    [openMarkdownInEditor],
+  );
+
+  const applyFullBackupFromMerge = useCallback(async () => {
+    const mv = mergeView;
+    if (!mv) {
+      return;
+    }
+    if (mv.kind === 'diskConflict') {
+      resolveDiskConflictReloadFromDisk();
+      setMergeView(null);
+      return;
+    }
+    const normBase = normalizeEditorDocUri(mv.baseUri);
+    const dc = diskConflictRef.current;
+    if (dc && normalizeEditorDocUri(dc.uri) === normBase) {
+      setErr(
+        'Resolve the disk conflict on this note before replacing it from a backup.',
+      );
+      return;
+    }
+    try {
+      setErr(null);
+      const raw = await fs.readFile(mv.backupUri, {encoding: 'utf8'});
+      loadFullMarkdownIntoInboxEditor(raw, normBase, 'start');
+      const body =
+        inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+      const full = inboxEditorSliceToFullMarkdown(
+        body,
+        normBase,
+        false,
+        inboxYamlFrontmatterInnerRef.current,
+        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+      );
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        normBase,
+        body,
+      );
+      if (nextCache) {
+        inboxContentByUriRef.current = nextCache;
+        setInboxContentByUri(
+          prev => mergeInboxNoteBodyIntoCache(prev, normBase, body) ?? prev,
+        );
+      }
+      backlinksActiveBodyRef.current = body;
+      setBacklinksActiveBody(body);
+      setMergeView(null);
+      enqueuePersistOutgoingNoteMarkdown(normBase, full);
+      scheduleBacklinksDeferOneFrameAfterLoad();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }, [
+    mergeView,
+    resolveDiskConflictReloadFromDisk,
+    fs,
+    loadFullMarkdownIntoInboxEditor,
+    inboxEditorRef,
+    enqueuePersistOutgoingNoteMarkdown,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  ]);
+
+  const keepMyEditsFromMerge = useCallback(() => {
+    resolveDiskConflictKeepLocal();
+    setMergeView(null);
+  }, [resolveDiskConflictKeepLocal]);
+
+  const enterDiskConflictMergeView = useCallback(() => {
+    const uri = selectedUriRef.current;
+    if (!uri) return;
+    const normUri = normalizeEditorDocUri(uri);
+
+    const dc = diskConflictRef.current;
+    if (dc && normalizeEditorDocUri(dc.uri) === normUri) {
+      setMergeView({kind: 'diskConflict', baseUri: normUri, diskMarkdown: dc.diskMarkdown});
+      return;
+    }
+
+    const s = diskConflictSoftRef.current;
+    if (s && normalizeEditorDocUri(s.uri) === normUri) {
+      autosaveSchedulerRef.current.cancel();
+      const hard: DiskConflictState = {uri: s.uri, diskMarkdown: s.diskMarkdown};
+      setDiskConflict(hard);
+      diskConflictRef.current = hard;
+      setDiskConflictSoft(null);
+      diskConflictSoftRef.current = null;
+      setMergeView({kind: 'diskConflict', baseUri: normUri, diskMarkdown: s.diskMarkdown});
+    }
+  }, []);
+
+  const applyMergedBodyFromMerge = useCallback(
+    (body: string) => {
+      const mv = mergeView;
+      if (!mv) return;
+      const normBase = normalizeEditorDocUri(mv.baseUri);
+
+      if (mv.kind === 'diskConflict') {
+        autosaveSchedulerRef.current.cancel();
+        const dc = diskConflictRef.current;
+        if (dc) {
+          lastPersistedRef.current = {uri: dc.uri, markdown: dc.diskMarkdown};
+        }
+        setDiskConflict(null);
+        diskConflictRef.current = null;
+        setDiskConflictSoft(null);
+        diskConflictSoftRef.current = null;
+      } else {
+        const dc = diskConflictRef.current;
+        if (dc && normalizeEditorDocUri(dc.uri) === normBase) {
+          setErr('Resolve the disk conflict on this note before applying a merge.');
+          return;
+        }
+      }
+
+      suppressEditorOnChangeRef.current = true;
+      inboxEditorRef.current?.loadMarkdown(body, {selection: 'preserve'});
+      suppressEditorOnChangeRef.current = false;
+      setEditorBody(body);
+      editorBodyRef.current = body;
+
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        normBase,
+        body,
+      );
+      if (nextCache) {
+        inboxContentByUriRef.current = nextCache;
+        setInboxContentByUri(prev => mergeInboxNoteBodyIntoCache(prev, normBase, body) ?? prev);
+      }
+      backlinksActiveBodyRef.current = body;
+      setBacklinksActiveBody(body);
+      setMergeView(null);
+
+      const full = inboxEditorSliceToFullMarkdown(
+        body,
+        normBase,
+        false,
+        inboxYamlFrontmatterInnerRef.current,
+        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+      );
+      enqueuePersistOutgoingNoteMarkdown(normBase, full);
+      scheduleBacklinksDeferOneFrameAfterLoad();
+    },
+    [
+      mergeView,
+      inboxEditorRef,
+      enqueuePersistOutgoingNoteMarkdown,
+      scheduleBacklinksDeferOneFrameAfterLoad,
+    ],
+  );
+
   const activateOpenTab = useCallback(
     (tabId: string) => {
       const tab = findTabById(editorWorkspaceTabsRef.current, tabId);
@@ -1912,6 +2118,7 @@ export function useMainWindowWorkspace(options: {
         setEditorClosedStackVersion(n => n + 1);
         setSelectedUri(null);
         setComposingNewEntry(false);
+        setMergeView(null);
         clearInboxYamlFrontmatterEditorRefs({
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
@@ -3264,6 +3471,11 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
+          if (result.kind === 'open') {
+            if (await tryEnterBackupMergeView(result.uri)) {
+              return;
+            }
+          }
           if (openInBackgroundTab) {
             await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
             return;
@@ -3347,6 +3559,11 @@ export function useMainWindowWorkspace(options: {
                     });
                   }
                 }
+                if (relResult.kind === 'open') {
+                  if (await tryEnterBackupMergeView(relResult.uri)) {
+                    return;
+                  }
+                }
                 if (openInBackgroundTab) {
                   await openNoteRespectingExistingTab(relResult.uri, 'background-new-tab');
                   return;
@@ -3377,7 +3594,15 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor, openNoteRespectingExistingTab],
+    [
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+      openNoteRespectingExistingTab,
+      tryEnterBackupMergeView,
+    ],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -3440,6 +3665,11 @@ export function useMainWindowWorkspace(options: {
               });
             }
           }
+          if (result.kind === 'open') {
+            if (await tryEnterBackupMergeView(result.uri)) {
+              return;
+            }
+          }
           if (openInBackgroundTab) {
             await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
             return;
@@ -3468,7 +3698,15 @@ export function useMainWindowWorkspace(options: {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [vaultRoot, fs, refreshNotes, inboxEditorRef, openMarkdownInEditor, openNoteRespectingExistingTab],
+    [
+      vaultRoot,
+      fs,
+      refreshNotes,
+      inboxEditorRef,
+      openMarkdownInEditor,
+      openNoteRespectingExistingTab,
+      tryEnterBackupMergeView,
+    ],
   );
 
   const onMarkdownRelativeLinkActivate = useCallback(
@@ -4421,5 +4659,11 @@ export function useMainWindowWorkspace(options: {
     inboxYamlFrontmatterInner,
     applyFrontmatterInnerChange,
     syncFrontmatterStateFromDisk,
+    mergeView,
+    closeMergeView,
+    applyFullBackupFromMerge,
+    keepMyEditsFromMerge,
+    enterDiskConflictMergeView,
+    applyMergedBodyFromMerge,
   };
 }

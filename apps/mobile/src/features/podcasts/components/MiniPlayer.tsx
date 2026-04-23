@@ -227,7 +227,7 @@ export function MiniPlayer() {
                   disabled={miniPlayerActionBusy}
                   hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
                   onPress={() => {
-                    void handleMiniPlayerMarkPlayed();
+                    handleMiniPlayerMarkPlayed();
                   }}
                   style={styles.actionIconButton}>
                   {miniPlayerActionKind === 'mark' ? (
@@ -246,7 +246,7 @@ export function MiniPlayer() {
                   disabled={miniPlayerActionBusy}
                   hitSlop={{bottom: 8, left: 8, right: 8, top: 8}}
                   onPress={() => {
-                    void handleMiniPlayerDismissWithoutPlayed();
+                    handleMiniPlayerDismissWithoutPlayed();
                   }}
                   style={styles.actionIconButton}>
                   {miniPlayerActionKind === 'dismiss' ? (

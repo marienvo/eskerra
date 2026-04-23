@@ -86,6 +86,8 @@ import {TodayHubCanvas} from './TodayHubCanvas';
 import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
+import {BackupMergePanel} from './BackupMergePanel';
+import type {MergePanelSource} from './BackupMergePanel';
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
 
@@ -213,6 +215,14 @@ type VaultTabProps = {
   titleBarEditorTabsHost?: HTMLElement | null;
   linkSnippetBlockedDomains?: ReadonlyArray<string>;
   onMuteLinkSnippetDomain?: (domain: string) => void;
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
+  onCloseMergeView: () => void;
+  onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onApplyMergedBodyFromMerge: (body: string) => void;
+  onKeepMyEditsFromMerge?: () => void;
 };
 
 type InboxBacklinksSectionProps = {
@@ -223,6 +233,15 @@ type InboxBacklinksSectionProps = {
 };
 
 type EditorPaneBodyProps = {
+  fs: VaultFilesystem;
+  mergeView:
+    | null
+    | {kind: 'backup'; baseUri: string; backupUri: string}
+    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
+  onCloseMergeView: () => void;
+  onApplyFullBackupFromMerge: () => void | Promise<void>;
+  onApplyMergedBodyFromMerge: (body: string) => void;
+  onKeepMyEditsFromMerge?: () => void;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxAttachmentHost: ReturnType<typeof createNoteInboxAttachmentHost>;
@@ -328,6 +347,12 @@ function InboxBacklinksSection({
 }
 
 function EditorPaneBody({
+  fs,
+  mergeView,
+  onCloseMergeView,
+  onApplyFullBackupFromMerge,
+  onApplyMergedBodyFromMerge,
+  onKeepMyEditsFromMerge,
   inboxEditorRef,
   inboxEditorShellScrollRef,
   inboxAttachmentHost,
@@ -410,7 +435,7 @@ function EditorPaneBody({
         el.classList.remove('note-sidecar-group--deferred');
       }
     };
-  }, [selectedUri]);
+  }, [selectedUri, mergeView]);
 
   const onFoldedRangesPresentChange = useCallback((next: boolean) => {
     setEditorHasFoldedRanges(next);
@@ -420,11 +445,27 @@ function EditorPaneBody({
     setEditorHasFoldableRanges(next);
   }, []);
 
+  const mergeCurrentBody = useMemo(() => {
+    if (mergeView == null) {
+      return '';
+    }
+    const k = mergeView.baseUri;
+    const fromCache = inboxContentByUri[k];
+    if (fromCache !== undefined) {
+      return fromCache;
+    }
+    if (selectedUri != null && normalizeEditorDocUri(selectedUri) === k) {
+      return editorBody;
+    }
+    return '';
+  }, [mergeView, inboxContentByUri, selectedUri, editorBody]);
+
   const scrollTodayHubLayout =
     showTodayHubCanvas &&
     Boolean(selectedUri) &&
     todayHubSettings != null &&
-    !composingNewEntry;
+    !composingNewEntry &&
+    mergeView == null;
 
   const frontmatterReadOnly =
     busy ||
@@ -446,7 +487,7 @@ function EditorPaneBody({
           }
         >
           <div className="note-markdown-editor-page">
-            {selectedUri && !composingNewEntry ? (
+            {selectedUri && !composingNewEntry && mergeView == null ? (
               <div className="note-markdown-editor-frontmatter-host">
                 <FrontmatterEditor
                   yamlInner={inboxYamlFrontmatterInner}
@@ -458,7 +499,27 @@ function EditorPaneBody({
                 />
               </div>
             ) : null}
-            <div className="note-markdown-editor-main-row">
+            {mergeView != null ? (
+              <BackupMergePanel
+                vaultRoot={vaultRoot}
+                fs={fs}
+                source={
+                  mergeView.kind === 'backup'
+                    ? ({kind: 'backup', backupUri: mergeView.backupUri} satisfies MergePanelSource)
+                    : ({kind: 'disk', diskMarkdown: mergeView.diskMarkdown} satisfies MergePanelSource)
+                }
+                currentBody={mergeCurrentBody}
+                onClose={onCloseMergeView}
+                onApplyOther={onApplyFullBackupFromMerge}
+                onApplyMergedBody={onApplyMergedBodyFromMerge}
+                onKeepLocal={mergeView.kind === 'diskConflict' ? onKeepMyEditsFromMerge : undefined}
+                busy={busy}
+              />
+            ) : null}
+            <div
+              className="note-markdown-editor-main-row"
+              hidden={mergeView != null}
+            >
             <div className="note-markdown-editor-fold-rail">
               {editorHasFoldedRanges || editorHasFoldableRanges ? (
                 <div className="note-markdown-editor-fold-bulk-anchor">
@@ -546,7 +607,8 @@ function EditorPaneBody({
           {showTodayHubCanvas &&
           selectedUri &&
           todayHubSettings &&
-          !composingNewEntry ? (
+          !composingNewEntry &&
+          mergeView == null ? (
             <div
               ref={todayHubSidecarRef}
               className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
@@ -676,6 +738,11 @@ export function VaultTab({
   titleBarEditorTabsHost = null,
   linkSnippetBlockedDomains,
   onMuteLinkSnippetDomain,
+  mergeView,
+  onCloseMergeView,
+  onApplyFullBackupFromMerge,
+  onApplyMergedBodyFromMerge,
+  onKeepMyEditsFromMerge,
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
@@ -1468,6 +1535,12 @@ export function VaultTab({
                 {editorOpen ? (
                   <>
                     <EditorPaneBody
+                      fs={fs}
+                      mergeView={mergeView}
+                      onCloseMergeView={onCloseMergeView}
+                      onApplyFullBackupFromMerge={onApplyFullBackupFromMerge}
+                      onApplyMergedBodyFromMerge={onApplyMergedBodyFromMerge}
+                      onKeepMyEditsFromMerge={onKeepMyEditsFromMerge}
                       inboxEditorRef={inboxEditorRef}
                       inboxEditorShellScrollRef={inboxEditorShellScrollRef}
                       inboxAttachmentHost={inboxAttachmentHost}

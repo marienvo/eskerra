@@ -73,18 +73,143 @@ cd apps/mobile && npx jest src/path/to/test.test.ts
 
 Both apps implement the `VaultFilesystem` interface from `@eskerra/core`, so feature code is platform-agnostic.
 
+## Language and style
+
+- Write all identifiers, comments, commit messages, and specs in **US English** (color, organization, behavior).
+- Default to **TypeScript** for all new code. Use Python or Go only when constraints require it.
+- Keep language choices consistent within each module.
+
+## Platform targets
+
+- **Mobile: Android only.** iOS is not supported and never planned. Do not propose iOS work, App Store steps, or iOS-driven cross-platform compromises.
+- **Desktop: Linux (Fedora Workstation / GNOME reference environment).** Future direction; not part of the mobile MVP unless a task explicitly says otherwise.
+- When unsure, prefer Android-specific solutions and defer hypothetical multi-mobile portability.
+
+## Quality gate
+
+After each change set, run the relevant test, lint, and type-check commands. Resolve all errors before considering work complete. Do not leave known failing quality checks on a branch.
+
+## Spec discipline
+
+Document facts that cannot be reliably inferred from the code in spec files (`specs/`). Capture concrete business rules, external constraints, assumptions, and architectural decisions. Keep specs synchronized with implementation changes.
+
 ## Key invariants
 
 **Startup performance:** First screen render is the sacred path. Defer all vault scans, feed refreshes, markdown parsing, and indexing until after first render. Use last-known cached state for first paint, then refresh in background. Nothing expensive runs on startup.
 
-**CodeMirror layout (desktop editor):** Use `padding`, not `margin`, for vertical spacing inside editor containers. CodeMirror's height map breaks with margin-based layouts.
-
-**Note body cache (desktop):** `inboxContentByUri` must stay in sync with disk at all times. Heal the cache on note switch if disk and cache diverge. Never persist stale content.
-
 **Playlist merge (multi-device):** Higher `controlRevision` wins. If tied, higher `updatedAt` wins. If tied, remote wins. R2 is authoritative; `.eskerra/playlist.json` is the offline fallback.
 
-**Kotlin on mobile:** Only use Kotlin when there is a measurable Android API/SAF benefit, heavy file I/O, or a proven TypeScript bottleneck. Default to TypeScript.
-
-**Testing:** Failing tests are blockers. Match testing tools to language: Vitest for TypeScript/desktop, Jest for React Native, Playwright for Storybook. The `vitest.setup.ts` harness in `apps/desktop/` isolates Tauri imports — follow the existing pattern for new desktop tests.
-
 **Releases:** Semver is canonical in `apps/mobile/package.json`. The bump script (`scripts/bump-release-version.mjs`) syncs desktop Vite splash, Tauri config, `Cargo.toml`, and `metainfo.xml`. CI checks alignment.
+
+## TypeScript vs. Kotlin boundary (mobile)
+
+Default to TypeScript. Use Kotlin only when at least one is true:
+- Depends on Android platform APIs, SAF, or other Android-specific file APIs
+- Performs heavy file-system access, scans, or indexing
+- Processes large numbers of files or large payloads
+- Must run reliably in the background on Android
+- Involves media playback, audio session integration, or native media
+- Is on a performance-critical path and TypeScript is **measurably** too slow
+
+Before proposing Kotlin, first consider: deferring the work, caching the result, doing less work, reducing frequency, limiting the data set, lazy loading, or a simpler TypeScript implementation.
+
+When proposing a new dependency, provider, startup initialization, background process, native module, persistent cache, file scan, or TypeScript→Kotlin migration, state: (1) why it is needed, (2) whether it is on the startup path, (3) whether it can be deferred, (4) why TypeScript is enough or Kotlin is justified, (5) the performance risk, (6) how it should be measured.
+
+## Testing
+
+- Add tests wherever they provide meaningful confidence for behavior, regressions, and edge cases. When fixing a bug, add or update a test that proves the fix.
+- Match tools to language: **Vitest** for TypeScript/desktop, **Jest** for React Native, **Playwright** for Storybook.
+- Failing tests are blockers. All relevant tests must pass before a change is done.
+
+### Desktop Vitest isolation (`apps/desktop/`)
+
+Authoritative detail: `specs/adrs/adr-vitest-desktop-test-isolation.md`.
+
+- `vitest.setup.ts` runs RTL `cleanup()` in `afterEach`; restores real timers; calls `vi.unstubAllGlobals()` / `unstubAllEnvs()`; clears `localStorage` / `sessionStorage` / `document.body`; clears cookies in `beforeEach`.
+- Keep **`restoreMocks: false`** in `vitest.config.ts`. `restoreMocks: true` resets `vi.mock()` factories and breaks module mocks (e.g., `@tauri-apps/plugin-store`). Use `clearMocks: true` only; use `vi.spyOn(...).mockRestore()` inside a test file when you need the real implementation back.
+- Keep **`isolate: true`** — ESLint flags `isolate: false`.
+- **Do not import Tauri in `vitest.setup.ts`.** `setupFiles` run before test files; importing a module that loads `@tauri-apps/*` at module scope binds the real Tauri client before `vi.mock(...)` runs. Safe to import in setup: modules with no Tauri at top level (e.g., `artworkCacheDesktop`, `cleanNoteMarkdown`, `editorWorkspaceTabs`). Not safe: modules wired to `invoke` or `plugin-store` (e.g., `emojiUsageStore`, `rssFeedUrlCacheDesktop`) — reset these from `beforeEach`/`afterEach` in individual test files.
+- New module-scoped mutable state must export `__resetForTests()`. Add it to `vitest.setup.ts` `afterEach` only if the module has no top-level Tauri import; otherwise document and reset per-file.
+- Tests that construct CodeMirror views must call `EditorView.destroy()` in the same test or `afterEach`.
+
+## Design system
+
+Authoritative architecture: `specs/design/design-system-architecture.md`.
+
+- **L1 `@eskerra/tokens`** — values and generators only; no React.
+- **L2 `@eskerra/ds-desktop` / `@eskerra/ds-mobile`** — product-agnostic primitives; no vault/inbox/episode naming; no business logic.
+- **L3** — `apps/desktop/src/shell`, `apps/mobile/src/features`; composes DS + product state.
+
+Shell chrome (rail `TabButton`, pane headers, title bar, splits, editor toolbar, dialogs with product copy) stays in `apps/desktop/src/shell`, not in `@eskerra/ds-desktop`.
+
+**Gluestack (`apps/mobile`):**
+- Allowed: direct `@gluestack-ui/*` in `apps/mobile/src/features/**` only when no `@eskerra/ds-mobile` primitive exists yet.
+- Required promotion: any control reused across 2+ features, or any token-bearing control (Button, Text, ListRow, Surface…), must move into `@eskerra/ds-mobile`.
+- Forbidden: `@gluestack-ui/*` imports inside `packages/eskerra-ds-mobile`. Forbidden: permanent wrappers that re-export Gluestack prop shapes as the Eskerra API.
+
+**Import rule:** apps depend on `@eskerra/tokens`, `@eskerra/ds-desktop`, or `@eskerra/ds-mobile`; do not import one app's `src` from the other app's UI.
+
+## Storybook
+
+- **Desktop web:** stories under `packages/eskerra-ds-desktop` only.
+- **Mobile:** on-device and RN-Web share the same story files under `packages/eskerra-ds-mobile`.
+- **L2 contract stories** (`packages/eskerra-ds-*/**/__stories__/`): mandatory variants for interactive components (Default, Disabled, Loading, LongContent, focus/pressed, A11y); use `play` from `storybook/test` to assert behavior. Static reference stories (token palettes, icon inventories, typography specimens) go under `__stories__/reference/`, tagged `reference`/`docs-only`, no `play` required.
+- **L3 sandbox stories** (`apps/*/src/**/__sandbox__/*.stories.tsx`): tag `sandbox`; `play` not required; not in official docs publish set.
+- Stories that depend on Reanimated, gesture-handler, or other native-only behavior: tag `native-only`.
+- No product compositions (`EditorWorkspaceToolbar`, vault trees…) as L2 contract stories — use L3 sandbox if needed.
+
+**When to add or update stories:** When you modify existing React components or add new presentational components under `apps/` or `packages/eskerra-ds-*`, decide whether Storybook coverage is needed and do it in the same change (or state in one sentence why not). Exceptions: logic-only changes, minor styling tweaks where existing stories still represent the component, generated or third-party code.
+
+## Mobile on-device verification
+
+RN-Web Storybook is not a substitute for Android. Merge gates may use RN-Web + test-runner; release requires on-device validation for native-affecting changes.
+
+Verify on a real device or emulator (not RN-Web alone) when touching:
+- `react-native-reanimated`, `react-native-gesture-handler`, `react-native-keyboard-controller`
+- `FlatList`, `FlashList`, large scroll performance
+- `react-native-track-player`, audio focus, notifications
+- `react-native-saf-x`, file pickers
+- Fonts, safe area, TalkBack order, haptics, AMOLED appearance
+
+## Desktop: CodeMirror layout
+
+Applies to: `apps/desktop/src/**/*.css`, `apps/desktop/src/editor/noteEditor/**`.
+
+- **Use `padding`, not `margin`**, for vertical spacing on elements whose height CodeMirror measures: `.cm-line` nodes, line decorations (e.g., `cm-md-*`), block widget roots (e.g., `cm-vault-image-preview`). CodeMirror's height map includes padding and border but excludes margin; margin-only spacing breaks click/selection coordinates below that content.
+- Do not remove **`-webkit-font-smoothing: antialiased`** from the capture inbox `.cm-scroller` without re-testing on Linux (see `specs/design/desktop-text-rendering.md`, symptom 7).
+
+Full rationale: `specs/architecture/desktop-editor.md` § "Vertical layout and click coordinates".
+
+## Desktop: Note body cache
+
+Applies to: `apps/desktop/**`.
+
+- **`inboxContentByUri`** must stay aligned with the latest in-memory editor text before awaiting work that can change `selectedUri` (snapshot in `openMarkdownInEditor`), and after every successful `saveNoteMarkdown` in `enqueueInboxPersist` (including when `persistTransientMarkdownImages` rewrites markdown).
+- **`lastPersistedRef`** must describe content that was written successfully (or read from disk for the current selection). Do not set it from a stale `inboxContentByUri` entry without reconciling with disk-known state.
+- The `useLayoutEffect` on `selectedUri` restores CodeMirror from cache when present; if cache and `lastPersistedRef` disagree for the same URI, disk-known (`lastPersistedRef`) wins and the cache is healed (`resolveInboxCachedBodyForEditor` in `apps/desktop/src/hooks/inboxNoteBodyCache.ts`).
+- Any new mutation path (bulk rewrite, external sync, etc.) must update or invalidate the cache entry for affected URIs.
+- Prefer small pure helpers in `inboxNoteBodyCache.ts` for merge/heal logic; add Vitest coverage there when behavior changes.
+
+Full detail: `specs/architecture/desktop-editor.md` § "lazy note bodies + cache consistency invariant".
+
+## Desktop: Editor interactive links
+
+Applies to: `apps/desktop/src/editor/noteEditor/**`, `apps/desktop/src/App.css`.
+
+In the vault capture markdown editor (`NoteMarkdownEditor` / table cell editors under `[data-app-surface='capture']`):
+
+- Any range that opens or creates a vault note via click, Mod-click, or Mod-Enter must use the same interactive link presentation: wiki links (`cm-wiki-link` / `cm-wiki-link--resolved` / `cm-wiki-link--unresolved`; browser-openable wiki targets also use `cm-wiki-link--external` and `cm-md-external-link-glyph`), relative vault `.md` inline links (`cm-md-rel-link` / `cm-md-rel-link--resolved` / `cm-md-rel-link--unresolved`), and browser inline links (`cm-md-external-link` / `cm-md-external-href` / `cm-md-external-link-glyph` for `http`/`https`/`mailto`).
+- **Hit testing must match styling.** Vault navigation and external link activation must not trigger from syntax-only characters (`[[` on wiki links; the gap between the two `]` of `]]`; Lezer `LinkMark` `[` `(` and closing `)`). For wiki links, Mod-Enter may use the caret slot at the first `]` of `]]`; pointer clicks use the inner span only. For inline links, the caret slot immediately before closing `]`/`)` does activate so Mod-Enter works after typing.
+- Do not leave navigable label or URL text styled as normal body copy while a sibling segment is the only underlined link.
+
+Full behavior: `specs/architecture/desktop-editor.md` § wiki links, WL-6 relative markdown links, and external browser links.
+
+## Desktop: Shell UI
+
+Applies to: `apps/desktop/**`.
+
+Full detail: `specs/design/desktop-shell-patterns.md`.
+
+**Resizable columns:** Main workspace (`MainWorkspaceSplit`) always uses `DesktopHorizontalSplit` with the center workspace (markdown editor) as `centerWorkspace` (CSS `desktop-hsplit-center-workspace`). When both side panes are hidden, `leftCollapsed` keeps a 0px left column with no separator and `left: null` so CodeMirror is not reparented. When both Vault and Episodes are open, `DesktopVerticalSplit` stacks them in the left column (`vaultEpisodesStack.topHeightPx` in `layoutPanelsV4`). One main left column width persisted as `inbox.leftWidthPx` / `podcastsMain.leftWidthPx`; editor is `flex: 1`. Do not reintroduce `react-resizable-panels` for this main split without a spec update (caused visible 1px jitter on window resize). Persist widths and stack heights via `layoutStore` (`layoutPanelsV4`), including `notificationsInboxStack.topHeightPx`.
+
+**Cursors:** Treat the desktop UI as a desktop app. Use `cursor: default` on buttons, rail tabs, list rows, and similar chrome. Do not use `cursor: pointer` for those. No `cursor: not-allowed` on disabled elements — keep `cursor: default` with existing opacity/color disabled styling. Exceptions: panel separators keep `col-resize`/`row-resize`; Today Hub read-only cell preview uses `cursor: text` (links inside use pointer from markdown token CSS).

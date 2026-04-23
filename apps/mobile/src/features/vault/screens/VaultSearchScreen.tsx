@@ -72,7 +72,7 @@ export function VaultSearchScreen({navigation}: Props) {
       return;
     }
     setSearchIndexOpening(true);
-    void eskerraVaultSearch
+    eskerraVaultSearch
       .open(baseUri.trim())
       .then(st => {
         if (cancelled) {

@@ -24,7 +24,7 @@ function findEarlierStem(sorted: readonly string[], currentStem: string): string
   let lo = 0;
   let hi = sorted.length;
   while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
+    const mid = Math.floor((lo + hi) / 2);
     if (sorted[mid]! < currentStem) {
       lo = mid + 1;
     } else {
@@ -39,7 +39,7 @@ function findLaterStem(sorted: readonly string[], currentStem: string): string |
   let lo = 0;
   let hi = sorted.length;
   while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
+    const mid = Math.floor((lo + hi) / 2);
     if (sorted[mid]! <= currentStem) {
       lo = mid + 1;
     } else {
