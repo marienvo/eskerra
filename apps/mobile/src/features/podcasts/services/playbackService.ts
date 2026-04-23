@@ -28,4 +28,11 @@ export async function playbackService() {
   TrackPlayer.addEventListener(Event.RemoteStop, () => {
     TrackPlayer.stop().catch(() => undefined);
   });
+
+  // When the queue ends naturally, reset the player so Android stops the
+  // foreground service and removes the media notification. Without this,
+  // the MediaSession and notification persist even though nothing is playing.
+  TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
+    TrackPlayer.reset().catch(() => undefined);
+  });
 }
