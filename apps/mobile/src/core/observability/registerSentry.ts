@@ -13,6 +13,14 @@ import {
 
 import packageJson from '../../../package.json';
 
+type RingTailSentryContext = {
+  line_count: number;
+  tail_json: string;
+};
+
+/** Set in {@link attachRingBufferTailOnce}; cleared after first delivered error that carries the tail. */
+let pendingRingTailForSentry: RingTailSentryContext | null = null;
+
 function scrubEvent(event: Event): Event {
   if (event.type === 'transaction') {
     return event;
@@ -79,7 +87,35 @@ function init(): void {
       patchGlobalPromise: true,
       release: `eskerra@${packageJson.version}`,
       beforeSend(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
-        return scrubEvent(event as unknown as Event) as ErrorEvent;
+        const scrubbed = scrubEvent(event as unknown as Event) as ErrorEvent;
+        if (scrubbed.type === 'transaction') {
+          return scrubbed;
+        }
+        const hadPendingTail = pendingRingTailForSentry != null;
+        const existingTail = scrubbed.contexts?.ring_buffer_tail as
+          | RingTailSentryContext
+          | undefined;
+        if (
+          pendingRingTailForSentry &&
+          (existingTail == null || existingTail.tail_json == null)
+        ) {
+          scrubbed.contexts = {
+            ...scrubbed.contexts,
+            ring_buffer_tail: pendingRingTailForSentry,
+          };
+        }
+        const tailOnOut = scrubbed.contexts?.ring_buffer_tail as
+          | RingTailSentryContext
+          | undefined;
+        if (
+          hadPendingTail &&
+          tailOnOut?.tail_json != null &&
+          tailOnOut.tail_json.length > 0
+        ) {
+          setLastRingSentTimestamp(Date.now()).catch(() => undefined);
+          pendingRingTailForSentry = null;
+        }
+        return scrubbed;
       },
       beforeBreadcrumb(crumb: Breadcrumb) {
         return scrubBreadcrumb(crumb);
@@ -104,19 +140,23 @@ async function attachRingBufferTailOnce(): Promise<void> {
       return;
     }
     // Do not use `captureMessage`: Sentry groups info-level messages as issues (e.g. REACT-NATIVE-2).
-    // Attach tail to scope so the next real error/session includes it for triage.
+    // Attach tail to scope so the next real error includes it for triage. Persist
+    // {@link setLastRingSentTimestamp} only from `beforeSend` once an error actually carries the
+    // payload — otherwise a restart before any send would keep the cooldown but lose in-memory
+    // scope context, suppressing re-attachment incorrectly.
     const tailJson = JSON.stringify(tail).slice(0, 8000);
-    Sentry.setContext('ring_buffer_tail', {
+    const payload: RingTailSentryContext = {
       line_count: tail.length,
       tail_json: tailJson,
-    });
+    };
+    pendingRingTailForSentry = payload;
+    Sentry.setContext('ring_buffer_tail', payload);
     Sentry.addBreadcrumb({
       category: 'eskerra.observability',
       level: 'info',
       message: 'ring_buffer_tail_loaded',
       data: {line_count: tail.length},
     });
-    await setLastRingSentTimestamp(Date.now());
   } catch {
     // ignore
   }
