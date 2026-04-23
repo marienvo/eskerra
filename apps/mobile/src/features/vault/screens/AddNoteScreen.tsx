@@ -22,6 +22,7 @@ import {
   inboxMarkdownFileToComposeInput,
   parseComposeInput,
 } from '../../../core/vault/vaultComposeNote';
+import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {AddNoteStackParamList, InboxStackParamList} from '../../../navigation/types';
 import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
@@ -38,12 +39,19 @@ type AddNoteNavigation = StackNavigationProp<InboxStackParamList, 'AddNote'> &
 
 /** Home stack only registers AddNote; Inbox stack includes Inbox and NoteDetail. */
 function isInboxComposeStack(navigation: Pick<AddNoteNavigation, 'getState'>): boolean {
-  return navigation.getState().routeNames.includes('Inbox');
+  const state = safeNavigationState(navigation);
+  if (!state?.routeNames?.length) {
+    return false;
+  }
+  return state.routeNames.includes('Inbox');
 }
 
 /** True when the screen under AddNote in the stack is Inbox (back goes to the inbox list). */
 function isPoppingFromAddNoteToInbox(stackNavigation: AddNoteNavigation): boolean {
-  const state = stackNavigation.getState();
+  const state = safeNavigationState(stackNavigation);
+  if (!state?.routes?.length || state.index == null) {
+    return false;
+  }
   const idx = state.index;
   if (idx < 1) {
     return false;

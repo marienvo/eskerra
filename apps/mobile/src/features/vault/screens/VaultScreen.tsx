@@ -19,6 +19,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {LIST_HORIZONTAL_INSET} from '../../../core/ui/listMetrics';
+import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {VaultStackParamList} from '../../../navigation/types';
 import {useVaultTodayHubContext} from '../context/VaultTodayHubContext';
 import {TodayHubPickerModal} from '../components/TodayHubPickerModal';
@@ -301,8 +302,11 @@ export function VaultScreen({navigation}: VaultScreenProps) {
   }, [activeHubUri]);
 
   const isVaultHubTopRoute = useCallback((): boolean => {
-    const state = navigation.getState();
-    const activeRoute = state.routes[state.index];
+    const state = safeNavigationState(navigation);
+    if (!state?.routes?.length) {
+      return false;
+    }
+    const activeRoute = state.routes[state.index ?? 0];
     return activeRoute?.name === 'Vault';
   }, [navigation]);
 

@@ -31,6 +31,7 @@ import {
   getInboxTileBackgroundColor,
 } from '@eskerra/core';
 import {consumePendingShareDraft} from '../../../core/share/pendingShareDraft';
+import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {MainTabParamList, InboxStackParamList} from '../../../navigation/types';
 import {useNotes} from '../../vault/hooks/useNotes';
 
@@ -49,8 +50,11 @@ export function InboxScreen({navigation}: InboxScreenProps) {
   const selectedCount = selectedNoteUris.size;
   const hasSelection = selectedCount > 0;
   const isInboxTopRoute = useCallback((): boolean => {
-    const state = navigation.getState();
-    const activeRoute = state.routes[state.index];
+    const state = safeNavigationState(navigation);
+    if (!state?.routes?.length) {
+      return false;
+    }
+    const activeRoute = state.routes[state.index ?? 0];
     return activeRoute?.name === 'Inbox';
   }, [navigation]);
 
