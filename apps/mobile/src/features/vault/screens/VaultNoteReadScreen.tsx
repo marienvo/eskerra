@@ -5,6 +5,7 @@ import {Box} from '@gluestack-ui/themed';
 import {StyleSheet, TouchableOpacity} from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {VaultStackParamList} from '../../../navigation/types';
 import {NoteContentView} from '../components/NoteContentView';
 
@@ -15,8 +16,11 @@ export function VaultNoteReadScreen({navigation, route}: VaultNoteReadScreenProp
   const noteTitle = route.params.noteTitle.trim();
 
   const isVaultNoteReadTopRoute = useCallback((): boolean => {
-    const state = navigation.getState();
-    const activeRoute = state.routes[state.index];
+    const state = safeNavigationState(navigation);
+    if (!state?.routes?.length) {
+      return false;
+    }
+    const activeRoute = state.routes[state.index ?? 0];
     return activeRoute?.name === 'VaultNoteRead';
   }, [navigation]);
 

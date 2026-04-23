@@ -18,6 +18,7 @@ import {
   LIST_HORIZONTAL_INSET,
 } from '../../../core/ui/listMetrics';
 import {useVaultContext} from '../../../core/vault/VaultContext';
+import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {PodcastsStackParamList} from '../../../navigation/types';
 import {PodcastEpisode} from '../../../types';
 import {EpisodeRow} from '../components/EpisodeRow';
@@ -135,8 +136,11 @@ export function PodcastsScreen({navigation}: PodcastsScreenProps) {
   }, [baseUri, refreshPodcasts, setPodcastsVaultRefreshUi]);
 
   const isPodcastsTopRoute = useCallback((): boolean => {
-    const state = navigation.getState();
-    const activeRoute = state.routes[state.index];
+    const state = safeNavigationState(navigation);
+    if (!state?.routes?.length) {
+      return false;
+    }
+    const activeRoute = state.routes[state.index ?? 0];
     return activeRoute?.name === 'Podcasts';
   }, [navigation]);
 

@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "patch-package",
     "apk-release": "npm run apk-release -w @eskerra/mobile",
     "mobile": "npm run start -w @eskerra/mobile",
     "mobile:android": "npm run android -w @eskerra/mobile",
@@ -21,6 +22,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "patch-package": "^8.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
@@ -32,6 +34,13 @@
   },
   "overrides": {
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "patch-package": {
+      "find-yarn-workspace-root": {
+        "micromatch": {
+          "picomatch": "2.3.2"
+        }
+      }
+    }
   }
 }

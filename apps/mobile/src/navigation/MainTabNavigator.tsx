@@ -13,6 +13,7 @@ import {Pressable, StyleSheet, Text, TouchableOpacity, View} from 'react-native'
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import {VaultTodayHubProvider, useVaultTodayHubContext} from '../features/vault/context/VaultTodayHubContext';
+import {safeNavigationState} from './safeNavigationState';
 import {vaultStackRouteIsVaultHome, vaultStackStateFromRootState} from './vaultTabNavigationState';
 
 import {InboxScreen} from '../features/inbox/screens/InboxScreen';
@@ -74,15 +75,22 @@ function VaultTabBarButton(props: BottomTabBarButtonProps) {
   /** BottomTabBarButtonProps does not include `navigation`; use tab context from the bar. */
   const tabNavigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const {onPress} = props;
-  const handlePress = useCallback(() => {
-    const state = tabNavigation.getState();
-    const activeTab = state.routes[state.index];
-    if (activeTab?.name === 'VaultTab') {
-      resetWeekToCurrent();
-      tabNavigation.navigate('VaultTab', {screen: 'Vault', merge: true});
-    }
-    onPress?.();
-  }, [tabNavigation, onPress, resetWeekToCurrent]);
+  const handlePress = useCallback<NonNullable<BottomTabBarButtonProps['onPress']>>(
+    e => {
+      const state = safeNavigationState(tabNavigation);
+      if (!state?.routes?.length) {
+        onPress?.(e);
+        return;
+      }
+      const activeTab = state.routes[state.index ?? 0];
+      if (activeTab?.name === 'VaultTab') {
+        resetWeekToCurrent();
+        tabNavigation?.navigate('VaultTab', {screen: 'Vault', merge: true});
+      }
+      onPress?.(e);
+    },
+    [tabNavigation, onPress, resetWeekToCurrent],
+  );
   return <TabBarButton {...props} onPress={handlePress} />;
 }
 

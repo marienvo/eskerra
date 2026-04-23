@@ -1,0 +1,52 @@
+diff --git a/node_modules/@codemirror/view/dist/index.cjs b/node_modules/@codemirror/view/dist/index.cjs
+index 0f6cc24..a34ba62 100644
+--- a/node_modules/@codemirror/view/dist/index.cjs
++++ b/node_modules/@codemirror/view/dist/index.cjs
+@@ -3794,6 +3794,12 @@ function posAtCoords(view, coords, precise, scanY) {
+     let line = view.docView.lineAt(block.from, 2);
+     if (!line || line.length != block.length)
+         line = view.docView.lineAt(block.from, -2);
++    if (!line) {
++        if (precise)
++            return null;
++        let pos = posAtCoordsImprecise(view, content, block, x, y);
++        return new PosAssoc(pos, pos == block.from ? 1 : -1);
++    }
+     return new InlineCoordsScan(view, x, y, view.textDirectionAt(block.from)).scanTile(line, block.from);
+ }
+ class InlineCoordsScan {
+@@ -3907,6 +3913,8 @@ class InlineCoordsScan {
+         // on the y axis, move this.y into it, and retry the scan.
+         if (!closestRect) {
+             let side = above && (!below || (this.y - above.bottom < below.top - this.y)) ? above : below;
++            if (!side)
++                return { i: lo, after: false };
+             this.y = (side.top + side.bottom) / 2;
+             return this.scan(positions, getRects);
+         }
+diff --git a/node_modules/@codemirror/view/dist/index.js b/node_modules/@codemirror/view/dist/index.js
+index 05b89f2..66309dd 100644
+--- a/node_modules/@codemirror/view/dist/index.js
++++ b/node_modules/@codemirror/view/dist/index.js
+@@ -3790,6 +3790,12 @@ function posAtCoords(view, coords, precise, scanY) {
+     let line = view.docView.lineAt(block.from, 2);
+     if (!line || line.length != block.length)
+         line = view.docView.lineAt(block.from, -2);
++    if (!line) {
++        if (precise)
++            return null;
++        let pos = posAtCoordsImprecise(view, content, block, x, y);
++        return new PosAssoc(pos, pos == block.from ? 1 : -1);
++    }
+     return new InlineCoordsScan(view, x, y, view.textDirectionAt(block.from)).scanTile(line, block.from);
+ }
+ class InlineCoordsScan {
+@@ -3903,6 +3909,8 @@ class InlineCoordsScan {
+         // on the y axis, move this.y into it, and retry the scan.
+         if (!closestRect) {
+             let side = above && (!below || (this.y - above.bottom < below.top - this.y)) ? above : below;
++            if (!side)
++                return { i: lo, after: false };
+             this.y = (side.top + side.bottom) / 2;
+             return this.scan(positions, getRects);
+         }

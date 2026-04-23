@@ -331,8 +331,8 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const [hoveredBodyRow, setHoveredBodyRow] = useState<number | null>(null);
 
   const leaveRowHover = useCallback((bodyIndex: number, e: MouseEvent) => {
-    const next = e.relatedTarget as HTMLElement | null;
-    if (next?.closest(`[data-eskerra-row-hover="${bodyIndex}"]`)) {
+    const rt = e.relatedTarget;
+    if (rt instanceof Element && rt.closest(`[data-eskerra-row-hover="${bodyIndex}"]`)) {
       return;
     }
     setHoveredBodyRow(h => (h === bodyIndex ? null : h));

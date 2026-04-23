@@ -425,7 +425,15 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       selectedItems: [],
     },
     hotkeys: {
-      toggleSelectedItem: {isEnabled: () => false},
+      // Shallow merge in headless-tree replaces the whole preset; include `hotkey` + `handler` (see ESKERRA-TAURI-9).
+      toggleSelectedItem: {
+        hotkey: 'Control+Space',
+        preventDefault: true,
+        isEnabled: () => false,
+        handler: (_e, tree) => {
+          tree.getFocusedItem().toggleSelect();
+        },
+      },
     },
   });
 
