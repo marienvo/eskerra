@@ -177,6 +177,7 @@ import {resolveVaultLinkBaseMarkdownUri} from '../lib/resolveVaultLinkBaseMarkdo
 /** Skip showing an immediate blocking disk conflict if the user just edited; one deferred re-check follows. */
 const DISK_CONFLICT_RECENCY_MS = 2000;
 const DISK_CONFLICT_DEFER_MS = 600;
+const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -190,6 +191,10 @@ function fingerprintUtf16ForDebug(text: string): string {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0).toString(16);
+}
+
+function vaultChangedPathsSignature(paths: readonly string[]): string {
+  return [...new Set(paths.map(p => p.trim()).filter(Boolean))].sort().join('\n');
 }
 
 function snapshotEditorShellScrollForOpenNote(
@@ -2182,6 +2187,10 @@ export function useMainWindowWorkspace(options: {
     let cancelled = false;
     const watchSessionId = crypto.randomUUID();
     const vaultRootHash = fingerprintUtf16ForDebug(vaultRoot);
+    let coarseFullReindexScheduled = false;
+    let lastIncrementalIndexTouch:
+      | {signature: string; touchedAtMs: number}
+      | null = null;
 
     const applyExternalOpenNoteDeleted = async (normTab: string) => {
       const wasSelected = selectedUriRef.current === normTab;
@@ -2514,14 +2523,26 @@ export function useMainWindowWorkspace(options: {
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
         isPodcastRelevantPath,
+        allowCoarseFullReindex: !coarseFullReindexScheduled,
       });
       const {paths, coarse} = plan;
       const coarseReason = event.payload?.coarseReason ?? null;
       if (plan.shouldTouchPathsIncrementally) {
-        void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
-        void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+        const signature = vaultChangedPathsSignature(paths);
+        const now = Date.now();
+        const duplicate =
+          lastIncrementalIndexTouch?.signature === signature
+          && now - lastIncrementalIndexTouch.touchedAtMs < VAULT_INDEX_TOUCH_DEDUP_MS;
+        if (!duplicate) {
+          lastIncrementalIndexTouch = {signature, touchedAtMs: now};
+          void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
+          void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+        }
       }
       if (plan.shouldScheduleFullReindex) {
+        if (coarse) {
+          coarseFullReindexScheduled = true;
+        }
         void vaultSearchIndexSchedule().catch(() => undefined);
         void vaultFrontmatterIndexSchedule().catch(() => undefined);
       }

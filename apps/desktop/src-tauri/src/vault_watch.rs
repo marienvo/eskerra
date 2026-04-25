@@ -2,14 +2,13 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use notify::{Config, Event, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 
 use crate::vault::VaultRootState;
 
 const WATCH_DEBOUNCE_MS: u64 = 200;
-const WATCH_POLL_INTERVAL_MS: u64 = 500;
 const WATCH_MAX_BATCH_MS: u64 = 900;
 
 #[derive(Clone, Serialize)]
@@ -30,7 +29,6 @@ enum VaultWatchSignal {
 
 pub struct VaultWatchState {
     watcher: Mutex<Option<RecommendedWatcher>>,
-    poll_watcher: Mutex<Option<PollWatcher>>,
     notify_tx: std::sync::mpsc::Sender<VaultWatchSignal>,
 }
 
@@ -39,7 +37,6 @@ pub fn setup_vault_watch(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     spawn_vault_debouncer(app.handle().clone(), rx);
     app.manage(VaultWatchState {
         watcher: Mutex::new(None),
-        poll_watcher: Mutex::new(None),
         notify_tx: tx,
     });
     Ok(())
@@ -124,10 +121,6 @@ pub fn vault_start_watch(
         let mut guard = watch_state.watcher.lock().map_err(|e| e.to_string())?;
         *guard = None;
     }
-    {
-        let mut guard = watch_state.poll_watcher.lock().map_err(|e| e.to_string())?;
-        *guard = None;
-    }
 
     let tx_recommended = watch_state.notify_tx.clone();
     let mut watcher = RecommendedWatcher::new(
@@ -157,42 +150,10 @@ pub fn vault_start_watch(
     )
     .map_err(|e| e.to_string())?;
 
-    let tx_poll = watch_state.notify_tx.clone();
-    let poll_config = Config::default()
-        .with_compare_contents(true)
-        .with_poll_interval(Duration::from_millis(WATCH_POLL_INTERVAL_MS));
-    let mut poll_watcher = PollWatcher::new(
-        move |res: Result<Event, notify::Error>| match res {
-            Ok(ev) => {
-                let batch: Vec<String> = ev
-                    .paths
-                    .iter()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .collect();
-                if batch.is_empty() {
-                    let _ = tx_poll.send(VaultWatchSignal::Coarse(
-                        "notify_event_empty_paths:poll".to_string(),
-                    ));
-                } else {
-                    let _ = tx_poll.send(VaultWatchSignal::Paths(batch));
-                }
-            }
-            Err(err) => {
-                eprintln!("[vault-watch] poll watcher error: {err}");
-                let _ = tx_poll.send(VaultWatchSignal::Coarse(format!("notify_error:poll:{err}")));
-            }
-        },
-        poll_config,
-    )
-    .map_err(|e| e.to_string())?;
-
     if root.exists() {
         watcher
             .watch(&root, RecursiveMode::Recursive)
             .map_err(|e| format!("watch {}: {e}", root.display()))?;
-        poll_watcher
-            .watch(&root, RecursiveMode::Recursive)
-            .map_err(|e| format!("poll watch {}: {e}", root.display()))?;
     } else {
         let _ = watch_state.notify_tx.send(VaultWatchSignal::Coarse(
             "vault_root_missing_at_watch_start".to_string(),
@@ -201,10 +162,6 @@ pub fn vault_start_watch(
 
     let mut guard = watch_state.watcher.lock().map_err(|e| e.to_string())?;
     *guard = Some(watcher);
-    drop(guard);
-
-    let mut poll_guard = watch_state.poll_watcher.lock().map_err(|e| e.to_string())?;
-    *poll_guard = Some(poll_watcher);
     Ok(())
 }
 
@@ -217,7 +174,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         tx.send(VaultWatchSignal::Paths(vec!["/vault/Inbox/A.md".to_string()]))
             .expect("send path signal");
-        tx.send(VaultWatchSignal::Coarse("notify_error:poll:overflow".to_string()))
+        tx.send(VaultWatchSignal::Coarse("notify_error:recommended:overflow".to_string()))
             .expect("send coarse signal");
 
         let payload = collect_debounced_payload(
@@ -230,7 +187,7 @@ mod tests {
         assert!(payload.coarse);
         assert_eq!(
             payload.coarse_reason.as_deref(),
-            Some("notify_error:poll:overflow")
+            Some("notify_error:recommended:overflow")
         );
         assert!(payload.paths.contains(&"/vault/Inbox/A.md".to_string()));
         assert!(payload.paths.contains(&"/vault/Inbox/B.md".to_string()));

@@ -22,6 +22,22 @@ describe('planVaultFilesChangedEvent', () => {
     expect(plan.shouldScheduleFullReindex).toBe(true);
   });
 
+  it('can suppress repeated coarse full reindexes while preserving coarse reconcile', () => {
+    const plan = planVaultFilesChangedEvent({
+      payload: {
+        paths: ['/vault/Inbox/note.md'],
+        coarse: true,
+        coarseReason: 'notify_error:recommended:overflow',
+      },
+      isPodcastRelevantPath: isPodcastRelevant,
+      allowCoarseFullReindex: false,
+    });
+    expect(plan.coarse).toBe(true);
+    expect(plan.pathsForReconcile).toEqual([]);
+    expect(plan.shouldTouchPathsIncrementally).toBe(false);
+    expect(plan.shouldScheduleFullReindex).toBe(false);
+  });
+
   it('uses incremental path touch only for precise path batches', () => {
     const plan = planVaultFilesChangedEvent({
       payload: {paths: ['/vault/Inbox/note.md']},
