@@ -3,14 +3,15 @@ import {
   buildUpdatedPodcastFileContent,
   companionHubFileName,
   mergePodcastsFeedContent,
-  parsePodcastRssFetchedAtFromContent,
   parsePodcastRssSettingsFromContent,
   parseUncheckedHubLinks,
-  shouldSkipRssFetch,
 } from '@eskerra/core';
 import type {VaultFilesystem} from '@eskerra/core';
 
-import {splitPodcastAndRssMarkdownFiles, filterPodcastRelevantGeneralMarkdownFiles} from './generalIndex';
+import {
+  filterPodcastRelevantGeneralMarkdownFiles,
+  splitPodcastAndRssMarkdownFiles,
+} from './generalIndex';
 import {isPodcastFile} from './podcastParser';
 import {listGeneralMarkdownFiles} from './podcastPhase1Desktop';
 import type {RootMarkdownFile} from './podcastTypes';
@@ -57,15 +58,29 @@ async function syncSingleFile(
   const settings = parsePodcastRssSettingsFromContent(content);
   if (settings == null) return 'skipped';
 
-  const lastFetchedAt = parsePodcastRssFetchedAtFromContent(content);
-  if (shouldSkipRssFetch(lastFetchedAt, now, settings.minFetchIntervalMinutes)) {
-    return 'skipped';
+  const xmlTexts: string[] = [];
+  let lastError: unknown = null;
+  for (const url of settings.rssFeedUrls) {
+    try {
+      xmlTexts.push(await fetchRssXml(url, settings.timeoutMs));
+    } catch (err) {
+      lastError = err;
+      console.error(
+        `[podcast-rss-sync] Feed failed: ${name} (rssFeedUrl=${url}, timeoutMs=${settings.timeoutMs})`,
+        err,
+      );
+    }
   }
-
+  if (xmlTexts.length === 0) {
+    console.error(
+      `[podcast-rss-sync] Failed: ${name} (rssFeedUrls=${settings.rssFeedUrls.join(', ')}, timeoutMs=${settings.timeoutMs})`,
+      lastError,
+    );
+    return 'failed';
+  }
   try {
-    const xml = await fetchRssXml(settings.rssFeedUrl, settings.timeoutMs);
     const noteTitle = titleFromFileName(name);
-    const newBody = buildPodcastMarkdownFromRss(xml, now, settings, noteTitle);
+    const newBody = buildPodcastMarkdownFromRss(xmlTexts, now, settings, noteTitle);
     const newContent = buildUpdatedPodcastFileContent(content, newBody, now);
     if (newContent === content) return 'skipped';
     await fs.writeFile(uri, newContent, {encoding: 'utf8'});
@@ -77,6 +92,38 @@ async function syncSingleFile(
     );
     return 'failed';
   }
+}
+
+async function collectRssFilesFromUncheckedHubLinks(
+  allFiles: RootMarkdownFile[],
+  fs: VaultFilesystem,
+  now: Date,
+): Promise<RootMarkdownFile[]> {
+  const currentYear = now.getFullYear();
+  const relevant = filterPodcastRelevantGeneralMarkdownFiles(allFiles);
+  const {podcastFiles, rssFeedFiles} = splitPodcastAndRssMarkdownFiles(relevant);
+  const byName = new Map(allFiles.map(f => [f.name, f]));
+  const rssFeedFilesByName = new Map(rssFeedFiles.map(f => [f.name, f]));
+  const selectedNames = new Set<string>();
+  const selected: RootMarkdownFile[] = [];
+
+  for (const episodesFile of podcastFiles.filter(f => isPodcastFile(f.name, currentYear))) {
+    const hubName = companionHubFileName(episodesFile.name);
+    if (!hubName) continue;
+    const hubFile = byName.get(hubName);
+    if (!hubFile) continue;
+
+    const hubContent = await fs.readFile(hubFile.uri, {encoding: 'utf8'});
+    for (const linkedName of parseUncheckedHubLinks(hubContent)) {
+      if (selectedNames.has(linkedName)) continue;
+      const rssFile = rssFeedFilesByName.get(linkedName);
+      if (!rssFile) continue;
+      selectedNames.add(linkedName);
+      selected.push(rssFile);
+    }
+  }
+
+  return selected;
 }
 
 async function mergeIntoEpisodesFiles(
@@ -124,13 +171,12 @@ async function runSync(
   fs: VaultFilesystem,
 ): Promise<DesktopRssSyncResult> {
   const allFiles = await listGeneralMarkdownFiles(baseUri, fs);
-  const relevant = filterPodcastRelevantGeneralMarkdownFiles(allFiles);
-  const {rssFeedFiles} = splitPodcastAndRssMarkdownFiles(relevant);
 
   let syncedCount = 0;
   let skippedCount = 0;
   let failedCount = 0;
   const now = new Date();
+  const rssFeedFiles = await collectRssFilesFromUncheckedHubLinks(allFiles, fs, now);
   const updatedPieContents = new Map<string, string>();
 
   for (const file of rssFeedFiles) {

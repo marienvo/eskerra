@@ -34,6 +34,7 @@ describe('parsePodcastRssSettingsFromContent', () => {
     );
     expect(result).toEqual({
       rssFeedUrl: 'https://example.com/feed.xml',
+      rssFeedUrls: ['https://example.com/feed.xml'],
       daysAgo: 14,
       timeoutMs: 5000,
       minFetchIntervalMinutes: 30,
@@ -46,17 +47,29 @@ describe('parsePodcastRssSettingsFromContent', () => {
     );
     expect(result).toEqual({
       rssFeedUrl: 'https://example.com/feed.xml',
+      rssFeedUrls: ['https://example.com/feed.xml'],
       daysAgo: 7,
       timeoutMs: 8000,
-      minFetchIntervalMinutes: 15,
+      minFetchIntervalMinutes: 0,
     });
   });
 
-  it('accepts rssFeedUrl as YAML list (first item)', () => {
+  it('accepts rssFeedUrl as YAML list', () => {
     const result = parsePodcastRssSettingsFromContent(
-      '---\nrssFeedUrl:\n  - https://example.com/feed.xml\n---\n',
+      '---\nrssFeedUrl:\n  - https://example.com/feed-a.xml\n  - https://example.com/feed-b.xml\n---\n',
     );
-    expect(result?.rssFeedUrl).toBe('https://example.com/feed.xml');
+    expect(result?.rssFeedUrl).toBe('https://example.com/feed-a.xml');
+    expect(result?.rssFeedUrls).toEqual([
+      'https://example.com/feed-a.xml',
+      'https://example.com/feed-b.xml',
+    ]);
+  });
+
+  it('keeps valid list URLs when one candidate is invalid', () => {
+    const result = parsePodcastRssSettingsFromContent(
+      '---\nrssFeedUrl:\n  - not-a-url\n  - https://example.com/feed.xml\n---\n',
+    );
+    expect(result?.rssFeedUrls).toEqual(['https://example.com/feed.xml']);
   });
 });
 
@@ -430,6 +443,17 @@ describe('mergePodcastsFeedContent', () => {
     );
     const result = mergePodcastsFeedContent('', [{series: 'OVT', content: pie}], today);
     expect(result).toContain('[🌐](https://example.com/article)');
+  });
+
+  it('prefers ampersand-clean mp3 URL when duplicate rows share date and title', () => {
+    const existing = [
+      '- [ ] 2025-04-25; Same Title [▶️](https://cdn.example.com/old.mp3?a=1&amp;b=2) (OVT)',
+      '- [ ] 2025-04-25; Same Title [▶️](https://cdn.example.com/new.mp3?a=1&b=2) (OVT)',
+    ].join('\n') + '\n';
+    const result = mergePodcastsFeedContent(existing, [], today);
+    expect((result.match(/Same Title/g) ?? []).length).toBe(1);
+    expect(result).toContain('https://cdn.example.com/new.mp3?a=1&b=2');
+    expect(result).not.toContain('&amp;');
   });
 });
 

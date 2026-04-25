@@ -3,7 +3,9 @@ import {XMLParser} from 'fast-xml-parser';
 import {splitYamlFrontmatter} from './markdown/splitYamlFrontmatter';
 
 export type PodcastRssSettings = {
+  /** First feed URL, kept for existing callers that only handle one feed. */
   rssFeedUrl: string;
+  rssFeedUrls: string[];
   daysAgo: number;
   timeoutMs: number;
   minFetchIntervalMinutes: number;
@@ -19,7 +21,7 @@ export type PodcastRssSyncEpisode = {
 
 const DEFAULT_DAYS_AGO = 7;
 const DEFAULT_TIMEOUT_MS = 8000;
-const DEFAULT_MIN_FETCH_INTERVAL_MINUTES = 15;
+const DEFAULT_MIN_FETCH_INTERVAL_MINUTES = 0;
 const DEFAULT_TITLE_FALLBACK = 'Untitled episode';
 const RSS_FETCHED_AT_KEY = 'rssFetchedAt';
 
@@ -43,11 +45,12 @@ function parseFrontmatterStringValue(frontmatter: string, key: string): unknown 
   }
 }
 
-function parseFirstYamlListItem(frontmatter: string, key: string): string | null {
+function parseYamlListItems(frontmatter: string, key: string): string[] {
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const keyLineRegex = new RegExp(`^([ \\t]*)${escapedKey}[ \\t]*:[ \\t]*$`);
   const lines = frontmatter.split(/\r?\n/);
   let keyIndent = -1;
+  const result: string[] = [];
   for (const line of lines) {
     if (keyIndent < 0) {
       const m = line.match(keyLineRegex);
@@ -69,30 +72,35 @@ function parseFirstYamlListItem(frontmatter: string, key: string): string | null
     if (raw.startsWith('"')) {
       try {
         const parsed = JSON.parse(raw);
-        if (typeof parsed === 'string' && parsed.trim().length > 0) return parsed.trim();
+        if (typeof parsed === 'string' && parsed.trim().length > 0) {
+          result.push(parsed.trim());
+          continue;
+        }
       } catch {
         // Keep raw fallback.
       }
     }
-    return raw;
+    result.push(raw);
   }
-  return null;
+  return result;
 }
 
-function parseRssFeedUrlFromFrontmatter(frontmatter: string): string | null {
+function parseRssFeedUrlsFromFrontmatter(frontmatter: string): string[] {
   const rawValue = parseFrontmatterStringValue(frontmatter, 'rssFeedUrl');
+  const urls: string[] = [];
   if (typeof rawValue === 'string') {
     const value = rawValue.trim();
-    if (value.length > 0) return value;
+    if (value.length > 0) urls.push(value);
   }
   if (Array.isArray(rawValue)) {
     for (const candidate of rawValue) {
       if (typeof candidate !== 'string') continue;
       const value = candidate.trim();
-      if (value.length > 0) return value;
+      if (value.length > 0) urls.push(value);
     }
   }
-  return parseFirstYamlListItem(frontmatter, 'rssFeedUrl');
+  urls.push(...parseYamlListItems(frontmatter, 'rssFeedUrl'));
+  return [...new Set(urls)];
 }
 
 function parseLastFetchedAt(frontmatter: string): Date | null {
@@ -133,13 +141,16 @@ export function parsePodcastRssSettingsFromContent(
   fileContent: string,
 ): PodcastRssSettings | null {
   const inner = extractFrontmatterInner(fileContent);
-  const rssFeedUrl = parseRssFeedUrlFromFrontmatter(inner);
+  const rssFeedUrls = parseRssFeedUrlsFromFrontmatter(inner).filter(candidate => {
+    try {
+      new URL(candidate);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  const rssFeedUrl = rssFeedUrls[0];
   if (rssFeedUrl == null) return null;
-  try {
-    new URL(rssFeedUrl);
-  } catch {
-    return null;
-  }
   const daysAgo = parsePositiveIntOrDefault(
     parseFrontmatterStringValue(inner, 'daysAgo'),
     DEFAULT_DAYS_AGO,
@@ -155,7 +166,7 @@ export function parsePodcastRssSettingsFromContent(
     DEFAULT_MIN_FETCH_INTERVAL_MINUTES,
     0,
   );
-  return {rssFeedUrl, daysAgo, timeoutMs, minFetchIntervalMinutes};
+  return {rssFeedUrl, rssFeedUrls, daysAgo, timeoutMs, minFetchIntervalMinutes};
 }
 
 export function parsePodcastRssFetchedAtFromContent(fileContent: string): Date | null {
@@ -395,7 +406,7 @@ function renderEpisodeBullet(ep: PodcastRssSyncEpisode): string {
 }
 
 export function buildPodcastMarkdownFromRss(
-  rssText: string,
+  rssText: string | string[],
   now: Date,
   settings: Pick<PodcastRssSettings, 'daysAgo'>,
   noteTitle: string,
@@ -404,9 +415,18 @@ export function buildPodcastMarkdownFromRss(
     new Date(now.getFullYear(), now.getMonth(), now.getDate() - settings.daysAgo),
   );
   const toInclusive = endOfLocalDay(now);
-  const episodes = parsePodcastEpisodesFromRss(rssText).filter(ep => {
+  const rssTexts = Array.isArray(rssText) ? rssText : [rssText];
+  const allEpisodes = rssTexts.flatMap(text => parsePodcastEpisodesFromRss(text));
+  const byDedupeKey = new Map<string, PodcastRssSyncEpisode>();
+  for (const ep of allEpisodes) {
+    if (!byDedupeKey.has(ep.dedupeKey)) byDedupeKey.set(ep.dedupeKey, ep);
+  }
+  const episodes = [...byDedupeKey.values()].filter(ep => {
     const ts = ep.publishedAt.getTime();
     return ts >= fromInclusive.getTime() && ts <= toInclusive.getTime();
+  }).sort((a, b) => {
+    const diff = b.publishedAt.getTime() - a.publishedAt.getTime();
+    return diff !== 0 ? diff : a.title.localeCompare(b.title);
   });
 
   const lines: string[] = [`# ${noteTitle}`];
@@ -497,6 +517,7 @@ type MergeParts = {
   mp3Url: string;
   articleUrl: string | null;
   series: string;
+  mp3SourceHadAmpEntity: boolean;
 };
 
 const MERGE_EP_PREFIX = /^-\s*\[([ xX])\]\s+/;
@@ -545,14 +566,23 @@ function parseMergeEpisodeLine(line: string): MergeParts | null {
   const plays = Array.from(beforeSeries.matchAll(MERGE_PLAY_LINK));
   const lastPlay = plays.at(-1);
   if (!lastPlay || typeof lastPlay.index !== 'number') return null;
-  const mp3Url = mergeSanitizeUrl(lastPlay[1] ?? '');
+  const rawMp3Url = lastPlay[1] ?? '';
+  const mp3Url = mergeSanitizeUrl(rawMp3Url);
   if (!mp3Url) return null;
   const titlePart = beforeSeries.slice(0, lastPlay.index).trim();
   const artM = MERGE_ARTICLE_LEAD.exec(titlePart);
   const articleUrl = artM ? mergeSanitizeUrl(artM[1] ?? '') : null;
   const title = artM ? titlePart.slice(artM[0].length).trim() : titlePart;
   if (!title) return null;
-  return {date, played, title, mp3Url, articleUrl: articleUrl || null, series};
+  return {
+    date,
+    played,
+    title,
+    mp3Url,
+    articleUrl: articleUrl || null,
+    series,
+    mp3SourceHadAmpEntity: rawMp3Url.includes('&amp;'),
+  };
 }
 
 function formatMergeLine(parts: MergeParts): string {
@@ -606,8 +636,22 @@ function addToMergeMap(map: Map<string, MergeParts>, incoming: MergeParts): void
   if (existing == null) {
     map.set(key, incoming);
   } else {
-    map.set(key, {...existing, played: existing.played || incoming.played});
+    map.set(key, mergePartsPreferringBetterMp3(existing, incoming));
   }
+}
+
+function mergePartsPreferringBetterMp3(a: MergeParts, b: MergeParts): MergeParts {
+  const played = a.played || b.played;
+  const useB = a.mp3SourceHadAmpEntity && !b.mp3SourceHadAmpEntity;
+  const base = useB ? b : a;
+  const fallback = useB ? a : b;
+  return {
+    ...base,
+    played,
+    mp3Url: mergeSanitizeUrl(base.mp3Url),
+    articleUrl: base.articleUrl ?? fallback.articleUrl,
+    mp3SourceHadAmpEntity: base.mp3Url.includes('&amp;'),
+  };
 }
 
 export function mergePodcastsFeedContent(
@@ -640,6 +684,7 @@ export function mergePodcastsFeedContent(
         mp3Url: ep.mp3Url,
         articleUrl: ep.articleUrl ?? null,
         series: resolvedSeries,
+        mp3SourceHadAmpEntity: ep.mp3Url.includes('&amp;'),
       });
     }
   }

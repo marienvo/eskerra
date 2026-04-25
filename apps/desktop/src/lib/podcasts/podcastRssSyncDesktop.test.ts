@@ -19,6 +19,10 @@ const GENERAL_URI = getGeneralDirectoryUri(VAULT_ROOT);
 const RSS_FILE_NAME = '📻 OVT.md';
 const RSS_FILE_URI = `${GENERAL_URI}/${RSS_FILE_NAME}`;
 const RSS_FEED_URL = 'https://example.com/feed.xml';
+const PODCASTS_FILE_NAME = '2026 Shows - podcasts.md';
+const PODCASTS_FILE_URI = `${GENERAL_URI}/${PODCASTS_FILE_NAME}`;
+const HUB_FILE_NAME = '2026 Shows.md';
+const HUB_FILE_URI = `${GENERAL_URI}/${HUB_FILE_NAME}`;
 
 const MINIMAL_EPISODE_XML = [
   '<rss version="2.0"><channel>',
@@ -62,6 +66,17 @@ function buildFs(files: Map<string, string>): VaultFilesystem {
   };
 }
 
+function addPodcastHub(
+  files: Map<string, string>,
+  linkedNames: string[] = [RSS_FILE_NAME],
+): void {
+  files.set(PODCASTS_FILE_URI, '# Shows\n');
+  files.set(
+    HUB_FILE_URI,
+    linkedNames.map(name => `- [ ] [[${name.replace(/\.md$/i, '')}]]`).join('\n') + '\n',
+  );
+}
+
 describe('runDesktopPodcastRssSync', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -72,6 +87,7 @@ describe('runDesktopPodcastRssSync', () => {
     const original =
       `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`;
     const files = new Map([[RSS_FILE_URI, original]]);
+    addPodcastHub(files);
     const fs = buildFs(files);
     mockFetch(MINIMAL_EPISODE_XML);
 
@@ -87,26 +103,28 @@ describe('runDesktopPodcastRssSync', () => {
     expect(written).toContain('# OVT');
   });
 
-  it('skips file when still within cooldown', async () => {
+  it('does not skip manual refresh when rssFetchedAt is recent', async () => {
     const recentFetch = new Date(Date.now() - 5 * 60_000).toISOString();
     const original =
       `---\nrssFetchedAt: "${recentFetch}"\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`;
     const files = new Map([[RSS_FILE_URI, original]]);
+    addPodcastHub(files);
     const fs = buildFs(files);
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, text: async () => MINIMAL_EPISODE_XML});
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await runDesktopPodcastRssSync(VAULT_ROOT, fs);
 
-    expect(result.skippedCount).toBe(1);
-    expect(result.syncedCount).toBe(0);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(files.get(RSS_FILE_URI)).toBe(original);
+    expect(result.skippedCount).toBe(0);
+    expect(result.syncedCount).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(files.get(RSS_FILE_URI)).not.toBe(original);
   });
 
   it('skips file with no rssFeedUrl', async () => {
     const original = '---\ntitle: No feed\n---\n\n# Pod\n';
     const files = new Map([[RSS_FILE_URI, original]]);
+    addPodcastHub(files);
     const fs = buildFs(files);
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -127,11 +145,15 @@ describe('runDesktopPodcastRssSync', () => {
     const files = new Map([
       [failingUri, `---\nrssFeedUrl: "${failingUrl}"\n---\n\n# A\n`],
       [healthyUri, `---\nrssFeedUrl: "${healthyUrl}"\n---\n\n# B\n`],
+      [PODCASTS_FILE_URI, '# Shows\n'],
+      [HUB_FILE_URI, '- [ ] [[📻 A]]\n- [ ] [[📻 B]]\n'],
     ]);
 
     const entries: VaultDirEntry[] = [
       {uri: failingUri, name: failingName, type: 'file', lastModified: 1000},
       {uri: healthyUri, name: healthyName, type: 'file', lastModified: 1000},
+      {uri: PODCASTS_FILE_URI, name: PODCASTS_FILE_NAME, type: 'file', lastModified: 1000},
+      {uri: HUB_FILE_URI, name: HUB_FILE_NAME, type: 'file', lastModified: 1000},
     ];
 
     const fs: VaultFilesystem = {
@@ -177,6 +199,7 @@ describe('runDesktopPodcastRssSync', () => {
   it('coalesces concurrent calls into one run', async () => {
     const original = `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`;
     const files = new Map([[RSS_FILE_URI, original]]);
+    addPodcastHub(files);
     const fs = buildFs(files);
     const fetchMock = vi.fn().mockResolvedValue({ok: true, text: async () => MINIMAL_EPISODE_XML});
     vi.stubGlobal('fetch', fetchMock);
@@ -190,7 +213,7 @@ describe('runDesktopPodcastRssSync', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns 0 counts when General/ directory has no 📻 files', async () => {
+  it('returns 0 counts when General/ directory has no linked 📻 files', async () => {
     const fs: VaultFilesystem = {
       exists: async () => false,
       mkdir: async () => {},
@@ -204,5 +227,58 @@ describe('runDesktopPodcastRssSync', () => {
 
     const result = await runDesktopPodcastRssSync(VAULT_ROOT, fs);
     expect(result).toEqual({syncedCount: 0, skippedCount: 0, failedCount: 0});
+  });
+
+  it('does not sync checked or unlinked RSS notes', async () => {
+    const checkedName = '📻 Checked.md';
+    const unlinkedName = '📻 Unlinked.md';
+    const checkedUri = `${GENERAL_URI}/${checkedName}`;
+    const unlinkedUri = `${GENERAL_URI}/${unlinkedName}`;
+    const files = new Map([
+      [RSS_FILE_URI, `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`],
+      [checkedUri, '---\nrssFeedUrl: "https://example.com/checked.xml"\n---\n\n# Checked\n'],
+      [unlinkedUri, '---\nrssFeedUrl: "https://example.com/unlinked.xml"\n---\n\n# Unlinked\n'],
+      [PODCASTS_FILE_URI, '# Shows\n'],
+      [HUB_FILE_URI, '- [ ] [[📻 OVT]]\n- [x] [[📻 Checked]]\n'],
+    ]);
+    const fs = buildFs(files);
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, text: async () => MINIMAL_EPISODE_XML});
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await runDesktopPodcastRssSync(VAULT_ROOT, fs);
+
+    expect(result).toEqual({syncedCount: 1, skippedCount: 0, failedCount: 0});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(RSS_FEED_URL, expect.any(Object));
+    expect(files.get(checkedUri)).not.toContain('rssFetchedAt:');
+    expect(files.get(unlinkedUri)).not.toContain('rssFetchedAt:');
+  });
+
+  it('fetches all configured rssFeedUrl list entries and writes if one succeeds', async () => {
+    const badUrl = 'https://example.com/bad.xml';
+    const goodUrl = 'https://example.com/good.xml';
+    const original =
+      `---\nrssFeedUrl:\n  - ${badUrl}\n  - ${goodUrl}\n---\n\n# OVT\n`;
+    const files = new Map([[RSS_FILE_URI, original]]);
+    addPodcastHub(files);
+    const fs = buildFs(files);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === badUrl) throw new Error('network');
+        return {ok: true, text: async () => MINIMAL_EPISODE_XML};
+      }),
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await runDesktopPodcastRssSync(VAULT_ROOT, fs);
+
+    expect(result).toEqual({syncedCount: 1, skippedCount: 0, failedCount: 0});
+    expect(files.get(RSS_FILE_URI)).toContain('rssFetchedAt:');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('[podcast-rss-sync] Feed failed:'),
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
   });
 });
