@@ -200,6 +200,7 @@ Applies to: `apps/desktop/src-tauri/src/vault_watch.rs`, `apps/desktop/src/hooks
 - `coarse` watcher events are fail-safe full-vault invalidation. They must never be treated as path-limited updates, even when payload `paths` is non-empty.
 - Keep watcher latency bounded: debounce is allowed, but event batching must have a hard upper bound (target under 1 second end-to-end for detection + dispatch).
 - Preserve observability on degradation: coarse invalidation and watcher degradation paths must emit Sentry warning telemetry (`captureObservabilityMessage`) with stable fingerprint + reason fields.
+- Keep Sentry alerting active for coarse invalidation burst rate per watch session; if telemetry tags/fingerprints change, update `specs/observability/desktop-vault-watch-coarse-alert.md` in the same change.
 - Do not remove or dilute existing reconcile safeguards without updating `specs/architecture/desktop-editor.md` and adding regression tests for selected-note reload/conflict behavior.
 
 ## Desktop: Editor interactive links

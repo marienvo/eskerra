@@ -2180,6 +2180,8 @@ export function useMainWindowWorkspace(options: {
     }
     let unlisten: (() => void) | undefined;
     let cancelled = false;
+    const watchSessionId = crypto.randomUUID();
+    const vaultRootHash = fingerprintUtf16ForDebug(vaultRoot);
 
     const applyExternalOpenNoteDeleted = async (normTab: string) => {
       const wasSelected = selectedUriRef.current === normTab;
@@ -2527,6 +2529,8 @@ export function useMainWindowWorkspace(options: {
         console.warn('[vault-files-changed] coarse invalidation', {
           reason: coarseReason,
           pathCount: paths.length,
+          watchSessionId,
+          vaultRootHash,
         });
         captureObservabilityMessage({
           message: 'eskerra.desktop.vault_watch_coarse_invalidation',
@@ -2534,6 +2538,14 @@ export function useMainWindowWorkspace(options: {
           extra: {
             reason: coarseReason,
             pathCount: paths.length,
+            watchSessionId,
+            vaultRootHash,
+          },
+          tags: {
+            obs_surface: 'vault_watch',
+            watch_session_id: watchSessionId,
+            vault_root_hash: vaultRootHash,
+            coarse_reason: coarseReason ?? 'unknown',
           },
           fingerprint: [
             'eskerra.desktop',

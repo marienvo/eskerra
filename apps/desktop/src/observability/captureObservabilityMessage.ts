@@ -7,6 +7,7 @@ export function captureObservabilityMessage(input: {
   level: 'warning' | 'info';
   extra?: Record<string, unknown>;
   fingerprint?: string[];
+  tags?: Record<string, string>;
 }): void {
   if (!getSentryClient()) {
     return;
@@ -19,6 +20,11 @@ export function captureObservabilityMessage(input: {
     }
     if (input.fingerprint) {
       scope.setFingerprint(input.fingerprint);
+    }
+    if (input.tags) {
+      for (const [k, v] of Object.entries(input.tags)) {
+        scope.setTag(k, v);
+      }
     }
     Sentry.captureMessage(input.message, input.level);
   });
