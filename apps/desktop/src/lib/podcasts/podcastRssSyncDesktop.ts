@@ -22,6 +22,16 @@ export type DesktopRssSyncResult = {
   failedCount: number;
 };
 
+export type DesktopRssSyncProgressPayload = {
+  percent: number;
+  phase: 'rss_file' | 'complete';
+  detail?: string;
+};
+
+export type DesktopRssSyncOptions = {
+  onProgress?: (payload: DesktopRssSyncProgressPayload) => void;
+};
+
 // Module-level chain so concurrent calls (e.g. double-click) coalesce into one run.
 let syncChain: Promise<DesktopRssSyncResult> | null = null;
 
@@ -169,6 +179,7 @@ async function mergeIntoEpisodesFiles(
 async function runSync(
   baseUri: string,
   fs: VaultFilesystem,
+  options?: DesktopRssSyncOptions,
 ): Promise<DesktopRssSyncResult> {
   const allFiles = await listGeneralMarkdownFiles(baseUri, fs);
 
@@ -178,7 +189,9 @@ async function runSync(
   const now = new Date();
   const rssFeedFiles = await collectRssFilesFromUncheckedHubLinks(allFiles, fs, now);
   const updatedPieContents = new Map<string, string>();
+  const rssDenom = Math.max(1, rssFeedFiles.length);
 
+  let doneRss = 0;
   for (const file of rssFeedFiles) {
     const outcome = await syncSingleFile(file.uri, file.name, fs, now);
     if (outcome === 'synced') {
@@ -191,6 +204,12 @@ async function runSync(
     } else {
       failedCount++;
     }
+    doneRss++;
+    options?.onProgress?.({
+      percent: Math.min(99, Math.floor((doneRss * 100) / rssDenom)),
+      phase: 'rss_file',
+      detail: file.name,
+    });
   }
 
   try {
@@ -199,15 +218,17 @@ async function runSync(
     console.error('[podcast-rss-sync] Merge into episodes files failed:', err);
   }
 
+  options?.onProgress?.({percent: 100, phase: 'complete'});
   return {syncedCount, skippedCount, failedCount};
 }
 
 export function runDesktopPodcastRssSync(
   baseUri: string,
   fs: VaultFilesystem,
+  options?: DesktopRssSyncOptions,
 ): Promise<DesktopRssSyncResult> {
   if (syncChain != null) return syncChain;
-  const chain = runSync(baseUri, fs).finally(() => {
+  const chain = runSync(baseUri, fs, options).finally(() => {
     syncChain = null;
   });
   syncChain = chain;

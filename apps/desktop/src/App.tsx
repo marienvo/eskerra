@@ -493,13 +493,22 @@ export default function App() {
 
   const rssSyncingRef = useRef(false);
   const [rssSyncing, setRssSyncing] = useState(false);
+  const [rssSyncPercent, setRssSyncPercent] = useState<number | null>(null);
 
   const handleEpisodesRssSync = useCallback(async () => {
     if (vaultRoot == null || rssSyncingRef.current) return;
     rssSyncingRef.current = true;
     setRssSyncing(true);
+    setRssSyncPercent(null);
     try {
-      await runDesktopPodcastRssSync(vaultRoot, fs);
+      await runDesktopPodcastRssSync(vaultRoot, fs, {
+        onProgress: payload => {
+          const n = payload.percent;
+          if (Number.isFinite(n) && n >= 0 && n <= 100) {
+            setRssSyncPercent(n);
+          }
+        },
+      });
       clearPodcastMarkdownFileContentCache();
       await podcastCatalog.refreshPodcasts(true);
     } catch {
@@ -507,6 +516,7 @@ export default function App() {
     } finally {
       rssSyncingRef.current = false;
       setRssSyncing(false);
+      setRssSyncPercent(null);
     }
   }, [vaultRoot, fs, podcastCatalog]);
 
@@ -1150,6 +1160,7 @@ export default function App() {
                             }
                             onRssSync={handleEpisodesRssSync}
                             rssSyncing={rssSyncing}
+                            rssSyncPercent={rssSyncPercent}
                           />
                         ) : null
                       }

@@ -21,6 +21,7 @@ export type EpisodesPaneProps = {
   episodeSelectLocked?: boolean;
   onRssSync?: () => void;
   rssSyncing?: boolean;
+  rssSyncPercent?: number | null;
 };
 
 function episodeListLabel(text: string): string {
@@ -214,8 +215,18 @@ export function EpisodesPane({
   episodeSelectLocked = false,
   onRssSync,
   rssSyncing = false,
+  rssSyncPercent = null,
 }: EpisodesPaneProps) {
   const episodesRefreshVisible = useDeferredLoadingIndicator(catalogLoading, 100);
+  const refreshStripVisible = rssSyncing || episodesRefreshVisible;
+  const determinateRssPercent =
+    rssSyncing &&
+    rssSyncPercent != null &&
+    Number.isFinite(rssSyncPercent) &&
+    rssSyncPercent >= 0 &&
+    rssSyncPercent <= 100
+      ? rssSyncPercent
+      : null;
 
   return (
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
@@ -241,13 +252,22 @@ export function EpisodesPane({
       </div>
       <div
         className={
-          episodesRefreshVisible
+          refreshStripVisible
             ? 'episodes-refresh-strip episodes-refresh-strip--active'
             : 'episodes-refresh-strip'
         }
         aria-hidden
       >
-        {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
+        {refreshStripVisible ? (
+          determinateRssPercent != null ? (
+            <div
+              className="episodes-refresh-strip__fill"
+              style={{width: `${determinateRssPercent}%`}}
+            />
+          ) : (
+            <div className="episodes-refresh-strip__segment" />
+          )
+        ) : null}
       </div>
       <div className="episode-scroll">
         {sections.map(section => (

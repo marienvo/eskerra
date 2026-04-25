@@ -213,6 +213,29 @@ describe('runDesktopPodcastRssSync', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('reports determinate progress while RSS files are processed', async () => {
+    const files = new Map([
+      [RSS_FILE_URI, `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`],
+      [`${GENERAL_URI}/📻 Argos.md`, '---\nrssFeedUrl: "https://example.com/argos.xml"\n---\n\n# Argos\n'],
+      [PODCASTS_FILE_URI, '# Shows\n'],
+      [HUB_FILE_URI, '- [ ] [[📻 OVT]]\n- [ ] [[📻 Argos]]\n'],
+    ]);
+    const fs = buildFs(files);
+    const fetchMock = vi.fn().mockResolvedValue({ok: true, text: async () => MINIMAL_EPISODE_XML});
+    vi.stubGlobal('fetch', fetchMock);
+    const progress: Array<{percent: number; phase: string; detail?: string}> = [];
+
+    await runDesktopPodcastRssSync(VAULT_ROOT, fs, {
+      onProgress: payload => progress.push(payload),
+    });
+
+    expect(progress).toEqual([
+      {percent: 50, phase: 'rss_file', detail: '📻 OVT.md'},
+      {percent: 99, phase: 'rss_file', detail: '📻 Argos.md'},
+      {percent: 100, phase: 'complete'},
+    ]);
+  });
+
   it('returns 0 counts when General/ directory has no linked 📻 files', async () => {
     const fs: VaultFilesystem = {
       exists: async () => false,
