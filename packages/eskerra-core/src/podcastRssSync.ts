@@ -36,6 +36,11 @@ function parseFrontmatterStringValue(frontmatter: string, key: string): unknown 
   if (match == null) return undefined;
   const rawValue = match[1].trim();
   if (rawValue.length === 0) return '';
+  const singleQuoted =
+    rawValue.startsWith('\'') && rawValue.endsWith('\'') && rawValue.length >= 2
+      ? rawValue.slice(1, -1).trim()
+      : null;
+  if (singleQuoted != null) return singleQuoted;
   const shouldTryJson = /^("|-?\d|true$|false$|null$|\{|\[)/i.test(rawValue);
   if (!shouldTryJson) return rawValue;
   try {
@@ -69,6 +74,13 @@ function parseYamlListItems(frontmatter: string, key: string): string[] {
     if (listItemMatch == null) continue;
     const raw = listItemMatch[1]?.trim() ?? '';
     if (raw.length === 0) continue;
+    if (raw.startsWith('\'') && raw.endsWith('\'') && raw.length >= 2) {
+      const singleQuoted = raw.slice(1, -1).trim();
+      if (singleQuoted.length > 0) {
+        result.push(singleQuoted);
+        continue;
+      }
+    }
     if (raw.startsWith('"')) {
       try {
         const parsed = JSON.parse(raw);
@@ -416,12 +428,23 @@ export function buildPodcastMarkdownFromRss(
   );
   const toInclusive = endOfLocalDay(now);
   const rssTexts = Array.isArray(rssText) ? rssText : [rssText];
-  const allEpisodes = rssTexts.flatMap(text => parsePodcastEpisodesFromRss(text));
-  const byDedupeKey = new Map<string, PodcastRssSyncEpisode>();
-  for (const ep of allEpisodes) {
-    if (!byDedupeKey.has(ep.dedupeKey)) byDedupeKey.set(ep.dedupeKey, ep);
+  const byMergedKey = new Map<string, PodcastRssSyncEpisode>();
+  for (const [feedIndex, text] of rssTexts.entries()) {
+    const parsed = parsePodcastEpisodesFromRss(text);
+    for (const ep of parsed) {
+      const publishedAtKey = ep.publishedAt.toISOString();
+      const audioKey = ep.audioUrl?.trim().toLowerCase();
+      const webKey = ep.webUrl?.trim().toLowerCase();
+      const mergedKey =
+        audioKey != null && audioKey.length > 0
+          ? `audio|${audioKey}|${publishedAtKey}`
+          : webKey != null && webKey.length > 0
+            ? `web|${webKey}|${publishedAtKey}`
+            : `feed|${feedIndex}|${ep.dedupeKey}`;
+      if (!byMergedKey.has(mergedKey)) byMergedKey.set(mergedKey, ep);
+    }
   }
-  const episodes = [...byDedupeKey.values()].filter(ep => {
+  const episodes = [...byMergedKey.values()].filter(ep => {
     const ts = ep.publishedAt.getTime();
     return ts >= fromInclusive.getTime() && ts <= toInclusive.getTime();
   }).sort((a, b) => {

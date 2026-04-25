@@ -41,6 +41,14 @@ describe('parsePodcastRssSettingsFromContent', () => {
     });
   });
 
+  it('accepts single-quoted scalar rssFeedUrl', () => {
+    const result = parsePodcastRssSettingsFromContent(
+      '---\nrssFeedUrl: \'https://example.com/feed.xml\'\n---\n',
+    );
+    expect(result?.rssFeedUrl).toBe('https://example.com/feed.xml');
+    expect(result?.rssFeedUrls).toEqual(['https://example.com/feed.xml']);
+  });
+
   it('uses defaults when optional keys are absent', () => {
     const result = parsePodcastRssSettingsFromContent(
       '---\nrssFeedUrl: "https://example.com/feed.xml"\n---\n',
@@ -70,6 +78,16 @@ describe('parsePodcastRssSettingsFromContent', () => {
       '---\nrssFeedUrl:\n  - not-a-url\n  - https://example.com/feed.xml\n---\n',
     );
     expect(result?.rssFeedUrls).toEqual(['https://example.com/feed.xml']);
+  });
+
+  it('accepts single-quoted entries in rssFeedUrl YAML list', () => {
+    const result = parsePodcastRssSettingsFromContent(
+      '---\nrssFeedUrl:\n  - \'https://example.com/feed-a.xml\'\n  - \'https://example.com/feed-b.xml\'\n---\n',
+    );
+    expect(result?.rssFeedUrls).toEqual([
+      'https://example.com/feed-a.xml',
+      'https://example.com/feed-b.xml',
+    ]);
   });
 });
 
@@ -279,6 +297,48 @@ describe('buildPodcastMarkdownFromRss', () => {
     ].join('\n');
     const output = buildPodcastMarkdownFromRss(rss, now, {daysAgo: 7}, 'My Pod');
     expect(output.trim()).toBe('# My Pod');
+  });
+
+  it('keeps episodes from different feeds even when guid values collide', () => {
+    const now = new Date('2026-02-22T14:00:00Z');
+    const feedA = [
+      '<rss version="2.0"><channel>',
+      '<item><guid>shared-guid</guid><title>Feed A episode</title>',
+      '<pubDate>Sun, 22 Feb 2026 08:00:00 GMT</pubDate>',
+      '<enclosure url="https://cdn.example.com/a.mp3" type="audio/mpeg" /></item>',
+      '</channel></rss>',
+    ].join('\n');
+    const feedB = [
+      '<rss version="2.0"><channel>',
+      '<item><guid>shared-guid</guid><title>Feed B episode</title>',
+      '<pubDate>Sun, 22 Feb 2026 08:00:00 GMT</pubDate>',
+      '<enclosure url="https://cdn.example.com/b.mp3" type="audio/mpeg" /></item>',
+      '</channel></rss>',
+    ].join('\n');
+    const output = buildPodcastMarkdownFromRss([feedA, feedB], now, {daysAgo: 7}, 'OVT');
+    expect(output).toContain('Feed A episode');
+    expect(output).toContain('Feed B episode');
+    expect((output.match(/\[▶️\]\(<https:\/\/cdn\.example\.com\/[ab]\.mp3>\)/g) ?? []).length).toBe(2);
+  });
+
+  it('deduplicates cross-feed episodes with same normalized audio URL and publish timestamp', () => {
+    const now = new Date('2026-02-22T14:00:00Z');
+    const feedA = [
+      '<rss version="2.0"><channel>',
+      '<item><guid>shared-guid-a</guid><title>Episode A</title>',
+      '<pubDate>Sun, 22 Feb 2026 08:00:00 GMT</pubDate>',
+      '<enclosure url="https://cdn.example.com/same.mp3?X=1&Y=2" type="audio/mpeg" /></item>',
+      '</channel></rss>',
+    ].join('\n');
+    const feedB = [
+      '<rss version="2.0"><channel>',
+      '<item><guid>shared-guid-b</guid><title>Episode B</title>',
+      '<pubDate>Sun, 22 Feb 2026 08:00:00 GMT</pubDate>',
+      '<enclosure url="https://cdn.example.com/same.mp3?x=1&y=2" type="audio/mpeg" /></item>',
+      '</channel></rss>',
+    ].join('\n');
+    const output = buildPodcastMarkdownFromRss([feedA, feedB], now, {daysAgo: 7}, 'OVT');
+    expect((output.match(/https:\/\/cdn\.example\.com\/same\.mp3\?x=1&y=2/gi) ?? []).length).toBe(1);
   });
 });
 
