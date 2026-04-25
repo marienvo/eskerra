@@ -42,7 +42,7 @@ function createMemoryVaultFs(
         }
       }
     }
-    for (const [uri, _content] of files) {
+    for (const [uri] of files) {
       if (uri.startsWith(prefix) && uri !== base) {
         const rest = uri.slice(prefix.length);
         if (rest && !rest.includes('/')) {

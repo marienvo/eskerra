@@ -71,18 +71,17 @@ function VaultRefreshStrip({percent, visible}: VaultRefreshStripProps) {
       width: seg > 0 ? seg : w * SEGMENT_FRACTION,
     };
   });
+  const stripContent = determinate ? (
+    <View style={[styles.determinateFill, {width: `${percent}%`}]} />
+  ) : (
+    <Animated.View style={[styles.indeterminateSegment, indeterminateStyle]} />
+  );
 
   return (
     <View
       style={[styles.stripSlot, visible ? styles.stripSlotActive : styles.stripSlotIdle]}
       onLayout={onTrackLayout}>
-      {visible ? (
-        determinate ? (
-          <View style={[styles.determinateFill, {width: `${percent}%`}]} />
-        ) : (
-          <Animated.View style={[styles.indeterminateSegment, indeterminateStyle]} />
-        )
-      ) : null}
+      {visible ? stripContent : null}
     </View>
   );
 }

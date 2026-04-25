@@ -12,7 +12,7 @@ describe('useResolvedChromeMode', () => {
       'matchMedia',
       vi.fn((query: string) => ({
         get matches() {
-          return query === '(prefers-color-scheme: dark)' ? false : false;
+          return false;
         },
         media: query,
         addEventListener: (_: string, fn: () => void) => {

@@ -131,13 +131,9 @@ export function VaultSearchPalette({
         ? noteCount != null
           ? `Searching… · ${noteCount}`
           : 'Searching…'
-        : awaitingDebouncedRun
-          ? noteCount != null
-            ? `${noteCount} found`
-            : null
-          : noteCount != null
-            ? `${noteCount} found`
-            : null;
+        : noteCount != null
+          ? `${noteCount} found`
+          : null;
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>

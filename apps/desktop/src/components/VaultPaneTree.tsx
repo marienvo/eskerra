@@ -159,7 +159,7 @@ function mountVaultTreeDragGhost(options: {
   ghost.appendChild(icon);
   ghost.appendChild(text);
   document.body.appendChild(ghost);
-  void ghost.offsetWidth;
+  ghost.getBoundingClientRect();
 
   const btnRect = sourceButton.getBoundingClientRect();
   const relX = pointerClientX - btnRect.left;
@@ -451,7 +451,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     const inboxUri = treeScope === 'inboxRoot' ? rootId : inboxDirectoryUri;
     const warmupPromise = warmInboxChildrenAtUri(t, inboxUri);
     inboxWarmupPromiseRef.current = warmupPromise;
-    void warmupPromise.finally(() => {
+    warmupPromise.finally(() => {
       if (inboxWarmupPromiseRef.current === warmupPromise) {
         inboxWarmupPromiseRef.current = null;
       }
@@ -525,7 +525,6 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       });
   }, [fsRefreshNonce, rootId, treeScope, inboxDirectoryUri]);
 
-  void treeViewRevision;
   const items = tree.getItems();
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -714,12 +713,12 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         return;
       }
       if (resolved.mode === 'bulk') {
-        void Promise.resolve(
+        Promise.resolve(
           onBulkMoveVaultTreeItems(resolved.items, targetDirectoryUri),
         );
         return;
       }
-      void Promise.resolve(
+      Promise.resolve(
         onMoveVaultTreeItem(
           resolved.sourceUri,
           resolved.sourceKind,
@@ -1025,7 +1024,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                               } else if (data.kind === 'article') {
                                 onOpenMarkdownNote(data.uri);
                               } else {
-                                void item.expand();
+                                item.expand();
                               }
                             }}
                           >

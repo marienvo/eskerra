@@ -1049,7 +1049,7 @@ export function useMainWindowWorkspace(options: {
             return;
           }
           await saveNoteMarkdown(norm, fs, md);
-          void refreshNotes(root).catch(() => undefined);
+          refreshNotes(root).catch(() => undefined);
 
           const activeSel = selectedUriRef.current;
           if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
@@ -2142,8 +2142,8 @@ export function useMainWindowWorkspace(options: {
         await store.save();
         await startVaultWatch();
         queueMicrotask(() => {
-          void vaultSearchIndexSchedule().catch(() => undefined);
-          void vaultFrontmatterIndexSchedule().catch(() => undefined);
+          vaultSearchIndexSchedule().catch(() => undefined);
+          vaultFrontmatterIndexSchedule().catch(() => undefined);
         });
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
@@ -2519,7 +2519,7 @@ export function useMainWindowWorkspace(options: {
       }
     };
 
-    void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
+    listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
         isPodcastRelevantPath,
@@ -2535,16 +2535,16 @@ export function useMainWindowWorkspace(options: {
           && now - lastIncrementalIndexTouch.touchedAtMs < VAULT_INDEX_TOUCH_DEDUP_MS;
         if (!duplicate) {
           lastIncrementalIndexTouch = {signature, touchedAtMs: now};
-          void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
-          void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+          vaultSearchIndexTouchPaths(paths).catch(() => undefined);
+          vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
         }
       }
       if (plan.shouldScheduleFullReindex) {
         if (coarse) {
           coarseFullReindexScheduled = true;
         }
-        void vaultSearchIndexSchedule().catch(() => undefined);
-        void vaultFrontmatterIndexSchedule().catch(() => undefined);
+        vaultSearchIndexSchedule().catch(() => undefined);
+        vaultFrontmatterIndexSchedule().catch(() => undefined);
       }
       if (coarse) {
         console.warn('[vault-files-changed] coarse invalidation', {
@@ -3489,7 +3489,7 @@ export function useMainWindowWorkspace(options: {
       }
       const browserHref = wikiLinkInnerBrowserOpenableHref(inner);
       if (browserHref != null) {
-        void openSystemBrowserUrl(browserHref.trim()).catch(e => {
+        openSystemBrowserUrl(browserHref.trim()).catch(e => {
           setErr(e instanceof Error ? e.message : String(e));
         });
         return;
@@ -3787,7 +3787,7 @@ export function useMainWindowWorkspace(options: {
       if (!isBrowserOpenableMarkdownHref(href)) {
         return;
       }
-      void openSystemBrowserUrl(href).catch(e => {
+      openSystemBrowserUrl(href).catch(e => {
         setErr(e instanceof Error ? e.message : String(e));
       });
     },

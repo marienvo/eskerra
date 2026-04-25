@@ -90,7 +90,7 @@ describe('cleanNoteMarkdownBody', () => {
     const input = ['- plain', '', '- [ ] task'].join('\n');
     const out = cleanNoteMarkdownBody(input, '/tmp/B.md', {bullet: '*'});
     expect(out).toContain('* plain');
-    expect(out).toMatch(/-\s+\[[ x ]\]\s+task/);
+    expect(out).toMatch(/-\s+\[[ x]\]\s+task/);
   });
 
   it('ensures blank lines around structural blocks', () => {
@@ -211,17 +211,17 @@ describe('cleanNoteMarkdownBody', () => {
     expect(output).toContain('\t\t- level2');
     expect(output).toContain('\t\t\t- level3');
     expect(output).toContain('\t\t- mixed-level2');
-    expect(output).not.toMatch(/^[ ]{4,}[-*+]\s/m);
-    expect(output).not.toMatch(/^\t+[ ]+[-*+]\s/m);
+    expect(output).not.toMatch(/^ {4,}[-*+]\s/m);
+    expect(output).not.toMatch(/^\t+ +[-*+]\s/m);
   });
 
   it('normalizes bullet spacing inside blockquotes', () => {
     const input = ['> -\t\titem a', '> \t- [x]\t item b'].join('\n');
     const output = cleanNoteMarkdownBody(input, '/tmp/QuoteList.md');
     expect(output).toContain('> - item a');
-    expect(output).toMatch(/>\s*[-]\s+\[x\] item b/);
+    expect(output).toMatch(/>\s*-\s+\[x\] item b/);
     expect(output).not.toMatch(/>\s*-\t+/);
-    expect(output).not.toMatch(/>\s*-[ ]{2,}\S/);
+    expect(output).not.toMatch(/>\s*- {2,}\S/);
   });
 
   it('preserves Obsidian admonition headers in blockquotes', () => {

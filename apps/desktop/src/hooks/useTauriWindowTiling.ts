@@ -57,7 +57,7 @@ export function useTauriWindowTiling(): {
     let unlistenResize: (() => void) | undefined;
     let unlistenMove: (() => void) | undefined;
     let cancelled = false;
-    void getCurrentWindow()
+    getCurrentWindow()
       .onResized(() => {
         scheduleRefresh();
       })
@@ -69,7 +69,7 @@ export function useTauriWindowTiling(): {
         }
       })
       .catch(() => undefined);
-    void getCurrentWindow()
+    getCurrentWindow()
       .onMoved(() => {
         scheduleRefresh();
       })

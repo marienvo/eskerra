@@ -166,7 +166,7 @@ export function bindMarkdownEditorContextMenuHandlers(
         return;
       }
       const text = view.state.doc.sliceString(from, to);
-      void navigator.clipboard.writeText(text).then(() => {
+      navigator.clipboard.writeText(text).then(() => {
         view.dispatch({
           changes: {from, to, insert: ''},
           selection: {anchor: from},
@@ -187,7 +187,7 @@ export function bindMarkdownEditorContextMenuHandlers(
         return;
       }
       const text = view.state.doc.sliceString(from, to);
-      void navigator.clipboard.writeText(text).finally(() => view.focus());
+      navigator.clipboard.writeText(text).finally(() => view.focus());
     },
     paste: () => {
       if (blockEdit) {

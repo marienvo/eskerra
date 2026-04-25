@@ -77,10 +77,17 @@ function normalizeNote(raw: unknown): VaultSearchNoteResult {
       }
       const sn = s as Record<string, unknown>;
       const ln = sn.lineNumber;
+      let lineNumber: number | null;
+      if (ln === null || ln === undefined) {
+        lineNumber = null;
+      } else if (typeof ln === 'number') {
+        lineNumber = ln;
+      } else {
+        lineNumber = Number(ln);
+      }
       snippets.push({
         text: String(sn.text ?? ''),
-        lineNumber:
-          ln === null || ln === undefined ? null : typeof ln === 'number' ? ln : Number(ln),
+        lineNumber,
       });
     }
   }

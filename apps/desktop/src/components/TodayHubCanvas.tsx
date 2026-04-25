@@ -498,7 +498,7 @@ export function TodayHubCanvas({
       };
       if (hubFlushWouldAwait) {
         const flushT0 = todayHubPerfEnabled() ? performance.now() : 0;
-        void flushScheduledPersist().then(() => {
+        flushScheduledPersist().then(() => {
           if (todayHubPerfEnabled()) {
             todayHubPerfLog('openCell_after_flush', {
               flushMs: performance.now() - flushT0,

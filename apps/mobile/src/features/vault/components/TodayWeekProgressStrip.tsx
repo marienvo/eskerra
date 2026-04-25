@@ -50,12 +50,12 @@ export function TodayWeekProgressStrip({progress, weekStart, comparisonNow}: Tod
   return (
     <View accessibilityLabel={accessibilityLabel} accessible style={styles.row}>
       {segments.map(seg => {
-        const base =
-          seg.kind === 'filled'
-            ? [styles.cell, {backgroundColor: filledColor, width: seg.widthPx}]
-            : seg.kind === 'current'
-              ? [styles.cell, {backgroundColor: accentColor, width: seg.widthPx}]
-              : [styles.cell, styles.cellEmpty, {borderColor: mutedColor, width: seg.widthPx}];
+        let base = [styles.cell, styles.cellEmpty, {borderColor: mutedColor, width: seg.widthPx}];
+        if (seg.kind === 'filled') {
+          base = [styles.cell, {backgroundColor: filledColor, width: seg.widthPx}];
+        } else if (seg.kind === 'current') {
+          base = [styles.cell, {backgroundColor: accentColor, width: seg.widthPx}];
+        }
         return <View key={seg.key} style={base} />;
       })}
     </View>

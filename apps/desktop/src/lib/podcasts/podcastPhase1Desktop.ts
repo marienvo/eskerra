@@ -247,7 +247,7 @@ export async function runPodcastPhase1Desktop(
 
     clearPodcastNoteUriCacheForVault(baseUri);
 
-    let {nextAllEpisodes, nextSections} = await buildPodcastSectionsFromPodcastMarkdownFiles(
+    const {nextAllEpisodes} = await buildPodcastSectionsFromPodcastMarkdownFiles(
       baseUri,
       podcastFiles,
       fs,
@@ -259,16 +259,14 @@ export async function runPodcastPhase1Desktop(
       rssFeedFiles,
       fs,
     );
-    nextAllEpisodes = enriched.episodes;
-    nextSections = enriched.sections;
 
     return {
-      allEpisodes: nextAllEpisodes,
+      allEpisodes: enriched.episodes,
       didFullVaultListingThisRefresh,
       error: null,
       podcastRelevantFiles,
       rssFeedFiles,
-      sections: nextSections,
+      sections: enriched.sections,
     };
   } catch (loadError) {
     const fallbackMessage = 'Could not load podcasts from vault.';

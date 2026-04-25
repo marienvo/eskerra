@@ -40,7 +40,7 @@ export function reportCrash(
     return;
   }
 
-  void invoke('eskerra_append_crash_log', {
+  invoke('eskerra_append_crash_log', {
     record: {
       source,
       timestamp: new Date().toISOString(),

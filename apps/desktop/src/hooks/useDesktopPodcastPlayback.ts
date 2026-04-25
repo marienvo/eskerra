@@ -375,7 +375,7 @@ export function useDesktopPodcastPlayback({
         cancelled = true;
       };
     }
-    void readPlaylistEntry(vaultRoot, fs)
+    readPlaylistEntry(vaultRoot, fs)
       .then(async pl => {
         if (cancelled) {
           return;
@@ -397,7 +397,7 @@ export function useDesktopPodcastPlayback({
         }
         const catalogEp = consumeEpisodesRef.current.find(e => e.id === pl.episodeId);
         if (!catalogEp || catalogEp.isListened) {
-          void clearPlaylistEntry(vaultRoot, fs).finally(() => {
+          clearPlaylistEntry(vaultRoot, fs).finally(() => {
             onPlaylistDiskUpdatedRef.current?.();
           });
           send({type: 'RESET'});
@@ -601,7 +601,7 @@ export function useDesktopPodcastPlayback({
     if (playbackSub !== 'idle' || snapCtx.episode != null) {
       return;
     }
-    void getDesktopAudioPlayer()
+    getDesktopAudioPlayer()
       .stop()
       .catch(() => undefined);
   }, [playbackSub, snapCtx.episode]);

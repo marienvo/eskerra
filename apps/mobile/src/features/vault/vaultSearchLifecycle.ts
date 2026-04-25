@@ -38,22 +38,36 @@ export function vaultSearchBaseUriHash(canonicalBaseUri: string): string {
   return createHash('sha1').update(canonicalBaseUri, 'utf8').digest('hex');
 }
 
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  return undefined;
+}
+
 export function parseVaultSearchIndexStatus(raw: unknown): VaultSearchIndexStatus | null {
   if (typeof raw !== 'object' || raw === null) {
     return null;
   }
   const o = raw as Record<string, unknown>;
   const schema = o.schemaVersion;
-  const schemaNum =
-    typeof schema === 'number' ? schema : schema != null ? Number(schema) : Number.NaN;
+  let schemaNum = Number.NaN;
+  if (typeof schema === 'number') {
+    schemaNum = schema;
+  } else if (schema != null) {
+    schemaNum = Number(schema);
+  }
   return {
     vaultInstanceId: String(o.vaultInstanceId ?? ''),
     baseUriHash: String(o.baseUriHash ?? ''),
     schemaVersion: Number.isFinite(schemaNum) ? schemaNum : 0,
     indexReady: o.indexReady === true,
     isBuilding: o.isBuilding === true,
-    bodiesIndexReady: o.bodiesIndexReady === true ? true : o.bodiesIndexReady === false ? false : undefined,
-    notesRegistryReady: o.notesRegistryReady === true ? true : o.notesRegistryReady === false ? false : undefined,
+    bodiesIndexReady: parseOptionalBoolean(o.bodiesIndexReady),
+    notesRegistryReady: parseOptionalBoolean(o.notesRegistryReady),
     indexedNotes: Number(o.indexedNotes ?? 0),
     lastFullBuildAt: Number(o.lastFullBuildAt ?? 0),
     lastReconciledAt: Number(o.lastReconciledAt ?? 0),

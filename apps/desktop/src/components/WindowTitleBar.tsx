@@ -34,14 +34,14 @@ export function WindowTitleBar({
     if (!tauri) {
       return;
     }
-    void getCurrentWindow().minimize();
+    getCurrentWindow().minimize();
   };
 
   const onClose = () => {
     if (!tauri) {
       return;
     }
-    void getCurrentWindow().close();
+    getCurrentWindow().close();
   };
 
   return (

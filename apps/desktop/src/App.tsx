@@ -559,7 +559,7 @@ export default function App() {
       playControl: desktopPlayback.playbackTransportPlayControl,
       onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
       onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
-      onTogglePlay: () => void desktopPlayback.togglePause(),
+      onTogglePlay: () => desktopPlayback.togglePause(),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
   }, [
@@ -653,7 +653,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
+    Promise.all([
       loadStoredLayouts(),
       loadMainWindowUi(),
       hydrateEmojiUsageFromStore(),
@@ -692,10 +692,10 @@ export default function App() {
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    void listen<string>('media-control', event => {
+    listen<string>('media-control', event => {
       const action = event.payload;
       const p = getDesktopAudioPlayer();
-      void (async () => {
+      (async () => {
         if (action === 'pause' || action === 'stop') {
           if ((await p.getState()) === 'playing') {
             await desktopPlaybackRef.current.togglePause();
@@ -934,7 +934,7 @@ export default function App() {
     let unlistenClose: (() => void) | undefined;
     let unlistenFocus: (() => void) | undefined;
     const win = getCurrentWindow();
-    void win
+    win
       .onCloseRequested(async event => {
         event.preventDefault();
         try {
@@ -958,7 +958,7 @@ export default function App() {
           }
         } finally {
           /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
-          void win.destroy();
+          win.destroy();
         }
       })
       .then(fn => {
@@ -969,7 +969,7 @@ export default function App() {
         }
       })
       .catch(() => undefined);
-    void win
+    win
       .onFocusChanged(({payload: focused}) => {
         if (!focused) {
           void flushInboxSave();

@@ -140,7 +140,7 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      vaultSearchCancel().catch(() => undefined);
     }
   }, [open, resetLocal]);
 
@@ -229,7 +229,7 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      vaultSearchCancel().catch(() => undefined);
       return;
     }
 
@@ -239,7 +239,7 @@ export function useVaultContentSearch({
       setHoldingPreviousResults(false);
     });
     clearPendingSearchFlush();
-    void vaultSearchCancel().catch(() => undefined);
+    vaultSearchCancel().catch(() => undefined);
     queueMicrotask(() => {
       setScanDone(true);
       setAwaitingDebouncedRun(true);

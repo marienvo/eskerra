@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
     const {error, componentStack} = this.state;
     if (!error) return;
     const text = formatCrashDetails(error, componentStack);
-    void navigator.clipboard.writeText(text).then(
+    navigator.clipboard.writeText(text).then(
       () => {
         this.setState({copied: true});
         window.setTimeout(() => this.setState({copied: false}), 2000);

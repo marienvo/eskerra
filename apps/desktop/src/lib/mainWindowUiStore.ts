@@ -133,8 +133,8 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     return null;
   }
 
-  let vaultPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible;
-  let episodesPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible;
+  let vaultPaneVisible: boolean;
+  let episodesPaneVisible: boolean;
   let inboxPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible;
 
   const v = o.vaultPaneVisible;

@@ -648,13 +648,10 @@ const NoteMarkdownEditorImpl = forwardRef<
           );
           return true;
         }
-        if (
-          e.clipboardData
+        return (
+          e.clipboardData != null
           && tryPasteRichHtmlFromDataTransfer(e.clipboardData, e, view)
-        ) {
-          return true;
-        }
-        return false;
+        );
       }
 
       const dt = e.clipboardData;
@@ -678,10 +675,7 @@ const NoteMarkdownEditorImpl = forwardRef<
           e.stopPropagation();
           return runNativeClipboardPasteWhenWebDataEmpty(view);
         }
-        if (tryPasteRichHtmlFromDataTransfer(dt, e, view)) {
-          return true;
-        }
-        return false;
+        return tryPasteRichHtmlFromDataTransfer(dt, e, view);
       }
 
       e.preventDefault();
@@ -1395,7 +1389,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    void attachmentHost
+    attachmentHost
       .subscribeWindowFileDragDrop({
         onDragHover: () => {
           if (!busy) {
