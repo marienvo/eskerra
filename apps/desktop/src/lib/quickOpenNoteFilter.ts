@@ -1,5 +1,13 @@
 import {normalizeVaultBaseUri} from '@eskerra/core';
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 function normSlashes(p: string): string {
   return p.trim().replace(/\\/g, '/');
 }
@@ -8,8 +16,8 @@ function normSlashes(p: string): string {
  * Path from vault root to the note file, using `/` separators (for display and search).
  */
 export function quickOpenVaultRelativePath(vaultRoot: string, noteUri: string): string {
-  const base = normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, '');
-  const path = normSlashes(noteUri).replace(/\/+$/, '');
+  const base = trimTrailingSlashes(normSlashes(normalizeVaultBaseUri(vaultRoot)));
+  const path = trimTrailingSlashes(normSlashes(noteUri));
   const prefix = `${base}/`;
   if (
     path.length >= prefix.length

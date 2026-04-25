@@ -70,15 +70,27 @@ function normalizeNoteUri(noteUri: string): string {
 }
 
 function sanitizeFileName(rawName: string): string {
+  const trimDotSpaceEdges = (value: string): string => {
+    let start = 0;
+    let end = value.length;
+    while (start < end && (value[start] === '.' || value[start] === ' ')) {
+      start += 1;
+    }
+    while (end > start && (value[end - 1] === '.' || value[end - 1] === ' ')) {
+      end -= 1;
+    }
+    return value.slice(start, end);
+  };
   const withoutControlChars = Array.from(rawName.trim())
     .filter(ch => ch >= ' ' && ch !== '\u007f')
     .join('');
   const normalized = withoutControlChars
     .replace(/[/\\:*?"<>|]/g, '')
     .replace(/\s+/g, ' ')
-    .replace(/^[. ]+|[. ]+$/g, '');
+    .trim();
+  const edgeTrimmed = trimDotSpaceEdges(normalized);
 
-  return normalized || `note-${Date.now()}`;
+  return edgeTrimmed || `note-${Date.now()}`;
 }
 
 function noteUriFromName(noteName: string): string {

@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/slow-regex -- Markdown normalization patterns are bounded per-line and required for syntax transforms. */
 import {remark} from 'remark';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
@@ -165,7 +166,7 @@ export function cleanNoteMarkdownBody(
  * Placeholder path for `cleanNoteMarkdownBody` when pasting while no vault file path exists yet
  * (for example a new inbox entry). Not used for H1 injection when `insertH1FromFilename` is false.
  */
-export const CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH = '/tmp/Untitled.md';
+export const CLEAN_PASTE_FRAGMENT_PLACEHOLDER_PATH = '/virtual/Untitled.md';
 
 /**
  * Same normalization pipeline as "Clean this note", scoped to pasted markdown only.

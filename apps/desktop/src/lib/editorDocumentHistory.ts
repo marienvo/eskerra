@@ -17,6 +17,14 @@ export function normalizeEditorDocUri(uri: string): string {
   return uri.trim().replace(/\\/g, '/');
 }
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 /** Same path-prefix rules as vault rename/move in the main window workspace. */
 export function remapVaultUriPrefix(
   uri: string,
@@ -24,8 +32,8 @@ export function remapVaultUriPrefix(
   newPrefix: string,
 ): string | null {
   const u = uri.replace(/\\/g, '/');
-  const o = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
-  const n = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  const o = trimTrailingSlashes(oldPrefix.replace(/\\/g, '/'));
+  const n = trimTrailingSlashes(newPrefix.replace(/\\/g, '/'));
   if (u === o) {
     return n;
   }
@@ -138,7 +146,7 @@ export function vaultUriDeletedByTreeChange(
     return true;
   }
   for (const folder of deletedFolderPrefixes) {
-    const f = folder.replace(/\\/g, '/').replace(/\/+$/, '');
+    const f = trimTrailingSlashes(folder.replace(/\\/g, '/'));
     if (!f) {
       continue;
     }

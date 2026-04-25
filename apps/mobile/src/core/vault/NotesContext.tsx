@@ -248,7 +248,10 @@ export function NotesProvider({children}: NotesProviderProps) {
         );
       }
 
-      const normalizedBaseUri = baseUri.trim().replace(/\/+$/, '');
+      let normalizedBaseUri = baseUri.trim();
+      while (normalizedBaseUri.endsWith('/')) {
+        normalizedBaseUri = normalizedBaseUri.slice(0, -1);
+      }
       const canonicalDeleteUris = canonicalNotes.map(
         note => `${normalizedBaseUri}/Inbox/${note.name}`,
       );

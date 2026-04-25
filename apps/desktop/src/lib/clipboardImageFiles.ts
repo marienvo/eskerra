@@ -31,6 +31,19 @@ function dedupeFileKey(file: File): string {
   return `${file.name}\0${file.size}\0${file.lastModified}`;
 }
 
+function stripUriQueryAndHash(value: string): string {
+  const hashIndex = value.indexOf('#');
+  const queryIndex = value.indexOf('?');
+  let cut = value.length;
+  if (hashIndex >= 0 && hashIndex < cut) {
+    cut = hashIndex;
+  }
+  if (queryIndex >= 0 && queryIndex < cut) {
+    cut = queryIndex;
+  }
+  return value.slice(0, cut);
+}
+
 /** Synchronously copy clipboard strings and file references before any `await` (WebKit/Tauri). */
 export type ClipboardImageSnapshot = {
   types: string[];
@@ -129,7 +142,7 @@ function textUriListLineLooksLikeLocalImageFile(line: string): boolean {
     return false;
   }
   try {
-    const noHashOrQuery = trimmed.replace(/[?#].*$/, '');
+    const noHashOrQuery = stripUriQueryAndHash(trimmed);
     const path = decodeURIComponent(noHashOrQuery.slice('file://'.length));
     return /\.(png|jpe?g|gif|webp|svg)$/i.test(path);
   } catch {
@@ -165,7 +178,7 @@ export function absoluteImagePathsFromClipboardUriList(dt: DataTransfer): string
     if (!textUriListLineLooksLikeLocalImageFile(raw)) {
       continue;
     }
-    const baseUri = raw.trim().replace(/[?#].*$/, '');
+    const baseUri = stripUriQueryAndHash(raw.trim());
     const abs = fileUriToLocalPath(baseUri);
     if (abs && !seen.has(abs)) {
       seen.add(abs);

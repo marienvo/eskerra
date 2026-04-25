@@ -14,6 +14,8 @@ type NativePodcastRssSyncModule = {
   startPodcastRssSync: (generalDirectoryUri: string, jobId: string) => Promise<null | void>;
 };
 
+let fallbackPodcastSyncJobCounter = 0;
+
 function getNativeModule(): NativePodcastRssSyncModule | null {
   if (Platform.OS !== 'android') {
     return null;
@@ -43,7 +45,10 @@ export async function runAndroidGeneralPodcastRssSync(
   if (!trimmedUri) {
     throw new Error('generalDirectoryUri cannot be empty.');
   }
-  const jobId = `podcast-rss-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const jobId =
+    globalThis.crypto && 'randomUUID' in globalThis.crypto
+      ? `podcast-rss-${globalThis.crypto.randomUUID()}`
+      : `podcast-rss-${Date.now()}-${++fallbackPodcastSyncJobCounter}`;
   const sub = DeviceEventEmitter.addListener(
     ESKERRA_PODCAST_RSS_SYNC_PROGRESS_EVENT,
     (raw: {jobId?: string; percent?: number; phase?: string; detail?: string}) => {

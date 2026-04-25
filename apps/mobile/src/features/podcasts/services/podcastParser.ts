@@ -1,8 +1,6 @@
 import {PodcastEpisode, PodcastSection} from '../../../types';
 
-const PODCAST_FILE_PATTERN = /^(\d{4})\s+(.+?)\s+-\s+podcasts\.md$/i;
 const EPISODE_PREFIX_PATTERN = /^-\s*\[([ xX])\]\s+/;
-const DATE_PREFIX_PATTERN = /^(\d{4}-\d{2}-\d{2})\s*;\s*(.+)$/;
 const PLAY_LINK_PATTERN = /\[▶️?\]\(([^)]+)\)/g;
 const ARTICLE_LINK_PATTERN = /^\[🌐\]\(([^)]+)\)\s*/;
 const SERIES_PATTERN = /\(([^()]+)\)\s*$/;
@@ -21,14 +19,22 @@ type ParsePodcastLineInput = {
 function parsePodcastFileDetails(
   fileName: string,
 ): PodcastFileDetails | null {
-  const match = PODCAST_FILE_PATTERN.exec(fileName.trim());
-
-  if (!match) {
+  const trimmed = fileName.trim();
+  const suffix = ' - podcasts.md';
+  if (!trimmed.toLowerCase().endsWith(suffix)) {
     return null;
   }
-
-  const year = Number(match[1]);
-  const sectionTitle = match[2].trim();
+  const stem = trimmed.slice(0, -suffix.length);
+  const firstSpace = stem.indexOf(' ');
+  if (firstSpace <= 0) {
+    return null;
+  }
+  const yearToken = stem.slice(0, firstSpace);
+  if (yearToken.length !== 4 || !/^\d{4}$/.test(yearToken)) {
+    return null;
+  }
+  const year = Number(yearToken);
+  const sectionTitle = stem.slice(firstSpace + 1).trim();
 
   if (!sectionTitle) {
     return null;
@@ -59,6 +65,22 @@ export function extractSectionTitle(fileName: string): string | null {
   return details?.sectionTitle ?? null;
 }
 
+function splitDatePrefix(value: string): {date: string; remainder: string} | null {
+  const separatorIdx = value.indexOf(';');
+  if (separatorIdx < 0) {
+    return null;
+  }
+  const date = value.slice(0, separatorIdx).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return null;
+  }
+  const remainder = value.slice(separatorIdx + 1).trim();
+  if (!remainder) {
+    return null;
+  }
+  return {date, remainder};
+}
+
 export function parsePodcastLine({
   line,
   sectionTitle,
@@ -73,14 +95,12 @@ export function parsePodcastLine({
 
   const isListened = prefixMatch[1].toLowerCase() === 'x';
   const withoutPrefix = trimmedLine.slice(prefixMatch[0].length).trim();
-  const dateMatch = DATE_PREFIX_PATTERN.exec(withoutPrefix);
-
-  if (!dateMatch) {
+  const parsedPrefix = splitDatePrefix(withoutPrefix);
+  if (!parsedPrefix) {
     return null;
   }
 
-  const date = dateMatch[1];
-  const remainder = dateMatch[2];
+  const {date, remainder} = parsedPrefix;
 
   const playMatches = Array.from(remainder.matchAll(PLAY_LINK_PATTERN));
   const lastPlayMatch = playMatches.at(-1);

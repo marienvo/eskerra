@@ -39,8 +39,16 @@ async function hasAnyFiles(fs: VaultFilesystem, dirUri: string): Promise<boolean
   return false;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 function pathRelativeToVault(vaultRoot: string, fileUri: string): string {
-  const r = vaultRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+  const r = trimTrailingSlashes(vaultRoot.replace(/\\/g, '/'));
   const f = fileUri.replace(/\\/g, '/');
   if (f.startsWith(`${r}/`)) {
     return f.slice(r.length + 1);

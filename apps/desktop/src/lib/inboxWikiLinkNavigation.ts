@@ -18,6 +18,14 @@ import {
 
 import {createVaultMarkdownNoteInDirectory} from './vaultBootstrap';
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 export type InboxWikiLinkNavigationResult =
   | {kind: 'open'; uri: string; canonicalInner?: string}
   | {kind: 'created'; uri: string}
@@ -75,7 +83,8 @@ export async function openOrCreateInboxWikiLinkTarget(options: {
   if (newNoteParentDirectory) {
     parentDir = assertVaultTreeDirectoryUriForCrud(vaultRoot, newNoteParentDirectory)
       .replace(/\\/g, '/')
-      .replace(/\/+$/, '');
+      .trim();
+    parentDir = trimTrailingSlashes(parentDir);
   } else if (activeMarkdownUri) {
     const noteUri = assertVaultMarkdownNoteUriForCrud(vaultRoot, activeMarkdownUri);
     parentDir = vaultPathDirname(noteUri);
@@ -215,7 +224,7 @@ async function tryResolveMarkdownFileByListingParent(
   fs: VaultFilesystem,
   resolvedFileUri: string,
 ): Promise<string | null> {
-  const parent = vaultPathDirname(resolvedFileUri).replace(/\/+$/, '');
+  const parent = trimTrailingSlashes(vaultPathDirname(resolvedFileUri));
   const expectedBasename = markdownBasenameFromUri(resolvedFileUri);
   let entries: Awaited<ReturnType<VaultFilesystem['listFiles']>>;
   try {

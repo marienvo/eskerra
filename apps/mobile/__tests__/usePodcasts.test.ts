@@ -147,6 +147,7 @@ describe('usePodcasts loading lifecycle', () => {
   >;
 
   let baseUri = 'content://vault-root';
+  let baseUriCounter = 0;
   const legacyEpisode: PodcastEpisode = {
     date: '2026-03-20',
     id: 'episode-1',
@@ -164,7 +165,8 @@ describe('usePodcasts loading lifecycle', () => {
     asyncStorageRemoveItemMock.mockReset();
     asyncStorageSetItemMock.mockReset();
     resetRssFeedUrlCacheForTesting();
-    baseUri = `content://vault-root-${Date.now()}-${Math.random()}`;
+    baseUriCounter += 1;
+    baseUri = `content://vault-root-${Date.now()}-${baseUriCounter}`;
 
     useVaultContextMock.mockReturnValue({
       baseUri,

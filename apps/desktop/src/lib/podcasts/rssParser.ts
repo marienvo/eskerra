@@ -1,8 +1,3 @@
-const FRONTMATTER_PATTERN = /^---\s*\r?\n([\s\S]*?)\r?\n---\s*/;
-const RSS_FEED_URL_PATTERN = /^\s*rssFeedUrl[ \t]*:[ \t]*([^\r\n]+)\s*$/im;
-const RSS_FEED_URL_LIST_PATTERN = /^\s*rssFeedUrl[ \t]*:[ \t]*\r?\n[ \t]*-[ \t]*(.+)\s*$/im;
-const H1_TITLE_PATTERN = /^\s*#\s+(.+?)\s*$/m;
-
 function trimWrappingQuotes(value: string): string {
   const trimmed = value.trim();
   if (
@@ -15,32 +10,98 @@ function trimWrappingQuotes(value: string): string {
   return trimmed;
 }
 
-export function extractRssFeedUrl(content: string): string | undefined {
-  const frontmatterMatch = FRONTMATTER_PATTERN.exec(content);
-  if (!frontmatterMatch) {
+function normalizeMarkdownNewlines(value: string): string {
+  return value.replace(/\r\n/g, '\n');
+}
+
+function extractFrontmatterContent(content: string): string | null {
+  const normalized = normalizeMarkdownNewlines(content);
+  const firstLineEnd = normalized.indexOf('\n');
+  if (firstLineEnd < 0) {
+    return null;
+  }
+  const firstLine = normalized.slice(0, firstLineEnd).trim();
+  if (firstLine !== '---') {
+    return null;
+  }
+
+  const lines = normalized.slice(firstLineEnd + 1).split('\n');
+  const endIdx = lines.findIndex(line => line.trim() === '---');
+  if (endIdx < 0) {
+    return null;
+  }
+  return lines.slice(0, endIdx).join('\n');
+}
+
+function extractFrontmatterRssFeedUrl(frontmatter: string): string | undefined {
+  const lines = frontmatter.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    const trimmedStart = line.trimStart();
+    const lower = trimmedStart.toLowerCase();
+    if (!lower.startsWith('rssfeedurl')) {
+      continue;
+    }
+    const colonIdx = trimmedStart.indexOf(':');
+    if (colonIdx < 0) {
+      continue;
+    }
+
+    const scalarOrEmpty = trimmedStart.slice(colonIdx + 1).trim();
+    if (scalarOrEmpty !== '') {
+      const scalarUrl = trimWrappingQuotes(scalarOrEmpty);
+      return scalarUrl || undefined;
+    }
+
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const item = lines[j] ?? '';
+      const itemTrimmed = item.trim();
+      if (itemTrimmed === '') {
+        continue;
+      }
+      const itemStart = item.trimStart();
+      if (!itemStart.startsWith('-')) {
+        return undefined;
+      }
+      const listUrl = trimWrappingQuotes(itemStart.slice(1).trim());
+      return listUrl || undefined;
+    }
     return undefined;
-  }
-
-  const frontmatterContent = frontmatterMatch[1];
-  const scalarMatch = RSS_FEED_URL_PATTERN.exec(frontmatterContent);
-  if (scalarMatch?.[1]) {
-    const scalarUrl = trimWrappingQuotes(scalarMatch[1]);
-    return scalarUrl || undefined;
-  }
-
-  const listMatch = RSS_FEED_URL_LIST_PATTERN.exec(frontmatterContent);
-  if (listMatch?.[1]) {
-    const listUrl = trimWrappingQuotes(listMatch[1]);
-    return listUrl || undefined;
   }
 
   return undefined;
 }
 
+function extractFirstMarkdownH1(content: string): string | undefined {
+  const lines = normalizeMarkdownNewlines(content).split('\n');
+  for (const line of lines) {
+    const trimmedStart = line.trimStart();
+    if (!trimmedStart.startsWith('#')) {
+      continue;
+    }
+    const withoutHash = trimmedStart.slice(1);
+    if (!withoutHash.startsWith(' ')) {
+      continue;
+    }
+    const title = withoutHash.trim();
+    return title === '' ? undefined : title;
+  }
+  return undefined;
+}
+
+export function extractRssFeedUrl(content: string): string | undefined {
+  const frontmatterContent = extractFrontmatterContent(content);
+  if (frontmatterContent == null) {
+    return undefined;
+  }
+
+  return extractFrontmatterRssFeedUrl(frontmatterContent);
+}
+
 export function extractRssPodcastTitle(fileName: string, content: string): string {
-  const headingMatch = H1_TITLE_PATTERN.exec(content);
-  if (headingMatch?.[1]?.trim()) {
-    return headingMatch[1].trim();
+  const heading = extractFirstMarkdownH1(content);
+  if (heading != null) {
+    return heading;
   }
 
   const withoutExtension = fileName.replace(/\.md$/i, '');

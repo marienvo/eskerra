@@ -101,6 +101,14 @@ type WikiLinkAmbiguityRenamePrompt = {
 
 type DiskConflictPayload = {uri: string};
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 type VaultTabProps = {
   vaultRoot: string;
   vaultSettings: EskerraSettings | null;
@@ -746,14 +754,12 @@ export function VaultTab({
 }: VaultTabProps) {
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
-    () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+    () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
     [vaultRoot],
   );
   const inboxDirectoryUriForTree = useMemo(
     () =>
-      getInboxDirectoryUri(normalizedVaultRootForTree)
-        .replace(/\\/g, '/')
-        .replace(/\/+$/, ''),
+      trimTrailingSlashes(getInboxDirectoryUri(normalizedVaultRootForTree).replace(/\\/g, '/')),
     [normalizedVaultRootForTree],
   );
   const inboxHasItems = useMemo(
@@ -1278,7 +1284,7 @@ export function VaultTab({
                   {
                     planVaultTreeBulkTargets(
                       confirmBulkDeleteItems,
-                      normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+                      trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
                     ).length
                   }{' '}
                   vault item(s) including any files inside selected folders? This cannot be

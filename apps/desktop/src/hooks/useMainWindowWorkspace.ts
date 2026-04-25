@@ -149,10 +149,25 @@ import {
 import {isPodcastFile} from '../lib/podcasts/podcastParser';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 
-const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+function looksLikeRssEpisodeMarkdownName(name: string): boolean {
+  if (!name.endsWith('.md') || !name.startsWith('📻')) {
+    return false;
+  }
+  const middle = name.slice('📻'.length, -'.md'.length);
+  return middle.trim().length > 0;
+}
+
 function isPodcastRelevantPath(p: string): boolean {
   const name = p.replace(/\\/g, '/').split('/').pop() ?? '';
-  return isPodcastFile(name) || RSS_EPISODE_FILE_PATTERN.test(name);
+  return isPodcastFile(name) || looksLikeRssEpisodeMarkdownName(name);
 }
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
@@ -235,8 +250,8 @@ function remapEditorShellScrollMapTreePrefix(
   oldPrefix: string,
   newPrefix: string,
 ) {
-  const oldP = oldPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
-  const newP = newPrefix.replace(/\\/g, '/').replace(/\/+$/, '');
+  const oldP = trimTrailingSlashes(oldPrefix.replace(/\\/g, '/'));
+  const newP = trimTrailingSlashes(newPrefix.replace(/\\/g, '/'));
   if (oldP === newP) {
     return;
   }
@@ -971,7 +986,7 @@ export function useMainWindowWorkspace(options: {
       setShowTodayHubCanvas(false);
       return;
     }
-    const normRoot = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+    const normRoot = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
     const normSel = selectedUri.replace(/\\/g, '/');
     if (!normSel.startsWith(`${normRoot}/`)) {
       setShowTodayHubCanvas(false);
@@ -1675,11 +1690,9 @@ export function useMainWindowWorkspace(options: {
         const vr = vaultRootRef.current;
         let nextShowTodayHub = false;
         if (vr && targetNorm) {
-          const normRoot = normalizeVaultBaseUri(vr)
-            .replace(/\\/g, '/')
-            .replace(/\/+$/, '');
+          const normRootTrimmed = trimTrailingSlashes(normalizeVaultBaseUri(vr).replace(/\\/g, '/'));
           const normSel = targetNorm.replace(/\\/g, '/');
-          if (normSel.startsWith(`${normRoot}/`)) {
+          if (normSel.startsWith(`${normRootTrimmed}/`)) {
             nextShowTodayHub = vaultUriIsTodayMarkdownFile(normSel);
           }
         }
@@ -3826,7 +3839,7 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       autosaveSchedulerRef.current.cancel();
-      const normDir = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+      const normDir = trimTrailingSlashes(directoryUri.replace(/\\/g, '/'));
       const selected = selectedUriRef.current?.replace(/\\/g, '/');
       const clearsSelection =
         selected != null
@@ -3915,7 +3928,7 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       clearRenameNotice();
       try {
-        const oldUri = directoryUri.replace(/\\/g, '/').replace(/\/+$/, '');
+        const oldUri = trimTrailingSlashes(directoryUri.replace(/\\/g, '/'));
         const nextUri = await renameVaultTreeDirectory(
           vaultRoot,
           directoryUri,
@@ -4112,7 +4125,7 @@ export function useMainWindowWorkspace(options: {
       if (!vaultRoot) {
         return;
       }
-      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const rootId = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
       const plan = planVaultTreeBulkTargets(items, rootId);
       if (plan.length === 0) {
         return;
@@ -4122,7 +4135,7 @@ export function useMainWindowWorkspace(options: {
       const shouldClearEditor =
         normSel != null
           && plan.some(entry => {
-          const d = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+          const d = trimTrailingSlashes(entry.uri.replace(/\\/g, '/'));
           if (entry.kind === 'folder' || entry.kind === 'todayHub') {
             return normSel === d || normSel.startsWith(`${d}/`);
           }
@@ -4163,7 +4176,7 @@ export function useMainWindowWorkspace(options: {
               return next;
             });
           } else {
-            const normDir = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
+            const normDir = trimTrailingSlashes(entry.uri.replace(/\\/g, '/'));
             await deleteVaultTreeDirectory(vaultRoot, entry.uri, fs);
             subtreeMarkdownCache.invalidateForMutation(
               vaultRoot,
@@ -4189,7 +4202,7 @@ export function useMainWindowWorkspace(options: {
             deletedFiles.add(normalizeEditorDocUri(entry.uri));
           } else {
             deletedFolders.push(
-              entry.uri.replace(/\\/g, '/').replace(/\/+$/, ''),
+              trimTrailingSlashes(entry.uri.replace(/\\/g, '/')),
             );
           }
         }
@@ -4239,7 +4252,7 @@ export function useMainWindowWorkspace(options: {
       if (!vaultRoot) {
         return;
       }
-      const rootId = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, '');
+      const rootId = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
       const plan = filterVaultTreeBulkMoveSources(items, targetDirectoryUri, rootId);
       if (plan.length === 0) {
         return;
@@ -4388,7 +4401,7 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
-      const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+      const root = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
       const hubUris = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
       const filterStoredTab = (raw: string) => {
         const uri = raw.replace(/\\/g, '/');

@@ -11,6 +11,18 @@ const LONE_LINK_LINE_RX = new RegExp(
   `^(\\s*)(${LIST_MARKER_GROUP})?(${URL_GROUP})\\s*$`,
 );
 
+function trimTrailingUrlPunctuation(value: string): string {
+  let out = value;
+  while (out.length > 0) {
+    const last = out[out.length - 1];
+    if (last !== ')' && last !== ',' && last !== '.' && last !== ';' && last !== '!' && last !== '?') {
+      break;
+    }
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 /**
  * Returns info about a line that contains _only_ a bare `http(s)://` URL, optionally preceded by
  * a single list marker (`-`, `*`, `+`, `1.`, `1)`, with optional GFM task-box). Returns `null`
@@ -24,7 +36,7 @@ export function parseLoneLinkLine(lineText: string): LoneLinkLineInfo | null {
   const leading = m[1] ?? '';
   const marker = m[2] ?? '';
   const rawUrl = m[3] ?? '';
-  const url = rawUrl.replace(/[),.;!?]+$/u, '');
+  const url = trimTrailingUrlPunctuation(rawUrl);
   if (!/^https?:\/\/[^\s]+\.[^\s]/u.test(url)) {
     return null;
   }

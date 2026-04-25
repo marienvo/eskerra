@@ -52,10 +52,14 @@ function attachmentsDirAbsolute(vaultRoot: string): string {
   );
 }
 
+let fallbackAttachmentTokenCounter = 0;
+
 function uniqueAttachmentToken(): string {
-  const t = Date.now().toString(36);
-  const r = Math.random().toString(36).slice(2, 10);
-  return `${t}-${r}`;
+  if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
+    return globalThis.crypto.randomUUID();
+  }
+  fallbackAttachmentTokenCounter += 1;
+  return `${Date.now().toString(36)}-${fallbackAttachmentTokenCounter.toString(36)}`;
 }
 
 export type SaveBytesOptions = {

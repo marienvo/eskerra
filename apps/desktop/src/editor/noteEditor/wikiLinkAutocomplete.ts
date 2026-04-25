@@ -14,6 +14,7 @@ import {
 } from './emojiColonAutocomplete';
 
 /** Match an unfinished wiki target right after `[[` (no `|` in the target segment). */
+// eslint-disable-next-line sonarjs/slow-regex -- CodeMirror completion source requires a regex anchor.
 const wikiTargetPrefix = /\[\[([^\]|]*)$/;
 
 function inboxWikiLinkCompletions(

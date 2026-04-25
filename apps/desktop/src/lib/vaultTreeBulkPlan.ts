@@ -6,7 +6,11 @@ export type VaultTreeBulkItem = {
 };
 
 export function normalizeVaultTreePath(uri: string): string {
-  return uri.replace(/\\/g, '/').replace(/\/+$/, '');
+  let normalized = uri.replace(/\\/g, '/');
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
 }
 
 /**

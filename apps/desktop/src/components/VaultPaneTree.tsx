@@ -61,6 +61,14 @@ const VAULT_TREE_ROW_HEIGHT_PX = FILE_TREE_ROW_HEIGHT_PX;
 
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
   const p = {
     width: FILE_TREE_ICON_SIZE_PX,
@@ -244,11 +252,11 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   treeScope = 'vaultRoot',
 }: VaultPaneTreeProps) {
   const vaultBaseUri = useMemo(
-    () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+    () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
     [vaultRoot],
   );
   const inboxDirectoryUri = useMemo(
-    () => getInboxDirectoryUri(vaultBaseUri).replace(/\\/g, '/').replace(/\/+$/, ''),
+    () => trimTrailingSlashes(getInboxDirectoryUri(vaultBaseUri).replace(/\\/g, '/')),
     [vaultBaseUri],
   );
   const rootId = treeScope === 'inboxRoot' ? inboxDirectoryUri : vaultBaseUri;
@@ -487,7 +495,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     const pathDepth = (uri: string) => uri.split('/').filter(Boolean).length;
     const asyncRef = t.getDataRef<AsyncDataLoaderDataRef<VaultTreeItemData>>().current;
     const parentsToReload = Object.keys(asyncRef.childrenIds ?? {}).filter(id => {
-      const n = id.replace(/\\/g, '/').replace(/\/+$/, '');
+      const n = trimTrailingSlashes(id.replace(/\\/g, '/'));
       return n === rootId || n.startsWith(`${rootId}/`);
     });
     parentsToReload.sort((a, b) => pathDepth(a) - pathDepth(b) || a.localeCompare(b));

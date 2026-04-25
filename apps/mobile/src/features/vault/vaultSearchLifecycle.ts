@@ -26,7 +26,10 @@ export type VaultSearchIndexStatus = {
 export function canonicalizeVaultBaseUriForSearch(raw: string): string {
   let s = raw.trim();
   if (s.length > 1 && s.endsWith('/')) {
-    const withoutTrailing = s.replace(/\/+$/, '');
+    let withoutTrailing = s;
+    while (withoutTrailing.endsWith('/')) {
+      withoutTrailing = withoutTrailing.slice(0, -1);
+    }
     if (withoutTrailing !== '' && !withoutTrailing.endsWith(':')) {
       s = withoutTrailing;
     }

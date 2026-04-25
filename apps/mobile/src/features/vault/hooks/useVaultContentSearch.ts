@@ -226,6 +226,15 @@ export function useVaultContentSearch({
   const lastReconciledAtRef = useRef(lastReconciledAt);
   /** When native returns not-ready for a query, re-run search after index-status ready. */
   const needsSearchRetryRef = useRef(false);
+  const fallbackSearchIdCounterRef = useRef(0);
+
+  const createSearchId = useCallback((): string => {
+    if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
+      return globalThis.crypto.randomUUID();
+    }
+    fallbackSearchIdCounterRef.current += 1;
+    return `${Date.now()}-${fallbackSearchIdCounterRef.current}`;
+  }, []);
 
   useEffect(() => {
     indexReadyRef.current = indexReady;
@@ -286,10 +295,7 @@ export function useVaultContentSearch({
         return;
       }
       needsSearchRetryRef.current = false;
-      const id =
-        globalThis.crypto && 'randomUUID' in globalThis.crypto
-          ? globalThis.crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
+      const id = createSearchId();
       searchIdRef.current = id;
       clearResultHoldTimer();
       queueMicrotask(() => {
@@ -303,7 +309,7 @@ export function useVaultContentSearch({
         });
       });
     },
-    [clearResultHoldTimer],
+    [clearResultHoldTimer, createSearchId],
   );
 
   useEffect(() => {
@@ -565,10 +571,7 @@ export function useVaultContentSearch({
         });
         return;
       }
-      const id =
-        globalThis.crypto && 'randomUUID' in globalThis.crypto
-          ? globalThis.crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
+      const id = createSearchId();
       searchIdRef.current = id;
       clearPendingSearchFlush();
       clearResultHoldTimer();
@@ -631,7 +634,7 @@ export function useVaultContentSearch({
         debounceTimerRef.current = null;
       }
     };
-  }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer]);
+  }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer, createSearchId]);
 
   const partialBodiesIndexing = useMemo(() => {
     if (bodiesIndexReadyFromOpen === false) {
