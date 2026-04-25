@@ -265,6 +265,28 @@ describe('classifyNoteDiskReconcile', () => {
     ).toBe('conflict');
   });
 
+  it('open selected note: external disk update reloads when local editor still equals last persisted', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'persisted-v1'},
+        diskMarkdown: 'persisted-v2',
+        localMarkdown: 'persisted-v1',
+      }),
+    ).toBe('reload_from_disk');
+  });
+
+  it('open selected note: external disk update conflicts when local editor changed since last persisted', () => {
+    expect(
+      classifyNoteDiskReconcile({
+        noteUri: uri,
+        lastPersisted: {uri, markdown: 'persisted-v1'},
+        diskMarkdown: 'persisted-v2',
+        localMarkdown: 'local-unsaved-edits',
+      }),
+    ).toBe('conflict');
+  });
+
   it('returns reload_from_disk when there is no lastPersisted baseline but disk differs', () => {
     expect(
       classifyNoteDiskReconcile({

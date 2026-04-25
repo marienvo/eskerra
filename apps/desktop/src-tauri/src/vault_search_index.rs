@@ -489,6 +489,20 @@ fn delete_note(writer: &mut tantivy::IndexWriter, f_uri: tantivy::schema::Field,
     let _ = writer.delete_term(term);
 }
 
+fn path_requires_index_write(vault_root: &Path, path: &Path) -> bool {
+    if !path.starts_with(vault_root) {
+        return false;
+    }
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
+    if path.is_file() {
+        return is_eligible_vault_markdown_file_name(&name);
+    }
+    !path.exists() && name.ends_with(".md")
+}
+
 /// Full rebuild in a background thread. Emits `vault-search:index-status` for UI.
 pub fn schedule_full_rebuild(app: AppHandle, vault_root: PathBuf, index_state: VaultSearchIndexState) {
     let index_dir = match vault_index_dir(&app, &vault_root) {
@@ -627,6 +641,15 @@ pub fn reindex_paths_best_effort(
     index_state: &VaultSearchIndexState,
     paths: &[String],
 ) {
+    let actionable_paths: Vec<PathBuf> = paths
+        .iter()
+        .map(PathBuf::from)
+        .filter(|path| path_requires_index_write(vault_root, path))
+        .collect();
+    if actionable_paths.is_empty() {
+        return;
+    }
+
     let inner = index_state.inner.lock().unwrap();
     if inner.status != VaultSearchIndexStatusDto::Ready {
         return;
@@ -658,11 +681,7 @@ pub fn reindex_paths_best_effort(
         Err(_) => return,
     };
 
-    for p in paths {
-        let path = PathBuf::from(p);
-        if !path.starts_with(vault_root) {
-            continue;
-        }
+    for path in actionable_paths {
         if path.is_file() {
             let name = path
                 .file_name()
@@ -919,7 +938,37 @@ impl VaultSearchIndexState {
 #[cfg(test)]
 mod ranking_tests {
     use super::*;
+    use std::fs;
     use tantivy::doc;
+
+    #[test]
+    fn path_requires_index_write_ignores_non_markdown_paths() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let dir = root.join("Inbox");
+        fs::create_dir(&dir).expect("create dir");
+        let txt = root.join("Inbox").join("note.txt");
+        fs::write(&txt, "not indexed").expect("write txt");
+
+        assert!(!path_requires_index_write(root, &dir));
+        assert!(!path_requires_index_write(root, &txt));
+        assert!(!path_requires_index_write(root, &root.join("missing-folder")));
+    }
+
+    #[test]
+    fn path_requires_index_write_keeps_markdown_creates_and_deletes_actionable() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let note = root.join("note.md");
+        fs::write(&note, "# Note").expect("write note");
+        let deleted_note = root.join("deleted.md");
+        let hidden_note = root.join(".hidden.md");
+        fs::write(&hidden_note, "# Hidden").expect("write hidden note");
+
+        assert!(path_requires_index_write(root, &note));
+        assert!(path_requires_index_write(root, &deleted_note));
+        assert!(!path_requires_index_write(root, &hidden_note));
+    }
 
     #[test]
     fn lisane_prefers_title_lisanne_over_body_only_note() {

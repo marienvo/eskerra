@@ -143,8 +143,11 @@ import {
   selectNoteActiveHubTodayOpen,
   workspaceSelectShowsActiveTabPillState,
 } from '../lib/workspaceShellToday';
-import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
+import {
+  type VaultFilesChangedPayload,
+} from '../lib/vaultFilesChangedPayload';
 import {isPodcastFile} from '../lib/podcasts/podcastParser';
+import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 
 const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
 function isPodcastRelevantPath(p: string): boolean {
@@ -153,6 +156,7 @@ function isPodcastRelevantPath(p: string): boolean {
 }
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
+import {captureObservabilityMessage} from '../observability/captureObservabilityMessage';
 import {
   clearInboxYamlFrontmatterEditorRefs,
   inboxEditorSliceToFullMarkdown,
@@ -173,6 +177,7 @@ import {resolveVaultLinkBaseMarkdownUri} from '../lib/resolveVaultLinkBaseMarkdo
 /** Skip showing an immediate blocking disk conflict if the user just edited; one deferred re-check follows. */
 const DISK_CONFLICT_RECENCY_MS = 2000;
 const DISK_CONFLICT_DEFER_MS = 600;
+const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -186,6 +191,10 @@ function fingerprintUtf16ForDebug(text: string): string {
     h = Math.imul(h, 16777619);
   }
   return (h >>> 0).toString(16);
+}
+
+function vaultChangedPathsSignature(paths: readonly string[]): string {
+  return [...new Set(paths.map(p => p.trim()).filter(Boolean))].sort().join('\n');
 }
 
 function snapshotEditorShellScrollForOpenNote(
@@ -2176,6 +2185,12 @@ export function useMainWindowWorkspace(options: {
     }
     let unlisten: (() => void) | undefined;
     let cancelled = false;
+    const watchSessionId = crypto.randomUUID();
+    const vaultRootHash = fingerprintUtf16ForDebug(vaultRoot);
+    let coarseFullReindexScheduled = false;
+    let lastIncrementalIndexTouch:
+      | {signature: string; touchedAtMs: number}
+      | null = null;
 
     const applyExternalOpenNoteDeleted = async (normTab: string) => {
       const wasSelected = selectedUriRef.current === normTab;
@@ -2505,17 +2520,67 @@ export function useMainWindowWorkspace(options: {
     };
 
     void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
-      const paths = event.payload?.paths ?? [];
-      if (paths.length > 0) {
-        void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
-        void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+      const plan = planVaultFilesChangedEvent({
+        payload: event.payload,
+        isPodcastRelevantPath,
+        allowCoarseFullReindex: !coarseFullReindexScheduled,
+      });
+      const {paths, coarse} = plan;
+      const coarseReason = event.payload?.coarseReason ?? null;
+      if (plan.shouldTouchPathsIncrementally) {
+        const signature = vaultChangedPathsSignature(paths);
+        const now = Date.now();
+        const duplicate =
+          lastIncrementalIndexTouch?.signature === signature
+          && now - lastIncrementalIndexTouch.touchedAtMs < VAULT_INDEX_TOUCH_DEDUP_MS;
+        if (!duplicate) {
+          lastIncrementalIndexTouch = {signature, touchedAtMs: now};
+          void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
+          void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+        }
+      }
+      if (plan.shouldScheduleFullReindex) {
+        if (coarse) {
+          coarseFullReindexScheduled = true;
+        }
+        void vaultSearchIndexSchedule().catch(() => undefined);
+        void vaultFrontmatterIndexSchedule().catch(() => undefined);
+      }
+      if (coarse) {
+        console.warn('[vault-files-changed] coarse invalidation', {
+          reason: coarseReason,
+          pathCount: paths.length,
+          watchSessionId,
+          vaultRootHash,
+        });
+        captureObservabilityMessage({
+          message: 'eskerra.desktop.vault_watch_coarse_invalidation',
+          level: 'warning',
+          extra: {
+            reason: coarseReason,
+            pathCount: paths.length,
+            watchSessionId,
+            vaultRootHash,
+          },
+          tags: {
+            obs_surface: 'vault_watch',
+            watch_session_id: watchSessionId,
+            vault_root_hash: vaultRootHash,
+            coarse_reason: coarseReason ?? 'unknown',
+          },
+          fingerprint: [
+            'eskerra.desktop',
+            'vault_watch_coarse_invalidation',
+            coarseReason ?? 'unknown',
+          ],
+        });
       }
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       // Only rescan podcast catalog when podcast-relevant files change (YYYY podcasts.md or 📻 *.md).
-      if (paths.some(p => isPodcastRelevantPath(p))) {
+      if (plan.shouldRefreshPodcasts) {
         setPodcastFsNonce(n => n + 1);
       }
       void (async () => {
@@ -2526,7 +2591,7 @@ export function useMainWindowWorkspace(options: {
           // ignore: transient FS race
         }
       })();
-      void reconcileOpenNotesAfterFsChange(paths);
+      void reconcileOpenNotesAfterFsChange(plan.pathsForReconcile);
     })
       .then(fn => {
         if (cancelled) {

@@ -192,6 +192,17 @@ Applies to: `apps/desktop/**`.
 
 Full detail: `specs/architecture/desktop-editor.md` § "lazy note bodies + cache consistency invariant".
 
+## Desktop: Vault disk sync invariants
+
+Applies to: `apps/desktop/src-tauri/src/vault_watch.rs`, `apps/desktop/src/hooks/useMainWindowWorkspace.ts`, `apps/desktop/src/hooks/inboxNoteBodyCache.ts`, `apps/desktop/src/lib/vaultFilesChanged*`.
+
+- Treat file/app sync as a **critical correctness surface**. Any change touching watcher events, reconcile routing, cache invalidation, `lastPersistedRef`, or conflict classification must include tests in the same change.
+- `coarse` watcher events are fail-safe full-vault invalidation. They must never be treated as path-limited updates, even when payload `paths` is non-empty.
+- Keep watcher latency bounded: debounce is allowed, but event batching must have a hard upper bound (target under 1 second end-to-end for detection + dispatch).
+- Preserve observability on degradation: coarse invalidation and watcher degradation paths must emit Sentry warning telemetry (`captureObservabilityMessage`) with stable fingerprint + reason fields.
+- Keep Sentry alerting active for coarse invalidation burst rate per watch session; if telemetry tags/fingerprints change, update `specs/observability/desktop-vault-watch-coarse-alert.md` in the same change.
+- Do not remove or dilute existing reconcile safeguards without updating `specs/architecture/desktop-editor.md` and adding regression tests for selected-note reload/conflict behavior.
+
 ## Desktop: Editor interactive links
 
 Applies to: `apps/desktop/src/editor/noteEditor/**`, `apps/desktop/src/App.css`.
