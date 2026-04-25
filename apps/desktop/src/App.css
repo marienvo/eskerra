@@ -1691,6 +1691,12 @@ body.editor-tab-strip--dragging {
   animation: episodes-refresh-strip-sweep 1.2s ease-in-out infinite alternate;
 }
 
+.episodes-refresh-strip__fill {
+  height: 100%;
+  background-color: var(--color-accent);
+  transition: width 140ms ease-out;
+}
+
 @keyframes episodes-refresh-strip-sweep {
   from {
     left: 0;

@@ -38,6 +38,8 @@ import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
+import {clearPodcastMarkdownFileContentCache} from './lib/podcasts/podcastPhase1Desktop';
+import {runDesktopPodcastRssSync} from './lib/podcasts/podcastRssSyncDesktop';
 import {useTauriWindowMaximized} from './hooks/useTauriWindowMaximized';
 import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
@@ -488,6 +490,35 @@ export default function App() {
     fsRefreshNonce: podcastFsNonce,
     onError: setErr,
   });
+
+  const rssSyncingRef = useRef(false);
+  const [rssSyncing, setRssSyncing] = useState(false);
+  const [rssSyncPercent, setRssSyncPercent] = useState<number | null>(null);
+
+  const handleEpisodesRssSync = useCallback(async () => {
+    if (vaultRoot == null || rssSyncingRef.current) return;
+    rssSyncingRef.current = true;
+    setRssSyncing(true);
+    setRssSyncPercent(null);
+    try {
+      await runDesktopPodcastRssSync(vaultRoot, fs, {
+        onProgress: payload => {
+          const n = payload.percent;
+          if (Number.isFinite(n) && n >= 0 && n <= 100) {
+            setRssSyncPercent(n);
+          }
+        },
+      });
+      clearPodcastMarkdownFileContentCache();
+      await podcastCatalog.refreshPodcasts(true);
+    } catch {
+      // Errors per-file are already logged inside runDesktopPodcastRssSync.
+    } finally {
+      rssSyncingRef.current = false;
+      setRssSyncing(false);
+      setRssSyncPercent(null);
+    }
+  }, [vaultRoot, fs, podcastCatalog]);
 
   const consumeCatalogReady = Boolean(vaultRoot) && !podcastCatalog.catalogLoading;
 
@@ -1127,6 +1158,9 @@ export default function App() {
                             episodeSelectLocked={
                               desktopPlayback.episodeSelectLocked
                             }
+                            onRssSync={handleEpisodesRssSync}
+                            rssSyncing={rssSyncing}
+                            rssSyncPercent={rssSyncPercent}
                           />
                         ) : null
                       }

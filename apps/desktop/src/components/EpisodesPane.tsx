@@ -7,6 +7,7 @@ import type {ReactElement} from 'react';
 import {useDesktopPodcastArtwork} from '../hooks/useDesktopPodcastArtwork';
 import {useDeferredLoadingIndicator} from '../hooks/useDeferredLoadingIndicator';
 import type {PodcastEpisode, PodcastSection} from '../lib/podcasts/podcastTypes';
+import {MaterialIcon} from './MaterialIcon';
 
 export type EpisodesPaneProps = {
   sections: PodcastSection[];
@@ -18,6 +19,9 @@ export type EpisodesPaneProps = {
   activeEpisodePlayControl: PlaybackTransportPlayControl;
   /** When true, episode rows do not start or switch playback (an episode is already playing). */
   episodeSelectLocked?: boolean;
+  onRssSync?: () => void;
+  rssSyncing?: boolean;
+  rssSyncPercent?: number | null;
 };
 
 function episodeListLabel(text: string): string {
@@ -209,23 +213,61 @@ export function EpisodesPane({
   activeEpisodeId,
   activeEpisodePlayControl,
   episodeSelectLocked = false,
+  onRssSync,
+  rssSyncing = false,
+  rssSyncPercent = null,
 }: EpisodesPaneProps) {
   const episodesRefreshVisible = useDeferredLoadingIndicator(catalogLoading, 100);
+  const refreshStripVisible = rssSyncing || episodesRefreshVisible;
+  const determinateRssPercent =
+    rssSyncing &&
+    rssSyncPercent != null &&
+    Number.isFinite(rssSyncPercent) &&
+    rssSyncPercent >= 0 &&
+    rssSyncPercent <= 100
+      ? rssSyncPercent
+      : null;
 
   return (
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
       <div className="pane-header pane-header--episodes pane-header--workspace-panel">
         <span className="pane-title">Episodes</span>
+        {onRssSync != null ? (
+          <div className="pane-header-trailing-actions">
+            <button
+              type="button"
+              className="pane-header-add-btn icon-btn-ghost app-tooltip-trigger"
+              onClick={onRssSync}
+              disabled={rssSyncing}
+              aria-label="Refresh podcast feeds"
+              data-tooltip="Refresh podcast feeds"
+              data-tooltip-placement="inline-start"
+            >
+              <span className="pane-header-add-btn__glyph" aria-hidden>
+                <MaterialIcon name="sync" size={12} />
+              </span>
+            </button>
+          </div>
+        ) : null}
       </div>
       <div
         className={
-          episodesRefreshVisible
+          refreshStripVisible
             ? 'episodes-refresh-strip episodes-refresh-strip--active'
             : 'episodes-refresh-strip'
         }
         aria-hidden
       >
-        {episodesRefreshVisible ? <div className="episodes-refresh-strip__segment" /> : null}
+        {refreshStripVisible ? (
+          determinateRssPercent != null ? (
+            <div
+              className="episodes-refresh-strip__fill"
+              style={{width: `${determinateRssPercent}%`}}
+            />
+          ) : (
+            <div className="episodes-refresh-strip__segment" />
+          )
+        ) : null}
       </div>
       <div className="episode-scroll">
         {sections.map(section => (
