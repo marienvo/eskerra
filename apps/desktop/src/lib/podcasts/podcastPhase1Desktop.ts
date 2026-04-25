@@ -111,7 +111,7 @@ export function createSectionsWithRss(
   });
 }
 
-async function listGeneralMarkdownFiles(
+export async function listGeneralMarkdownFiles(
   baseUri: string,
   fs: VaultFilesystem,
 ): Promise<RootMarkdownFile[]> {

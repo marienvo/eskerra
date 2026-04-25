@@ -237,6 +237,19 @@ export {
 } from './playerMachine';
 export {markEpisodeAsPlayedInContent} from './markPodcastEpisodePlayed';
 export {fetchRssArtworkUrl, parseRssArtworkUrl} from './rssArtwork';
+export {
+  buildPodcastMarkdownFromRss,
+  buildUpdatedPodcastFileContent,
+  companionHubFileName,
+  mergePodcastsFeedContent,
+  parsePodcastEpisodesFromRss,
+  parsePodcastRssFetchedAtFromContent,
+  parsePodcastRssSettingsFromContent,
+  parseUncheckedHubLinks,
+  shouldSkipRssFetch,
+  type PodcastRssSettings,
+  type PodcastRssSyncEpisode,
+} from './podcastRssSync';
 export type {
   FetchR2PlaylistConditionalOptions,
   R2PlaylistConditionalResult,
