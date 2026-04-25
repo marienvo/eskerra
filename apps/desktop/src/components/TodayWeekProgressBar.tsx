@@ -24,7 +24,7 @@ export function TodayWeekProgressBar({progress, weekStart, comparisonNow}: Today
   );
   const merged = segments.length === 6;
 
-  let ariaLabel = `Day ${progress.dayIndex + 1} of 7`;
+  let ariaLabel: string;
   if (progress.kind === 'past') {
     ariaLabel = merged
       ? 'Week complete, six segments (weekend as one block)'
@@ -33,8 +33,10 @@ export function TodayWeekProgressBar({progress, weekStart, comparisonNow}: Today
     ariaLabel = merged
       ? 'Upcoming week, six segments (weekend as one block)'
       : 'Upcoming week, no days started';
-  } else if (merged) {
-    ariaLabel = `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`;
+  } else {
+    ariaLabel = merged
+      ? `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`
+      : `Day ${progress.dayIndex + 1} of 7`;
   }
 
   return (
