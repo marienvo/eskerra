@@ -143,7 +143,10 @@ import {
   selectNoteActiveHubTodayOpen,
   workspaceSelectShowsActiveTabPillState,
 } from '../lib/workspaceShellToday';
-import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
+import {
+  type VaultFilesChangedPayload,
+  vaultFilesChangedIsCoarse,
+} from '../lib/vaultFilesChangedPayload';
 import {isPodcastFile} from '../lib/podcasts/podcastParser';
 
 const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
@@ -2506,9 +2509,20 @@ export function useMainWindowWorkspace(options: {
 
     void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const paths = event.payload?.paths ?? [];
-      if (paths.length > 0) {
+      const coarse = vaultFilesChangedIsCoarse(event.payload);
+      const coarseReason = event.payload?.coarseReason ?? null;
+      if (!coarse && paths.length > 0) {
         void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
         void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
+      } else {
+        void vaultSearchIndexSchedule().catch(() => undefined);
+        void vaultFrontmatterIndexSchedule().catch(() => undefined);
+      }
+      if (coarse) {
+        console.warn('[vault-files-changed] coarse invalidation', {
+          reason: coarseReason,
+          pathCount: paths.length,
+        });
       }
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};

@@ -8,7 +8,10 @@ import {
 } from '@eskerra/core';
 import {useCallback, useEffect, useMemo, useState} from 'react';
 
-import type {VaultFilesChangedPayload} from '../lib/vaultFilesChangedPayload';
+import {
+  type VaultFilesChangedPayload,
+  vaultFilesChangedIsCoarse,
+} from '../lib/vaultFilesChangedPayload';
 
 type UseVaultThemesParams = {
   vaultRoot: string | null;
@@ -65,7 +68,8 @@ export function useVaultThemes({vaultRoot, fs}: UseVaultThemesParams): {
     let unlisten: (() => void) | undefined;
     void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const paths = event.payload?.paths ?? [];
-      if (paths.length === 0 || !themesDirHit(vaultRoot, paths)) {
+      const coarse = vaultFilesChangedIsCoarse(event.payload);
+      if (!coarse && !themesDirHit(vaultRoot, paths)) {
         return;
       }
       void reload();
