@@ -145,9 +145,9 @@ import {
 } from '../lib/workspaceShellToday';
 import {
   type VaultFilesChangedPayload,
-  vaultFilesChangedIsCoarse,
 } from '../lib/vaultFilesChangedPayload';
 import {isPodcastFile} from '../lib/podcasts/podcastParser';
+import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 
 const RSS_EPISODE_FILE_PATTERN = /📻\s+.+\.md$/;
 function isPodcastRelevantPath(p: string): boolean {
@@ -156,6 +156,7 @@ function isPodcastRelevantPath(p: string): boolean {
 }
 import {tryMergeThreeWayVaultMarkdown} from '../lib/vaultMarkdownThreeWayMerge';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
+import {captureObservabilityMessage} from '../observability/captureObservabilityMessage';
 import {
   clearInboxYamlFrontmatterEditorRefs,
   inboxEditorSliceToFullMarkdown,
@@ -2508,13 +2509,17 @@ export function useMainWindowWorkspace(options: {
     };
 
     void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
-      const paths = event.payload?.paths ?? [];
-      const coarse = vaultFilesChangedIsCoarse(event.payload);
+      const plan = planVaultFilesChangedEvent({
+        payload: event.payload,
+        isPodcastRelevantPath,
+      });
+      const {paths, coarse} = plan;
       const coarseReason = event.payload?.coarseReason ?? null;
-      if (!coarse && paths.length > 0) {
+      if (plan.shouldTouchPathsIncrementally) {
         void vaultSearchIndexTouchPaths(paths).catch(() => undefined);
         void vaultFrontmatterIndexTouchPaths(paths).catch(() => undefined);
-      } else {
+      }
+      if (plan.shouldScheduleFullReindex) {
         void vaultSearchIndexSchedule().catch(() => undefined);
         void vaultFrontmatterIndexSchedule().catch(() => undefined);
       }
@@ -2523,13 +2528,26 @@ export function useMainWindowWorkspace(options: {
           reason: coarseReason,
           pathCount: paths.length,
         });
+        captureObservabilityMessage({
+          message: 'eskerra.desktop.vault_watch_coarse_invalidation',
+          level: 'warning',
+          extra: {
+            reason: coarseReason,
+            pathCount: paths.length,
+          },
+          fingerprint: [
+            'eskerra.desktop',
+            'vault_watch_coarse_invalidation',
+            coarseReason ?? 'unknown',
+          ],
+        });
       }
       subtreeMarkdownCacheRef.current.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       // Only rescan podcast catalog when podcast-relevant files change (YYYY podcasts.md or 📻 *.md).
-      if (paths.some(p => isPodcastRelevantPath(p))) {
+      if (plan.shouldRefreshPodcasts) {
         setPodcastFsNonce(n => n + 1);
       }
       void (async () => {
@@ -2540,7 +2558,7 @@ export function useMainWindowWorkspace(options: {
           // ignore: transient FS race
         }
       })();
-      void reconcileOpenNotesAfterFsChange(paths);
+      void reconcileOpenNotesAfterFsChange(plan.pathsForReconcile);
     })
       .then(fn => {
         if (cancelled) {
