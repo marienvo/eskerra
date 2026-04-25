@@ -275,7 +275,9 @@ export function useDesktopPodcastPlayback({
   });
 
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+  useLayoutEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const snapCtx = snapshot.context;
   const playbackSub = getPlaybackSubstate(snapshot);

@@ -70,11 +70,20 @@ export function BackupMergePanel({
   const [leftText, setLeftText] = useState<string | null>(null);
 
   const [focusedHunkIdx, setFocusedHunkIdx] = useState(0);
-  const hunkEls = useRef<HTMLDivElement[]>([]);
+  const hunkEls = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    setRightText(currentBody);
-    setFocusedHunkIdx(0);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setRightText(currentBody);
+      setFocusedHunkIdx(0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [currentBody]);
 
   useEffect(() => {
@@ -110,8 +119,17 @@ export function BackupMergePanel({
 
   // Sync leftText when otherText becomes available or changes (new backup loaded / source changed)
   useEffect(() => {
-    setLeftText(otherText);
-    setFocusedHunkIdx(0);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setLeftText(otherText);
+      setFocusedHunkIdx(0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [otherText]);
 
   const {segments, hunks} = useMemo(
@@ -125,7 +143,16 @@ export function BackupMergePanel({
   const hunkCount = hunks.length;
 
   useEffect(() => {
-    setFocusedHunkIdx(prev => (hunkCount === 0 ? 0 : Math.min(prev, hunkCount - 1)));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setFocusedHunkIdx(prev => (hunkCount === 0 ? 0 : Math.min(prev, hunkCount - 1)));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [hunkCount]);
 
   const scrollToHunk = useCallback((idx: number) => {
@@ -211,7 +238,6 @@ export function BackupMergePanel({
   }
 
   let hunkRenderIdx = 0;
-  hunkEls.current = [];
 
   return (
     <div
@@ -372,7 +398,11 @@ export function BackupMergePanel({
               <div
                 key={i}
                 ref={el => {
-                  if (el) hunkEls.current[thisHunkRenderIdx] = el;
+                  if (el) {
+                    hunkEls.current[thisHunkRenderIdx] = el;
+                  } else {
+                    delete hunkEls.current[thisHunkRenderIdx];
+                  }
                 }}
                 className={
                   isFocused

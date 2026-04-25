@@ -586,13 +586,16 @@ export function useMainWindowWorkspace(options: {
     Record<string, TodayHubWorkspaceSnapshot>
   >({});
   const [editorClosedStackVersion, setEditorClosedStackVersion] = useState(0);
+  const [editorClosedTabsStackSnapshot, setEditorClosedTabsStackSnapshot] = useState<
+    ClosedEditorTabRecord[]
+  >([]);
   const [mergeView, setMergeView] = useState<
     | null
     | {kind: 'backup'; baseUri: string; backupUri: string}
     | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string}
   >(null);
 
-  const subtreeMarkdownCacheRef = useRef(new SubtreeMarkdownPresenceCache());
+  const subtreeMarkdownCache = useMemo(() => new SubtreeMarkdownPresenceCache(), []);
   /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
   const vaultBacklinkDiskBodyCacheRef = useRef<Record<string, string>>({});
   const inboxBodyPrefetchGenRef = useRef(0);
@@ -676,13 +679,33 @@ export function useMainWindowWorkspace(options: {
     diskConflictSoftRef.current = diskConflictSoft;
   }, [diskConflictSoft]);
 
-  vaultRootRef.current = vaultRoot;
-  selectedUriRef.current = selectedUri;
-  composingNewEntryRef.current = composingNewEntry;
-  showTodayHubCanvasRef.current = showTodayHubCanvas;
-  editorBodyRef.current = editorBody;
-  inboxContentByUriRef.current = inboxContentByUri;
-  backlinksActiveBodyRef.current = backlinksActiveBody;
+  useLayoutEffect(() => {
+    vaultRootRef.current = vaultRoot;
+  }, [vaultRoot]);
+
+  useLayoutEffect(() => {
+    selectedUriRef.current = selectedUri;
+  }, [selectedUri]);
+
+  useLayoutEffect(() => {
+    composingNewEntryRef.current = composingNewEntry;
+  }, [composingNewEntry]);
+
+  useLayoutEffect(() => {
+    showTodayHubCanvasRef.current = showTodayHubCanvas;
+  }, [showTodayHubCanvas]);
+
+  useLayoutEffect(() => {
+    editorBodyRef.current = editorBody;
+  }, [editorBody]);
+
+  useLayoutEffect(() => {
+    inboxContentByUriRef.current = inboxContentByUri;
+  }, [inboxContentByUri]);
+
+  useLayoutEffect(() => {
+    backlinksActiveBodyRef.current = backlinksActiveBody;
+  }, [backlinksActiveBody]);
 
   const guardedSetEditorBody: typeof setEditorBody = useCallback(
     value => {
@@ -750,6 +773,7 @@ export function useMainWindowWorkspace(options: {
 
   const bumpEditorClosedStack = useCallback(() => {
     setEditorClosedStackVersion(v => v + 1);
+    setEditorClosedTabsStackSnapshot([...editorClosedTabsStackRef.current]);
   }, []);
 
   /* editorClosedStackVersion re-runs this when the ref-backed closed-tab stack mutates. */
@@ -761,7 +785,7 @@ export function useMainWindowWorkspace(options: {
     const noteSet = new Set(
       notes.map(n => n.uri.replace(/\\/g, '/')),
     );
-    const stack = editorClosedTabsStackRef.current;
+    const stack = editorClosedTabsStackSnapshot;
     for (let i = stack.length - 1; i >= 0; i--) {
       if (
         isEditorClosedTabReopenable(stack[i]!.uri, root, noteSet)
@@ -771,7 +795,7 @@ export function useMainWindowWorkspace(options: {
     }
     return false;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editorClosedStackVersion syncs ref stack mutations to UI
-  }, [vaultRoot, notes, editorClosedStackVersion]);
+  }, [vaultRoot, notes, editorClosedStackVersion, editorClosedTabsStackSnapshot]);
 
   const todayHubSelectorItems = useMemo(() => {
     const hubs = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
@@ -859,7 +883,9 @@ export function useMainWindowWorkspace(options: {
 
   useEffect(() => {
     if (composingNewEntry || !selectedUri || !vaultRoot) {
-      setSelectedNoteBacklinkUris([]);
+      queueMicrotask(() => {
+        setSelectedNoteBacklinkUris([]);
+      });
       return;
     }
 
@@ -1213,7 +1239,7 @@ export function useMainWindowWorkspace(options: {
             try {
               if (await fs.exists(norm)) {
                 await deleteVaultMarkdownNote(root, norm, fs);
-                subtreeMarkdownCacheRef.current.invalidateForMutation(
+                subtreeMarkdownCache.invalidateForMutation(
                   root,
                   norm,
                   'file',
@@ -1244,7 +1270,7 @@ export function useMainWindowWorkspace(options: {
             return;
           }
           await saveNoteMarkdown(norm, fs, md);
-          subtreeMarkdownCacheRef.current.invalidateForMutation(root, norm, 'file');
+          subtreeMarkdownCache.invalidateForMutation(root, norm, 'file');
           todayHubRowLastPersistedRef.current.set(norm, md);
           const nextCache = mergeInboxNoteBodyIntoCache(
             inboxContentByUriRef.current,
@@ -2098,7 +2124,7 @@ export function useMainWindowWorkspace(options: {
       clearRenameNotice();
       setRenameLinkProgress(null);
       setPendingWikiLinkAmbiguityRename(null);
-      subtreeMarkdownCacheRef.current.invalidateAll();
+      subtreeMarkdownCache.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       setVaultSettings(null);
       try {
@@ -2124,7 +2150,7 @@ export function useMainWindowWorkspace(options: {
         setActiveTodayHubUri(null);
         setTodayHubWorkspacesForSave({});
         editorClosedTabsStackRef.current = [];
-        setEditorClosedStackVersion(n => n + 1);
+        bumpEditorClosedStack();
         setSelectedUri(null);
         setComposingNewEntry(false);
         setMergeView(null);
@@ -2151,7 +2177,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [fs, refreshNotes, clearRenameNotice],
+    [fs, refreshNotes, clearRenameNotice, bumpEditorClosedStack],
   );
 
   useEffect(() => {
@@ -2575,7 +2601,7 @@ export function useMainWindowWorkspace(options: {
           ],
         });
       }
-      subtreeMarkdownCacheRef.current.invalidateAll();
+      subtreeMarkdownCache.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
@@ -2850,7 +2876,7 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       try {
         const created = await createInboxMarkdownNote(vaultRoot, fs, title, body);
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
+        subtreeMarkdownCache.invalidateForMutation(
           vaultRoot,
           created.uri,
           'file',
@@ -3202,7 +3228,7 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       try {
         await deleteVaultMarkdownNote(vaultRoot, uri, fs);
-        subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, uri, 'file');
+        subtreeMarkdownCache.invalidateForMutation(vaultRoot, uri, 'file');
         setInboxContentByUri(prev => {
           const next = {...prev};
           delete next[uri];
@@ -3410,9 +3436,9 @@ export function useMainWindowWorkspace(options: {
             `Updated links in ${rewritePlan.touchedFileCount} ${noteLabel}.`,
           );
         }
-        subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, uri, 'file');
+        subtreeMarkdownCache.invalidateForMutation(vaultRoot, uri, 'file');
         if (nextUri !== uri) {
-          subtreeMarkdownCacheRef.current.invalidateForMutation(vaultRoot, nextUri, 'file');
+          subtreeMarkdownCache.invalidateForMutation(vaultRoot, nextUri, 'file');
         }
         await refreshNotes(vaultRoot);
         setFsRefreshNonce(n => n + 1);
@@ -3513,7 +3539,7 @@ export function useMainWindowWorkspace(options: {
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
-            subtreeMarkdownCacheRef.current.invalidateForMutation(
+            subtreeMarkdownCache.invalidateForMutation(
               vaultRoot,
               result.uri,
               'file',
@@ -3596,7 +3622,7 @@ export function useMainWindowWorkspace(options: {
               }
               if (relResult.kind === 'open' || relResult.kind === 'created') {
                 if (relResult.kind === 'created') {
-                  subtreeMarkdownCacheRef.current.invalidateForMutation(
+                  subtreeMarkdownCache.invalidateForMutation(
                     vaultRoot,
                     relResult.uri,
                     'file',
@@ -3707,7 +3733,7 @@ export function useMainWindowWorkspace(options: {
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
-            subtreeMarkdownCacheRef.current.invalidateForMutation(
+            subtreeMarkdownCache.invalidateForMutation(
               vaultRoot,
               result.uri,
               'file',
@@ -3824,7 +3850,7 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       try {
         await deleteVaultTreeDirectory(vaultRoot, directoryUri, fs);
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
+        subtreeMarkdownCache.invalidateForMutation(
           vaultRoot,
           directoryUri,
           'directory',
@@ -3897,12 +3923,12 @@ export function useMainWindowWorkspace(options: {
           fs,
         );
         const normalizedNext = nextUri.replace(/\\/g, '/');
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
+        subtreeMarkdownCache.invalidateForMutation(
           vaultRoot,
           oldUri,
           'directory',
         );
-        subtreeMarkdownCacheRef.current.invalidateForMutation(
+        subtreeMarkdownCache.invalidateForMutation(
           vaultRoot,
           normalizedNext,
           'directory',
@@ -3958,7 +3984,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, clearRenameNotice],
+    [vaultRoot, fs, refreshNotes, clearRenameNotice, subtreeMarkdownCache],
   );
 
   const commitMoveVaultTreeResult = useCallback(
@@ -3967,12 +3993,12 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       const invKind = result.movedKind === 'article' ? 'file' : 'directory';
-      subtreeMarkdownCacheRef.current.invalidateForMutation(
+      subtreeMarkdownCache.invalidateForMutation(
         vaultRoot,
         result.previousUri,
         invKind,
       );
-      subtreeMarkdownCacheRef.current.invalidateForMutation(
+      subtreeMarkdownCache.invalidateForMutation(
         vaultRoot,
         result.nextUri,
         invKind,
@@ -4047,7 +4073,7 @@ export function useMainWindowWorkspace(options: {
       editorWorkspaceTabsRef.current = remappedMoveTabs;
       setEditorWorkspaceTabs(remappedMoveTabs);
     },
-    [vaultRoot],
+    [vaultRoot, subtreeMarkdownCache],
   );
 
   const moveVaultTreeItem = useCallback(
@@ -4123,7 +4149,7 @@ export function useMainWindowWorkspace(options: {
         for (const entry of plan) {
           if (entry.kind === 'article') {
             await deleteVaultMarkdownNote(vaultRoot, entry.uri, fs);
-            subtreeMarkdownCacheRef.current.invalidateForMutation(
+            subtreeMarkdownCache.invalidateForMutation(
               vaultRoot,
               entry.uri,
               'file',
@@ -4139,7 +4165,7 @@ export function useMainWindowWorkspace(options: {
           } else {
             const normDir = entry.uri.replace(/\\/g, '/').replace(/\/+$/, '');
             await deleteVaultTreeDirectory(vaultRoot, entry.uri, fs);
-            subtreeMarkdownCacheRef.current.invalidateForMutation(
+            subtreeMarkdownCache.invalidateForMutation(
               vaultRoot,
               entry.uri,
               'directory',
@@ -4205,7 +4231,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor, subtreeMarkdownCache],
   );
 
   const bulkMoveVaultTreeItems = useCallback(
@@ -4336,16 +4362,22 @@ export function useMainWindowWorkspace(options: {
 
   useEffect(() => {
     if (!vaultRoot) {
-      setInboxShellRestored(true);
+      queueMicrotask(() => {
+        setInboxShellRestored(true);
+      });
       return;
     }
-    setInboxShellRestored(false);
+    queueMicrotask(() => {
+      setInboxShellRestored(false);
+    });
   }, [vaultRoot]);
 
   useEffect(() => {
-    setPendingWikiLinkAmbiguityRename(null);
-    setRenameLinkProgress(null);
-    clearRenameNotice();
+    queueMicrotask(() => {
+      setPendingWikiLinkAmbiguityRename(null);
+      setRenameLinkProgress(null);
+      clearRenameNotice();
+    });
   }, [vaultRoot, clearRenameNotice]);
 
   useEffect(() => {
@@ -4456,8 +4488,10 @@ export function useMainWindowWorkspace(options: {
       if (chosenTabsSource != null && chosenTabsSource.length === 0) {
         editorWorkspaceTabsRef.current = [];
         activeEditorTabIdRef.current = null;
-        setEditorWorkspaceTabs([]);
-        setActiveEditorTabId(null);
+        queueMicrotask(() => {
+          setEditorWorkspaceTabs([]);
+          setActiveEditorTabId(null);
+        });
         restoredTabs = [];
       } else if (chosenTabsSource != null && chosenTabsSource.length > 0) {
         const sanitized = sanitizeStoredWorkspaceRows(chosenTabsSource);
@@ -4473,8 +4507,10 @@ export function useMainWindowWorkspace(options: {
           nextActive = ensureActiveTabId(nextTabs, nextActive);
           editorWorkspaceTabsRef.current = nextTabs;
           activeEditorTabIdRef.current = nextActive;
-          setEditorWorkspaceTabs(nextTabs);
-          setActiveEditorTabId(nextActive);
+          queueMicrotask(() => {
+            setEditorWorkspaceTabs(nextTabs);
+            setActiveEditorTabId(nextActive);
+          });
           restoredTabs = nextTabs
             .map(t => tabCurrentUri(t))
             .filter((u): u is string => u != null);
@@ -4492,8 +4528,10 @@ export function useMainWindowWorkspace(options: {
           const nextActive = migrated[0]!.id;
           editorWorkspaceTabsRef.current = migrated;
           activeEditorTabIdRef.current = nextActive;
-          setEditorWorkspaceTabs(migrated);
-          setActiveEditorTabId(nextActive);
+          queueMicrotask(() => {
+            setEditorWorkspaceTabs(migrated);
+            setActiveEditorTabId(nextActive);
+          });
           restoredTabs = migrated
             .map(t => tabCurrentUri(t))
             .filter((u): u is string => u != null);
@@ -4624,13 +4662,15 @@ export function useMainWindowWorkspace(options: {
     if (!activeTodayHubUri || !inboxShellRestored) {
       return;
     }
-    setTodayHubWorkspacesForSave(prev => ({
-      ...prev,
-      [activeTodayHubUri]: {
-        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
-        activeEditorTabId,
-      },
-    }));
+    queueMicrotask(() => {
+      setTodayHubWorkspacesForSave(prev => ({
+        ...prev,
+        [activeTodayHubUri]: {
+          editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
+          activeEditorTabId,
+        },
+      }));
+    });
   }, [
     editorWorkspaceTabs,
     activeEditorTabId,
@@ -4683,7 +4723,7 @@ export function useMainWindowWorkspace(options: {
     onMarkdownExternalLinkOpen,
     deleteNote,
     renameNote,
-    subtreeMarkdownCache: subtreeMarkdownCacheRef.current,
+    subtreeMarkdownCache: subtreeMarkdownCache,
     deleteFolder,
     renameFolder,
     moveVaultTreeItem,

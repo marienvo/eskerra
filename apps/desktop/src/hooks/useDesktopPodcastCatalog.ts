@@ -59,14 +59,18 @@ export function useDesktopPodcastCatalog({
   );
 
   useEffect(() => {
-    void refreshPodcasts(false);
+    queueMicrotask(() => {
+      void refreshPodcasts(false);
+    });
   }, [refreshPodcasts]);
 
   useEffect(() => {
     if (fsRefreshNonce === 0) {
       return;
     }
-    void refreshPodcasts(true);
+    queueMicrotask(() => {
+      void refreshPodcasts(true);
+    });
     // Only rescan when the app increments the nonce (filesystem watcher or settings refresh).
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid re-running when refreshPodcasts identity changes
   }, [fsRefreshNonce]);

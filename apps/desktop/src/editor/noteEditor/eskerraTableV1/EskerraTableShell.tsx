@@ -1507,7 +1507,10 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
 
   const pasteSessionRef = useRef(0);
   const onCellDocChangeRef = useRef(onCellDocChange);
-  onCellDocChangeRef.current = onCellDocChange;
+
+  useLayoutEffect(() => {
+    onCellDocChangeRef.current = onCellDocChange;
+  }, [onCellDocChange]);
 
   useLayoutEffect(() => {
     const tc = tableCallbacksRef.current;

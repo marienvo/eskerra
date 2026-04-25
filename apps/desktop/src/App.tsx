@@ -388,10 +388,16 @@ export default function App() {
 
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
   const quickOpenOpenRef = useRef(false);
-  quickOpenOpenRef.current = quickOpenOpen;
   const [vaultSearchOpen, setVaultSearchOpen] = useState(false);
   const vaultSearchOpenRef = useRef(false);
-  vaultSearchOpenRef.current = vaultSearchOpen;
+
+  useLayoutEffect(() => {
+    quickOpenOpenRef.current = quickOpenOpen;
+  }, [quickOpenOpen]);
+
+  useLayoutEffect(() => {
+    vaultSearchOpenRef.current = vaultSearchOpen;
+  }, [vaultSearchOpen]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -687,7 +693,9 @@ export default function App() {
   }, []);
 
   const desktopPlaybackRef = useRef(desktopPlayback);
-  desktopPlaybackRef.current = desktopPlayback;
+  useLayoutEffect(() => {
+    desktopPlaybackRef.current = desktopPlayback;
+  }, [desktopPlayback]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -778,7 +786,9 @@ export default function App() {
       return;
     }
     document.getElementById('splash-html')?.remove();
-    setStartupSplashPhase('scrim');
+    queueMicrotask(() => {
+      setStartupSplashPhase('scrim');
+    });
   }, [appStartupReady, startupSplashPhase]);
 
   useEffect(() => {
@@ -883,11 +893,8 @@ export default function App() {
       return;
     }
     await hydrateVault(dir);
-  };
-
-  useEffect(() => {
     setActivePage('vault');
-  }, [vaultRoot]);
+  };
 
   /** Single left-pane width (Vault, Episodes, or stack); mirrors `inbox` and `podcastsMain` in layout store. */
   const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
