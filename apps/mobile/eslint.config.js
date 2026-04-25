@@ -3,10 +3,8 @@ const globals = require('globals');
 const reactNativeConfig = require('@react-native/eslint-config/flat').filter(
   config => !config.plugins?.['ft-flow']
 );
-const reactHooks = require('eslint-plugin-react-hooks');
 const reactRefresh = require('eslint-plugin-react-refresh').default;
 const sonarjs = require('eslint-plugin-sonarjs');
-const tseslint = require('typescript-eslint');
 const {defineConfig, globalIgnores} = require('eslint/config');
 
 module.exports = defineConfig([
@@ -16,7 +14,6 @@ module.exports = defineConfig([
     files: ['**/*.{js,jsx,ts,tsx}'],
     extends: [
       js.configs.recommended,
-      reactHooks.configs.flat.recommended,
       reactRefresh.configs.recommended,
       sonarjs.configs.recommended,
     ],
@@ -47,7 +44,6 @@ module.exports = defineConfig([
   },
   {
     files: ['**/*.{ts,tsx}'],
-    extends: [tseslint.configs.recommended],
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',
