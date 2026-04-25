@@ -7,11 +7,9 @@ import {formatRelativeCalendarLabelFromIsoDate} from '@eskerra/core';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {PodcastEpisode} from '../../../types';
 import {PodcastArtworkImage} from './PodcastArtworkImage';
+import {SELECTED_ARTWORK_IMAGE_BLUR_RADIUS} from './episodeRowConstants';
 import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 import {PlayerState} from '../services/audioPlayer';
-
-/** Android Image blur when the row is selected (paired with selection overlay). */
-export const SELECTED_ARTWORK_IMAGE_BLUR_RADIUS = 6;
 
 type EpisodeRowProps = {
   activeEpisodeId: string | null;

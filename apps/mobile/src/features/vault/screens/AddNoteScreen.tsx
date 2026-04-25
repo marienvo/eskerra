@@ -26,7 +26,7 @@ import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {AddNoteStackParamList, InboxStackParamList} from '../../../navigation/types';
 import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
-import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/MiniPlayer';
+import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/miniPlayerLayout';
 import {usePlayerContext} from '../../podcasts/context/PlayerContext';
 import {useNotes} from '../hooks/useNotes';
 

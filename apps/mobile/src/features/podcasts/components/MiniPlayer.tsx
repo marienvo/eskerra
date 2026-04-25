@@ -27,15 +27,6 @@ const MINI_PLAYER_TRANSPORT = '#ffffff';
 const MINI_PLAYER_TRANSPORT_DISABLED = 'rgba(255,255,255,0.4)';
 const MINI_PLAYER_PLACEHOLDER_BG = '#3a3a3a';
 
-/**
- * Approximate total height when MiniPlayer is visible. Used for keyboard footer offset;
- * update if container padding, artwork row, or progress block changes.
- * Artwork action mode matches the same ~64px text column height; an error line below actions
- * can add ~22px but is omitted here to keep the offset conservative.
- */
-export const MINI_PLAYER_LAYOUT_HEIGHT =
-  1 + 20 + 64 + 8 + 40 + 6 + 52;// + 20;
-
 const MS_PER_SECOND = 1000;
 /** Mid-episode resume: show "Resuming…" instead of "Buffering…" when position is past this threshold. */
 const RESUMING_COPY_THRESHOLD_MS = 10_000;

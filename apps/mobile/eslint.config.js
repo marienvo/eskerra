@@ -43,6 +43,12 @@ module.exports = defineConfig([
     },
   },
   {
+    files: ['src/features/vault/markdown/vaultReadonlyMarkdownRules.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-unused-vars': [

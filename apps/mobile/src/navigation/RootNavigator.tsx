@@ -8,9 +8,9 @@ import {useColorScheme} from 'react-native';
 
 import {appBreadcrumb} from '../core/observability';
 import {SetupScreen} from '../features/setup/screens/SetupScreen';
+import {scheduleTryConsumeAndroidShareNavigation} from './androidShareIntentHandlers';
 import {
   AndroidShareIntentBridge,
-  scheduleTryConsumeAndroidShareNavigation,
 } from './androidShareIntentNavigation';
 import {MainTabNavigator} from './MainTabNavigator';
 import {navigationRef} from './navigationContainerRef';

@@ -9,8 +9,8 @@ import {Image, Text as RNText} from 'react-native';
 import {useVaultContext} from '../src/core/vault/VaultContext';
 import {
   EpisodeRow,
-  SELECTED_ARTWORK_IMAGE_BLUR_RADIUS,
 } from '../src/features/podcasts/components/EpisodeRow';
+import {SELECTED_ARTWORK_IMAGE_BLUR_RADIUS} from '../src/features/podcasts/components/episodeRowConstants';
 import {usePodcastArtwork} from '../src/features/podcasts/hooks/usePodcastArtwork';
 import {PodcastEpisode} from '../src/types';
 
