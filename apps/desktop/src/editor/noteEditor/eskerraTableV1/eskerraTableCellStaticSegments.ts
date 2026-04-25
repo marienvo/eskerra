@@ -136,12 +136,12 @@ function collectWikiIntervals(
       const to = from + fullLen;
       const inner = match[1]!;
       const browserHref = wikiLinkInnerBrowserOpenableHref(inner);
-      const innerClass =
-        browserHref != null
-          ? `cm-wiki-link cm-wiki-link--resolved cm-wiki-link--external ${CM_MD_EXTERNAL_LINK_GLYPH_CLASS}`
-          : wikiResolved(inner)
-            ? 'cm-wiki-link cm-wiki-link--resolved'
-            : 'cm-wiki-link cm-wiki-link--unresolved';
+      let innerClass = 'cm-wiki-link cm-wiki-link--unresolved';
+      if (browserHref != null) {
+        innerClass = `cm-wiki-link cm-wiki-link--resolved cm-wiki-link--external ${CM_MD_EXTERNAL_LINK_GLYPH_CLASS}`;
+      } else if (wikiResolved(inner)) {
+        innerClass = 'cm-wiki-link cm-wiki-link--resolved';
+      }
       out.push({from, to: from + 2, priority: 2, classes: 'cm-md-wiki-bracket'});
       out.push({from: from + 2, to: to - 2, priority: 2, classes: innerClass});
       out.push({from: to - 2, to, priority: 2, classes: 'cm-md-wiki-bracket'});

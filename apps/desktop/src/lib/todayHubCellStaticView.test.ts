@@ -42,14 +42,13 @@ describe('todayHubCellStaticView', () => {
     expect(lines.length).toBeGreaterThan(4);
     for (const line of lines) {
       const expected = direct.get(line.from);
-      const expectedStr =
-        expected && expected.size > 0 ? [...expected].sort().join(' ') : '';
-      const actualStr =
-        line.lineClassName === 'cm-line'
-          ? ''
-          : line.lineClassName.startsWith('cm-line ')
-            ? line.lineClassName.slice('cm-line '.length)
-            : line.lineClassName;
+      const expectedStr = expected && expected.size > 0 ? [...expected].sort().join(' ') : '';
+      let actualStr = line.lineClassName;
+      if (line.lineClassName === 'cm-line') {
+        actualStr = '';
+      } else if (line.lineClassName.startsWith('cm-line ')) {
+        actualStr = line.lineClassName.slice('cm-line '.length);
+      }
       expect(actualStr).toBe(expectedStr);
     }
   });

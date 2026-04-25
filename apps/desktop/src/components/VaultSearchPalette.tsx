@@ -123,17 +123,24 @@ export function VaultSearchPalette({
     progress != null
       ? `${progress.totalHits} note${progress.totalHits === 1 ? '' : 's'}${indexHint}${skipPart}`
       : null;
+  const searchingLabel = noteCount != null ? `Searching… · ${noteCount}` : 'Searching…';
+  const foundLabel = noteCount != null ? `${noteCount} found` : null;
 
   const statusLine =
     trimmedQuery.length === 0
       ? null
       : !scanDone && searchingStatusVisible
-        ? noteCount != null
-          ? `Searching… · ${noteCount}`
-          : 'Searching…'
-        : noteCount != null
-          ? `${noteCount} found`
-          : null;
+        ? searchingLabel
+        : foundLabel;
+
+  let emptyLabel: string | null = null;
+  if (trimmedQuery.length === 0) {
+    emptyLabel = 'Type to search markdown in the vault.';
+  } else if (scanDone && !awaitingDebouncedRun && notes.length === 0) {
+    emptyLabel = progress != null && !progress.indexReady
+      ? 'Index not ready yet — try again in a moment.'
+      : 'No matches.';
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -173,13 +180,7 @@ export function VaultSearchPalette({
             ) : null}
             <CommandList className="quick-open-command__list">
               <CommandEmpty className="quick-open-command__empty">
-                {trimmedQuery.length === 0
-                  ? 'Type to search markdown in the vault.'
-                  : scanDone && !awaitingDebouncedRun && notes.length === 0
-                    ? progress != null && !progress.indexReady
-                      ? 'Index not ready yet — try again in a moment.'
-                      : 'No matches.'
-                    : null}
+                {emptyLabel}
               </CommandEmpty>
               {displayedNotes.map((n, i) => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, n.uri);

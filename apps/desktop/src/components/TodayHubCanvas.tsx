@@ -182,14 +182,14 @@ function TodayHubCanvasNonEmptyCell({
     };
   }, [editing, isWarm, canPrewarm]);
 
-  const cmHostClass =
-    editing
-      ? `today-hub-canvas__cm-host today-hub-canvas__cm-host--editing${
-          cmSurfaceReady ? ' today-hub-canvas__cm-host--surface-ready' : ''
-        }`
-      : warmOrActive
-        ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
-        : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant';
+  let cmHostClass = 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant';
+  if (editing) {
+    cmHostClass = `today-hub-canvas__cm-host today-hub-canvas__cm-host--editing${
+      cmSurfaceReady ? ' today-hub-canvas__cm-host--surface-ready' : ''
+    }`;
+  } else if (warmOrActive) {
+    cmHostClass = 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay';
+  }
 
   const readonlyClassNames = [
     'today-hub-canvas__cell-readonly',

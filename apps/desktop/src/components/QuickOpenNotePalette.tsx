@@ -66,6 +66,12 @@ export function QuickOpenNotePalette({
     },
     [handleOpenChange, onPickNote],
   );
+  let emptyLabel = 'No matching notes.';
+  if (searchTrimmed.length === 0) {
+    emptyLabel = 'Type to search by name or path.';
+  } else if (searchPending) {
+    emptyLabel = 'Searching…';
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -100,11 +106,7 @@ export function QuickOpenNotePalette({
             />
             <CommandList className="quick-open-command__list">
               <CommandEmpty className="quick-open-command__empty">
-                {searchTrimmed.length === 0
-                  ? 'Type to search by name or path.'
-                  : searchPending
-                    ? 'Searching…'
-                    : 'No matching notes.'}
+                {emptyLabel}
               </CommandEmpty>
               {displayed.map(r => {
                 const rel = quickOpenVaultRelativePath(vaultRoot, r.uri);

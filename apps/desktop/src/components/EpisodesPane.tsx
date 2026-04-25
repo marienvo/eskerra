@@ -85,14 +85,14 @@ function EpisodeListRow({
     .filter(Boolean)
     .join(' ');
 
-  const statusLabel =
-    isActive && playCtl === 'playing'
-      ? 'Playing'
-      : isActive && (playCtl === 'loading' || playCtl === 'buffering')
-        ? 'Buffering'
-        : isActive && playCtl === 'paused'
-          ? 'Paused'
-          : null;
+  let statusLabel: string | null = null;
+  if (isActive && playCtl === 'playing') {
+    statusLabel = 'Playing';
+  } else if (isActive && (playCtl === 'loading' || playCtl === 'buffering')) {
+    statusLabel = 'Buffering';
+  } else if (isActive && playCtl === 'paused') {
+    statusLabel = 'Paused';
+  }
 
   const markPlayedDisabled =
     ep.isListened || episodeSelectLocked;
@@ -227,6 +227,14 @@ export function EpisodesPane({
     rssSyncPercent <= 100
       ? rssSyncPercent
       : null;
+  const refreshStripFill = determinateRssPercent != null
+    ? (
+      <div
+        className="episodes-refresh-strip__fill"
+        style={{width: `${determinateRssPercent}%`}}
+      />
+      )
+    : <div className="episodes-refresh-strip__segment" />;
 
   return (
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
@@ -258,16 +266,7 @@ export function EpisodesPane({
         }
         aria-hidden
       >
-        {refreshStripVisible ? (
-          determinateRssPercent != null ? (
-            <div
-              className="episodes-refresh-strip__fill"
-              style={{width: `${determinateRssPercent}%`}}
-            />
-          ) : (
-            <div className="episodes-refresh-strip__segment" />
-          )
-        ) : null}
+        {refreshStripVisible ? refreshStripFill : null}
       </div>
       <div className="episode-scroll">
         {sections.map(section => (

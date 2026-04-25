@@ -162,15 +162,17 @@ export function MiniPlayer() {
     playbackPhase === 'nearEndPlaying' || playbackPhase === 'nearEndPaused'
       ? 'Bijna klaar'
       : null;
-  const bufferingSubtitle =
-    nearEndCopy ??
-    (showTransportSpinner && playbackState === 'loading'
-      ? progress.positionMs >= RESUMING_COPY_THRESHOLD_MS
-        ? 'Resuming…'
-        : 'Buffering…'
-      : showTransportSpinner && playbackState === 'paused'
-        ? 'Starting…'
-        : null);
+  let bufferingSubtitle = nearEndCopy;
+  if (bufferingSubtitle == null) {
+    if (showTransportSpinner && playbackState === 'loading') {
+      bufferingSubtitle =
+        progress.positionMs >= RESUMING_COPY_THRESHOLD_MS ? 'Resuming…' : 'Buffering…';
+    } else if (showTransportSpinner && playbackState === 'paused') {
+      bufferingSubtitle = 'Starting…';
+    } else {
+      bufferingSubtitle = null;
+    }
+  }
   const skipDisabled = playbackState === 'loading' && !playbackSeeking;
   const durationMs = progress.durationMs ?? 0;
   const sliderMaxMs =
@@ -186,6 +188,12 @@ export function MiniPlayer() {
     progress.durationMs != null && progress.durationMs > 0
       ? formatClockFromMs(progress.durationMs)
       : '\u2014';
+  let transportAccessibilityLabel = 'Play';
+  if (showTransportSpinner) {
+    transportAccessibilityLabel = playbackState === 'loading' ? 'Buffering' : 'Starting playback';
+  } else if (isPlaying) {
+    transportAccessibilityLabel = 'Pause';
+  }
 
   const actionIconColor = miniPlayerActionBusy
     ? MINI_PLAYER_TRANSPORT_DISABLED
@@ -316,15 +324,7 @@ export function MiniPlayer() {
                 ? 'Playback is loading or starting.'
                 : undefined
             }
-            accessibilityLabel={
-              showTransportSpinner
-                ? playbackState === 'loading'
-                  ? 'Buffering'
-                  : 'Starting playback'
-                : isPlaying
-                  ? 'Pause'
-                  : 'Play'
-            }
+            accessibilityLabel={transportAccessibilityLabel}
             accessibilityState={{busy: showTransportSpinner}}
             disabled={playbackTransportBusy}
             onPress={() => {

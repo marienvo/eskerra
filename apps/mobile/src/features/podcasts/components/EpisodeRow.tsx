@@ -58,15 +58,16 @@ export function EpisodeRow({
   const rowDisabled = playbackTransportBusy || isBatchMarking;
   const playAreaDisabled =
     rowDisabled || playbackState === 'playing' || (isActive && playbackState === 'loading');
-  const statusLine = isPlaying
-    ? 'Playing'
-    : isActive && playbackState === 'loading'
-      ? 'Buffering'
-      : isActive
-        ? 'Paused'
-        : playbackState === 'playing'
-          ? ''
-          : 'Tap to play';
+  let statusLine = 'Tap to play';
+  if (isPlaying) {
+    statusLine = 'Playing';
+  } else if (isActive && playbackState === 'loading') {
+    statusLine = 'Buffering';
+  } else if (isActive) {
+    statusLine = 'Paused';
+  } else if (playbackState === 'playing') {
+    statusLine = '';
+  }
 
   return (
     <View

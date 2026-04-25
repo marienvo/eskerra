@@ -94,6 +94,29 @@ export function SettingsPage({
       setBusy(false);
     }
   }, [vaultRoot, fs, setVaultSettings]);
+  let tabContent = (
+    <PropertiesTab
+      vaultRoot={vaultRoot}
+      fs={fs}
+      vaultSettings={vaultSettings}
+      setVaultSettings={setVaultSettings}
+    />
+  );
+  if (tab === 'sync') {
+    tabContent = (
+      <SettingsContent
+        key={settingsFormKey}
+        vaultSettings={vaultSettings}
+        localSettings={localSettings}
+        onSave={handleSave}
+        onChangeFolder={() => void onChangeVaultFolder()}
+        onRefreshVault={() => void refreshFromDisk()}
+        busy={busy}
+      />
+    );
+  } else if (tab === 'themes') {
+    tabContent = <ThemesTab vaultRoot={vaultRoot} fs={fs} />;
+  }
 
   return (
     <div className="settings-page">
@@ -138,26 +161,7 @@ export function SettingsPage({
               {err}
             </div>
           ) : null}
-          {tab === 'sync' ? (
-            <SettingsContent
-              key={settingsFormKey}
-              vaultSettings={vaultSettings}
-              localSettings={localSettings}
-              onSave={handleSave}
-              onChangeFolder={() => void onChangeVaultFolder()}
-              onRefreshVault={() => void refreshFromDisk()}
-              busy={busy}
-            />
-          ) : tab === 'themes' ? (
-            <ThemesTab vaultRoot={vaultRoot} fs={fs} />
-          ) : (
-            <PropertiesTab
-              vaultRoot={vaultRoot}
-              fs={fs}
-              vaultSettings={vaultSettings}
-              setVaultSettings={setVaultSettings}
-            />
-          )}
+          {tabContent}
         </div>
       </div>
     </div>

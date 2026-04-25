@@ -31,12 +31,15 @@ describe('matrixFromHtmlTable', () => {
 describe('clipboardMatrixFromDataTransfer', () => {
   it('prefers HTML table when present', () => {
     const dt = {
-      getData: (mime: string) =>
-        mime === 'text/html'
-          ? '<table><tr><td>x</td></tr></table>'
-          : mime === 'text/plain'
-            ? 'y'
-            : '',
+      getData: (mime: string) => {
+        if (mime === 'text/html') {
+          return '<table><tr><td>x</td></tr></table>';
+        }
+        if (mime === 'text/plain') {
+          return 'y';
+        }
+        return '';
+      },
     } as DataTransfer;
     expect(clipboardMatrixFromDataTransfer(dt)).toEqual([['x']]);
   });
