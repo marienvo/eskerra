@@ -1,4 +1,3 @@
-/* eslint-env jest, node */
 /** Set before any test file so app code can skip long deferred timers without relying on inlined env. */
 global.__ESKERRA_JEST__ = true;
 

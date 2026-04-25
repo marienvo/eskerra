@@ -58,4 +58,15 @@ export default defineConfig([
       ],
     },
   },
+  {
+    files: [
+      '**/__tests__/**/*.{js,jsx,ts,tsx}',
+      '**/*.test.{js,jsx,ts,tsx}',
+      '**/*.spec.{js,jsx,ts,tsx}',
+    ],
+    rules: {
+      // Test code intentionally uses OS temp locations for isolated fixtures.
+      'sonarjs/publicly-writable-directories': 'off',
+    },
+  },
 ])
