@@ -213,6 +213,39 @@ describe('runDesktopPodcastRssSync', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('delivers progress to every concurrent caller that passed onProgress', async () => {
+    const files = new Map([
+      [RSS_FILE_URI, `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`],
+      [`${GENERAL_URI}/📻 Argos.md`, '---\nrssFeedUrl: "https://example.com/argos.xml"\n---\n\n# Argos\n'],
+      [PODCASTS_FILE_URI, '# Shows\n'],
+      [HUB_FILE_URI, '- [ ] [[📻 OVT]]\n- [ ] [[📻 Argos]]\n'],
+    ]);
+    const fs = buildFs(files);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ok: true, text: async () => MINIMAL_EPISODE_XML}),
+    );
+    const expected = [
+      {percent: 50, phase: 'rss_file', detail: '📻 OVT.md'},
+      {percent: 99, phase: 'rss_file', detail: '📻 Argos.md'},
+      {percent: 100, phase: 'complete'},
+    ];
+    const progressA: Array<{percent: number; phase: string; detail?: string}> = [];
+    const progressB: Array<{percent: number; phase: string; detail?: string}> = [];
+
+    await Promise.all([
+      runDesktopPodcastRssSync(VAULT_ROOT, fs, {
+        onProgress: payload => progressA.push(payload),
+      }),
+      runDesktopPodcastRssSync(VAULT_ROOT, fs, {
+        onProgress: payload => progressB.push(payload),
+      }),
+    ]);
+
+    expect(progressA).toEqual(expected);
+    expect(progressB).toEqual(expected);
+  });
+
   it('reports determinate progress while RSS files are processed', async () => {
     const files = new Map([
       [RSS_FILE_URI, `---\nrssFeedUrl: "${RSS_FEED_URL}"\n---\n\n# OVT\n`],

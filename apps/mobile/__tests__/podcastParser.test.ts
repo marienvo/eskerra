@@ -1,4 +1,10 @@
 import {
+  PODCAST_FIXTURE_EPISODE_LINE_PLAYED,
+  PODCAST_FIXTURE_EPISODE_LINE_UNPLAYED,
+  PODCAST_FIXTURE_GROUP_BODY,
+  PODCAST_FIXTURE_MULTI_LINE_BODY,
+} from '@eskerra/core';
+import {
   extractSectionTitle,
   groupBySection,
   isPodcastFile,
@@ -28,12 +34,9 @@ describe('podcastParser', () => {
   });
 
   test('parsePodcastLine parses unplayed episode without article link', () => {
-    const line =
-      '- [ ] 2026-03-20; #52 - Flitspalen, een gereedschapskist en een bosje tulpen (S10) [▶️](https://example.com/episode.mp3) (De Stemming van Vullings en De Rooy ●)';
-
     expect(
       parsePodcastLine({
-        line,
+        line: PODCAST_FIXTURE_EPISODE_LINE_UNPLAYED,
         sectionTitle: 'Demo',
         sourceFile: '2026 Demo - podcasts.md',
       }),
@@ -51,12 +54,9 @@ describe('podcastParser', () => {
   });
 
   test('parsePodcastLine parses listened episode with article link', () => {
-    const line =
-      "- [x] 2026-03-20; [🌐](https://example.com/article) Van Iran tot Oekraïne: hackers storten zich op beveiligingscamera's [▶️](https://example.com/audio.mp3) (Schaduwoorlog)";
-
     expect(
       parsePodcastLine({
-        line,
+        line: PODCAST_FIXTURE_EPISODE_LINE_PLAYED,
         sectionTitle: 'Nieuws',
         sourceFile: '2026 Nieuws - podcasts.md',
       }),
@@ -84,27 +84,14 @@ describe('podcastParser', () => {
   });
 
   test('parsePodcastFile returns only valid entries and ignores wrong year', () => {
-    const content = [
-      '- [ ] 2026-01-02; Titel A [▶️](https://example.com/a.mp3) (Serie A)',
-      '- [x] 2026-01-03; [🌐](https://example.com) Titel B [▶️](https://example.com/b.mp3) (Serie B)',
-      'Not an entry',
-    ].join('\n');
-
-    expect(parsePodcastFile('2026 Demo - podcasts.md', content, 2026)).toHaveLength(
+    expect(parsePodcastFile('2026 Demo - podcasts.md', PODCAST_FIXTURE_MULTI_LINE_BODY, 2026)).toHaveLength(
       2,
     );
-    expect(parsePodcastFile('2024 Demo - podcasts.md', content, 2026)).toEqual([]);
+    expect(parsePodcastFile('2024 Demo - podcasts.md', PODCAST_FIXTURE_MULTI_LINE_BODY, 2026)).toEqual([]);
   });
 
   test('groupBySection groups episodes under shared section', () => {
-    const parsed = parsePodcastFile(
-      '2026 Demo - podcasts.md',
-      [
-        '- [ ] 2026-01-02; Titel A [▶️](https://example.com/a.mp3) (Serie A)',
-        '- [ ] 2026-01-03; Titel B [▶️](https://example.com/b.mp3) (Serie B)',
-      ].join('\n'),
-      2026,
-    );
+    const parsed = parsePodcastFile('2026 Demo - podcasts.md', PODCAST_FIXTURE_GROUP_BODY, 2026);
 
     const sections = groupBySection(parsed);
     expect(sections).toHaveLength(1);
