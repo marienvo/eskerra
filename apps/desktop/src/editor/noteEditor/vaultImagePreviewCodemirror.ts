@@ -75,6 +75,42 @@ function filterValidExpandedLineStarts(doc: Text, positions: Set<number>): Set<n
   return out;
 }
 
+function remapVaultImageExpandedPositions(
+  set: Set<number>,
+  tr: Transaction,
+): Set<number> {
+  const next = new Set<number>();
+  for (const pos of set) {
+    const mapped = tr.changes.mapPos(pos, -1);
+    if (mapped !== null) {
+      next.add(mapped);
+    }
+  }
+  return next;
+}
+
+function applyVaultImageExpandToggleEffects(
+  doc: Text,
+  next: Set<number>,
+  tr: Transaction,
+): Set<number> {
+  let out = next;
+  for (const e of tr.effects) {
+    if (!e.is(toggleVaultImageExpand)) {
+      continue;
+    }
+    const {lineFrom} = e.value;
+    const n = new Set(out);
+    if (n.has(lineFrom)) {
+      n.delete(lineFrom);
+    } else {
+      n.add(lineFrom);
+    }
+    out = filterValidExpandedLineStarts(doc, n);
+  }
+  return out;
+}
+
 const vaultImageExpanded = StateField.define<Set<number>>({
   create: () => new Set(),
   update(set, tr) {
@@ -82,35 +118,17 @@ const vaultImageExpanded = StateField.define<Set<number>>({
       return set;
     }
 
-    let next: Set<number>;
-    if (tr.docChanged) {
-      next = new Set();
-      for (const pos of set) {
-        const mapped = tr.changes.mapPos(pos, -1);
-        if (mapped !== null) {
-          next.add(mapped);
-        }
-      }
-    } else {
-      next = new Set(set);
-    }
+    const next = tr.docChanged
+      ? remapVaultImageExpandedPositions(set, tr)
+      : new Set(set);
 
-    next = filterValidExpandedLineStarts(tr.state.doc, next);
+    const afterToggles = applyVaultImageExpandToggleEffects(
+      tr.state.doc,
+      filterValidExpandedLineStarts(tr.state.doc, next),
+      tr,
+    );
 
-    for (const e of tr.effects) {
-      if (e.is(toggleVaultImageExpand)) {
-        const {lineFrom} = e.value;
-        const n = new Set(next);
-        if (n.has(lineFrom)) {
-          n.delete(lineFrom);
-        } else {
-          n.add(lineFrom);
-        }
-        next = filterValidExpandedLineStarts(tr.state.doc, n);
-      }
-    }
-
-    return setsEqual(set, next) ? set : next;
+    return setsEqual(set, afterToggles) ? set : afterToggles;
   },
 });
 

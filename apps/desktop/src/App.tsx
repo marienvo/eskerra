@@ -14,7 +14,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type MutableRefObject,
   type ReactNode,
+  type SetStateAction,
 } from 'react';
 
 import {SettingsPage} from './components/SettingsPage';
@@ -34,7 +37,7 @@ import {
 } from './components/AppStatusBar';
 import {ToastStack} from './components/ToastStack';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
-import {WindowTitleBar} from './components/WindowTitleBar';
+import {WindowTitleBar, type WindowTitleBarTodayHubSelect} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
@@ -48,13 +51,18 @@ import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
 import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {ThemeProvider} from './theme/ThemeProvider';
 import {ThemedChromeBackground} from './theme/ThemedChromeBackground';
-import {defaultEskerraSettings, isVaultR2PlaylistConfigured} from '@eskerra/core';
+import {
+  defaultEskerraSettings,
+  isVaultR2PlaylistConfigured,
+  type EskerraSettings,
+} from '@eskerra/core';
 
 import {getDesktopAudioPlayer} from './lib/htmlAudioPlayer';
 import {normalizeEditorDocUri} from './lib/editorDocumentHistory';
 import {
   tabCurrentUri,
   tabsToStored,
+  type EditorWorkspaceTab,
 } from './lib/editorWorkspaceTabs';
 import {
   DEFAULT_LAYOUTS,
@@ -68,6 +76,8 @@ import {
   DEFAULT_MAIN_WINDOW_PANE_VISIBILITY,
   loadMainWindowUi,
   saveMainWindowUi,
+  type StoredMainWindowInbox,
+  type StoredMainWindowUi,
   type TodayHubWorkspaceSnapshot,
 } from './lib/mainWindowUiStore';
 import {
@@ -75,7 +85,10 @@ import {
   reduceDoubleShiftKeyDown,
   reduceDoubleShiftKeyUp,
 } from './lib/doubleShiftKeySequence';
-import {resolveAppStatusBarCenter} from './lib/resolveAppStatusBarCenter';
+import {
+  resolveAppStatusBarCenter,
+  type AppStatusBarCenter,
+} from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
 
@@ -96,6 +109,1090 @@ const MAIN_WINDOW_LABEL = 'main';
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
+
+function useAppRootClassName(
+  vaultRoot: string | null,
+  layoutsReady: boolean,
+  maximized: boolean,
+  tiling: 'none' | 'left' | 'right',
+  tilingDebug: boolean,
+): string {
+  return useMemo(() => {
+    const parts = ['app-root'];
+    if (isTauri()) {
+      parts.push('app-root--tauri');
+    }
+    if (!vaultRoot || !layoutsReady) {
+      parts.push('app-root--setup');
+    }
+    if (maximized) {
+      parts.push('app-root--maximized');
+    }
+    if (tiling === 'left') {
+      parts.push('app-root--tiled-left');
+    }
+    if (tiling === 'right') {
+      parts.push('app-root--tiled-right');
+    }
+    if (tilingDebug) {
+      parts.push('app-root--tiling-debug');
+    }
+    return parts.join(' ');
+  }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
+}
+
+function useAppTitleBarTodayHubSelect(
+  vaultRoot: string | null,
+  todayHubSelectorItems: ReadonlyArray<{
+    todayNoteUri: string;
+    label: string;
+  }>,
+  activeTodayHubUri: string | null,
+  workspaceSelectShowsActiveTabPill: boolean,
+  focusActiveTodayHubNote: () => void,
+  switchTodayHubWorkspace: (uri: string) => void | Promise<void>,
+  openTodayHubInNewTabAfterActive: (uri: string) => void,
+): WindowTitleBarTodayHubSelect {
+  return useMemo((): WindowTitleBarTodayHubSelect => {
+    if (
+      !vaultRoot
+      || todayHubSelectorItems.length === 0
+      || activeTodayHubUri == null
+    ) {
+      return null;
+    }
+    const activeLabel =
+      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
+        ?.label ?? 'Today';
+    return {
+      items: todayHubSelectorItems,
+      activeTodayNoteUri: activeTodayHubUri,
+      activeLabel,
+      mainShowsActiveTabPill: workspaceSelectShowsActiveTabPill,
+      onMainActivate: focusActiveTodayHubNote,
+      onPickHub: (uri: string) => {
+        void switchTodayHubWorkspace(uri);
+      },
+      onOpenHubInNewTab: openTodayHubInNewTabAfterActive,
+    };
+  }, [
+    vaultRoot,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    workspaceSelectShowsActiveTabPill,
+    focusActiveTodayHubNote,
+    switchTodayHubWorkspace,
+    openTodayHubInNewTabAfterActive,
+  ]);
+}
+
+type AppMainWindowKeyboardEffectsArgs = {
+  vaultRoot: string | null;
+  busy: boolean;
+  canReopenClosedEditorTab: boolean;
+  reopenLastClosedEditorTab: () => void;
+  composingNewEntry: boolean;
+  selectedUri: string | null;
+  onCleanNoteInbox: () => void;
+  quickOpenOpen: boolean;
+  setQuickOpenOpen: (open: boolean) => void;
+  vaultSearchOpen: boolean;
+  setVaultSearchOpen: (open: boolean) => void;
+};
+
+function useAppMainWindowKeyboardEffects({
+  vaultRoot,
+  busy,
+  canReopenClosedEditorTab,
+  reopenLastClosedEditorTab,
+  composingNewEntry,
+  selectedUri,
+  onCleanNoteInbox,
+  quickOpenOpen,
+  setQuickOpenOpen,
+  vaultSearchOpen,
+  setVaultSearchOpen,
+}: AppMainWindowKeyboardEffectsArgs) {
+  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
+  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
+  useLayoutEffect(() => {
+    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
+    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
+  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
+
+  const onCleanNoteInboxRef = useRef(onCleanNoteInbox);
+  useLayoutEffect(() => {
+    onCleanNoteInboxRef.current = onCleanNoteInbox;
+  }, [onCleanNoteInbox]);
+
+  const quickOpenOpenRef = useRef(quickOpenOpen);
+  const vaultSearchOpenRef = useRef(vaultSearchOpen);
+  useLayoutEffect(() => {
+    quickOpenOpenRef.current = quickOpenOpen;
+  }, [quickOpenOpen]);
+  useLayoutEffect(() => {
+    vaultSearchOpenRef.current = vaultSearchOpen;
+  }, [vaultSearchOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || !e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 't' && e.key !== 'T') {
+        return;
+      }
+      if (busy || !canReopenClosedEditorTabRef.current) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      reopenLastClosedEditorTabRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [vaultRoot, busy]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || busy) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 'e' && e.key !== 'E') {
+        return;
+      }
+      const focusEl =
+        (document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null) ?? (e.target as HTMLElement | null);
+      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
+      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
+      if (!inInboxCm && !inTodayHubCm) {
+        return;
+      }
+      if (composingNewEntry || !selectedUri) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      onCleanNoteInboxRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [vaultRoot, busy, composingNewEntry, selectedUri]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || busy) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod || !e.shiftKey || e.altKey) {
+        return;
+      }
+      if (e.key !== 'f' && e.key !== 'F') {
+        return;
+      }
+      if (quickOpenOpenRef.current || vaultSearchOpenRef.current) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      setVaultSearchOpen(true);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [vaultRoot, busy, setVaultSearchOpen]);
+
+  useEffect(() => {
+    let state = initialDoubleShiftState;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
+        return;
+      }
+      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
+        return;
+      }
+      if (e.repeat) {
+        return;
+      }
+      const next = reduceDoubleShiftKeyUp(
+        state,
+        performance.now(),
+        e.key,
+        e.ctrlKey,
+        e.metaKey,
+        e.altKey,
+      );
+      state = next.state;
+      if (next.shouldOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setQuickOpenOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+    };
+  }, [vaultRoot, busy, setQuickOpenOpen]);
+}
+
+function logDevWindowRestoreError(message: string, e: unknown): void {
+  if (import.meta.env.DEV) {
+    console.error(message, e);
+  }
+}
+
+async function peekMainWindowSizeFromStateFile(): Promise<{
+  diskMainW?: number;
+  diskMainH?: number;
+}> {
+  try {
+    const v = await invoke<{
+      pathExists: boolean;
+      mainWidth?: number;
+      mainHeight?: number;
+    }>('eskerra_peek_window_state_file');
+    if (!v.pathExists) {
+      return {};
+    }
+    return {diskMainW: v.mainWidth, diskMainH: v.mainHeight};
+  } catch {
+    return {};
+  }
+}
+
+async function applyPersistedFileSizeIfDiffers(
+  win: ReturnType<typeof getCurrentWindow>,
+  diskMainW: number,
+  diskMainH: number,
+  sizeAfterRestore: {width: number; height: number} | null,
+): Promise<void> {
+  if (sizeAfterRestore == null) {
+    return;
+  }
+  if (
+    diskMainW <= 0
+    || diskMainH <= 0
+    || (sizeAfterRestore.width === diskMainW
+      && sizeAfterRestore.height === diskMainH)
+  ) {
+    return;
+  }
+  try {
+    await win.setSize(new PhysicalSize(diskMainW, diskMainH));
+  } catch (e) {
+    logDevWindowRestoreError(
+      '[eskerra] window restore: setSize from persisted file failed',
+      e,
+    );
+  }
+}
+
+async function runMainWindowRestoreAfterScrim(
+  cancelledRef: {current: boolean},
+  setStartupSplashPhase: Dispatch<SetStateAction<StartupSplashPhase>>,
+): Promise<void> {
+  const win = getCurrentWindow();
+  const {diskMainW, diskMainH} = await peekMainWindowSizeFromStateFile();
+
+  try {
+    await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
+  } catch (e) {
+    logDevWindowRestoreError(
+      '[eskerra] window-state restore (size, maximized, visible, …) failed',
+      e,
+    );
+  }
+
+  try {
+    await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
+  } catch (e) {
+    logDevWindowRestoreError(
+      '[eskerra] window-state restore (position) failed; size already applied',
+      e,
+    );
+  }
+
+  let sizeAfterRestore: {width: number; height: number} | null = null;
+  try {
+    const s = await win.innerSize();
+    sizeAfterRestore = {width: s.width, height: s.height};
+  } catch {
+    sizeAfterRestore = null;
+  }
+
+  const dw = diskMainW;
+  const dh = diskMainH;
+  if (dw != null && dh != null) {
+    await applyPersistedFileSizeIfDiffers(win, dw, dh, sizeAfterRestore);
+  }
+
+  if (!cancelledRef.current) {
+    setStartupSplashPhase('done');
+  }
+}
+
+type AppPodcastPlaybackRegionArgs = {
+  vaultRoot: string | null;
+  fs: ReturnType<typeof createTauriVaultFilesystem>;
+  podcastFsNonce: number;
+  setErr: (err: string | null) => void;
+  deviceInstanceId: string | null;
+  vaultSettings: EskerraSettings | null;
+  err: string | null;
+  diskConflict: unknown;
+  diskConflictSoft: unknown;
+  renameLinkProgress: {done: number; total: number} | null;
+  wikiRenameNotice: string | null;
+};
+
+function useAppPodcastPlaybackRegion({
+  vaultRoot,
+  fs,
+  podcastFsNonce,
+  setErr,
+  deviceInstanceId,
+  vaultSettings,
+  err,
+  diskConflict,
+  diskConflictSoft,
+  renameLinkProgress,
+  wikiRenameNotice,
+}: AppPodcastPlaybackRegionArgs) {
+  const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
+  const bumpPlaylistDiskRevision = useCallback(() => {
+    setPlaylistDiskRevision(r => r + 1);
+  }, []);
+
+  const podcastCatalog = useDesktopPodcastCatalog({
+    vaultRoot,
+    fs,
+    fsRefreshNonce: podcastFsNonce,
+    onError: setErr,
+  });
+
+  const rssSyncingRef = useRef(false);
+  const [rssSyncing, setRssSyncing] = useState(false);
+  const [rssSyncPercent, setRssSyncPercent] = useState<number | null>(null);
+
+  const handleEpisodesRssSync = useCallback(async () => {
+    if (vaultRoot == null || rssSyncingRef.current) {
+      return;
+    }
+    rssSyncingRef.current = true;
+    setRssSyncing(true);
+    setRssSyncPercent(null);
+    try {
+      await runDesktopPodcastRssSync(vaultRoot, fs, {
+        onProgress: payload => {
+          const n = payload.percent;
+          if (Number.isFinite(n) && n >= 0 && n <= 100) {
+            setRssSyncPercent(n);
+          }
+        },
+      });
+      clearPodcastMarkdownFileContentCache();
+      await podcastCatalog.refreshPodcasts(true);
+    } catch {
+      // Errors per-file are already logged inside runDesktopPodcastRssSync.
+    } finally {
+      rssSyncingRef.current = false;
+      setRssSyncing(false);
+      setRssSyncPercent(null);
+    }
+  }, [vaultRoot, fs, podcastCatalog]);
+
+  const consumeCatalogReady = Boolean(vaultRoot) && !podcastCatalog.catalogLoading;
+
+  const desktopPlayback = useDesktopPodcastPlayback({
+    consumeCatalogReady,
+    consumeEpisodes: podcastCatalog.episodes,
+    deviceInstanceId: deviceInstanceId ?? '',
+    fs,
+    onCatalogRefresh: () => podcastCatalog.refreshPodcasts(false),
+    onError: setErr,
+    onPlaylistDiskUpdated: bumpPlaylistDiskRevision,
+    playlistRevision: playlistDiskRevision,
+    r2PlaylistConfigured: isVaultR2PlaylistConfigured(
+      vaultSettings ?? defaultEskerraSettings,
+    ),
+    vaultRoot,
+  });
+
+  const toolbarNowPlaying = useMemo(() => {
+    if (desktopPlayback.activeEpisode == null) {
+      return null;
+    }
+    return {
+      episodeTitle: desktopPlayback.activeEpisode.title,
+      seriesName: desktopPlayback.activeEpisode.seriesName,
+    };
+  }, [desktopPlayback.activeEpisode]);
+
+  const playbackTransport = useMemo((): PlaybackTransportProps | undefined => {
+    if (desktopPlayback.activeEpisode == null) {
+      return undefined;
+    }
+    const seek = desktopPlayback.seekBy;
+    return {
+      positionLabel: formatPlaybackMs(desktopPlayback.positionMs),
+      durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
+      seekDisabled: desktopPlayback.seekDisabled,
+      playControl: desktopPlayback.playbackTransportPlayControl,
+      onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
+      onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
+      onTogglePlay: () => desktopPlayback.togglePause(),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
+  }, [
+    desktopPlayback.activeEpisode,
+    desktopPlayback.durationMs,
+    desktopPlayback.playbackTransportPlayControl,
+    desktopPlayback.positionMs,
+    desktopPlayback.seekBy,
+    desktopPlayback.seekDisabled,
+    desktopPlayback.togglePause,
+  ]);
+
+  const statusBarCenter = useMemo(
+    () =>
+      resolveAppStatusBarCenter({
+        err,
+        diskConflict: diskConflict != null,
+        diskConflictSoft: diskConflictSoft != null,
+        renameLinkProgress,
+        wikiRenameNotice,
+        playerLabel: desktopPlayback.playerLabel,
+        activeEpisode: desktopPlayback.activeEpisode,
+        tagline: APP_SHELL_TAGLINE,
+      }),
+    [
+      err,
+      diskConflict,
+      diskConflictSoft,
+      renameLinkProgress,
+      wikiRenameNotice,
+      desktopPlayback.playerLabel,
+      desktopPlayback.activeEpisode,
+    ],
+  );
+
+  return {
+    podcastCatalog,
+    rssSyncing,
+    rssSyncPercent,
+    handleEpisodesRssSync,
+    desktopPlayback,
+    toolbarNowPlaying,
+    playbackTransport,
+    statusBarCenter,
+    bumpPlaylistDiskRevision,
+  };
+}
+
+function useAppTauriDocumentChrome(
+  maximized: boolean,
+  tiling: 'none' | 'left' | 'right',
+) {
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    void (async () => {
+      try {
+        await getCurrentWindow().setDecorations(false);
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }, []);
+
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!isTauri()) {
+      root.classList.remove('tauri-main-chrome');
+      return () => {
+        root.classList.remove('tauri-main-chrome');
+      };
+    }
+    root.classList.add('tauri-main-chrome');
+    return () => {
+      root.classList.remove('tauri-main-chrome');
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      document.documentElement.style.removeProperty('--shell-overlay-radius');
+      return () => {
+        document.documentElement.style.removeProperty('--shell-overlay-radius');
+      };
+    }
+    const rounded = !maximized && tiling !== 'left' && tiling !== 'right';
+    document.documentElement.style.setProperty(
+      '--shell-overlay-radius',
+      rounded ? 'var(--window-radius)' : '0px',
+    );
+    return () => {
+      document.documentElement.style.removeProperty('--shell-overlay-radius');
+    };
+  }, [maximized, tiling]);
+}
+
+type UseAppOnMountLayoutHydrationArgs = {
+  setLayouts: Dispatch<SetStateAction<StoredLayouts>>;
+  setLayoutsReady: (ready: boolean) => void;
+  setVaultPaneVisible: Dispatch<SetStateAction<boolean>>;
+  setEpisodesPaneVisible: Dispatch<SetStateAction<boolean>>;
+  setInboxPaneVisible: Dispatch<SetStateAction<boolean>>;
+  setNotificationsPanelVisible: Dispatch<SetStateAction<boolean>>;
+  setRestoredInboxState: Dispatch<
+    SetStateAction<{
+      vaultRoot: string;
+      composingNewEntry: boolean;
+      selectedUri: string | null;
+      openTabUris?: readonly string[];
+      editorWorkspaceTabs?: ReadonlyArray<{
+        id: string;
+        entries: string[];
+        index: number;
+      }>;
+      activeEditorTabId?: string | null;
+      activeTodayHubUri?: string | null;
+      todayHubWorkspaces?: Record<string, TodayHubWorkspaceSnapshot> | null;
+    } | null>
+  >;
+};
+
+function useAppOnMountLayoutHydration({
+  setLayouts,
+  setLayoutsReady,
+  setVaultPaneVisible,
+  setEpisodesPaneVisible,
+  setInboxPaneVisible,
+  setNotificationsPanelVisible,
+  setRestoredInboxState,
+}: UseAppOnMountLayoutHydrationArgs) {
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      loadStoredLayouts(),
+      loadMainWindowUi(),
+      hydrateEmojiUsageFromStore(),
+    ]).then(([loadedLayouts, ui]) => {
+      if (cancelled) {
+        return;
+      }
+      setLayouts(loadedLayouts);
+      if (ui) {
+        setVaultPaneVisible(ui.vaultPaneVisible);
+        setEpisodesPaneVisible(ui.episodesPaneVisible);
+        setInboxPaneVisible(ui.inboxPaneVisible);
+        setNotificationsPanelVisible(ui.notificationsPanelVisible);
+        setRestoredInboxState({
+          vaultRoot: ui.vaultRoot,
+          composingNewEntry: ui.inbox.composingNewEntry,
+          selectedUri: ui.inbox.selectedUri,
+          openTabUris: ui.inbox.openTabUris,
+          editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
+          activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
+          activeTodayHubUri: ui.inbox.activeTodayHubUri ?? null,
+          todayHubWorkspaces: ui.inbox.todayHubWorkspaces ?? null,
+        });
+      }
+      setLayoutsReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    setLayouts,
+    setLayoutsReady,
+    setRestoredInboxState,
+    setVaultPaneVisible,
+    setEpisodesPaneVisible,
+    setInboxPaneVisible,
+    setNotificationsPanelVisible,
+  ]);
+}
+
+function useAppMediaControlDesktopPlayback(
+  desktopPlaybackRef: MutableRefObject<
+    ReturnType<typeof useDesktopPodcastPlayback>
+  >,
+) {
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    listen<string>('media-control', event => {
+      const action = event.payload;
+      const p = getDesktopAudioPlayer();
+      (async () => {
+        if (action === 'pause' || action === 'stop') {
+          if ((await p.getState()) === 'playing') {
+            await desktopPlaybackRef.current.togglePause();
+          } else if (action === 'stop') {
+            await p.pause();
+          }
+          return;
+        }
+        if (action === 'play' || action === 'toggle') {
+          await desktopPlaybackRef.current.togglePause();
+        }
+      })().catch(() => undefined);
+    })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [desktopPlaybackRef]);
+}
+
+type UseAppStartupSplashPhasesArgs = {
+  appStartupReady: boolean;
+  startupSplashPhase: StartupSplashPhase;
+  setStartupSplashPhase: Dispatch<SetStateAction<StartupSplashPhase>>;
+};
+
+function useAppStartupSplashPhases({
+  appStartupReady,
+  startupSplashPhase,
+  setStartupSplashPhase,
+}: UseAppStartupSplashPhasesArgs) {
+  useEffect(() => {
+    if (!isTauri()) {
+      document.getElementById('splash-html')?.remove();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri() || startupSplashPhase !== 'artwork' || !appStartupReady) {
+      return;
+    }
+    document.getElementById('splash-html')?.remove();
+    queueMicrotask(() => {
+      setStartupSplashPhase('scrim');
+    });
+  }, [appStartupReady, startupSplashPhase, setStartupSplashPhase]);
+
+  useEffect(() => {
+    if (!isTauri() || startupSplashPhase !== 'scrim' || !appStartupReady) {
+      return;
+    }
+    const cancelledRef = {current: false};
+    let raf1 = 0;
+    let raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelledRef.current) {
+          return;
+        }
+        void runMainWindowRestoreAfterScrim(
+          cancelledRef,
+          setStartupSplashPhase,
+        );
+      });
+    });
+    return () => {
+      cancelledRef.current = true;
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [appStartupReady, startupSplashPhase, setStartupSplashPhase]);
+}
+
+type UseAppDebouncedPersistMainWindowUiArgs = {
+  vaultRoot: string | null;
+  inboxShellRestored: boolean;
+  vaultPaneVisible: boolean;
+  episodesPaneVisible: boolean;
+  inboxPaneVisible: boolean;
+  notificationsPanelVisible: boolean;
+  composingNewEntry: boolean;
+  selectedUri: string | null;
+  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
+  activeEditorTabId: string | null;
+  activeTodayHubUri: string | null;
+  todayHubWorkspacesForSave: Record<string, TodayHubWorkspaceSnapshot> | null;
+};
+
+function useAppDebouncedPersistMainWindowUi({
+  vaultRoot,
+  inboxShellRestored,
+  vaultPaneVisible,
+  episodesPaneVisible,
+  inboxPaneVisible,
+  notificationsPanelVisible,
+  composingNewEntry,
+  selectedUri,
+  editorWorkspaceTabs,
+  activeEditorTabId,
+  activeTodayHubUri,
+  todayHubWorkspacesForSave,
+}: UseAppDebouncedPersistMainWindowUiArgs) {
+  useEffect(() => {
+    if (!vaultRoot || !inboxShellRestored) {
+      return;
+    }
+    const inbox: StoredMainWindowInbox = {
+      composingNewEntry,
+      selectedUri,
+      openTabUris: editorWorkspaceTabs
+        .map(t => tabCurrentUri(t))
+        .filter((u): u is string => u != null),
+      editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
+      activeEditorTabId,
+      activeTodayHubUri,
+    };
+    if (todayHubWorkspacesForSave != null) {
+      inbox.todayHubWorkspaces = todayHubWorkspacesForSave;
+    }
+    const payload: StoredMainWindowUi = {
+      vaultRoot,
+      vaultPaneVisible,
+      episodesPaneVisible,
+      inboxPaneVisible,
+      notificationsPanelVisible,
+      inbox,
+    };
+    const t = window.setTimeout(() => {
+      void saveMainWindowUi(payload);
+    }, 200);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [
+    vaultRoot,
+    vaultPaneVisible,
+    episodesPaneVisible,
+    inboxPaneVisible,
+    notificationsPanelVisible,
+    selectedUri,
+    composingNewEntry,
+    editorWorkspaceTabs,
+    activeEditorTabId,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
+    inboxShellRestored,
+  ]);
+}
+
+function useAppTauriCloseAndFocusSave(
+  desktopPlaybackRef: MutableRefObject<
+    ReturnType<typeof useDesktopPodcastPlayback>
+  >,
+  flushInboxSave: () => void | Promise<void>,
+) {
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+    let cancelled = false;
+    let unlistenClose: (() => void) | undefined;
+    let unlistenFocus: (() => void) | undefined;
+    const win = getCurrentWindow();
+    win
+      .onCloseRequested(async event => {
+        event.preventDefault();
+        try {
+          try {
+            await desktopPlaybackRef.current.pauseIfPlaying();
+            await desktopPlaybackRef.current.waitForPersistFlushed(
+              SHUTDOWN_PERSIST_TIMEOUT_MS,
+            );
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error('[eskerra] shutdown pause/flush failed', e);
+            }
+          }
+          await flushInboxSave();
+          try {
+            await saveWindowState(StateFlags.ALL);
+          } catch (e) {
+            if (import.meta.env.DEV) {
+              console.error('[eskerra] saveWindowState failed', e);
+            }
+          }
+        } finally {
+          /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
+          win.destroy();
+        }
+      })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlistenClose = fn;
+        }
+      })
+      .catch(() => undefined);
+    win
+      .onFocusChanged(({payload: focused}) => {
+        if (!focused) {
+          void flushInboxSave();
+        }
+      })
+      .then(fn => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlistenFocus = fn;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlistenClose?.();
+      unlistenFocus?.();
+    };
+  }, [desktopPlaybackRef, flushInboxSave]);
+}
+
+function useAppLayoutWidthPersisters(
+  setLayouts: Dispatch<SetStateAction<StoredLayouts>>,
+) {
+  const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
+    setLayouts(prev => {
+      const next = {
+        ...prev,
+        inbox: {leftWidthPx},
+        podcastsMain: {leftWidthPx},
+      };
+      void saveStoredLayouts(next);
+      return next;
+    });
+  }, [setLayouts]);
+
+  const persistVaultEpisodesStackTopHeightPx = useCallback(
+    (topHeightPx: number) => {
+      setLayouts(prev => {
+        const next = {...prev, vaultEpisodesStack: {topHeightPx}};
+        void saveStoredLayouts(next);
+        return next;
+      });
+    },
+    [setLayouts],
+  );
+
+  const persistNotificationsInboxStackTopHeightPx = useCallback(
+    (topHeightPx: number) => {
+      setLayouts(prev => {
+        const next = {...prev, notificationsInboxStack: {topHeightPx}};
+        void saveStoredLayouts(next);
+        return next;
+      });
+    },
+    [setLayouts],
+  );
+
+  const persistNotificationsWidthPx = useCallback(
+    (widthPx: number) => {
+      setLayouts(prev => {
+        const next = {...prev, notifications: {widthPx}};
+        void saveStoredLayouts(next);
+        return next;
+      });
+    },
+    [setLayouts],
+  );
+
+  return {
+    persistMainLeftWidthPx,
+    persistVaultEpisodesStackTopHeightPx,
+    persistNotificationsInboxStackTopHeightPx,
+    persistNotificationsWidthPx,
+  };
+}
+
+type AppThemeShellProps = {
+  vaultRoot: string | null;
+  vaultSettings: EskerraSettings | null;
+  setVaultSettings: (s: SetStateAction<EskerraSettings | null>) => void;
+  fs: ReturnType<typeof createTauriVaultFilesystem>;
+  onThemeReady: () => void;
+  children: ReactNode;
+};
+
+function AppThemeShell({
+  vaultRoot,
+  vaultSettings,
+  setVaultSettings,
+  fs,
+  onThemeReady,
+  children,
+}: AppThemeShellProps) {
+  return (
+    <ThemeProvider
+      vaultRoot={vaultRoot}
+      vaultSettings={vaultSettings}
+      setVaultSettings={setVaultSettings}
+      fs={fs}
+      onThemeReady={onThemeReady}>
+      {children}
+    </ThemeProvider>
+  );
+}
+
+type UseAppNotificationSessionArgs = {
+  err: string | null;
+  diskConflict: unknown;
+  diskConflictSoft: {uri: string} | null;
+  selectedUri: string | null;
+  statusBarCenter: AppStatusBarCenter;
+  renameLinkProgress: {done: number; total: number} | null;
+  setNotificationsPanelVisible: Dispatch<SetStateAction<boolean>>;
+};
+
+function useAppNotificationSession({
+  err,
+  diskConflict,
+  diskConflictSoft,
+  selectedUri,
+  statusBarCenter,
+  renameLinkProgress,
+  setNotificationsPanelVisible,
+}: UseAppNotificationSessionArgs) {
+  const diskConflictSoftVisible = useMemo(
+    () =>
+      !err &&
+      diskConflict == null &&
+      diskConflictSoft != null &&
+      selectedUri != null &&
+      normalizeEditorDocUri(diskConflictSoft.uri) ===
+        normalizeEditorDocUri(selectedUri),
+    [err, diskConflict, diskConflictSoft, selectedUri],
+  );
+
+  const openNotificationsPanel = useCallback(() => {
+    setNotificationsPanelVisible(true);
+  }, [setNotificationsPanelVisible]);
+
+  const session = useSessionNotifications(
+    {
+      statusBarCenter,
+      renameLinkProgress,
+      diskConflictBlocking: diskConflict != null,
+      diskConflictSoftVisible,
+    },
+    {onOpenPanel: openNotificationsPanel},
+  );
+
+  return session;
+}
+
+type AppDiskConflictBannersProps = {
+  err: string | null;
+  diskConflict: unknown;
+  diskConflictSoft: {uri: string} | null;
+  selectedUri: string | null;
+  enterDiskConflictMergeView: () => void;
+  resolveDiskConflictReloadFromDisk: () => void;
+  resolveDiskConflictKeepLocal: () => void;
+  elevateDiskConflictSoftToBlocking: () => void;
+  dismissDiskConflictSoft: () => void;
+};
+
+function AppDiskConflictBanners({
+  err,
+  diskConflict,
+  diskConflictSoft,
+  selectedUri,
+  enterDiskConflictMergeView,
+  resolveDiskConflictReloadFromDisk,
+  resolveDiskConflictKeepLocal,
+  elevateDiskConflictSoftToBlocking,
+  dismissDiskConflictSoft,
+}: AppDiskConflictBannersProps) {
+  return (
+    <>
+      {!err && diskConflict ? (
+        <div className="conflict-banner" role="alert">
+          <span>
+            This note was changed on disk while you have unsaved edits. Saving is paused until you
+            choose.
+          </span>
+          <span className="conflict-banner__actions">
+            <button
+              type="button"
+              onClick={() => enterDiskConflictMergeView()}
+            >
+              Compare / merge…
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => resolveDiskConflictReloadFromDisk()}
+            >
+              Reload from disk
+            </button>
+            <button type="button" onClick={() => resolveDiskConflictKeepLocal()}>
+              Keep my edits
+            </button>
+          </span>
+        </div>
+      ) : null}
+      {!err &&
+      !diskConflict &&
+      diskConflictSoft &&
+      selectedUri != null &&
+      normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
+        <div className="info-banner info-banner--inline-actions" aria-live="polite">
+          <span>
+            A version on disk differs from your unsaved draft. Your edits stay primary until you
+            save. Open full resolve only if you need to reconcile with disk.
+          </span>
+          <span className="conflict-banner__actions">
+            <button
+              type="button"
+              onClick={() => enterDiskConflictMergeView()}
+            >
+              Compare / merge…
+            </button>
+            <button
+              type="button"
+              className="primary"
+              onClick={() => elevateDiskConflictSoftToBlocking()}
+            >
+              Resolve with disk…
+            </button>
+            <button type="button" onClick={() => dismissDiskConflictSoft()}>
+              Dismiss
+            </button>
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 export default function App() {
   const {maximized} = useTauriWindowMaximized();
@@ -238,52 +1335,15 @@ export default function App() {
     [vaultRoot, vaultSettings, fs, setVaultSettings],
   );
 
-  const appRootClassName = useMemo(() => {
-    const parts = ['app-root'];
-    if (isTauri()) {
-      parts.push('app-root--tauri');
-    }
-    if (!vaultRoot || !layoutsReady) {
-      parts.push('app-root--setup');
-    }
-    if (maximized) {
-      parts.push('app-root--maximized');
-    }
-    if (tiling === 'left') {
-      parts.push('app-root--tiled-left');
-    }
-    if (tiling === 'right') {
-      parts.push('app-root--tiled-right');
-    }
-    if (tilingDebug) {
-      parts.push('app-root--tiling-debug');
-    }
-    return parts.join(' ');
-  }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
+  const appRootClassName = useAppRootClassName(
+    vaultRoot,
+    layoutsReady,
+    maximized,
+    tiling,
+    tilingDebug,
+  );
 
-  const titleBarTodayHubSelect = useMemo(() => {
-    if (
-      !vaultRoot
-      || todayHubSelectorItems.length === 0
-      || activeTodayHubUri == null
-    ) {
-      return null;
-    }
-    const activeLabel =
-      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
-        ?.label ?? 'Today';
-    return {
-      items: todayHubSelectorItems,
-      activeTodayNoteUri: activeTodayHubUri,
-      activeLabel,
-      mainShowsActiveTabPill: workspaceSelectShowsActiveTabPill,
-      onMainActivate: focusActiveTodayHubNote,
-      onPickHub: (uri: string) => {
-        void switchTodayHubWorkspace(uri);
-      },
-      onOpenHubInNewTab: openTodayHubInNewTabAfterActive,
-    };
-  }, [
+  const titleBarTodayHubSelect = useAppTitleBarTodayHubSelect(
     vaultRoot,
     todayHubSelectorItems,
     activeTodayHubUri,
@@ -291,7 +1351,7 @@ export default function App() {
     focusActiveTodayHubNote,
     switchTodayHubWorkspace,
     openTodayHubInNewTabAfterActive,
-  ]);
+  );
 
   const [vaultPaneVisible, setVaultPaneVisible] = useState(
     DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible,
@@ -315,156 +1375,25 @@ export default function App() {
   });
   usePreventMiddleClickPaste();
 
-  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
-  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
-  useLayoutEffect(() => {
-    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
-    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
-  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 't' && e.key !== 'T') {
-        return;
-      }
-      if (busy || !canReopenClosedEditorTabRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      reopenLastClosedEditorTabRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy]);
-
-  const onCleanNoteInboxRef = useRef(onCleanNoteInbox);
-  useLayoutEffect(() => {
-    onCleanNoteInboxRef.current = onCleanNoteInbox;
-  }, [onCleanNoteInbox]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'e' && e.key !== 'E') {
-        return;
-      }
-      const focusEl =
-        (document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null) ?? (e.target as HTMLElement | null);
-      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
-      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
-      if (!inInboxCm && !inTodayHubCm) {
-        return;
-      }
-      if (composingNewEntry || !selectedUri) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      onCleanNoteInboxRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy, composingNewEntry, selectedUri]);
-
   const [quickOpenOpen, setQuickOpenOpen] = useState(false);
-  const quickOpenOpenRef = useRef(false);
   const [vaultSearchOpen, setVaultSearchOpen] = useState(false);
-  const vaultSearchOpenRef = useRef(false);
 
-  useLayoutEffect(() => {
-    quickOpenOpenRef.current = quickOpenOpen;
-  }, [quickOpenOpen]);
-
-  useLayoutEffect(() => {
-    vaultSearchOpenRef.current = vaultSearchOpen;
-  }, [vaultSearchOpen]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'f' && e.key !== 'F') {
-        return;
-      }
-      if (quickOpenOpenRef.current || vaultSearchOpenRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      setVaultSearchOpen(true);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy]);
-
-  useEffect(() => {
-    let state = initialDoubleShiftState;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      if (e.repeat) {
-        return;
-      }
-      const next = reduceDoubleShiftKeyUp(
-        state,
-        performance.now(),
-        e.key,
-        e.ctrlKey,
-        e.metaKey,
-        e.altKey,
-      );
-      state = next.state;
-      if (next.shouldOpen) {
-        e.preventDefault();
-        e.stopPropagation();
-        setQuickOpenOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('keyup', onKeyUp, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('keyup', onKeyUp, true);
-    };
-  }, [vaultRoot, busy]);
+  useAppMainWindowKeyboardEffects({
+    vaultRoot,
+    busy,
+    canReopenClosedEditorTab,
+    reopenLastClosedEditorTab,
+    composingNewEntry,
+    selectedUri,
+    onCleanNoteInbox,
+    quickOpenOpen,
+    setQuickOpenOpen,
+    vaultSearchOpen,
+    setVaultSearchOpen,
+  });
 
   const [layouts, setLayouts] = useState<StoredLayouts>(DEFAULT_LAYOUTS);
   const [notificationsPanelVisible, setNotificationsPanelVisible] = useState(true);
-  const [playlistDiskRevision, setPlaylistDiskRevision] = useState(0);
   const [startupSplashPhase, setStartupSplashPhase] = useState<StartupSplashPhase>(
     () => (!isTauri() ? 'done' : 'artwork'),
   );
@@ -486,167 +1415,31 @@ export default function App() {
     ],
   );
 
-  const bumpPlaylistDiskRevision = useCallback(() => {
-    setPlaylistDiskRevision(r => r + 1);
-  }, []);
-
-  const podcastCatalog = useDesktopPodcastCatalog({
+  const {
+    podcastCatalog,
+    rssSyncing,
+    rssSyncPercent,
+    handleEpisodesRssSync,
+    desktopPlayback,
+    toolbarNowPlaying,
+    playbackTransport,
+    statusBarCenter,
+    bumpPlaylistDiskRevision,
+  } = useAppPodcastPlaybackRegion({
     vaultRoot,
     fs,
-    fsRefreshNonce: podcastFsNonce,
-    onError: setErr,
-  });
-
-  const rssSyncingRef = useRef(false);
-  const [rssSyncing, setRssSyncing] = useState(false);
-  const [rssSyncPercent, setRssSyncPercent] = useState<number | null>(null);
-
-  const handleEpisodesRssSync = useCallback(async () => {
-    if (vaultRoot == null || rssSyncingRef.current) return;
-    rssSyncingRef.current = true;
-    setRssSyncing(true);
-    setRssSyncPercent(null);
-    try {
-      await runDesktopPodcastRssSync(vaultRoot, fs, {
-        onProgress: payload => {
-          const n = payload.percent;
-          if (Number.isFinite(n) && n >= 0 && n <= 100) {
-            setRssSyncPercent(n);
-          }
-        },
-      });
-      clearPodcastMarkdownFileContentCache();
-      await podcastCatalog.refreshPodcasts(true);
-    } catch {
-      // Errors per-file are already logged inside runDesktopPodcastRssSync.
-    } finally {
-      rssSyncingRef.current = false;
-      setRssSyncing(false);
-      setRssSyncPercent(null);
-    }
-  }, [vaultRoot, fs, podcastCatalog]);
-
-  const consumeCatalogReady = Boolean(vaultRoot) && !podcastCatalog.catalogLoading;
-
-  const desktopPlayback = useDesktopPodcastPlayback({
-    consumeCatalogReady,
-    consumeEpisodes: podcastCatalog.episodes,
+    podcastFsNonce,
+    setErr,
     deviceInstanceId,
-    fs,
-    onCatalogRefresh: () => podcastCatalog.refreshPodcasts(false),
-    onError: setErr,
-    onPlaylistDiskUpdated: bumpPlaylistDiskRevision,
-    playlistRevision: playlistDiskRevision,
-    r2PlaylistConfigured: isVaultR2PlaylistConfigured(
-      vaultSettings ?? defaultEskerraSettings,
-    ),
-    vaultRoot,
+    vaultSettings,
+    err,
+    diskConflict,
+    diskConflictSoft,
+    renameLinkProgress,
+    wikiRenameNotice,
   });
 
-  const toolbarNowPlaying = useMemo(() => {
-    if (desktopPlayback.activeEpisode == null) {
-      return null;
-    }
-    return {
-      episodeTitle: desktopPlayback.activeEpisode.title,
-      seriesName: desktopPlayback.activeEpisode.seriesName,
-    };
-  }, [desktopPlayback.activeEpisode]);
-
-  const playbackTransport = useMemo((): PlaybackTransportProps | undefined => {
-    if (desktopPlayback.activeEpisode == null) {
-      return undefined;
-    }
-    const seek = desktopPlayback.seekBy;
-    return {
-      positionLabel: formatPlaybackMs(desktopPlayback.positionMs),
-      durationLabel: formatPlaybackMs(desktopPlayback.durationMs),
-      seekDisabled: desktopPlayback.seekDisabled,
-      playControl: desktopPlayback.playbackTransportPlayControl,
-      onSeekBack: () => void seek(-PLAYBACK_SKIP_MS),
-      onSeekForward: () => void seek(PLAYBACK_SKIP_MS),
-      onTogglePlay: () => desktopPlayback.togglePause(),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- granular playback fields below; hook return object is unstable
-  }, [
-    desktopPlayback.activeEpisode,
-    desktopPlayback.durationMs,
-    desktopPlayback.playbackTransportPlayControl,
-    desktopPlayback.positionMs,
-    desktopPlayback.seekBy,
-    desktopPlayback.seekDisabled,
-    desktopPlayback.togglePause,
-  ]);
-
-  const statusBarCenter = useMemo(
-    () =>
-      resolveAppStatusBarCenter({
-        err,
-        diskConflict: diskConflict != null,
-        diskConflictSoft: diskConflictSoft != null,
-        renameLinkProgress,
-        wikiRenameNotice,
-        playerLabel: desktopPlayback.playerLabel,
-        activeEpisode: desktopPlayback.activeEpisode,
-        tagline: APP_SHELL_TAGLINE,
-      }),
-    [
-      err,
-      diskConflict,
-      diskConflictSoft,
-      renameLinkProgress,
-      wikiRenameNotice,
-      desktopPlayback.playerLabel,
-      desktopPlayback.activeEpisode,
-    ],
-  );
-
-  /* Always frameless; native titlebar never shown (custom WindowTitleBar on all routes). */
-  useLayoutEffect(() => {
-    if (!isTauri()) {
-      return;
-    }
-    void (async () => {
-      try {
-        await getCurrentWindow().setDecorations(false);
-      } catch {
-        /* best-effort */
-      }
-    })();
-  }, []);
-
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    if (!isTauri()) {
-      root.classList.remove('tauri-main-chrome');
-      return () => {
-        root.classList.remove('tauri-main-chrome');
-      };
-    }
-    root.classList.add('tauri-main-chrome');
-    return () => {
-      root.classList.remove('tauri-main-chrome');
-    };
-  }, []);
-
-  /* Modal dim: match frameless rounded mask (all Tauri phases). */
-  useLayoutEffect(() => {
-    if (!isTauri()) {
-      document.documentElement.style.removeProperty('--shell-overlay-radius');
-      return () => {
-        document.documentElement.style.removeProperty('--shell-overlay-radius');
-      };
-    }
-    const rounded =
-      !maximized && tiling !== 'left' && tiling !== 'right';
-    document.documentElement.style.setProperty(
-      '--shell-overlay-radius',
-      rounded ? 'var(--window-radius)' : '0px',
-    );
-    return () => {
-      document.documentElement.style.removeProperty('--shell-overlay-radius');
-    };
-  }, [maximized, tiling]);
+  useAppTauriDocumentChrome(maximized, tiling);
 
   useDesktopPlaylistR2EtagPollingForMainWindow({
     allowPolling: !desktopPlayback.localPlaybackActive,
@@ -657,234 +1450,43 @@ export default function App() {
     vaultSettings,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      loadStoredLayouts(),
-      loadMainWindowUi(),
-      hydrateEmojiUsageFromStore(),
-    ]).then(([loadedLayouts, ui]) => {
-        if (cancelled) {
-          return;
-        }
-        setLayouts(loadedLayouts);
-        if (ui) {
-          setVaultPaneVisible(ui.vaultPaneVisible);
-          setEpisodesPaneVisible(ui.episodesPaneVisible);
-          setInboxPaneVisible(ui.inboxPaneVisible);
-          setNotificationsPanelVisible(ui.notificationsPanelVisible);
-          setRestoredInboxState({
-            vaultRoot: ui.vaultRoot,
-            composingNewEntry: ui.inbox.composingNewEntry,
-            selectedUri: ui.inbox.selectedUri,
-            openTabUris: ui.inbox.openTabUris,
-            editorWorkspaceTabs: ui.inbox.editorWorkspaceTabs,
-            activeEditorTabId: ui.inbox.activeEditorTabId ?? null,
-            activeTodayHubUri: ui.inbox.activeTodayHubUri ?? null,
-            todayHubWorkspaces: ui.inbox.todayHubWorkspaces ?? null,
-          });
-        }
-        setLayoutsReady(true);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useAppOnMountLayoutHydration({
+    setLayouts,
+    setLayoutsReady,
+    setVaultPaneVisible,
+    setEpisodesPaneVisible,
+    setInboxPaneVisible,
+    setNotificationsPanelVisible,
+    setRestoredInboxState,
+  });
 
   const desktopPlaybackRef = useRef(desktopPlayback);
   useLayoutEffect(() => {
     desktopPlaybackRef.current = desktopPlayback;
   }, [desktopPlayback]);
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    listen<string>('media-control', event => {
-      const action = event.payload;
-      const p = getDesktopAudioPlayer();
-      (async () => {
-        if (action === 'pause' || action === 'stop') {
-          if ((await p.getState()) === 'playing') {
-            await desktopPlaybackRef.current.togglePause();
-          } else if (action === 'stop') {
-            await p.pause();
-          }
-          return;
-        }
-        if (action === 'play' || action === 'toggle') {
-          await desktopPlaybackRef.current.togglePause();
-        }
-      })().catch(() => undefined);
-    })
-      .then(fn => {
-        if (cancelled) {
-          fn();
-        } else {
-          unlisten = fn;
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+  useAppMediaControlDesktopPlayback(desktopPlaybackRef);
 
-  useEffect(() => {
-    if (!vaultRoot || !inboxShellRestored) {
-      return;
-    }
-    const payload = {
-      vaultRoot,
-      vaultPaneVisible,
-      episodesPaneVisible,
-      inboxPaneVisible,
-      notificationsPanelVisible,
-      inbox: {
-        composingNewEntry,
-        selectedUri,
-        openTabUris: editorWorkspaceTabs
-          .map(t => tabCurrentUri(t))
-          .filter((u): u is string => u != null),
-        editorWorkspaceTabs: tabsToStored(editorWorkspaceTabs),
-        activeEditorTabId,
-        activeTodayHubUri,
-        todayHubWorkspaces: todayHubWorkspacesForSave,
-      },
-    };
-    const t = window.setTimeout(() => {
-      void saveMainWindowUi(payload);
-    }, 200);
-    return () => {
-      window.clearTimeout(t);
-    };
-  }, [
+  useAppDebouncedPersistMainWindowUi({
     vaultRoot,
+    inboxShellRestored,
     vaultPaneVisible,
     episodesPaneVisible,
     inboxPaneVisible,
     notificationsPanelVisible,
-    selectedUri,
     composingNewEntry,
+    selectedUri,
     editorWorkspaceTabs,
     activeEditorTabId,
     activeTodayHubUri,
     todayHubWorkspacesForSave,
-    inboxShellRestored,
-  ]);
+  });
 
-  useEffect(() => {
-    // In browser (non-Tauri), remove the HTML splash immediately — no startup flow needed.
-    if (!isTauri()) {
-      document.getElementById('splash-html')?.remove();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri() || startupSplashPhase !== 'artwork' || !appStartupReady) {
-      return;
-    }
-    document.getElementById('splash-html')?.remove();
-    queueMicrotask(() => {
-      setStartupSplashPhase('scrim');
-    });
-  }, [appStartupReady, startupSplashPhase]);
-
-  useEffect(() => {
-    if (!isTauri() || startupSplashPhase !== 'scrim' || !appStartupReady) {
-      return;
-    }
-    let cancelled = false;
-    let raf1 = 0;
-    let raf2 = 0;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        if (cancelled) {
-          return;
-        }
-        void (async () => {
-          const win = getCurrentWindow();
-          let diskMainW: number | undefined;
-          let diskMainH: number | undefined;
-          try {
-            const v = await invoke<{
-              pathExists: boolean;
-              mainWidth?: number;
-              mainHeight?: number;
-            }>('eskerra_peek_window_state_file');
-            if (v.pathExists) {
-              diskMainW = v.mainWidth;
-              diskMainH = v.mainHeight;
-            }
-          } catch {
-            /* ignore: fallback only when peek succeeds */
-          }
-
-          try {
-            await restoreState(MAIN_WINDOW_LABEL, WINDOW_RESTORE_FLAGS_NO_POSITION);
-          } catch (e) {
-            if (import.meta.env.DEV) {
-              console.error(
-                '[eskerra] window-state restore (size, maximized, visible, …) failed',
-                e,
-              );
-            }
-          }
-
-          try {
-            await restoreState(MAIN_WINDOW_LABEL, StateFlags.POSITION);
-          } catch (e) {
-            if (import.meta.env.DEV) {
-              console.error(
-                '[eskerra] window-state restore (position) failed; size already applied',
-                e,
-              );
-            }
-          }
-
-          let sizeAfterRestore: {width: number; height: number} | null = null;
-          try {
-            const s = await win.innerSize();
-            sizeAfterRestore = {width: s.width, height: s.height};
-          } catch {
-            sizeAfterRestore = null;
-          }
-
-          const dw = diskMainW;
-          const dh = diskMainH;
-          if (
-            dw != null &&
-            dh != null &&
-            dw > 0 &&
-            dh > 0 &&
-            sizeAfterRestore != null &&
-            (sizeAfterRestore.width !== dw || sizeAfterRestore.height !== dh)
-          ) {
-            try {
-              await win.setSize(new PhysicalSize(dw, dh));
-            } catch (e) {
-              if (import.meta.env.DEV) {
-                console.error(
-                  '[eskerra] window restore: setSize from persisted file failed',
-                  e,
-                );
-              }
-            }
-          }
-
-          if (!cancelled) {
-            setStartupSplashPhase('done');
-          }
-        })();
-      });
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
-    };
-  }, [appStartupReady, startupSplashPhase]);
+  useAppStartupSplashPhases({
+    appStartupReady,
+    startupSplashPhase,
+    setStartupSplashPhase,
+  });
 
   const pickFolder = async () => {
     setErr(null);
@@ -896,136 +1498,29 @@ export default function App() {
     setActivePage('vault');
   };
 
-  /** Single left-pane width (Vault, Episodes, or stack); mirrors `inbox` and `podcastsMain` in layout store. */
-  const persistMainLeftWidthPx = useCallback((leftWidthPx: number) => {
-    setLayouts(prev => {
-      const next = {
-        ...prev,
-        inbox: {leftWidthPx},
-        podcastsMain: {leftWidthPx},
-      };
-      void saveStoredLayouts(next);
-      return next;
-    });
-  }, []);
+  const {
+    persistMainLeftWidthPx,
+    persistVaultEpisodesStackTopHeightPx,
+    persistNotificationsInboxStackTopHeightPx,
+    persistNotificationsWidthPx,
+  } = useAppLayoutWidthPersisters(setLayouts);
 
-  const persistVaultEpisodesStackTopHeightPx = useCallback((topHeightPx: number) => {
-    setLayouts(prev => {
-      const next = {...prev, vaultEpisodesStack: {topHeightPx}};
-      void saveStoredLayouts(next);
-      return next;
-    });
-  }, []);
-
-  const persistNotificationsInboxStackTopHeightPx = useCallback((topHeightPx: number) => {
-    setLayouts(prev => {
-      const next = {...prev, notificationsInboxStack: {topHeightPx}};
-      void saveStoredLayouts(next);
-      return next;
-    });
-  }, []);
-
-  const persistNotificationsWidthPx = useCallback((widthPx: number) => {
-    setLayouts(prev => {
-      const next = {...prev, notifications: {widthPx}};
-      void saveStoredLayouts(next);
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri()) {
-      return;
-    }
-    let cancelled = false;
-    let unlistenClose: (() => void) | undefined;
-    let unlistenFocus: (() => void) | undefined;
-    const win = getCurrentWindow();
-    win
-      .onCloseRequested(async event => {
-        event.preventDefault();
-        try {
-          try {
-            await desktopPlaybackRef.current.pauseIfPlaying();
-            await desktopPlaybackRef.current.waitForPersistFlushed(
-              SHUTDOWN_PERSIST_TIMEOUT_MS,
-            );
-          } catch (e) {
-            if (import.meta.env.DEV) {
-              console.error('[eskerra] shutdown pause/flush failed', e);
-            }
-          }
-          await flushInboxSave();
-          try {
-            await saveWindowState(StateFlags.ALL);
-          } catch (e) {
-            if (import.meta.env.DEV) {
-              console.error('[eskerra] saveWindowState failed', e);
-            }
-          }
-        } finally {
-          /* Avoid awaiting destroy inside onCloseRequested (Tauri can deadlock waiting on this handler). */
-          win.destroy();
-        }
-      })
-      .then(fn => {
-        if (cancelled) {
-          fn();
-        } else {
-          unlistenClose = fn;
-        }
-      })
-      .catch(() => undefined);
-    win
-      .onFocusChanged(({payload: focused}) => {
-        if (!focused) {
-          void flushInboxSave();
-        }
-      })
-      .then(fn => {
-        if (cancelled) {
-          fn();
-        } else {
-          unlistenFocus = fn;
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      unlistenClose?.();
-      unlistenFocus?.();
-    };
-  }, [flushInboxSave]);
-
-  const diskConflictSoftVisible = useMemo(
-    () =>
-      !err &&
-      diskConflict == null &&
-      diskConflictSoft != null &&
-      selectedUri != null &&
-      normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri),
-    [err, diskConflict, diskConflictSoft, selectedUri],
-  );
-
-  const openNotificationsPanel = useCallback(() => {
-    setNotificationsPanelVisible(true);
-  }, []);
+  useAppTauriCloseAndFocusSave(desktopPlaybackRef, flushInboxSave);
 
   const {
     items: notificationItems,
     dismissItem: dismissNotification,
     clearAll: clearAllNotifications,
     highlightId: notificationHighlightId,
-  } = useSessionNotifications(
-    {
-      statusBarCenter,
-      renameLinkProgress,
-      diskConflictBlocking: diskConflict != null,
-      diskConflictSoftVisible,
-    },
-    {onOpenPanel: openNotificationsPanel},
-  );
-
+  } = useAppNotificationSession({
+    err,
+    diskConflict,
+    diskConflictSoft: diskConflictSoft as {uri: string} | null,
+    selectedUri,
+    statusBarCenter,
+    renameLinkProgress,
+    setNotificationsPanelVisible,
+  });
 
   const startupOverlay =
     isTauri() && startupSplashPhase !== 'done' ? (
@@ -1034,20 +1529,14 @@ export default function App() {
       />
     ) : null;
 
-  const wrapInThemeShell = (node: ReactNode) => (
-    <ThemeProvider
-      vaultRoot={vaultRoot}
-      vaultSettings={vaultSettings}
-      setVaultSettings={setVaultSettings}
-      fs={fs}
-      onThemeReady={onThemeReady}>
-      {node}
-    </ThemeProvider>
-  );
-
   if (!vaultRoot) {
-    return wrapInThemeShell(
-      <>
+    return (
+      <AppThemeShell
+        vaultRoot={vaultRoot}
+        vaultSettings={vaultSettings}
+        setVaultSettings={setVaultSettings}
+        fs={fs}
+        onThemeReady={onThemeReady}>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
           <ThemedChromeBackground />
@@ -1064,13 +1553,18 @@ export default function App() {
             <AppSetupTagline />
           </div>
         </div>
-      </>,
+      </AppThemeShell>
     );
   }
 
   if (!layoutsReady) {
-    return wrapInThemeShell(
-      <>
+    return (
+      <AppThemeShell
+        vaultRoot={vaultRoot}
+        vaultSettings={vaultSettings}
+        setVaultSettings={setVaultSettings}
+        fs={fs}
+        onThemeReady={onThemeReady}>
         {startupOverlay}
         <div ref={appRootRef} className={appRootClassName}>
           <ThemedChromeBackground />
@@ -1082,12 +1576,17 @@ export default function App() {
             <AppSetupTagline />
           </div>
         </div>
-      </>,
+      </AppThemeShell>
     );
   }
 
-  return wrapInThemeShell(
-    <>
+  return (
+    <AppThemeShell
+      vaultRoot={vaultRoot}
+      vaultSettings={vaultSettings}
+      setVaultSettings={setVaultSettings}
+      fs={fs}
+      onThemeReady={onThemeReady}>
       {startupOverlay}
       <div ref={appRootRef} className={appRootClassName}>
         <ThemedChromeBackground />
@@ -1271,62 +1770,17 @@ export default function App() {
             </div>
           </div>
 
-          {!err && diskConflict ? (
-            <div className="conflict-banner" role="alert">
-              <span>
-                This note was changed on disk while you have unsaved edits. Saving is paused until you
-                choose.
-              </span>
-              <span className="conflict-banner__actions">
-                <button
-                  type="button"
-                  onClick={() => enterDiskConflictMergeView()}
-                >
-                  Compare / merge…
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => resolveDiskConflictReloadFromDisk()}
-                >
-                  Reload from disk
-                </button>
-                <button type="button" onClick={() => resolveDiskConflictKeepLocal()}>
-                  Keep my edits
-                </button>
-              </span>
-            </div>
-          ) : null}
-          {!err &&
-          !diskConflict &&
-          diskConflictSoft &&
-          selectedUri != null &&
-          normalizeEditorDocUri(diskConflictSoft.uri) === normalizeEditorDocUri(selectedUri) ? (
-            <div className="info-banner info-banner--inline-actions" aria-live="polite">
-              <span>
-                A version on disk differs from your unsaved draft. Your edits stay primary until you
-                save. Open full resolve only if you need to reconcile with disk.
-              </span>
-              <span className="conflict-banner__actions">
-                <button
-                  type="button"
-                  onClick={() => enterDiskConflictMergeView()}
-                >
-                  Compare / merge…
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => elevateDiskConflictSoftToBlocking()}
-                >
-                  Resolve with disk…
-                </button>
-                <button type="button" onClick={() => dismissDiskConflictSoft()}>
-                  Dismiss
-                </button>
-              </span>
-            </div>
-          ) : null}
+          <AppDiskConflictBanners
+            err={err}
+            diskConflict={diskConflict}
+            diskConflictSoft={diskConflictSoft as {uri: string} | null}
+            selectedUri={selectedUri}
+            enterDiskConflictMergeView={enterDiskConflictMergeView}
+            resolveDiskConflictReloadFromDisk={resolveDiskConflictReloadFromDisk}
+            resolveDiskConflictKeepLocal={resolveDiskConflictKeepLocal}
+            elevateDiskConflictSoftToBlocking={elevateDiskConflictSoftToBlocking}
+            dismissDiskConflictSoft={dismissDiskConflictSoft}
+          />
 
           <AppStatusBar
             onOpenSettings={() => setActivePage('settings')}
@@ -1350,6 +1804,6 @@ export default function App() {
           />
         </div>
       </div>
-    </>,
+    </AppThemeShell>
   );
 }

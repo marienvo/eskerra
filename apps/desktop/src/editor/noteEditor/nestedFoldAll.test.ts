@@ -97,7 +97,7 @@ describe('nestedCollapseAllFolds', () => {
     });
     expect(spans.length).toBeGreaterThanOrEqual(2);
 
-    const outer = spans.reduce((a, b) => (a.span >= b.span ? a : b));
+    const outer = spans.reduce((a, b) => (a.span >= b.span ? a : b), spans[0]!);
     view.dispatch({effects: [unfoldEffect.of({from: outer.from, to: outer.to})]});
 
     expect(foldedRanges(view.state).size).toBeGreaterThanOrEqual(1);

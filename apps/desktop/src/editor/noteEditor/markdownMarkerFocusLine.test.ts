@@ -91,7 +91,7 @@ describe('expandFocusLinesForFencedCode', () => {
     const lineStarts = new Set<number>([state.doc.lineAt(DOC.indexOf('const')).from]);
     expandFocusLinesForFencedCode(state, lineStarts);
     expect(lineStarts.has(state.doc.line(3).from)).toBe(true); // ```ts
-    expect(lineStarts.has(state.doc.line(4).from)).toBe(true); // const x = 1;
+    expect(lineStarts.has(state.doc.line(4).from)).toBe(true); // fenced content line
     expect(lineStarts.has(state.doc.line(5).from)).toBe(true); // ```
   });
 

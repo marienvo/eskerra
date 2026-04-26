@@ -6,7 +6,10 @@ const HTTPS_PLACEHOLDER = 'https://';
 /**
  * Insert `[label](url)` at the selection: selected text becomes `label`, caret/select in `url`.
  * Empty selection inserts `[](url)` with caret between `[` and `]`.
+ *
+ * Always returns true: CodeMirror command convention (truthy = handled).
  */
+// eslint-disable-next-line sonarjs/no-invariant-returns -- CM command API: truthy means handled
 export function insertMarkdownLinkTemplate(view: EditorView): boolean {
   const state = view.state;
   const range = state.selection.main;
@@ -35,6 +38,7 @@ export function insertMarkdownLinkTemplate(view: EditorView): boolean {
 /**
  * Same as {@link insertMarkdownLinkTemplate} but pre-fills `https://` in the URL slot and selects it.
  */
+// eslint-disable-next-line sonarjs/no-invariant-returns -- CM command API: truthy means handled
 export function insertMarkdownExternalLinkTemplate(view: EditorView): boolean {
   const state = view.state;
   const range = state.selection.main;

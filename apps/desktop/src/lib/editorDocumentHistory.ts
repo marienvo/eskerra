@@ -108,30 +108,41 @@ export function removeEditorHistoryUris(
   }
 
   const newEntries = kept.map(k => k.uri);
+  const newIdx = resolveHistoryIndexAfterRemovals(
+    entries,
+    index,
+    kept,
+    shouldRemove,
+  );
 
-  let newIdx: number;
+  return {entries: newEntries, index: newIdx};
+}
+
+function resolveHistoryIndexAfterRemovals(
+  entries: string[],
+  index: number,
+  kept: {uri: string; oldIdx: number}[],
+  shouldRemove: (normalizedUri: string) => boolean,
+): number {
+  const newEntriesLen = kept.length;
   if (index >= 0 && index < entries.length) {
     const curNorm = normalizeEditorDocUri(entries[index]!);
     if (!shouldRemove(curNorm)) {
       const at = kept.findIndex(k => k.oldIdx === index);
-      newIdx = at >= 0 ? at : 0;
-    } else {
-      const before = kept.filter(k => k.oldIdx < index);
-      const after = kept.filter(k => k.oldIdx > index);
-      if (before.length > 0) {
-        const pick = before[before.length - 1]!;
-        newIdx = kept.findIndex(k => k.oldIdx === pick.oldIdx);
-      } else if (after.length > 0) {
-        newIdx = kept.findIndex(k => k.oldIdx === after[0]!.oldIdx);
-      } else {
-        newIdx = 0;
-      }
+      return at >= 0 ? at : 0;
     }
-  } else {
-    newIdx = Math.min(Math.max(0, index), newEntries.length - 1);
+    const before = kept.filter(k => k.oldIdx < index);
+    const after = kept.filter(k => k.oldIdx > index);
+    if (before.length > 0) {
+      const pick = before[before.length - 1]!;
+      return kept.findIndex(k => k.oldIdx === pick.oldIdx);
+    }
+    if (after.length > 0) {
+      return kept.findIndex(k => k.oldIdx === after[0]!.oldIdx);
+    }
+    return 0;
   }
-
-  return {entries: newEntries, index: newIdx};
+  return Math.min(Math.max(0, index), newEntriesLen - 1);
 }
 
 /**

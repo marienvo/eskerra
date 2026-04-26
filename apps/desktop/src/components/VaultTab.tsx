@@ -1,6 +1,10 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
-import type {MutableRefObject, ReactNode, RefObject} from 'react';
+import type {
+  MutableRefObject,
+  ReactNode,
+  RefObject,
+} from 'react';
 import {
   Fragment,
   useCallback,
@@ -296,6 +300,386 @@ type EditorPaneBodyProps = {
   onMuteLinkSnippetDomain?: (domain: string) => void;
 };
 
+function useEditorPaneBodyDerived(
+  mergeView: EditorPaneBodyProps['mergeView'],
+  inboxContentByUri: EditorPaneBodyProps['inboxContentByUri'],
+  selectedUri: EditorPaneBodyProps['selectedUri'],
+  editorBody: string,
+  showTodayHubCanvas: boolean,
+  todayHubSettings: TodayHubSettings | null,
+  composingNewEntry: boolean,
+  busy: boolean,
+  diskConflict: EditorPaneBodyProps['diskConflict'],
+) {
+  const mergeCurrentBody = useMemo(() => {
+    if (mergeView == null) {
+      return '';
+    }
+    const k = mergeView.baseUri;
+    const fromCache = inboxContentByUri[k];
+    if (fromCache !== undefined) {
+      return fromCache;
+    }
+    if (selectedUri != null && normalizeEditorDocUri(selectedUri) === k) {
+      return editorBody;
+    }
+    return '';
+  }, [mergeView, inboxContentByUri, selectedUri, editorBody]);
+
+  const scrollTodayHubLayout =
+    showTodayHubCanvas
+    && Boolean(selectedUri)
+    && todayHubSettings != null
+    && !composingNewEntry
+    && mergeView == null;
+
+  const frontmatterReadOnly =
+    busy
+    || Boolean(
+      diskConflict
+        && selectedUri
+        && normalizeEditorDocUri(diskConflict.uri) ===
+          normalizeEditorDocUri(selectedUri),
+    );
+
+  return {mergeCurrentBody, scrollTodayHubLayout, frontmatterReadOnly};
+}
+
+type EditorPaneTodayHubBlockProps = {
+  mergeView: EditorPaneBodyProps['mergeView'];
+  showTodayHubCanvas: boolean;
+  selectedUri: string | null;
+  todayHubSettings: TodayHubSettings | null;
+  composingNewEntry: boolean;
+  todayHubSidecarRef: RefObject<HTMLDivElement | null>;
+  vaultRoot: string;
+  inboxContentByUri: Record<string, string>;
+  vaultMarkdownRefs: VaultMarkdownRef[];
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+  todayHubWikiNavParentRef: MutableRefObject<string | null>;
+  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  onWikiLinkActivate: EditorPaneBodyProps['onWikiLinkActivate'];
+  onMarkdownRelativeLinkActivate: EditorPaneBodyProps['onMarkdownRelativeLinkActivate'];
+  onMarkdownExternalLinkOpen: EditorPaneBodyProps['onMarkdownExternalLinkOpen'];
+  onEditorError: EditorPaneBodyProps['onEditorError'];
+  onSaveShortcut: EditorPaneBodyProps['onSaveShortcut'];
+  prehydrateTodayHubRows: EditorPaneBodyProps['prehydrateTodayHubRows'];
+  persistTodayHubRow: EditorPaneBodyProps['persistTodayHubRow'];
+  todayHubCleanRowBlocked: EditorPaneBodyProps['todayHubCleanRowBlocked'];
+  linkSnippetBlockedDomains: EditorPaneBodyProps['linkSnippetBlockedDomains'];
+  onMuteLinkSnippetDomain: EditorPaneBodyProps['onMuteLinkSnippetDomain'];
+};
+
+function EditorPaneTodayHubBlock({
+  mergeView,
+  showTodayHubCanvas,
+  selectedUri,
+  todayHubSettings,
+  composingNewEntry,
+  todayHubSidecarRef,
+  vaultRoot,
+  inboxContentByUri,
+  vaultMarkdownRefs,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  onWikiLinkActivate,
+  onMarkdownRelativeLinkActivate,
+  onMarkdownExternalLinkOpen,
+  onEditorError,
+  onSaveShortcut,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
+  todayHubCleanRowBlocked,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
+}: EditorPaneTodayHubBlockProps) {
+  if (
+    !showTodayHubCanvas
+    || !selectedUri
+    || todayHubSettings == null
+    || composingNewEntry
+    || mergeView != null
+  ) {
+    return null;
+  }
+  return (
+    <div
+      ref={todayHubSidecarRef}
+      className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
+    >
+      <div className="note-markdown-editor-main-row">
+        <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
+        <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
+          <TodayHubCanvas
+            key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}-${selectedUri}`}
+            vaultRoot={vaultRoot}
+            todayNoteUri={selectedUri}
+            hubSettings={todayHubSettings}
+            inboxContentByUri={inboxContentByUri}
+            vaultMarkdownRefs={vaultMarkdownRefs}
+            bridgeRef={todayHubBridgeRef}
+            wikiNavParentRef={todayHubWikiNavParentRef}
+            cellEditorRef={todayHubCellEditorRef}
+            onWikiLinkActivate={onWikiLinkActivate}
+            onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+            onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+            onEditorError={onEditorError}
+            onSaveShortcut={onSaveShortcut}
+            prehydrateTodayHubRows={prehydrateTodayHubRows}
+            persistTodayHubRow={persistTodayHubRow}
+            todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+            linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+            onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type EditorPaneBodyMainProps = EditorPaneBodyProps & {
+  mergeCurrentBody: string;
+  scrollTodayHubLayout: boolean;
+  frontmatterReadOnly: boolean;
+  editorHasFoldedRanges: boolean;
+  editorHasFoldableRanges: boolean;
+  onFoldedRangesPresentChange: (next: boolean) => void;
+  onFoldableRangesPresentChange: (next: boolean) => void;
+  backlinksSidecarRef: RefObject<HTMLDivElement | null>;
+  todayHubSidecarRef: RefObject<HTMLDivElement | null>;
+};
+
+function editorNoteShellScrollClass(scrollTodayHubLayout: boolean): string {
+  return scrollTodayHubLayout
+    ? 'note-markdown-editor-scroll note-markdown-editor-scroll--today-hub'
+    : 'note-markdown-editor-scroll';
+}
+
+type EditorPaneFoldBulkButtonProps = {
+  inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  editorHasFoldedRanges: boolean;
+  editorHasFoldableRanges: boolean;
+  busy: boolean;
+};
+
+function EditorPaneFoldBulkButton({
+  inboxEditorRef,
+  editorHasFoldedRanges,
+  editorHasFoldableRanges,
+  busy,
+}: EditorPaneFoldBulkButtonProps) {
+  if (!editorHasFoldedRanges && !editorHasFoldableRanges) {
+    return null;
+  }
+  const expanded = editorHasFoldedRanges;
+  const label = expanded ? 'Expand all folds' : 'Collapse all folds';
+  return (
+    <div className="note-markdown-editor-fold-bulk-anchor">
+      <button
+        type="button"
+        className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
+        onClick={() => {
+          const ed = inboxEditorRef.current;
+          if (!ed) {
+            return;
+          }
+          if (expanded) {
+            ed.unfoldAllFolds();
+          } else {
+            ed.collapseAllFolds();
+          }
+        }}
+        disabled={busy}
+        aria-label={label}
+        data-tooltip={label}
+        data-tooltip-placement="inline-end"
+      >
+        <MaterialIcon
+          name={expanded ? 'unfold_more' : 'unfold_less'}
+          size={12}
+        />
+      </button>
+    </div>
+  );
+}
+
+function EditorPaneBodyMain({
+  fs,
+  mergeView,
+  onCloseMergeView,
+  onApplyFullBackupFromMerge,
+  onApplyMergedBodyFromMerge,
+  onKeepMyEditsFromMerge,
+  inboxEditorRef,
+  inboxEditorShellScrollRef,
+  inboxAttachmentHost,
+  vaultRoot,
+  vaultMarkdownRefs,
+  inboxContentByUri,
+  composingNewEntry,
+  selectedUri,
+  editorBody,
+  inboxEditorResetNonce,
+  onEditorChange,
+  onEditorError,
+  onWikiLinkActivate,
+  onMarkdownRelativeLinkActivate,
+  onMarkdownExternalLinkOpen,
+  relativeMarkdownLinkHrefIsResolved,
+  wikiLinkTargetIsResolved,
+  wikiLinkCompletionCandidates,
+  onSaveShortcut,
+  onCleanNote,
+  onDeleteNoteShortcut,
+  busy,
+  backlinkRows,
+  onSelectNote,
+  inboxBacklinksDeferNonce,
+  showTodayHubCanvas,
+  todayHubSettings,
+  todayHubBridgeRef,
+  todayHubWikiNavParentRef,
+  todayHubCellEditorRef,
+  prehydrateTodayHubRows,
+  persistTodayHubRow,
+  todayHubCleanRowBlocked,
+  inboxYamlFrontmatterInner,
+  applyFrontmatterInnerChange,
+  vaultFrontmatterIndex,
+  vaultSettings,
+  diskConflict: _diskConflict,
+  linkSnippetBlockedDomains,
+  onMuteLinkSnippetDomain,
+  mergeCurrentBody,
+  scrollTodayHubLayout,
+  frontmatterReadOnly,
+  editorHasFoldedRanges,
+  editorHasFoldableRanges,
+  onFoldedRangesPresentChange,
+  onFoldableRangesPresentChange,
+  backlinksSidecarRef,
+  todayHubSidecarRef,
+}: EditorPaneBodyMainProps) {
+  return (
+    <div className="editor note-markdown-editor-wrap">
+        <div
+          ref={inboxEditorShellScrollRef}
+          className={editorNoteShellScrollClass(scrollTodayHubLayout)}
+        >
+          <div className="note-markdown-editor-page">
+            {selectedUri && !composingNewEntry && mergeView == null ? (
+              <div className="note-markdown-editor-frontmatter-host">
+                <FrontmatterEditor
+                  yamlInner={inboxYamlFrontmatterInner}
+                  onChange={applyFrontmatterInnerChange}
+                  index={vaultFrontmatterIndex}
+                  propertyOverrides={vaultSettings?.frontmatterProperties}
+                  readOnly={frontmatterReadOnly}
+                  rehydrateKey={`${selectedUri}:${inboxEditorResetNonce}`}
+                />
+              </div>
+            ) : null}
+            {mergeView != null ? (
+              <BackupMergePanel
+                vaultRoot={vaultRoot}
+                fs={fs}
+                source={
+                  mergeView.kind === 'backup'
+                    ? ({kind: 'backup', backupUri: mergeView.backupUri} satisfies MergePanelSource)
+                    : ({kind: 'disk', diskMarkdown: mergeView.diskMarkdown} satisfies MergePanelSource)
+                }
+                currentBody={mergeCurrentBody}
+                onClose={onCloseMergeView}
+                onApplyOther={onApplyFullBackupFromMerge}
+                onApplyMergedBody={onApplyMergedBodyFromMerge}
+                onKeepLocal={mergeView.kind === 'diskConflict' ? onKeepMyEditsFromMerge : undefined}
+                busy={busy}
+              />
+            ) : null}
+            <div
+              className="note-markdown-editor-main-row"
+              hidden={mergeView != null}
+            >
+            <div className="note-markdown-editor-fold-rail">
+              <EditorPaneFoldBulkButton
+                inboxEditorRef={inboxEditorRef}
+                editorHasFoldedRanges={editorHasFoldedRanges}
+                editorHasFoldableRanges={editorHasFoldableRanges}
+                busy={busy}
+              />
+            </div>
+            <div className="note-markdown-editor-paper">
+              <NoteMarkdownEditor
+                ref={inboxEditorRef}
+                attachmentHost={inboxAttachmentHost}
+                resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
+                vaultRoot={vaultRoot}
+                activeNotePath={composingNewEntry ? null : selectedUri}
+                initialMarkdown={editorBody}
+                sessionKey={inboxEditorResetNonce}
+                onMarkdownChange={onEditorChange}
+                onEditorError={onEditorError}
+                onWikiLinkActivate={onWikiLinkActivate}
+                onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+                onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+                wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+                wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+                onSaveShortcut={onSaveShortcut}
+                onCleanNote={onCleanNote}
+                onDeleteNoteShortcut={onDeleteNoteShortcut}
+                placeholder={
+                  composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
+                }
+                busy={busy}
+                onFoldedRangesPresentChange={onFoldedRangesPresentChange}
+                onFoldableRangesPresentChange={onFoldableRangesPresentChange}
+                linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+                onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
+              />
+              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
+                <div ref={backlinksSidecarRef} className="note-sidecar-group">
+                  <InboxBacklinksSection
+                    selectedUri={selectedUri}
+                    backlinkRows={backlinkRows}
+                    onSelectNote={onSelectNote}
+                    deferNonce={inboxBacklinksDeferNonce}
+                  />
+                </div>
+              ) : null}
+            </div>
+            </div>
+          </div>
+          <EditorPaneTodayHubBlock
+            mergeView={mergeView}
+            showTodayHubCanvas={showTodayHubCanvas}
+            selectedUri={selectedUri}
+            todayHubSettings={todayHubSettings}
+            composingNewEntry={composingNewEntry}
+            todayHubSidecarRef={todayHubSidecarRef}
+            vaultRoot={vaultRoot}
+            inboxContentByUri={inboxContentByUri}
+            vaultMarkdownRefs={vaultMarkdownRefs}
+            todayHubBridgeRef={todayHubBridgeRef}
+            todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+            todayHubCellEditorRef={todayHubCellEditorRef}
+            onWikiLinkActivate={onWikiLinkActivate}
+            onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+            onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+            onEditorError={onEditorError}
+            onSaveShortcut={onSaveShortcut}
+            prehydrateTodayHubRows={prehydrateTodayHubRows}
+            persistTodayHubRow={persistTodayHubRow}
+            todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+            linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+            onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
+          />
+        </div>
+    </div>
+  );
+}
+
 function InboxBacklinksSection({
   selectedUri,
   backlinkRows,
@@ -453,204 +837,77 @@ function EditorPaneBody({
     setEditorHasFoldableRanges(next);
   }, []);
 
-  const mergeCurrentBody = useMemo(() => {
-    if (mergeView == null) {
-      return '';
-    }
-    const k = mergeView.baseUri;
-    const fromCache = inboxContentByUri[k];
-    if (fromCache !== undefined) {
-      return fromCache;
-    }
-    if (selectedUri != null && normalizeEditorDocUri(selectedUri) === k) {
-      return editorBody;
-    }
-    return '';
-  }, [mergeView, inboxContentByUri, selectedUri, editorBody]);
-
-  const scrollTodayHubLayout =
-    showTodayHubCanvas &&
-    Boolean(selectedUri) &&
-    todayHubSettings != null &&
-    !composingNewEntry &&
-    mergeView == null;
-
-  const frontmatterReadOnly =
-    busy ||
-    Boolean(
-      diskConflict &&
-        selectedUri &&
-        normalizeEditorDocUri(diskConflict.uri) ===
-          normalizeEditorDocUri(selectedUri),
+  const {mergeCurrentBody, scrollTodayHubLayout, frontmatterReadOnly} =
+    useEditorPaneBodyDerived(
+      mergeView,
+      inboxContentByUri,
+      selectedUri,
+      editorBody,
+      showTodayHubCanvas,
+      todayHubSettings,
+      composingNewEntry,
+      busy,
+      diskConflict,
     );
 
   return (
-    <div className="editor note-markdown-editor-wrap">
-        <div
-          ref={inboxEditorShellScrollRef}
-          className={
-            scrollTodayHubLayout
-              ? 'note-markdown-editor-scroll note-markdown-editor-scroll--today-hub'
-              : 'note-markdown-editor-scroll'
-          }
-        >
-          <div className="note-markdown-editor-page">
-            {selectedUri && !composingNewEntry && mergeView == null ? (
-              <div className="note-markdown-editor-frontmatter-host">
-                <FrontmatterEditor
-                  yamlInner={inboxYamlFrontmatterInner}
-                  onChange={applyFrontmatterInnerChange}
-                  index={vaultFrontmatterIndex}
-                  propertyOverrides={vaultSettings?.frontmatterProperties}
-                  readOnly={frontmatterReadOnly}
-                  rehydrateKey={`${selectedUri}:${inboxEditorResetNonce}`}
-                />
-              </div>
-            ) : null}
-            {mergeView != null ? (
-              <BackupMergePanel
-                vaultRoot={vaultRoot}
-                fs={fs}
-                source={
-                  mergeView.kind === 'backup'
-                    ? ({kind: 'backup', backupUri: mergeView.backupUri} satisfies MergePanelSource)
-                    : ({kind: 'disk', diskMarkdown: mergeView.diskMarkdown} satisfies MergePanelSource)
-                }
-                currentBody={mergeCurrentBody}
-                onClose={onCloseMergeView}
-                onApplyOther={onApplyFullBackupFromMerge}
-                onApplyMergedBody={onApplyMergedBodyFromMerge}
-                onKeepLocal={mergeView.kind === 'diskConflict' ? onKeepMyEditsFromMerge : undefined}
-                busy={busy}
-              />
-            ) : null}
-            <div
-              className="note-markdown-editor-main-row"
-              hidden={mergeView != null}
-            >
-            <div className="note-markdown-editor-fold-rail">
-              {editorHasFoldedRanges || editorHasFoldableRanges ? (
-                <div className="note-markdown-editor-fold-bulk-anchor">
-                  <button
-                    type="button"
-                    className="note-markdown-editor-fold-bulk-btn app-tooltip-trigger"
-                    onClick={() => {
-                      const ed = inboxEditorRef.current;
-                      if (!ed) {
-                        return;
-                      }
-                      if (editorHasFoldedRanges) {
-                        ed.unfoldAllFolds();
-                      } else {
-                        ed.collapseAllFolds();
-                      }
-                    }}
-                    disabled={busy}
-                    aria-label={
-                      editorHasFoldedRanges
-                        ? 'Expand all folds'
-                        : 'Collapse all folds'
-                    }
-                    data-tooltip={
-                      editorHasFoldedRanges
-                        ? 'Expand all folds'
-                        : 'Collapse all folds'
-                    }
-                    data-tooltip-placement="inline-end"
-                  >
-                    <MaterialIcon
-                      name={
-                        editorHasFoldedRanges
-                          ? 'unfold_more'
-                          : 'unfold_less'
-                      }
-                      size={12}
-                    />
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <div className="note-markdown-editor-paper">
-              <NoteMarkdownEditor
-                ref={inboxEditorRef}
-                attachmentHost={inboxAttachmentHost}
-                resolveVaultImagePreviewUrl={resolveVaultImagePreviewUrl}
-                vaultRoot={vaultRoot}
-                activeNotePath={composingNewEntry ? null : selectedUri}
-                initialMarkdown={editorBody}
-                sessionKey={inboxEditorResetNonce}
-                onMarkdownChange={onEditorChange}
-                onEditorError={onEditorError}
-                onWikiLinkActivate={onWikiLinkActivate}
-                onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
-                wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
-                wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
-                onSaveShortcut={onSaveShortcut}
-                onCleanNote={onCleanNote}
-                onDeleteNoteShortcut={onDeleteNoteShortcut}
-                placeholder={
-                  composingNewEntry ? 'First line is title (H1)…' : 'Write markdown…'
-                }
-                busy={busy}
-                onFoldedRangesPresentChange={onFoldedRangesPresentChange}
-                onFoldableRangesPresentChange={onFoldableRangesPresentChange}
-                linkSnippetBlockedDomains={linkSnippetBlockedDomains}
-                onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
-              />
-              {!composingNewEntry && selectedUri && !showTodayHubCanvas ? (
-                <div ref={backlinksSidecarRef} className="note-sidecar-group">
-                  <InboxBacklinksSection
-                    selectedUri={selectedUri}
-                    backlinkRows={backlinkRows}
-                    onSelectNote={onSelectNote}
-                    deferNonce={inboxBacklinksDeferNonce}
-                  />
-                </div>
-              ) : null}
-            </div>
-            </div>
-          </div>
-          {showTodayHubCanvas &&
-          selectedUri &&
-          todayHubSettings &&
-          !composingNewEntry &&
-          mergeView == null ? (
-            <div
-              ref={todayHubSidecarRef}
-              className="note-markdown-editor-page note-markdown-editor-page--today-hub note-sidecar-group"
-            >
-              <div className="note-markdown-editor-main-row">
-              <div className="note-markdown-editor-fold-rail" aria-hidden="true" />
-              <div className="note-markdown-editor-paper note-markdown-editor-paper--today-hub-shell">
-                <TodayHubCanvas
-                  key={`today-hub-${todayHubColumnCount(todayHubSettings)}-${todayHubSettings.start}-${todayHubSettings.columns.join('\0')}-${selectedUri}`}
-                  vaultRoot={vaultRoot}
-                  todayNoteUri={selectedUri}
-                  hubSettings={todayHubSettings}
-                  inboxContentByUri={inboxContentByUri}
-                  vaultMarkdownRefs={vaultMarkdownRefs}
-                  bridgeRef={todayHubBridgeRef}
-                  wikiNavParentRef={todayHubWikiNavParentRef}
-                  cellEditorRef={todayHubCellEditorRef}
-                  onWikiLinkActivate={onWikiLinkActivate}
-                  onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                  onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
-                  onEditorError={onEditorError}
-                  onSaveShortcut={onSaveShortcut}
-                  prehydrateTodayHubRows={prehydrateTodayHubRows}
-                  persistTodayHubRow={persistTodayHubRow}
-                  todayHubCleanRowBlocked={todayHubCleanRowBlocked}
-                  linkSnippetBlockedDomains={linkSnippetBlockedDomains}
-                  onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
-                />
-              </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
-    </div>
+    <EditorPaneBodyMain
+      fs={fs}
+      mergeView={mergeView}
+      onCloseMergeView={onCloseMergeView}
+      onApplyFullBackupFromMerge={onApplyFullBackupFromMerge}
+      onApplyMergedBodyFromMerge={onApplyMergedBodyFromMerge}
+      onKeepMyEditsFromMerge={onKeepMyEditsFromMerge}
+      inboxEditorRef={inboxEditorRef}
+      inboxEditorShellScrollRef={inboxEditorShellScrollRef}
+      inboxAttachmentHost={inboxAttachmentHost}
+      vaultRoot={vaultRoot}
+      vaultMarkdownRefs={vaultMarkdownRefs}
+      inboxContentByUri={inboxContentByUri}
+      composingNewEntry={composingNewEntry}
+      selectedUri={selectedUri}
+      editorBody={editorBody}
+      inboxEditorResetNonce={inboxEditorResetNonce}
+      onEditorChange={onEditorChange}
+      onEditorError={onEditorError}
+      onWikiLinkActivate={onWikiLinkActivate}
+      onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
+      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+      relativeMarkdownLinkHrefIsResolved={relativeMarkdownLinkHrefIsResolved}
+      wikiLinkTargetIsResolved={wikiLinkTargetIsResolved}
+      wikiLinkCompletionCandidates={wikiLinkCompletionCandidates}
+      onSaveShortcut={onSaveShortcut}
+      onCleanNote={onCleanNote}
+      onDeleteNoteShortcut={onDeleteNoteShortcut}
+      busy={busy}
+      backlinkRows={backlinkRows}
+      onSelectNote={onSelectNote}
+      inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
+      showTodayHubCanvas={showTodayHubCanvas}
+      todayHubSettings={todayHubSettings}
+      todayHubBridgeRef={todayHubBridgeRef}
+      todayHubWikiNavParentRef={todayHubWikiNavParentRef}
+      todayHubCellEditorRef={todayHubCellEditorRef}
+      prehydrateTodayHubRows={prehydrateTodayHubRows}
+      persistTodayHubRow={persistTodayHubRow}
+      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+      inboxYamlFrontmatterInner={inboxYamlFrontmatterInner}
+      applyFrontmatterInnerChange={applyFrontmatterInnerChange}
+      vaultFrontmatterIndex={vaultFrontmatterIndex}
+      vaultSettings={vaultSettings}
+      diskConflict={diskConflict}
+      linkSnippetBlockedDomains={linkSnippetBlockedDomains}
+      onMuteLinkSnippetDomain={onMuteLinkSnippetDomain}
+      mergeCurrentBody={mergeCurrentBody}
+      scrollTodayHubLayout={scrollTodayHubLayout}
+      frontmatterReadOnly={frontmatterReadOnly}
+      editorHasFoldedRanges={editorHasFoldedRanges}
+      editorHasFoldableRanges={editorHasFoldableRanges}
+      onFoldedRangesPresentChange={onFoldedRangesPresentChange}
+      onFoldableRangesPresentChange={onFoldableRangesPresentChange}
+      backlinksSidecarRef={backlinksSidecarRef}
+      todayHubSidecarRef={todayHubSidecarRef}
+    />
   );
 }
 

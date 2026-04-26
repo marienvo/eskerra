@@ -136,6 +136,25 @@ async function collectRssFilesFromUncheckedHubLinks(
   return selected;
 }
 
+async function pieFilesForHubLinkedNames(
+  linkedNames: string[],
+  byName: Map<string, RootMarkdownFile>,
+  pieContentByName: Map<string, string>,
+  fs: VaultFilesystem,
+): Promise<Array<{series: string; content: string}>> {
+  const pieFiles: Array<{series: string; content: string}> = [];
+  for (const pieName of linkedNames) {
+    const pieFile = byName.get(pieName);
+    if (!pieFile) continue;
+    const content =
+      pieContentByName.get(pieName) ??
+      (await fs.readFile(pieFile.uri, {encoding: 'utf8'}));
+    const series = pieName.replace(/^📻\s*/u, '').replace(/\.md$/i, '').trim() || pieName;
+    pieFiles.push({series, content});
+  }
+  return pieFiles;
+}
+
 async function mergeIntoEpisodesFiles(
   allFiles: RootMarkdownFile[],
   pieContentByName: Map<string, string>,
@@ -156,16 +175,12 @@ async function mergeIntoEpisodesFiles(
     const linkedNames = parseUncheckedHubLinks(hubContent);
     if (linkedNames.length === 0) continue;
 
-    const pieFiles: Array<{series: string; content: string}> = [];
-    for (const pieName of linkedNames) {
-      const pieFile = byName.get(pieName);
-      if (!pieFile) continue;
-      const content =
-        pieContentByName.get(pieName) ??
-        (await fs.readFile(pieFile.uri, {encoding: 'utf8'}));
-      const series = pieName.replace(/^📻\s*/u, '').replace(/\.md$/i, '').trim() || pieName;
-      pieFiles.push({series, content});
-    }
+    const pieFiles = await pieFilesForHubLinkedNames(
+      linkedNames,
+      byName,
+      pieContentByName,
+      fs,
+    );
     if (pieFiles.length === 0) continue;
 
     const existing = await fs.readFile(episodesFile.uri, {encoding: 'utf8'});

@@ -102,6 +102,39 @@ export function equalHighlightExpectedSegments(
   return segments.length > 0 ? segments : null;
 }
 
+function pickBestEqualHighlightSegForRect(
+  m: RectangleMarker,
+  segs: EqualHighlightSeg[],
+): {best: EqualHighlightSeg; bestOverlap: number} | null {
+  const mTop = m.top;
+  const mBottom = m.top + m.height;
+  const mLeft = m.left;
+  const mRight = m.left + m.width!;
+
+  let best: EqualHighlightSeg | null = null;
+  let bestOverlap = 0;
+  let bestHoriz = -1;
+  for (const s of segs) {
+    const overlap = Math.max(
+      0,
+      Math.min(mBottom, s.bottom) - Math.max(mTop, s.top),
+    );
+    const horiz = Math.max(
+      0,
+      Math.min(mRight, s.right) - Math.max(mLeft, s.left),
+    );
+    if (
+      overlap > bestOverlap
+      || (overlap === bestOverlap && horiz > bestHoriz)
+    ) {
+      bestOverlap = overlap;
+      bestHoriz = horiz;
+      best = s;
+    }
+  }
+  return best ? {best, bestOverlap} : null;
+}
+
 /**
  * `RectangleMarker.forRange` can emit a full-content-width “between” slice for some ranges; that
  * reads as a whole-line `==` highlight. Keep only rects whose width matches the highlighted span.
@@ -148,36 +181,13 @@ export function clipEqualHighlightMarkersToSegmentBounds(
       out.push(m);
       continue;
     }
-    const mTop = m.top;
-    const mBottom = m.top + m.height;
-    const mLeft = m.left;
-    const mRight = m.left + m.width;
-
-    let best: EqualHighlightSeg | null = null;
-    let bestOverlap = 0;
-    let bestHoriz = -1;
-    for (const s of segs) {
-      const overlap = Math.max(
-        0,
-        Math.min(mBottom, s.bottom) - Math.max(mTop, s.top),
-      );
-      const horiz = Math.max(
-        0,
-        Math.min(mRight, s.right) - Math.max(mLeft, s.left),
-      );
-      if (
-        overlap > bestOverlap
-        || (overlap === bestOverlap && horiz > bestHoriz)
-      ) {
-        bestOverlap = overlap;
-        bestHoriz = horiz;
-        best = s;
-      }
-    }
-
-    if (!best || bestOverlap < Math.min(4, 0.12 * m.height)) {
+    const picked = pickBestEqualHighlightSegForRect(m, segs);
+    if (!picked || picked.bestOverlap < Math.min(4, 0.12 * m.height)) {
       continue;
     }
+    const {best} = picked;
+    const mLeft = m.left;
+    const mRight = m.left + m.width;
 
     const clipL = Math.max(mLeft, best.left - microPad);
     const clipR = Math.min(mRight, best.right + microPad);

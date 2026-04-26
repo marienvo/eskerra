@@ -239,6 +239,40 @@ export function pushClosedWorkspaceTabsFromCloseOther(
   }
 }
 
+function pushAllTabUrisToClosedStackRightToLeft(
+  stack: ClosedEditorTabRecord[],
+  prevTabs: readonly EditorWorkspaceTab[],
+): void {
+  for (let i = prevTabs.length - 1; i >= 0; i--) {
+    const u = tabCurrentUri(prevTabs[i]!);
+    if (u) {
+      stack.push({uri: u, index: i});
+    }
+  }
+}
+
+function pushClosedTabsExceptActiveThenActive(
+  stack: ClosedEditorTabRecord[],
+  prevTabs: readonly EditorWorkspaceTab[],
+  active: string,
+): void {
+  for (let i = prevTabs.length - 1; i >= 0; i--) {
+    const t = prevTabs[i]!;
+    if (t.id !== active) {
+      const u = tabCurrentUri(t);
+      if (u) {
+        stack.push({uri: u, index: i});
+      }
+    }
+  }
+  const activeIdx = prevTabs.findIndex(t => t.id === active);
+  const at = prevTabs.find(t => t.id === active);
+  const selU = at ? tabCurrentUri(at) : null;
+  if (selU && activeIdx >= 0) {
+    stack.push({uri: selU, index: activeIdx});
+  }
+}
+
 export function pushClosedWorkspaceTabsFromCloseAll(
   stack: ClosedEditorTabRecord[],
   prevTabs: readonly EditorWorkspaceTab[],
@@ -250,28 +284,9 @@ export function pushClosedWorkspaceTabsFromCloseAll(
   const active =
     activeTabId && prevTabs.some(t => t.id === activeTabId) ? activeTabId : null;
   if (active) {
-    for (let i = prevTabs.length - 1; i >= 0; i--) {
-      const t = prevTabs[i]!;
-      if (t.id !== active) {
-        const u = tabCurrentUri(t);
-        if (u) {
-          stack.push({uri: u, index: i});
-        }
-      }
-    }
-    const activeIdx = prevTabs.findIndex(t => t.id === active);
-    const at = prevTabs.find(t => t.id === active);
-    const selU = at ? tabCurrentUri(at) : null;
-    if (selU && activeIdx >= 0) {
-      stack.push({uri: selU, index: activeIdx});
-    }
+    pushClosedTabsExceptActiveThenActive(stack, prevTabs, active);
   } else {
-    for (let i = prevTabs.length - 1; i >= 0; i--) {
-      const u = tabCurrentUri(prevTabs[i]!);
-      if (u) {
-        stack.push({uri: u, index: i});
-      }
-    }
+    pushAllTabUrisToClosedStackRightToLeft(stack, prevTabs);
   }
 }
 

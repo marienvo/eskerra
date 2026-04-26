@@ -184,6 +184,58 @@ export function cleanPastedMarkdownFragment(
   });
 }
 
+function preprocessMarkdownLineOutsideFence(
+  rawLine: string,
+  resolved: ResolvedCleanNoteOptions,
+  b: string,
+  bEsc: string,
+  dupBulletRe: RegExp,
+  dupBulletOnlyRe: RegExp,
+  alternateBulletRe: RegExp,
+): string | null {
+  let line = rawLine.trimEnd();
+  line = line.replace(/^\s+(#{1,6}\s)/, '$1');
+  line = line.replace(alternateBulletRe, `$1${b} `);
+  if (b !== '-') {
+    line = line.replace(
+      /^((?:>\s*)*)([ \t]*)-\s+(?!\[[ xX]\])/,
+      `$1$2${b} `,
+    );
+    line = line.replace(/^([ \t]*)-\s+(?!\[[ xX]\])/, `$1${b} `);
+  }
+  line = line.replace(new RegExp(`^((?:>\\s*)*)([ \\t]*)${bEsc}(?:[ \\t]+)`, 'g'), `$1$2${b} `);
+  line = line.replace(new RegExp(`^([ \\t]*)${bEsc}(?:[ \\t]+)`), `$1${b} `);
+  line = line.replace(
+    /^((?:>\s*)*)(\s*)-\s*\[([ xX])\]\s*/,
+    (_m, quotePrefix: string, indent: string, mark: string) => {
+      const normalizedMark = mark.toLowerCase() === 'x' ? 'x' : ' ';
+      return `${quotePrefix}${indent}- [${normalizedMark}] `;
+    },
+  );
+  line = line.replace(/^(\s*)-\s*\[([ xX])\]\s*/, (_m, indent, mark) => {
+    const normalizedMark = (mark as string).toLowerCase() === 'x' ? 'x' : ' ';
+    return `${indent}- [${normalizedMark}] `;
+  });
+  line = line.replace(dupBulletRe, '$1');
+  line = line.replace(dupBulletOnlyRe, '$1');
+  line = line.replace(/^(\s*\d+[.)])\s*/, '$1 ');
+  line = line.replace(/^((?:>\s*)*\s*-\s\[[ xX]\])\s*/, '$1 ');
+  line = line.replace(/^(\s*-\s\[[ xX]\])\s*/, '$1 ');
+  line = line.replace(/\[([^\]]+)\]\(([^)\n]+)\)/g, (_m, text, url) => {
+    return `[${String(text).trim()}](${url})`;
+  });
+  line = line.replace(/\[\[\s*([^\]]*?)\s*\]\]/g, '[[$1]]');
+
+  if (resolved.removeEmptyListItems) {
+    const emptyList = new RegExp(`^\\s*${bEsc}\\s*(?:\\[[ xX]\\])?\\s*$`);
+    if (emptyList.test(line)) {
+      return null;
+    }
+  }
+
+  return collapseInnerSpaces(line);
+}
+
 function preprocessMarkdown(input: string, resolved: ResolvedCleanNoteOptions): string {
   const b = resolved.bullet;
   const bEsc = escapeRegExp(b);
@@ -220,48 +272,18 @@ function preprocessMarkdown(input: string, resolved: ResolvedCleanNoteOptions): 
       continue;
     }
 
-    let line = rawLine.trimEnd();
-    line = line.replace(/^\s+(#{1,6}\s)/, '$1');
-    line = line.replace(alternateBulletRe, `$1${b} `);
-    if (b !== '-') {
-      line = line.replace(
-        /^((?:>\s*)*)([ \t]*)-\s+(?!\[[ xX]\])/,
-        `$1$2${b} `,
-      );
-      line = line.replace(/^([ \t]*)-\s+(?!\[[ xX]\])/, `$1${b} `);
-    }
-    line = line.replace(new RegExp(`^((?:>\\s*)*)([ \\t]*)${bEsc}(?:[ \\t]+)`, 'g'), `$1$2${b} `);
-    line = line.replace(new RegExp(`^([ \\t]*)${bEsc}(?:[ \\t]+)`), `$1${b} `);
-    line = line.replace(
-      /^((?:>\s*)*)(\s*)-\s*\[([ xX])\]\s*/,
-      (_m, quotePrefix: string, indent: string, mark: string) => {
-        const normalizedMark = mark.toLowerCase() === 'x' ? 'x' : ' ';
-        return `${quotePrefix}${indent}- [${normalizedMark}] `;
-      },
+    const processed = preprocessMarkdownLineOutsideFence(
+      rawLine,
+      resolved,
+      b,
+      bEsc,
+      dupBulletRe,
+      dupBulletOnlyRe,
+      alternateBulletRe,
     );
-    line = line.replace(/^(\s*)-\s*\[([ xX])\]\s*/, (_m, indent, mark) => {
-      const normalizedMark = (mark as string).toLowerCase() === 'x' ? 'x' : ' ';
-      return `${indent}- [${normalizedMark}] `;
-    });
-    line = line.replace(dupBulletRe, '$1');
-    line = line.replace(dupBulletOnlyRe, '$1');
-    line = line.replace(/^(\s*\d+[.)])\s*/, '$1 ');
-    line = line.replace(/^((?:>\s*)*\s*-\s\[[ xX]\])\s*/, '$1 ');
-    line = line.replace(/^(\s*-\s\[[ xX]\])\s*/, '$1 ');
-    line = line.replace(/\[([^\]]+)\]\(([^)\n]+)\)/g, (_m, text, url) => {
-      return `[${String(text).trim()}](${url})`;
-    });
-    line = line.replace(/\[\[\s*([^\]]*?)\s*\]\]/g, '[[$1]]');
-
-    if (resolved.removeEmptyListItems) {
-      const emptyList = new RegExp(`^\\s*${bEsc}\\s*(?:\\[[ xX]\\])?\\s*$`);
-      if (emptyList.test(line)) {
-        continue;
-      }
+    if (processed != null) {
+      out.push(processed);
     }
-
-    line = collapseInnerSpaces(line);
-    out.push(line);
   }
 
   const noHyphenBreaks = resolved.rejoinHyphenatedLineBreaks
@@ -543,48 +565,58 @@ function removeBlankLinesBetweenListItems(lines: string[], bullet: string): stri
   return out;
 }
 
+function advanceAfterBlockquoteBlankLines(out: string[], i: number): number {
+  const start = i;
+  let end = i;
+  while (end + 1 < out.length && isBlockquote(out[end + 1]!)) {
+    end++;
+  }
+  ensureBlankBefore(out, start);
+  ensureBlankAfter(out, end);
+  return end + 1;
+}
+
+function advanceAfterFenceBlankLines(out: string[], i: number): number {
+  const start = i;
+  let end = i;
+  const openingFence = getFence(out[start]!);
+  if (openingFence) {
+    end++;
+    while (end < out.length) {
+      const maybeClose = getFence(out[end]!);
+      if (
+        maybeClose
+        && maybeClose.char === openingFence.char
+        && maybeClose.len >= openingFence.len
+      ) {
+        break;
+      }
+      end++;
+    }
+  }
+  ensureBlankBefore(out, start);
+  ensureBlankAfter(out, Math.min(end, out.length - 1));
+  return Math.min(end, out.length - 1) + 1;
+}
+
 function ensureBlankLinesAroundBlocks(lines: string[]): string[] {
   const out = lines.slice();
 
-  for (let i = 0; i < out.length; i++) {
+  let i = 0;
+  while (i < out.length) {
     if (isHeading(out[i]!) || isHorizontalRule(out[i]!)) {
       ensureBlankAroundSingleLineBlock(out, i);
+      i++;
       continue;
     }
 
     if (isBlockquote(out[i]!)) {
-      const start = i;
-      let end = i;
-      while (end + 1 < out.length && isBlockquote(out[end + 1]!)) {
-        end++;
-      }
-      ensureBlankBefore(out, start);
-      ensureBlankAfter(out, end);
-      i = end;
+      i = advanceAfterBlockquoteBlankLines(out, i);
       continue;
     }
 
     if (isFenceBoundary(out[i]!)) {
-      const start = i;
-      let end = i;
-      const openingFence = getFence(out[start]!);
-      if (openingFence) {
-        end++;
-        while (end < out.length) {
-          const maybeClose = getFence(out[end]!);
-          if (
-            maybeClose
-            && maybeClose.char === openingFence.char
-            && maybeClose.len >= openingFence.len
-          ) {
-            break;
-          }
-          end++;
-        }
-      }
-      ensureBlankBefore(out, start);
-      ensureBlankAfter(out, Math.min(end, out.length - 1));
-      i = Math.min(end, out.length - 1);
+      i = advanceAfterFenceBlankLines(out, i);
       continue;
     }
 
@@ -592,7 +624,9 @@ function ensureBlankLinesAroundBlocks(lines: string[]): string[] {
     if (tableEnd >= i) {
       ensureBlankBefore(out, i);
       ensureBlankAfter(out, tableEnd);
-      i = tableEnd;
+      i = tableEnd + 1;
+    } else {
+      i++;
     }
   }
 
@@ -697,6 +731,35 @@ function getFence(line: string): {char: string; len: number} | null {
   return {char: m[1]![0]!, len: m[1]!.length};
 }
 
+function normalizeBulletSpacingLine(
+  line: string,
+  bullet: string,
+  lineRe: RegExp,
+): string {
+  const {quotePrefix, content} = splitBlockquotePrefix(line);
+  if (isHorizontalRule(content)) {
+    return line;
+  }
+
+  const unescaped = content.replace(/^([ \t]*)\\-\s+/, '$1- ');
+  const m = unescaped.match(lineRe);
+  if (!m) {
+    return `${quotePrefix}${unescaped}`;
+  }
+
+  const indent = m[1]!;
+  const rest = m[2] ?? '';
+  const checklist = rest.match(/^\s*\[([ xX])\](.*)$/);
+  if (checklist) {
+    const mark = checklist[1]!.toLowerCase() === 'x' ? 'x' : ' ';
+    const text = (checklist[2] ?? '').trimStart();
+    return `${quotePrefix}${indent}- [${mark}] ${text}`.trimEnd();
+  }
+
+  const text = rest.trimStart();
+  return `${quotePrefix}${indent}${bullet} ${text}`.trimEnd();
+}
+
 function normalizeBulletSpacing(lines: string[], bullet: string): string[] {
   const bEsc = escapeRegExp(bullet);
   const lineRe = new RegExp(`^([ \\t]*)${bEsc}(.*)$`);
@@ -725,31 +788,7 @@ function normalizeBulletSpacing(lines: string[], bullet: string): string[] {
       continue;
     }
 
-    const {quotePrefix, content} = splitBlockquotePrefix(line);
-    if (isHorizontalRule(content)) {
-      out.push(line);
-      continue;
-    }
-
-    const unescaped = content.replace(/^([ \t]*)\\-\s+/, '$1- ');
-    const m = unescaped.match(lineRe);
-    if (!m) {
-      out.push(`${quotePrefix}${unescaped}`);
-      continue;
-    }
-
-    const indent = m[1]!;
-    const rest = m[2] ?? '';
-    const checklist = rest.match(/^\s*\[([ xX])\](.*)$/);
-    if (checklist) {
-      const mark = checklist[1]!.toLowerCase() === 'x' ? 'x' : ' ';
-      const text = (checklist[2] ?? '').trimStart();
-      out.push(`${quotePrefix}${indent}- [${mark}] ${text}`.trimEnd());
-      continue;
-    }
-
-    const text = rest.trimStart();
-    out.push(`${quotePrefix}${indent}${bullet} ${text}`.trimEnd());
+    out.push(normalizeBulletSpacingLine(line, bullet, lineRe));
   }
 
   return out;
@@ -873,20 +912,23 @@ function protectHighlights(text: string): {text: string; tokens: Map<string, str
   return {text: out.join('\n'), tokens};
 }
 
-function restoreWikiLinks(text: string, tokens: Map<string, string>): string {
-  let output = text;
-  for (const [token, wiki] of tokens.entries()) {
-    output = output.split(token).join(wiki);
-  }
-  return output;
-}
-
-function restoreHighlights(text: string, tokens: Map<string, string>): string {
+function restoreTokenPlaceholders(
+  text: string,
+  tokens: Map<string, string>,
+): string {
   let output = text;
   for (const [token, value] of tokens.entries()) {
     output = output.split(token).join(value);
   }
   return output;
+}
+
+function restoreWikiLinks(text: string, tokens: Map<string, string>): string {
+  return restoreTokenPlaceholders(text, tokens);
+}
+
+function restoreHighlights(text: string, tokens: Map<string, string>): string {
+  return restoreTokenPlaceholders(text, tokens);
 }
 
 function protectIssueNumberHashes(text: string): {
@@ -904,11 +946,7 @@ function protectIssueNumberHashes(text: string): {
 }
 
 function restoreIssueNumberHashes(text: string, tokens: Map<string, string>): string {
-  let output = text;
-  for (const [token, value] of tokens.entries()) {
-    output = output.split(token).join(value);
-  }
-  return output;
+  return restoreTokenPlaceholders(text, tokens);
 }
 
 function protectBlockquoteAdmonitions(text: string): {
@@ -958,11 +996,7 @@ function protectBlockquoteAdmonitions(text: string): {
 }
 
 function restoreBlockquoteAdmonitions(text: string, tokens: Map<string, string>): string {
-  let output = text;
-  for (const [token, value] of tokens.entries()) {
-    output = output.split(token).join(value);
-  }
-  return output;
+  return restoreTokenPlaceholders(text, tokens);
 }
 
 /** Vitest harness: clear cached remark processors keyed by resolved options. */

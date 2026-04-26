@@ -7,20 +7,25 @@ import {
   type TodayHubWorkspaceSelectItem,
 } from './TodayHubWorkspaceSelect';
 
+export type WindowTitleBarTodayHubSelect =
+  | {
+      items: readonly TodayHubWorkspaceSelectItem[];
+      activeTodayNoteUri: string | null;
+      activeLabel: string;
+      /** Match title bar editor tab pill active styling on the workspace main control. */
+      mainShowsActiveTabPill?: boolean;
+      onMainActivate: () => void;
+      onPickHub: (todayNoteUri: string) => void;
+      onOpenHubInNewTab: (todayNoteUri: string) => void;
+    }
+  | null
+  | undefined;
+
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
   /** Mount point for editor open-note tabs (React portal target). */
   onEditorTabsHostRef?: (el: HTMLDivElement | null) => void;
-  todayHubSelect?: {
-    items: readonly TodayHubWorkspaceSelectItem[];
-    activeTodayNoteUri: string | null;
-    activeLabel: string;
-    /** Match title bar editor tab pill active styling on the workspace main control. */
-    mainShowsActiveTabPill?: boolean;
-    onMainActivate: () => void;
-    onPickHub: (todayNoteUri: string) => void;
-    onOpenHubInNewTab: (todayNoteUri: string) => void;
-  } | null;
+  todayHubSelect?: WindowTitleBarTodayHubSelect;
 };
 
 export function WindowTitleBar({

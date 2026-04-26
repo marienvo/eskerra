@@ -12,6 +12,16 @@ import {
   type SessionNotification,
 } from '../lib/sessionNotifications';
 
+function hasStatusNotificationWithMessage(
+  items: SessionNotification[],
+  tone: SessionNotification['tone'],
+  text: string,
+): boolean {
+  return items.some(
+    n => n.source === 'status' && n.tone === tone && n.text === text,
+  );
+}
+
 export type UseSessionNotificationsInput = {
   statusBarCenter: AppStatusBarCenter;
   renameLinkProgress: {done: number; total: number} | null;
@@ -71,11 +81,7 @@ export function useSessionNotifications(
     }
     queueMicrotask(() => {
       setItems(prev => {
-        if (
-          prev.some(
-            i => i.source === 'status' && i.tone === tone && i.text === text,
-          )
-        ) {
+        if (hasStatusNotificationWithMessage(prev, tone, text)) {
           return prev;
         }
         const id = crypto.randomUUID();

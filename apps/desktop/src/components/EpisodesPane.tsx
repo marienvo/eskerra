@@ -45,6 +45,38 @@ function MusicNotePlaceholderIcon(): ReactElement {
   );
 }
 
+function buildEpisodeRowClassName(
+  isActive: boolean,
+  playCtl: PlaybackTransportPlayControl | null,
+): string {
+  return [
+    'episode-row',
+    isActive ? 'episode-row--active' : '',
+    isActive && playCtl === 'playing' ? 'episode-row--playing' : '',
+    isActive && (playCtl === 'loading' || playCtl === 'buffering')
+      ? 'episode-row--buffering'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function episodeRowStatusLabel(
+  isActive: boolean,
+  playCtl: PlaybackTransportPlayControl | null,
+): string | null {
+  if (isActive && playCtl === 'playing') {
+    return 'Playing';
+  }
+  if (isActive && (playCtl === 'loading' || playCtl === 'buffering')) {
+    return 'Buffering';
+  }
+  if (isActive && playCtl === 'paused') {
+    return 'Paused';
+  }
+  return null;
+}
+
 type EpisodeListRowProps = {
   ep: PodcastEpisode;
   sectionRssFeedUrl?: string;
@@ -74,25 +106,8 @@ function EpisodeListRow({
   const isActive = activeEpisodeId === ep.id;
   const playCtl = isActive ? activeEpisodePlayControl : null;
 
-  const rowClass = [
-    'episode-row',
-    isActive ? 'episode-row--active' : '',
-    isActive && playCtl === 'playing' ? 'episode-row--playing' : '',
-    isActive && (playCtl === 'loading' || playCtl === 'buffering')
-      ? 'episode-row--buffering'
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  let statusLabel: string | null = null;
-  if (isActive && playCtl === 'playing') {
-    statusLabel = 'Playing';
-  } else if (isActive && (playCtl === 'loading' || playCtl === 'buffering')) {
-    statusLabel = 'Buffering';
-  } else if (isActive && playCtl === 'paused') {
-    statusLabel = 'Paused';
-  }
+  const rowClass = buildEpisodeRowClassName(isActive, playCtl);
+  const statusLabel = episodeRowStatusLabel(isActive, playCtl);
 
   const markPlayedDisabled =
     ep.isListened || episodeSelectLocked;

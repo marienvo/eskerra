@@ -945,18 +945,11 @@ function tryUnwrapItalicEmptyMarkers(state: EditorState, head: number): Surround
   };
 }
 
-function computeEmptyCaretSymmetricSurroundChange(
+function tryEmptyCaretSymmetricUnwrap(
   state: EditorState,
   head: number,
   cfg: SymmetricSurroundConfig,
 ): SurroundChange | null {
-  if (!markdownLanguage.isActiveAt(state, head, 1)) {
-    return null;
-  }
-  if (selectionTouchesCodeBlock(state, head, head)) {
-    return null;
-  }
-
   if (cfg.mode === 'pairedOnly' && cfg.double === '**') {
     const u = tryUnwrapBoldEmptyMarkers(state, head);
     if (u) {
@@ -970,10 +963,27 @@ function computeEmptyCaretSymmetricSurroundChange(
     && cfg.double === '**'
     && cfg.outerSingleUnwrapsInsteadOfUpgrade
   ) {
-    const u = tryUnwrapItalicEmptyMarkers(state, head);
-    if (u) {
-      return u;
-    }
+    return tryUnwrapItalicEmptyMarkers(state, head);
+  }
+
+  return null;
+}
+
+function computeEmptyCaretSymmetricSurroundChange(
+  state: EditorState,
+  head: number,
+  cfg: SymmetricSurroundConfig,
+): SurroundChange | null {
+  if (!markdownLanguage.isActiveAt(state, head, 1)) {
+    return null;
+  }
+  if (selectionTouchesCodeBlock(state, head, head)) {
+    return null;
+  }
+
+  const unwrap = tryEmptyCaretSymmetricUnwrap(state, head, cfg);
+  if (unwrap) {
+    return unwrap;
   }
 
   const w = state.wordAt(head);

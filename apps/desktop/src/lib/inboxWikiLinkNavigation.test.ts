@@ -10,6 +10,50 @@ import {
   openOrCreateVaultWikiPathMarkdownLink,
 } from './inboxWikiLinkNavigation';
 
+function memoryVaultDirEntriesForPrefix(
+  dirs: Set<string>,
+  base: string,
+  prefix: string,
+): VaultDirEntry[] {
+  const out: VaultDirEntry[] = [];
+  for (const d of dirs) {
+    if (d.startsWith(prefix) && d !== base) {
+      const rest = d.slice(prefix.length);
+      if (rest && !rest.includes('/')) {
+        out.push({
+          name: rest,
+          uri: d,
+          type: 'directory',
+          lastModified: null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+function memoryVaultFileEntriesForPrefix(
+  files: Map<string, string>,
+  base: string,
+  prefix: string,
+): VaultDirEntry[] {
+  const out: VaultDirEntry[] = [];
+  for (const [uri] of files) {
+    if (uri.startsWith(prefix) && uri !== base) {
+      const rest = uri.slice(prefix.length);
+      if (rest && !rest.includes('/')) {
+        out.push({
+          name: rest,
+          uri,
+          type: 'file',
+          lastModified: null,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 function createMemoryVaultFs(
   seed: Array<[string, 'dir' | string]>,
 ): {fs: VaultFilesystem; writes: Array<{uri: string; content: string}>} {
@@ -28,34 +72,10 @@ function createMemoryVaultFs(
   const listFiles = async (directoryUri: string): Promise<VaultDirEntry[]> => {
     const base = directoryUri.replace(/\/$/, '');
     const prefix = `${base}/`;
-    const out: VaultDirEntry[] = [];
-    for (const d of dirs) {
-      if (d.startsWith(prefix) && d !== base) {
-        const rest = d.slice(prefix.length);
-        if (rest && !rest.includes('/')) {
-          out.push({
-            name: rest,
-            uri: d,
-            type: 'directory',
-            lastModified: null,
-          });
-        }
-      }
-    }
-    for (const [uri] of files) {
-      if (uri.startsWith(prefix) && uri !== base) {
-        const rest = uri.slice(prefix.length);
-        if (rest && !rest.includes('/')) {
-          out.push({
-            name: rest,
-            uri,
-            type: 'file',
-            lastModified: null,
-          });
-        }
-      }
-    }
-    return out;
+    return [
+      ...memoryVaultDirEntriesForPrefix(dirs, base, prefix),
+      ...memoryVaultFileEntriesForPrefix(files, base, prefix),
+    ];
   };
 
   const fs: VaultFilesystem = {
