@@ -81,6 +81,10 @@ function extractFirstMarkdownH1(content: string): string | undefined {
     if (!trimmedStart.startsWith('#') || trimmedStart.startsWith('##')) {
       continue;
     }
+    /** ATX H1 requires a space or tab after `#`; avoid treating `#tag` lines as headings. */
+    if (!/^#[ \t]/.test(trimmedStart)) {
+      continue;
+    }
     let h1Body = trimmedStart.slice(1).trimStart();
     if (!h1Body) {
       continue;
