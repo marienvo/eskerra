@@ -107,7 +107,27 @@ export function PlaybackTransport({
   const isLoading = playControl === 'loading';
   const isBuffering = playControl === 'buffering';
   const showPauseIcon = playControl === 'playing' || playControl === 'buffering';
-  const playLabel = isLoading ? 'Loading' : isBuffering ? 'Buffering, pause' : showPauseIcon ? 'Pause' : 'Play';
+  let playLabel = 'Play';
+  if (isLoading) {
+    playLabel = 'Loading';
+  } else if (isBuffering) {
+    playLabel = 'Buffering, pause';
+  } else if (showPauseIcon) {
+    playLabel = 'Pause';
+  }
+  let playIcon = <PlayIcon {...PLAYBACK_ICON_DIM} aria-hidden />;
+  if (isLoading) {
+    playIcon = <DualArcSpinner />;
+  } else if (isBuffering) {
+    playIcon = (
+      <span className="app-playback-chrome-btn__play-inner">
+        <BufferRingSpinner />
+        <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
+      </span>
+    );
+  } else if (showPauseIcon) {
+    playIcon = <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />;
+  }
   const isToolbar = variant === 'toolbar';
 
   return (
@@ -144,18 +164,7 @@ export function PlaybackTransport({
         disabled={isLoading}
         onClick={() => void onTogglePlay()}
       >
-        {isLoading ? (
-          <DualArcSpinner />
-        ) : isBuffering ? (
-          <span className="app-playback-chrome-btn__play-inner">
-            <BufferRingSpinner />
-            <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
-          </span>
-        ) : showPauseIcon ? (
-          <PauseIcon {...PLAYBACK_ICON_DIM} aria-hidden />
-        ) : (
-          <PlayIcon {...PLAYBACK_ICON_DIM} aria-hidden />
-        )}
+        {playIcon}
       </button>
       <button
         type="button"

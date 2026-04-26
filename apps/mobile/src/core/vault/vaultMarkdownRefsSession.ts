@@ -36,5 +36,9 @@ export function buildMockVaultMarkdownRefs(): VaultMarkdownRef[] {
 }
 
 export function normalizeVaultMarkdownRefsBaseUri(baseUri: string): string {
-  return normalizeVaultBaseUri(baseUri).replace(/\\/g, '/').replace(/\/+$/, '');
+  let normalized = normalizeVaultBaseUri(baseUri).replace(/\\/g, '/');
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
 }

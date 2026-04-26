@@ -1,5 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import {mobileAsyncStorage} from '../../../core/storage/mobileAsyncStorage';
 import {normalizeSeriesKey} from './rssParser';
 
 const rssFeedUrlBySeriesName = new Map<string, string>();
@@ -72,7 +71,7 @@ async function persistRssFeedUrlCache(baseUri: string): Promise<void> {
   const storageKey = getPersistentRssCacheStorageKey(baseUri);
   const {byNormalized, bySeries} = collectEntriesForBaseUri(baseUri);
   if (Object.keys(bySeries).length === 0 && Object.keys(byNormalized).length === 0) {
-    await AsyncStorage.removeItem(storageKey);
+    await mobileAsyncStorage.removeItem(storageKey);
     return;
   }
 
@@ -81,7 +80,7 @@ async function persistRssFeedUrlCache(baseUri: string): Promise<void> {
     bySeries,
     v: PERSISTED_PAYLOAD_VERSION,
   };
-  await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+  await mobileAsyncStorage.setItem(storageKey, JSON.stringify(payload));
 }
 
 function schedulePersistRssFeedUrlCache(baseUri: string): void {
@@ -143,13 +142,33 @@ function isValidPersistedPayload(parsed: unknown): parsed is PersistedRssPayload
   return true;
 }
 
+function loadRssFeedUrlCacheMap(
+  map: Map<string, string>,
+  entries: Record<string, unknown>,
+  prefix: string,
+): void {
+  for (const [key, url] of Object.entries(entries)) {
+    if (typeof url !== 'string') {
+      continue;
+    }
+    const trimmed = url.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const fullKey = `${prefix}${key}`;
+    if (!map.has(fullKey)) {
+      map.set(fullKey, trimmed);
+    }
+  }
+}
+
 export async function loadPersistentRssFeedUrlCache(baseUri: string): Promise<void> {
   if (!baseUri) {
     return;
   }
 
   const storageKey = getPersistentRssCacheStorageKey(baseUri);
-  const rawCache = await AsyncStorage.getItem(storageKey);
+  const rawCache = await mobileAsyncStorage.getItem(storageKey);
   if (!rawCache?.trim()) {
     return;
   }
@@ -166,34 +185,8 @@ export async function loadPersistentRssFeedUrlCache(baseUri: string): Promise<vo
   }
 
   const prefix = `${baseUri}::`;
-
-  for (const [seriesName, url] of Object.entries(parsed.bySeries)) {
-    if (typeof url !== 'string') {
-      continue;
-    }
-    const trimmed = url.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const fullKey = `${prefix}${seriesName}`;
-    if (!rssFeedUrlBySeriesName.has(fullKey)) {
-      rssFeedUrlBySeriesName.set(fullKey, trimmed);
-    }
-  }
-
-  for (const [normalizedKey, url] of Object.entries(parsed.byNormalized)) {
-    if (typeof url !== 'string') {
-      continue;
-    }
-    const trimmed = url.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const fullKey = `${prefix}${normalizedKey}`;
-    if (!rssFeedUrlByNormalizedSeriesName.has(fullKey)) {
-      rssFeedUrlByNormalizedSeriesName.set(fullKey, trimmed);
-    }
-  }
+  loadRssFeedUrlCacheMap(rssFeedUrlBySeriesName, parsed.bySeries, prefix);
+  loadRssFeedUrlCacheMap(rssFeedUrlByNormalizedSeriesName, parsed.byNormalized, prefix);
 }
 
 /**

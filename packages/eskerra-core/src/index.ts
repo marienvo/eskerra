@@ -63,6 +63,7 @@ export {
   startOfLocalDayMs,
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export {stripTrailingAtxClosingHashes} from './markdown/stripTrailingAtxClosingHashes';
 export type {
   CalloutCatalogEntry,
   CalloutColor,
@@ -250,6 +251,26 @@ export {
   type PodcastRssSettings,
   type PodcastRssSyncEpisode,
 } from './podcastRssSync';
+export type {
+  ParsePodcastEpisodeLineInput,
+  PodcastMarkdownEpisode,
+  PodcastMarkdownFileDetails,
+  PodcastMarkdownSection,
+} from './podcasts/podcastFileParser';
+export {
+  extractPodcastSectionTitle,
+  groupPodcastEpisodesBySection,
+  isPodcastEpisodesFile,
+  parsePodcastEpisodeLine,
+  parsePodcastEpisodesMarkdownFile,
+  parsePodcastFileDetails,
+} from './podcasts/podcastFileParser';
+export {
+  PODCAST_FIXTURE_EPISODE_LINE_PLAYED,
+  PODCAST_FIXTURE_EPISODE_LINE_UNPLAYED,
+  PODCAST_FIXTURE_GROUP_BODY,
+  PODCAST_FIXTURE_MULTI_LINE_BODY,
+} from './podcasts/podcastMarkdownFixtures';
 export type {
   FetchR2PlaylistConditionalOptions,
   R2PlaylistConditionalResult,

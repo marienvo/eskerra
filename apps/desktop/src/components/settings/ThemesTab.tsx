@@ -9,7 +9,7 @@ import {
   type ThemeMode,
   writeVaultTheme,
 } from '@eskerra/core';
-import {revealItemInDir} from '@tauri-apps/plugin-opener';
+import {revealPathInSystemExplorer} from '../../lib/revealPathInSystemExplorer';
 import {useCallback, useMemo, useState} from 'react';
 
 import {AppChromeBackground} from '../AppChromeBackground';
@@ -33,6 +33,15 @@ function ThemeCardPreview({palette}: {palette: readonly string[]}) {
 
 export function ThemesTab({vaultRoot, fs}: ThemesTabProps) {
   const {preference, resolvedMode, vaultThemeItems, setThemeId, setMode} = useThemeShell();
+  const modeLabel = (mode: ThemeMode): string => {
+    if (mode === 'auto') {
+      return 'Auto';
+    }
+    if (mode === 'light') {
+      return 'Light';
+    }
+    return 'Dark';
+  };
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [exportDialog, setExportDialog] = useState<{source: ThemeDefinition} | null>(null);
@@ -114,7 +123,7 @@ export function ThemesTab({vaultRoot, fs}: ThemesTabProps) {
       const dir = getThemesDirectoryUri(normalizeVaultBaseUri(vaultRoot));
       const path = `${dir}/${theme.fileName}`.replace(/\//g, '/');
       try {
-        await revealItemInDir(path);
+        await revealPathInSystemExplorer(path);
       } catch {
         // ignore
       }
@@ -136,7 +145,7 @@ export function ThemesTab({vaultRoot, fs}: ThemesTabProps) {
                 preference.mode === m ? 'themes-tab-mode-toggle__btn is-active' : 'themes-tab-mode-toggle__btn'
               }
               onClick={() => void setMode(m as ThemeMode)}>
-              {m === 'auto' ? 'Auto' : m === 'light' ? 'Light' : 'Dark'}
+              {modeLabel(m as ThemeMode)}
             </button>
           ))}
         </div>

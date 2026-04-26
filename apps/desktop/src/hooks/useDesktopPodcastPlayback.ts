@@ -8,6 +8,7 @@ import {
   type PlaybackTransportPlayControl,
   type PlayerEpisodeSnapshot,
   type PlaylistEntry,
+  type PlayerState,
   podcastPlayerMachine,
   type PodcastPlayerDeps,
   type PodcastPlayerPlaybackState,
@@ -15,7 +16,14 @@ import {
 } from '@eskerra/core';
 import {invoke} from '@tauri-apps/api/core';
 import {useMachine} from '@xstate/react';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type MutableRefObject,
+} from 'react';
 import {waitFor} from 'xstate';
 
 import {
@@ -116,6 +124,300 @@ function episodeToSnapshot(ep: PodcastEpisode): PlayerEpisodeSnapshot {
     title: ep.title,
     artist: ep.seriesName,
   };
+}
+
+type PrimedPlayingOrLoadingDone =
+  | {done: true}
+  | {done: false; st: PlayerState};
+
+async function primedResolvePlayingOrLoadingState(
+  player: ReturnType<typeof getDesktopAudioPlayer>,
+  st: PlayerState,
+  pl: PlaylistEntry,
+  key: string,
+  lastPrimedKeyRef: MutableRefObject<string | null>,
+): Promise<PrimedPlayingOrLoadingDone> {
+  if (st === 'playing') {
+    const currentId = player.getCurrentTrackEpisodeId();
+    if (currentId === pl.episodeId) {
+      lastPrimedKeyRef.current = key;
+      return {done: true};
+    }
+    await player.stop();
+    return {done: false, st: await player.getState()};
+  }
+  if (st === 'loading') {
+    const loadingEpisodeId = player.getCurrentTrackEpisodeId();
+    if (loadingEpisodeId === pl.episodeId) {
+      lastPrimedKeyRef.current = key;
+      return {done: true};
+    }
+    if (loadingEpisodeId != null && loadingEpisodeId !== pl.episodeId) {
+      await player.stop();
+      return {done: false, st: await player.getState()};
+    }
+  }
+  return {done: false, st};
+}
+
+async function tryPrimedSeekIfPausedOnLoadedSameTrack(
+  st: PlayerState,
+  player: ReturnType<typeof getDesktopAudioPlayer>,
+  pl: PlaylistEntry,
+  catalogEp: PodcastEpisode,
+  key: string,
+  lastPrimedKeyRef: MutableRefObject<string | null>,
+  isCancelled: () => boolean,
+): Promise<boolean> {
+  if (st !== 'paused' && st !== 'ended') {
+    return false;
+  }
+  const currentId = player.getCurrentTrackEpisodeId();
+  const loaded = player.getLoadedTrack();
+  if (
+    currentId === pl.episodeId
+    && loaded != null
+    && loaded.url === catalogEp.mp3Url
+  ) {
+    await player.seekTo(pl.positionMs);
+    if (isCancelled()) {
+      return true;
+    }
+    lastPrimedKeyRef.current = key;
+    return true;
+  }
+  return false;
+}
+
+async function runPrimedPrimePausedWithArtwork(
+  pl: PlaylistEntry,
+  catalogEp: PodcastEpisode,
+  key: string,
+  isCancelled: () => boolean,
+  lastPrimedKeyRef: MutableRefObject<string | null>,
+  onError: (message: string) => void,
+): Promise<void> {
+  const player = getDesktopAudioPlayer();
+  const trackUrl = catalogEp.mp3Url;
+  try {
+    const artwork = await channelArtworkFileUriForMpris(catalogEp.id, catalogEp.rssFeedUrl);
+    await player.primePausedAt(
+      {
+        artist: catalogEp.seriesName,
+        id: catalogEp.id,
+        title: catalogEp.title,
+        url: trackUrl,
+        ...(artwork ? {artwork} : {}),
+      },
+      pl.positionMs,
+    );
+    if (isCancelled()) {
+      return;
+    }
+    lastPrimedKeyRef.current = key;
+  } catch (e) {
+    try {
+      await getDesktopAudioPlayer().stop();
+    } catch {
+      /* ignore */
+    }
+    if (!isCancelled()) {
+      onError(
+        e instanceof Error
+          ? e.message
+          : 'Could not load episode audio for resume preview.',
+      );
+    }
+  }
+}
+
+/** Resume primed native player to playlist position (separate from hook for cognitive complexity). */
+async function runDesktopPrimedPlaylistNativeResume(options: {
+  isCancelled: () => boolean;
+  pl: PlaylistEntry;
+  catalogEp: PodcastEpisode;
+  key: string;
+  lastPrimedKeyRef: MutableRefObject<string | null>;
+  onError: (message: string) => void;
+}): Promise<void> {
+  const {isCancelled, pl, catalogEp, key, lastPrimedKeyRef, onError} = options;
+  const player = getDesktopAudioPlayer();
+  let st = await player.getState();
+  if (isCancelled()) {
+    return;
+  }
+  const playingOr = await primedResolvePlayingOrLoadingState(
+    player,
+    st,
+    pl,
+    key,
+    lastPrimedKeyRef,
+  );
+  if (playingOr.done) {
+    return;
+  }
+  st = playingOr.st;
+
+  if (isCancelled()) {
+    return;
+  }
+
+  const didSeek = await tryPrimedSeekIfPausedOnLoadedSameTrack(
+    st,
+    player,
+    pl,
+    catalogEp,
+    key,
+    lastPrimedKeyRef,
+    isCancelled,
+  );
+  if (didSeek) {
+    return;
+  }
+
+  if (isCancelled()) {
+    return;
+  }
+
+  await runPrimedPrimePausedWithArtwork(
+    pl,
+    catalogEp,
+    key,
+    isCancelled,
+    lastPrimedKeyRef,
+    onError,
+  );
+}
+
+type DesktopPlaySend = (
+  ev:
+    | {type: 'EPISODE_PLAY'; episode: PlayerEpisodeSnapshot; baseline: PlaylistEntry | null}
+    | {type: 'QUEUE_PERSIST'; entry: PlaylistEntry}
+    | {type: 'ERROR'; message: string},
+) => void;
+
+type PlaylistMachineContext = {
+  playlistBaseline: PlaylistEntry | null;
+  episode: PlayerEpisodeSnapshot | null;
+};
+
+function computeStartPositionMsFromPrior(
+  prior: PlaylistEntry | null,
+  ep: PodcastEpisode,
+  switchingFromAnother: boolean,
+): number {
+  if (switchingFromAnother) {
+    return 0;
+  }
+  if (prior?.episodeId === ep.id) {
+    return prior.positionMs;
+  }
+  return 0;
+}
+
+function queuePlaylistPersistForPlay(
+  ep: PodcastEpisode,
+  startPositionMs: number,
+  prior: PlaylistEntry | null,
+  deviceId: string,
+  send: DesktopPlaySend,
+): void {
+  const base: PlaylistEntry =
+    prior?.episodeId === ep.id
+      ? prior
+      : {
+          durationMs: null,
+          episodeId: ep.id,
+          mp3Url: ep.mp3Url,
+          positionMs: 0,
+          updatedAt: 0,
+          playbackOwnerId: '',
+          controlRevision: 0,
+        };
+  const entry = buildPlaylistEntryForWrite(
+    base,
+    {
+      durationMs: null,
+      episodeId: ep.id,
+      mp3Url: ep.mp3Url,
+      positionMs: startPositionMs,
+    },
+    deviceId,
+    Date.now(),
+  );
+  send({type: 'QUEUE_PERSIST', entry});
+}
+
+/** User-initiated play from Episodes list (separate from hook for cognitive complexity). */
+async function runDesktopPlayEpisodeUserAction(
+  ep: PodcastEpisode,
+  vaultRoot: string,
+  fs: VaultFilesystem,
+  onError: (msg: string | null) => void,
+  send: DesktopPlaySend,
+  getMachineContext: () => PlaylistMachineContext,
+  getDeviceId: () => string | null,
+  lastPrimedKeyRef: MutableRefObject<string | null>,
+): Promise<void> {
+  const ctx = getMachineContext();
+  const switchingFromAnother =
+    ctx.episode != null && ctx.episode.id !== ep.id;
+
+  const player = getDesktopAudioPlayer();
+  const st = await player.getState();
+  const loadedId = player.getCurrentTrackEpisodeId();
+  const loadedTrack = player.getLoadedTrack();
+  const sameLoadedEp =
+    loadedId === ep.id
+    && loadedTrack != null
+    && loadedTrack.url === ep.mp3Url;
+
+  if (st === 'playing' && sameLoadedEp) {
+    return;
+  }
+
+  if (!sameLoadedEp) {
+    await player.stop();
+  }
+
+  lastPrimedKeyRef.current = null;
+  onError(null);
+  send({
+    type: 'EPISODE_PLAY',
+    episode: episodeToSnapshot(ep),
+    baseline: ctx.playlistBaseline,
+  });
+
+  let prior: PlaylistEntry | null = null;
+  try {
+    prior = await readPlaylistEntry(vaultRoot, fs);
+  } catch {
+    prior = null;
+  }
+  const startPositionMs = computeStartPositionMsFromPrior(
+    prior,
+    ep,
+    switchingFromAnother,
+  );
+
+  const deviceId = getDeviceId();
+  if (deviceId) {
+    queuePlaylistPersistForPlay(ep, startPositionMs, prior, deviceId, send);
+  } else {
+    onError('Device id missing from local settings.');
+  }
+
+  const artwork = await channelArtworkFileUriForMpris(ep.id, ep.rssFeedUrl);
+  await getDesktopAudioPlayer().play(
+    {
+      artist: ep.seriesName,
+      id: ep.id,
+      title: ep.title,
+      url: ep.mp3Url,
+      ...(artwork ? {artwork} : {}),
+    },
+    startPositionMs,
+  );
 }
 
 export type UseDesktopPodcastPlaybackOptions = {
@@ -275,7 +577,9 @@ export function useDesktopPodcastPlayback({
   });
 
   const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
+  useLayoutEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
   const snapCtx = snapshot.context;
   const playbackSub = getPlaybackSubstate(snapshot);
@@ -375,7 +679,7 @@ export function useDesktopPodcastPlayback({
         cancelled = true;
       };
     }
-    void readPlaylistEntry(vaultRoot, fs)
+    readPlaylistEntry(vaultRoot, fs)
       .then(async pl => {
         if (cancelled) {
           return;
@@ -397,7 +701,7 @@ export function useDesktopPodcastPlayback({
         }
         const catalogEp = consumeEpisodesRef.current.find(e => e.id === pl.episodeId);
         if (!catalogEp || catalogEp.isListened) {
-          void clearPlaylistEntry(vaultRoot, fs).finally(() => {
+          clearPlaylistEntry(vaultRoot, fs).finally(() => {
             onPlaylistDiskUpdatedRef.current?.();
           });
           send({type: 'RESET'});
@@ -501,89 +805,16 @@ export function useDesktopPodcastPlayback({
     }
 
     let cancelled = false;
-    void (async () => {
-      const player = getDesktopAudioPlayer();
-      let st = await player.getState();
-      if (cancelled) {
-        return;
-      }
-
-      if (st === 'playing') {
-        const currentId = player.getCurrentTrackEpisodeId();
-        if (currentId === pl.episodeId) {
-          lastPrimedPlaylistKeyRef.current = key;
-          return;
-        }
-        await player.stop();
-        st = await player.getState();
-      } else if (st === 'loading') {
-        const loadingEpisodeId = player.getCurrentTrackEpisodeId();
-        if (loadingEpisodeId === pl.episodeId) {
-          lastPrimedPlaylistKeyRef.current = key;
-          return;
-        }
-        if (loadingEpisodeId != null && loadingEpisodeId !== pl.episodeId) {
-          await player.stop();
-          st = await player.getState();
-        }
-      }
-
-      if (cancelled) {
-        return;
-      }
-
-      if (st === 'paused' || st === 'ended') {
-        const currentId = player.getCurrentTrackEpisodeId();
-        const loaded = player.getLoadedTrack();
-        if (
-          currentId === pl.episodeId &&
-          loaded != null &&
-          loaded.url === trackUrl
-        ) {
-          await player.seekTo(pl.positionMs);
-          if (cancelled) {
-            return;
-          }
-          lastPrimedPlaylistKeyRef.current = key;
-          return;
-        }
-      }
-
-      if (cancelled) {
-        return;
-      }
-
-      try {
-        const artwork = await channelArtworkFileUriForMpris(catalogEp.id, catalogEp.rssFeedUrl);
-        await player.primePausedAt(
-          {
-            artist: catalogEp.seriesName,
-            id: catalogEp.id,
-            title: catalogEp.title,
-            url: trackUrl,
-            ...(artwork ? {artwork} : {}),
-          },
-          pl.positionMs,
-        );
-        if (cancelled) {
-          return;
-        }
-        lastPrimedPlaylistKeyRef.current = key;
-      } catch (e) {
-        try {
-          await getDesktopAudioPlayer().stop();
-        } catch {
-          /* ignore */
-        }
-        if (!cancelled) {
-          onError(
-            e instanceof Error
-              ? e.message
-              : 'Could not load episode audio for resume preview.',
-          );
-        }
-      }
-    })();
+    void runDesktopPrimedPlaylistNativeResume({
+      isCancelled: () => cancelled,
+      pl,
+      catalogEp,
+      key,
+      lastPrimedKeyRef: lastPrimedPlaylistKeyRef,
+      onError: (message: string) => {
+        onError(message);
+      },
+    });
 
     return () => {
       cancelled = true;
@@ -601,7 +832,7 @@ export function useDesktopPodcastPlayback({
     if (playbackSub !== 'idle' || snapCtx.episode != null) {
       return;
     }
-    void getDesktopAudioPlayer()
+    getDesktopAudioPlayer()
       .stop()
       .catch(() => undefined);
   }, [playbackSub, snapCtx.episode]);
@@ -649,89 +880,15 @@ export function useDesktopPodcastPlayback({
       }
       userPlaybackDepthRef.current += 1;
       try {
-        const ctx = snapshotRef.current.context;
-        const switchingFromAnother =
-          ctx.episode != null && ctx.episode.id !== ep.id;
-
-        const player = getDesktopAudioPlayer();
-        const st = await player.getState();
-        const loadedId = player.getCurrentTrackEpisodeId();
-        const loadedTrack = player.getLoadedTrack();
-        const sameLoadedEp =
-          loadedId === ep.id &&
-          loadedTrack != null &&
-          loadedTrack.url === ep.mp3Url;
-
-        if (st === 'playing' && sameLoadedEp) {
-          return;
-        }
-
-        if (!sameLoadedEp) {
-          await player.stop();
-        }
-
-        lastPrimedPlaylistKeyRef.current = null;
-        onError(null);
-        send({
-          type: 'EPISODE_PLAY',
-          episode: episodeToSnapshot(ep),
-          baseline: ctx.playlistBaseline,
-        });
-
-        let startPositionMs = 0;
-        let prior: PlaylistEntry | null = null;
-        try {
-          prior = await readPlaylistEntry(vaultRoot, fs);
-          if (prior?.episodeId === ep.id) {
-            startPositionMs = prior.positionMs;
-          }
-        } catch {
-          /* same as missing playlist */
-        }
-        if (switchingFromAnother) {
-          startPositionMs = 0;
-        }
-
-        const deviceId = deviceIdRef.current;
-        if (deviceId) {
-          const base: PlaylistEntry =
-            prior?.episodeId === ep.id
-              ? prior
-              : {
-                  durationMs: null,
-                  episodeId: ep.id,
-                  mp3Url: ep.mp3Url,
-                  positionMs: 0,
-                  updatedAt: 0,
-                  playbackOwnerId: '',
-                  controlRevision: 0,
-                };
-          const entry = buildPlaylistEntryForWrite(
-            base,
-            {
-              durationMs: null,
-              episodeId: ep.id,
-              mp3Url: ep.mp3Url,
-              positionMs: startPositionMs,
-            },
-            deviceId,
-            Date.now(),
-          );
-          send({type: 'QUEUE_PERSIST', entry});
-        } else {
-          onError('Device id missing from local settings.');
-        }
-
-        const artwork = await channelArtworkFileUriForMpris(ep.id, ep.rssFeedUrl);
-        await getDesktopAudioPlayer().play(
-          {
-            artist: ep.seriesName,
-            id: ep.id,
-            title: ep.title,
-            url: ep.mp3Url,
-            ...(artwork ? {artwork} : {}),
-          },
-          startPositionMs,
+        await runDesktopPlayEpisodeUserAction(
+          ep,
+          vaultRoot,
+          fs,
+          onError,
+          send,
+          () => snapshotRef.current.context as PlaylistMachineContext,
+          () => deviceIdRef.current,
+          lastPrimedPlaylistKeyRef,
         );
       } catch (e) {
         if (isAbortError(e)) {
@@ -855,7 +1012,6 @@ export function useDesktopPodcastPlayback({
 
     if (st === 'playing') {
       await pauseIfPlaying();
-      return;
     } else if (
       st === 'paused' ||
       st === 'ended' ||

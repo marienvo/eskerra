@@ -20,6 +20,16 @@ import {useSettings} from '../hooks/useSettings';
 
 type SettingsNavigation = NavigationProp<RootStackParamList>;
 
+function jurisdictionLabel(value: R2Jurisdiction): string {
+  if (value === 'default') {
+    return 'Default';
+  }
+  if (value === 'eu') {
+    return 'EU';
+  }
+  return 'FedRAMP';
+}
+
 function getDirectoryLabel(uri: string): string {
   const decodedUri = decodeURIComponent(uri);
   const treeMatch = decodedUri.match(/tree\/([^/]+)/);
@@ -188,7 +198,7 @@ export function SettingsScreen() {
                 r2Jurisdiction === j ? styles.jurisdictionChipSelected : null,
               ]}>
               <Text style={styles.jurisdictionChipText}>
-                {j === 'default' ? 'Default' : j === 'eu' ? 'EU' : 'FedRAMP'}
+                {jurisdictionLabel(j)}
               </Text>
             </Pressable>
           ))}

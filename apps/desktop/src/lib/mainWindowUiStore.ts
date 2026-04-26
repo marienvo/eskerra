@@ -69,6 +69,47 @@ function normalizeStoredVaultUriSlashes(uri: string): string {
   return uri.replace(/\\/g, '/').replace(/\/+/g, '/');
 }
 
+function normalizedStoredTabEntryStrings(rawEntries: unknown): string[] {
+  if (!Array.isArray(rawEntries)) {
+    return [];
+  }
+  const entries: string[] = [];
+  for (const e of rawEntries) {
+    if (typeof e === 'string') {
+      const u = normalizeStoredVaultUriSlashes(e.trim());
+      if (u) {
+        entries.push(u);
+      }
+    }
+  }
+  return entries;
+}
+
+function parseSingleStoredEditorWorkspaceTab(
+  rawTab: unknown,
+): StoredEditorWorkspaceTab | undefined {
+  if (rawTab === null || typeof rawTab !== 'object' || Array.isArray(rawTab)) {
+    return undefined;
+  }
+  const t = rawTab as Record<string, unknown>;
+  const id = typeof t.id === 'string' ? t.id.trim() : '';
+  if (!id) {
+    return undefined;
+  }
+  const entries = normalizedStoredTabEntryStrings(t.entries);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  let index =
+    typeof t.index === 'number' && Number.isFinite(t.index)
+      ? Math.floor(t.index)
+      : 0;
+  if (index < 0 || index >= entries.length) {
+    index = entries.length - 1;
+  }
+  return {id, entries, index};
+}
+
 function parseStoredEditorWorkspaceTabs(
   rawTabs: unknown,
 ): StoredEditorWorkspaceTab[] | undefined {
@@ -77,36 +118,10 @@ function parseStoredEditorWorkspaceTabs(
   }
   const tabs: StoredEditorWorkspaceTab[] = [];
   for (const rawTab of rawTabs) {
-    if (rawTab === null || typeof rawTab !== 'object' || Array.isArray(rawTab)) {
-      continue;
+    const tab = parseSingleStoredEditorWorkspaceTab(rawTab);
+    if (tab) {
+      tabs.push(tab);
     }
-    const t = rawTab as Record<string, unknown>;
-    const id = typeof t.id === 'string' ? t.id.trim() : '';
-    if (!id) {
-      continue;
-    }
-    const entries: string[] = [];
-    if (Array.isArray(t.entries)) {
-      for (const e of t.entries) {
-        if (typeof e === 'string') {
-          const u = normalizeStoredVaultUriSlashes(e.trim());
-          if (u) {
-            entries.push(u);
-          }
-        }
-      }
-    }
-    if (entries.length === 0) {
-      continue;
-    }
-    let index =
-      typeof t.index === 'number' && Number.isFinite(t.index)
-        ? Math.floor(t.index)
-        : 0;
-    if (index < 0 || index >= entries.length) {
-      index = entries.length - 1;
-    }
-    tabs.push({id, entries, index});
   }
   return tabs;
 }
@@ -122,6 +137,130 @@ function parseActiveEditorTabId(raw: unknown): string | null | undefined {
   return undefined;
 }
 
+function resolveStoredPaneVisibility(o: Record<string, unknown>): {
+  vaultPaneVisible: boolean;
+  episodesPaneVisible: boolean;
+} {
+  const v = o.vaultPaneVisible;
+  const e = o.episodesPaneVisible;
+  if (typeof v === 'boolean' && typeof e === 'boolean') {
+    return {vaultPaneVisible: v, episodesPaneVisible: e};
+  }
+  let legacyTab: MainTabId = 'podcasts';
+  if (o.mainTab === 'inbox' || o.mainTab === 'podcasts') {
+    legacyTab = o.mainTab;
+  }
+  if (legacyTab === 'inbox') {
+    return {vaultPaneVisible: true, episodesPaneVisible: false};
+  }
+  return {vaultPaneVisible: false, episodesPaneVisible: true};
+}
+
+function parseTodayHubWorkspacesMap(
+  rawMap: Record<string, unknown>,
+): Record<string, TodayHubWorkspaceSnapshot> | undefined {
+  const workspaces: Record<string, TodayHubWorkspaceSnapshot> = {};
+  for (const [rawKey, rawSnap] of Object.entries(rawMap)) {
+    const hubUri = normalizeStoredVaultUriSlashes(rawKey.trim());
+    if (!hubUri) {
+      continue;
+    }
+    if (
+      rawSnap === null
+      || typeof rawSnap !== 'object'
+      || Array.isArray(rawSnap)
+    ) {
+      continue;
+    }
+    const snap = rawSnap as Record<string, unknown>;
+    const snapTabs = parseStoredEditorWorkspaceTabs(snap.editorWorkspaceTabs);
+    if (!snapTabs) {
+      continue;
+    }
+    const snapActive = parseActiveEditorTabId(snap.activeEditorTabId);
+    const entry: TodayHubWorkspaceSnapshot = {editorWorkspaceTabs: snapTabs};
+    if (snapActive !== undefined) {
+      entry.activeEditorTabId = snapActive;
+    }
+    workspaces[hubUri] = entry;
+  }
+  return Object.keys(workspaces).length > 0 ? workspaces : undefined;
+}
+
+function trimmedNonEmptyStringsFromMixedArray(arr: readonly unknown[]): string[] {
+  const uris: string[] = [];
+  for (const item of arr) {
+    if (typeof item === 'string') {
+      const u = item.trim();
+      if (u) {
+        uris.push(u);
+      }
+    }
+  }
+  return uris;
+}
+
+function mergeInboxCoreFieldsFromRaw(
+  inbox: StoredMainWindowInbox,
+  ib: Record<string, unknown>,
+): void {
+  if (typeof ib.composingNewEntry === 'boolean') {
+    inbox.composingNewEntry = ib.composingNewEntry;
+  }
+  if (ib.selectedUri === null) {
+    inbox.selectedUri = null;
+  } else if (typeof ib.selectedUri === 'string') {
+    const t = ib.selectedUri.trim();
+    inbox.selectedUri = t === '' ? null : t;
+  }
+  if (Array.isArray(ib.openTabUris)) {
+    const uris = trimmedNonEmptyStringsFromMixedArray(ib.openTabUris);
+    if (uris.length > 0) {
+      inbox.openTabUris = uris;
+    }
+  }
+}
+
+function mergeInboxWorkspaceFieldsFromRaw(
+  inbox: StoredMainWindowInbox,
+  ib: Record<string, unknown>,
+): void {
+  const topTabs = parseStoredEditorWorkspaceTabs(ib.editorWorkspaceTabs);
+  if (topTabs) {
+    inbox.editorWorkspaceTabs = topTabs;
+  }
+  const topActive = parseActiveEditorTabId(ib.activeEditorTabId);
+  if (topActive !== undefined) {
+    inbox.activeEditorTabId = topActive;
+  }
+  if (ib.activeTodayHubUri === null) {
+    inbox.activeTodayHubUri = null;
+  } else if (typeof ib.activeTodayHubUri === 'string') {
+    const h = normalizeStoredVaultUriSlashes(ib.activeTodayHubUri.trim());
+    inbox.activeTodayHubUri = h === '' ? null : h;
+  }
+  if (
+    ib.todayHubWorkspaces !== null
+    && typeof ib.todayHubWorkspaces === 'object'
+    && !Array.isArray(ib.todayHubWorkspaces)
+  ) {
+    const workspaces = parseTodayHubWorkspacesMap(
+      ib.todayHubWorkspaces as Record<string, unknown>,
+    );
+    if (workspaces) {
+      inbox.todayHubWorkspaces = workspaces;
+    }
+  }
+}
+
+function mergeInboxFieldsFromRaw(
+  inbox: StoredMainWindowInbox,
+  ib: Record<string, unknown>,
+): void {
+  mergeInboxCoreFieldsFromRaw(inbox, ib);
+  mergeInboxWorkspaceFieldsFromRaw(inbox, ib);
+}
+
 /** Pure parse + sanitize for tests and for store values. */
 export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowUi | null {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -133,29 +272,8 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
     return null;
   }
 
-  let vaultPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.vaultPaneVisible;
-  let episodesPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.episodesPaneVisible;
+  const {vaultPaneVisible, episodesPaneVisible} = resolveStoredPaneVisibility(o);
   let inboxPaneVisible = DEFAULT_MAIN_WINDOW_PANE_VISIBILITY.inboxPaneVisible;
-
-  const v = o.vaultPaneVisible;
-  const e = o.episodesPaneVisible;
-  if (typeof v === 'boolean' && typeof e === 'boolean') {
-    vaultPaneVisible = v;
-    episodesPaneVisible = e;
-  } else {
-    let legacyTab: MainTabId = 'podcasts';
-    if (o.mainTab === 'inbox' || o.mainTab === 'podcasts') {
-      legacyTab = o.mainTab;
-    }
-    if (legacyTab === 'inbox') {
-      vaultPaneVisible = true;
-      episodesPaneVisible = false;
-    } else {
-      vaultPaneVisible = false;
-      episodesPaneVisible = true;
-    }
-  }
-
   if (typeof o.inboxPaneVisible === 'boolean') {
     inboxPaneVisible = o.inboxPaneVisible;
   }
@@ -167,79 +285,7 @@ export function normalizeMainWindowUiPayload(parsed: unknown): StoredMainWindowU
 
   const inbox: StoredMainWindowInbox = {...DEFAULT_INBOX};
   if (o.inbox !== null && typeof o.inbox === 'object' && !Array.isArray(o.inbox)) {
-    const ib = o.inbox as Record<string, unknown>;
-    if (typeof ib.composingNewEntry === 'boolean') {
-      inbox.composingNewEntry = ib.composingNewEntry;
-    }
-    if (ib.selectedUri === null) {
-      inbox.selectedUri = null;
-    } else if (typeof ib.selectedUri === 'string') {
-      const t = ib.selectedUri.trim();
-      inbox.selectedUri = t === '' ? null : t;
-    }
-    if (Array.isArray(ib.openTabUris)) {
-      const uris: string[] = [];
-      for (const item of ib.openTabUris) {
-        if (typeof item === 'string') {
-          const u = item.trim();
-          if (u) {
-            uris.push(u);
-          }
-        }
-      }
-      if (uris.length > 0) {
-        inbox.openTabUris = uris;
-      }
-    }
-    const topTabs = parseStoredEditorWorkspaceTabs(ib.editorWorkspaceTabs);
-    if (topTabs) {
-      inbox.editorWorkspaceTabs = topTabs;
-    }
-    const topActive = parseActiveEditorTabId(ib.activeEditorTabId);
-    if (topActive !== undefined) {
-      inbox.activeEditorTabId = topActive;
-    }
-    if (ib.activeTodayHubUri === null) {
-      inbox.activeTodayHubUri = null;
-    } else if (typeof ib.activeTodayHubUri === 'string') {
-      const h = normalizeStoredVaultUriSlashes(ib.activeTodayHubUri.trim());
-      inbox.activeTodayHubUri = h === '' ? null : h;
-    }
-    if (
-      ib.todayHubWorkspaces !== null
-      && typeof ib.todayHubWorkspaces === 'object'
-      && !Array.isArray(ib.todayHubWorkspaces)
-    ) {
-      const rawMap = ib.todayHubWorkspaces as Record<string, unknown>;
-      const workspaces: Record<string, TodayHubWorkspaceSnapshot> = {};
-      for (const [rawKey, rawSnap] of Object.entries(rawMap)) {
-        const hubUri = normalizeStoredVaultUriSlashes(rawKey.trim());
-        if (!hubUri) {
-          continue;
-        }
-        if (
-          rawSnap === null
-          || typeof rawSnap !== 'object'
-          || Array.isArray(rawSnap)
-        ) {
-          continue;
-        }
-        const snap = rawSnap as Record<string, unknown>;
-        const snapTabs = parseStoredEditorWorkspaceTabs(snap.editorWorkspaceTabs);
-        if (!snapTabs) {
-          continue;
-        }
-        const snapActive = parseActiveEditorTabId(snap.activeEditorTabId);
-        const entry: TodayHubWorkspaceSnapshot = {editorWorkspaceTabs: snapTabs};
-        if (snapActive !== undefined) {
-          entry.activeEditorTabId = snapActive;
-        }
-        workspaces[hubUri] = entry;
-      }
-      if (Object.keys(workspaces).length > 0) {
-        inbox.todayHubWorkspaces = workspaces;
-      }
-    }
+    mergeInboxFieldsFromRaw(inbox, o.inbox as Record<string, unknown>);
   }
 
   return {

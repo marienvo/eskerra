@@ -36,8 +36,64 @@ function getTurndown(): TurndownService {
  * Heuristic: `text/html` carries meaningful structure worth converting to Markdown.
  * Conservative about bare `<span>` so trivial fragments still fall through to default paste.
  */
-const CLIPBOARD_HTML_STRUCTURE_RE =
-  /<(table|thead|tbody|tfoot|tr|th|td|ul|ol|li|h[1-6]|blockquote|pre|p\b|div\b|br\b|hr\b|img\b|a\b|strong|em|b\b|i\b|u\b|del|strike|s\b|sup|sub|code\b|kbd\b)/i;
+const STRUCTURAL_HTML_MARKERS = [
+  '<table',
+  '<thead',
+  '<tbody',
+  '<tfoot',
+  '<tr',
+  '<th',
+  '<td',
+  '<ul',
+  '<ol',
+  '<li',
+  '<h1',
+  '<h2',
+  '<h3',
+  '<h4',
+  '<h5',
+  '<h6',
+  '<blockquote',
+  '<pre',
+  '<p',
+  '<div',
+  '<br',
+  '<hr',
+  '<img',
+  '<a',
+  '<strong',
+  '<em',
+  '<b',
+  '<i',
+  '<u',
+  '<del',
+  '<strike',
+  '<s',
+  '<sup',
+  '<sub',
+  '<code',
+  '<kbd',
+] as const;
+
+/**
+ * True when `lowerHtml` contains this tag open at a word boundary (so `<s` does not
+ * match `<span` / `<style` / `<script`, and `<th` does not match `<thead`).
+ */
+function lowerHtmlContainsTagOpen(lowerHtml: string, marker: string): boolean {
+  let from = 0;
+  while (from < lowerHtml.length) {
+    const idx = lowerHtml.indexOf(marker, from);
+    if (idx < 0) {
+      return false;
+    }
+    const after = lowerHtml[idx + marker.length];
+    if (after === undefined || !/[a-z0-9]/.test(after)) {
+      return true;
+    }
+    from = idx + 1;
+  }
+  return false;
+}
 
 function preprocessClipboardHtmlFragment(html: string): string {
   try {
@@ -114,7 +170,10 @@ export function isHtmlWrapperForPasteUrlAsLink(
 }
 
 function clipboardHtmlLooksStructured(html: string): boolean {
-  return CLIPBOARD_HTML_STRUCTURE_RE.test(html);
+  const lower = html.toLowerCase();
+  return STRUCTURAL_HTML_MARKERS.some(marker =>
+    lowerHtmlContainsTagOpen(lower, marker),
+  );
 }
 
 function normalizeForPlainComparison(s: string): string {
@@ -172,7 +231,7 @@ export function tryClipboardHtmlToMarkdownInsert(
   }
 
   md = md.replace(/\u00a0/g, ' ');
-  const trimmed = md.replace(/\s+$/, '');
+  const trimmed = md.trimEnd();
   if (!trimmed) {
     return null;
   }

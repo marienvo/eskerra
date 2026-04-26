@@ -55,6 +55,45 @@ function mapNativeInboxRow(row: {
   };
 }
 
+function buildNoteContentByUri(
+  rows: Array<{uri?: string; content?: string}>,
+): Record<string, string> | null {
+  const byUri: Record<string, string> = {};
+  for (const row of rows) {
+    if (typeof row.uri === 'string' && typeof row.content === 'string') {
+      byUri[normalizeNoteUri(row.uri)] = row.content;
+    }
+  }
+  return Object.keys(byUri).length > 0 ? byUri : null;
+}
+
+type ParsedStructuredSession = {
+  inboxContentByUri: Record<string, string> | null;
+  inboxPrefetch: NoteSummary[] | null;
+  settingsJson: string;
+  todayHubContentByUri: Record<string, string> | null;
+};
+
+function parseStructuredNativeSession(raw: Record<string, unknown>): ParsedStructuredSession | null {
+  if (typeof (raw as {settings?: unknown}).settings !== 'string') {
+    return null;
+  }
+  const structured = raw as {
+    inboxNotes?: Array<{content?: string; lastModified?: number | null; name: string; uri: string}>;
+    settings: string;
+    todayHubPrefetch?: Array<{uri?: string; content?: string}>;
+  };
+  const inboxNotes = structured.inboxNotes;
+  return {
+    inboxContentByUri: Array.isArray(inboxNotes) ? buildNoteContentByUri(inboxNotes) : null,
+    inboxPrefetch: Array.isArray(inboxNotes) ? inboxNotes.map(mapNativeInboxRow) : null,
+    settingsJson: structured.settings,
+    todayHubContentByUri: Array.isArray(structured.todayHubPrefetch)
+      ? buildNoteContentByUri(structured.todayHubPrefetch)
+      : null,
+  };
+}
+
 /**
  * Lists markdown files under a SAF directory on a background native thread when the Android
  * module is available. Returns null to signal the caller should use the JS/react-native-saf-x path.
@@ -146,61 +185,12 @@ export async function tryPrepareEskerraSessionNative(
       prefetch != null && prefetch.length > 0 ? prefetch : null,
     );
     if (typeof raw === 'string') {
-      return {
-        inboxContentByUri: null,
-        settingsJson: raw,
-        inboxPrefetch: null,
-        todayHubContentByUri: null,
-      };
+      return {inboxContentByUri: null, settingsJson: raw, inboxPrefetch: null, todayHubContentByUri: null};
     }
-    if (
-      raw == null ||
-      typeof raw !== 'object' ||
-      typeof (raw as {settings?: unknown}).settings !== 'string'
-    ) {
+    if (raw == null || typeof raw !== 'object') {
       return null;
     }
-    const structured = raw as {
-      inboxNotes?: Array<{
-        content?: string;
-        lastModified?: number | null;
-        name: string;
-        uri: string;
-      }>;
-      settings: string;
-      todayHubPrefetch?: Array<{uri?: string; content?: string}>;
-    };
-    const inboxNotes = structured.inboxNotes;
-    const inboxPrefetch = Array.isArray(inboxNotes)
-      ? inboxNotes.map(mapNativeInboxRow)
-      : null;
-    let inboxContentByUri: Record<string, string> | null = null;
-    if (Array.isArray(inboxNotes)) {
-      const byUri: Record<string, string> = {};
-      for (const row of inboxNotes) {
-        if (typeof row.content === 'string') {
-          byUri[normalizeNoteUri(row.uri)] = row.content;
-        }
-      }
-      inboxContentByUri = Object.keys(byUri).length > 0 ? byUri : null;
-    }
-    let todayHubContentByUri: Record<string, string> | null = null;
-    const hubPrefetch = structured.todayHubPrefetch;
-    if (Array.isArray(hubPrefetch)) {
-      const byUri: Record<string, string> = {};
-      for (const row of hubPrefetch) {
-        if (typeof row.uri === 'string' && typeof row.content === 'string') {
-          byUri[normalizeNoteUri(row.uri)] = row.content;
-        }
-      }
-      todayHubContentByUri = Object.keys(byUri).length > 0 ? byUri : null;
-    }
-    return {
-      inboxContentByUri,
-      settingsJson: structured.settings,
-      inboxPrefetch,
-      todayHubContentByUri,
-    };
+    return parseStructuredNativeSession(raw as Record<string, unknown>);
   } catch {
     return null;
   }

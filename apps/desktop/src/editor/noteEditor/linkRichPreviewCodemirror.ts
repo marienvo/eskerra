@@ -3,6 +3,7 @@ import {
   StateField,
   type EditorState,
   type Extension,
+  type Line,
   type Range,
 } from '@codemirror/state';
 import {
@@ -167,6 +168,67 @@ function collectCaretLineFroms(state: EditorState): Set<number> {
   return lineFroms;
 }
 
+function appendLinkRichDecorationsForLine(
+  doc: EditorState['doc'],
+  line: Line,
+  caretLineFroms: Set<number>,
+  refs: LinkRichPreviewRefs,
+  ranges: Range<Decoration>[],
+): void {
+  const parsed = parseLoneLinkLine(line.text);
+  if (!parsed) {
+    return;
+  }
+  if (refs.blockedDomains?.has(hostnameOf(parsed.url))) {
+    return;
+  }
+  const entry = getCachedLinkRichEntry(parsed.url);
+  const metadata = entry && entry.status === 'ok' ? entry.metadata : null;
+  if (!entry) {
+    prefetchLinkRichPreview(parsed.url);
+  }
+  const urlDocOffset = line.from + parsed.urlOffset;
+  const prefix = line.text.slice(0, parsed.urlOffset);
+  const hasListMarker = /\S/.test(prefix);
+
+  if (caretLineFroms.has(line.from)) {
+    ranges.push(
+      Decoration.widget({
+        widget: new LinkRichPreviewWidget(parsed.url, urlDocOffset, metadata, refs),
+        block: true,
+        side: 1,
+      }).range(line.to),
+    );
+    return;
+  }
+
+  if (hasListMarker) {
+    ranges.push(
+      Decoration.replace({
+        widget: new LinkRichPreviewWidget(
+          parsed.url,
+          urlDocOffset,
+          metadata,
+          refs,
+          true,
+        ),
+      }).range(urlDocOffset, line.to),
+    );
+    return;
+  }
+
+  let to = line.to;
+  if (to < doc.length && doc.sliceString(to, to + 1) === '\n') {
+    to += 1;
+  }
+  ranges.push(
+    Decoration.replace({
+      widget: new LinkRichPreviewWidget(parsed.url, urlDocOffset, metadata, refs),
+      block: true,
+    }).range(line.from, to),
+  );
+}
+
 function buildLinkRichDecorations(
   state: EditorState,
   refs: LinkRichPreviewRefs,
@@ -176,59 +238,12 @@ function buildLinkRichDecorations(
   const ranges: Range<Decoration>[] = [];
 
   for (let i = 1; i <= doc.lines; i++) {
-    const line = doc.line(i);
-    const parsed = parseLoneLinkLine(line.text);
-    if (!parsed) {
-      continue;
-    }
-    if (refs.blockedDomains?.has(hostnameOf(parsed.url))) {
-      continue;
-    }
-    const entry = getCachedLinkRichEntry(parsed.url);
-    const metadata = entry && entry.status === 'ok' ? entry.metadata : null;
-    if (!entry) {
-      prefetchLinkRichPreview(parsed.url);
-    }
-    const urlDocOffset = line.from + parsed.urlOffset;
-    const prefix = line.text.slice(0, parsed.urlOffset);
-    const hasListMarker = /\S/.test(prefix);
-
-    if (caretLineFroms.has(line.from)) {
-      ranges.push(
-        Decoration.widget({
-          widget: new LinkRichPreviewWidget(parsed.url, urlDocOffset, metadata, refs),
-          block: true,
-          side: 1,
-        }).range(line.to),
-      );
-      continue;
-    }
-
-    if (hasListMarker) {
-      // Replace just the URL with an inline card so the list marker stays visible on its line.
-      ranges.push(
-        Decoration.replace({
-          widget: new LinkRichPreviewWidget(
-            parsed.url,
-            urlDocOffset,
-            metadata,
-            refs,
-            true,
-          ),
-        }).range(urlDocOffset, line.to),
-      );
-      continue;
-    }
-
-    let to = line.to;
-    if (to < doc.length && doc.sliceString(to, to + 1) === '\n') {
-      to += 1;
-    }
-    ranges.push(
-      Decoration.replace({
-        widget: new LinkRichPreviewWidget(parsed.url, urlDocOffset, metadata, refs),
-        block: true,
-      }).range(line.from, to),
+    appendLinkRichDecorationsForLine(
+      doc,
+      doc.line(i),
+      caretLineFroms,
+      refs,
+      ranges,
     );
   }
 

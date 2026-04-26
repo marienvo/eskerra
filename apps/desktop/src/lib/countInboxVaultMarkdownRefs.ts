@@ -5,10 +5,13 @@ import {
 } from '@eskerra/core';
 
 function normalizeFsPath(uri: string): string {
-  return uri
+  let normalized = uri
     .replace(/\\/g, '/')
-    .replace(/\/+/g, '/')
-    .replace(/\/+$/, '');
+    .replace(/\/+/g, '/');
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
 }
 
 /**

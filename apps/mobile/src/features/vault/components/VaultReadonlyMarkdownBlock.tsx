@@ -33,6 +33,16 @@ function noteTitleFromUri(noteUri: string): string {
   return stemFromMarkdownFileName(tail);
 }
 
+function mapWikiIndexStatus(status: string): 'ready' | 'error' | 'loading' {
+  if (status === 'ready') {
+    return 'ready';
+  }
+  if (status === 'error') {
+    return 'error';
+  }
+  return 'loading';
+}
+
 export function VaultReadonlyMarkdownBlock({
   noteUri,
   markdownFullText,
@@ -73,12 +83,7 @@ export function VaultReadonlyMarkdownBlock({
     [onNavigateToVaultNote],
   );
 
-  const wikiIndexStatus =
-    vaultMarkdownRefsStatus === 'ready'
-      ? 'ready'
-      : vaultMarkdownRefsStatus === 'error'
-        ? 'error'
-        : 'loading';
+  const wikiIndexStatus = mapWikiIndexStatus(vaultMarkdownRefsStatus);
 
   const vaultRules = useMemo(
     () =>

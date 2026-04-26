@@ -83,7 +83,7 @@ export function useVaultFrontmatterIndex(options: {
     let unlistenReady: (() => void) | undefined;
     let unlistenUpdated: (() => void) | undefined;
 
-    void listen('vault-frontmatter-index-ready', () => {
+    listen('vault-frontmatter-index-ready', () => {
       if (!cancelled) {
         void reload();
       }
@@ -91,7 +91,7 @@ export function useVaultFrontmatterIndex(options: {
       unlistenReady = fn;
     });
 
-    void listen('vault-frontmatter-index-updated', () => {
+    listen('vault-frontmatter-index-updated', () => {
       if (!cancelled) {
         void reload();
       }

@@ -16,6 +16,14 @@ export type ClosedEditorTabRecord = {
   index: number;
 };
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 export function isEditorClosedTabReopenable(
   uri: string,
   vaultRoot: string | null,
@@ -25,10 +33,7 @@ export function isEditorClosedTabReopenable(
     return false;
   }
   const u = normalizeEditorDocUri(uri);
-  const root = normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(
-    /\/+$/,
-    '',
-  );
+  const root = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
   const inVault = u === root || u.startsWith(`${root}/`);
   if (!inVault) {
     return false;

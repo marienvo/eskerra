@@ -27,15 +27,6 @@ const MINI_PLAYER_TRANSPORT = '#ffffff';
 const MINI_PLAYER_TRANSPORT_DISABLED = 'rgba(255,255,255,0.4)';
 const MINI_PLAYER_PLACEHOLDER_BG = '#3a3a3a';
 
-/**
- * Approximate total height when MiniPlayer is visible. Used for keyboard footer offset;
- * update if container padding, artwork row, or progress block changes.
- * Artwork action mode matches the same ~64px text column height; an error line below actions
- * can add ~22px but is omitted here to keep the offset conservative.
- */
-export const MINI_PLAYER_LAYOUT_HEIGHT =
-  1 + 20 + 64 + 8 + 40 + 6 + 52;// + 20;
-
 const MS_PER_SECOND = 1000;
 /** Mid-episode resume: show "Resuming…" instead of "Buffering…" when position is past this threshold. */
 const RESUMING_COPY_THRESHOLD_MS = 10_000;
@@ -64,6 +55,92 @@ function clampSeekMs(
   return next;
 }
 
+function computeBufferingSubtitle(
+  nearEndCopy: string | null,
+  showTransportSpinner: boolean,
+  playbackState: string,
+  positionMs: number,
+): string | null {
+  if (nearEndCopy != null) {
+    return nearEndCopy;
+  }
+  if (showTransportSpinner && playbackState === 'loading') {
+    return positionMs >= RESUMING_COPY_THRESHOLD_MS ? 'Resuming…' : 'Buffering…';
+  }
+  if (showTransportSpinner && playbackState === 'paused') {
+    return 'Starting…';
+  }
+  return null;
+}
+
+function computeMiniPlayerIconColor(busy: boolean): string {
+  return busy ? MINI_PLAYER_TRANSPORT_DISABLED : MINI_PLAYER_TRANSPORT;
+}
+
+function computeSliderMaxMs(durationMs: number, positionMs: number): number {
+  return durationMs > 0 ? durationMs : Math.max(positionMs, 1);
+}
+
+function computeShowTransportSpinner(playbackState: string, playbackTransportBusy: boolean): boolean {
+  return playbackState === 'loading' || (playbackTransportBusy && playbackState === 'paused');
+}
+
+function computeNearEndCopy(playbackPhase: string): string | null {
+  return playbackPhase === 'nearEndPlaying' || playbackPhase === 'nearEndPaused' ? 'Bijna klaar' : null;
+}
+
+function computeDurationLabel(durationMs: number | null): string {
+  return durationMs != null && durationMs > 0 ? formatClockFromMs(durationMs) : '—';
+}
+
+function computeTransportLabel(
+  showTransportSpinner: boolean,
+  playbackState: string,
+  isPlaying: boolean,
+): string {
+  if (showTransportSpinner) {
+    return playbackState === 'loading' ? 'Buffering' : 'Starting playback';
+  }
+  if (isPlaying) {
+    return 'Pause';
+  }
+  return 'Play';
+}
+
+type MiniPlayerActionKind = null | 'mark' | 'dismiss';
+
+async function doMarkPlayed(
+  markEp: () => Promise<void>,
+  setError: (err: string | null) => void,
+  setKind: (kind: MiniPlayerActionKind) => void,
+): Promise<void> {
+  setError(null);
+  setKind('mark');
+  try {
+    await markEp();
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Kon aflevering niet als beluisterd markeren.');
+  } finally {
+    setKind(null);
+  }
+}
+
+async function doDismissWithoutPlayed(
+  dismissEp: () => Promise<void>,
+  setError: (err: string | null) => void,
+  setKind: (kind: MiniPlayerActionKind) => void,
+): Promise<void> {
+  setError(null);
+  setKind('dismiss');
+  try {
+    await dismissEp();
+  } catch (e) {
+    setError(e instanceof Error ? e.message : 'Kon aflevering niet sluiten.');
+  } finally {
+    setKind(null);
+  }
+}
+
 export function MiniPlayer() {
   const {baseUri} = useVaultContext();
   const {
@@ -86,26 +163,21 @@ export function MiniPlayer() {
 
   const [sliderDragging, setSliderDragging] = useState(false);
   const [sliderDragMs, setSliderDragMs] = useState(0);
-  const [miniPlayerActionKind, setMiniPlayerActionKind] = useState<null | 'dismiss' | 'mark'>(null);
+  const [miniPlayerActionKind, setMiniPlayerActionKind] = useState<MiniPlayerActionKind>(null);
   const [miniPlayerActionError, setMiniPlayerActionError] = useState<string | null>(null);
   const miniPlayerActionBusy = miniPlayerActionKind !== null;
 
   useEffect(() => {
-    if (!miniPlayerArtworkSelected) {
-      setMiniPlayerActionError(null);
-      setMiniPlayerActionKind(null);
-    }
+    setMiniPlayerActionError(null);
+    setMiniPlayerActionKind(null);
   }, [miniPlayerArtworkSelected]);
 
   const handleSeekBy = useCallback(
     (deltaMs: number) => {
-      if (!activeEpisode) {
-        return;
-      }
       const next = clampSeekMs(progress.positionMs, progress.durationMs, deltaMs);
       seekTo(next).catch(() => undefined);
     },
-    [activeEpisode, progress.durationMs, progress.positionMs, seekTo],
+    [progress.durationMs, progress.positionMs, seekTo],
   );
 
   const onSliderComplete = useCallback(
@@ -117,79 +189,41 @@ export function MiniPlayer() {
   );
 
   const handleMiniPlayerMarkPlayed = useCallback(async () => {
-    if (miniPlayerActionBusy || !activeEpisode) {
-      return;
-    }
-    setMiniPlayerActionError(null);
-    setMiniPlayerActionKind('mark');
-    try {
-      await markEpisodeAsPlayed(activeEpisode);
-    } catch (e) {
-      setMiniPlayerActionError(
-        e instanceof Error ? e.message : 'Kon aflevering niet als beluisterd markeren.',
-      );
-    } finally {
-      setMiniPlayerActionKind(null);
-    }
-  }, [activeEpisode, markEpisodeAsPlayed, miniPlayerActionBusy]);
+    await doMarkPlayed(
+      () => markEpisodeAsPlayed(activeEpisode!),
+      setMiniPlayerActionError,
+      setMiniPlayerActionKind,
+    );
+  }, [activeEpisode, markEpisodeAsPlayed]);
 
   const handleMiniPlayerDismissWithoutPlayed = useCallback(async () => {
-    if (miniPlayerActionBusy || !activeEpisode) {
-      return;
-    }
-    setMiniPlayerActionError(null);
-    setMiniPlayerActionKind('dismiss');
-    try {
-      await clearNowPlayingIfMatchesEpisode(activeEpisode.id);
-    } catch (e) {
-      setMiniPlayerActionError(
-        e instanceof Error ? e.message : 'Kon aflevering niet sluiten.',
-      );
-    } finally {
-      setMiniPlayerActionKind(null);
-    }
-  }, [activeEpisode, clearNowPlayingIfMatchesEpisode, miniPlayerActionBusy]);
+    await doDismissWithoutPlayed(
+      () => clearNowPlayingIfMatchesEpisode(activeEpisode!.id),
+      setMiniPlayerActionError,
+      setMiniPlayerActionKind,
+    );
+  }, [activeEpisode, clearNowPlayingIfMatchesEpisode]);
 
   if (!activeEpisode) {
     return null;
   }
 
   const isPlaying = playbackState === 'playing';
-  const showTransportSpinner =
-    playbackState === 'loading' ||
-    (playbackTransportBusy && playbackState === 'paused');
-  const nearEndCopy =
-    playbackPhase === 'nearEndPlaying' || playbackPhase === 'nearEndPaused'
-      ? 'Bijna klaar'
-      : null;
-  const bufferingSubtitle =
-    nearEndCopy ??
-    (showTransportSpinner && playbackState === 'loading'
-      ? progress.positionMs >= RESUMING_COPY_THRESHOLD_MS
-        ? 'Resuming…'
-        : 'Buffering…'
-      : showTransportSpinner && playbackState === 'paused'
-        ? 'Starting…'
-        : null);
+  const showTransportSpinner = computeShowTransportSpinner(playbackState, playbackTransportBusy);
+  const nearEndCopy = computeNearEndCopy(playbackPhase);
+  const bufferingSubtitle = computeBufferingSubtitle(nearEndCopy, showTransportSpinner, playbackState, progress.positionMs);
   const skipDisabled = playbackState === 'loading' && !playbackSeeking;
   const durationMs = progress.durationMs ?? 0;
-  const sliderMaxMs =
-    durationMs > 0 ? durationMs : Math.max(progress.positionMs, 1);
+  const sliderMaxMs = computeSliderMaxMs(durationMs, progress.positionMs);
   const sliderValueMs = sliderDragging ? sliderDragMs : progress.positionMs;
 
-  const transportIconColor = playbackTransportBusy
-    ? MINI_PLAYER_TRANSPORT_DISABLED
-    : MINI_PLAYER_TRANSPORT;
+  const transportIconColor = computeMiniPlayerIconColor(playbackTransportBusy);
   const artworkBorderColor = miniPlayerArtworkSelected ? ACCENT_COLOR : 'transparent';
   const elapsedLabel = formatClockFromMs(sliderValueMs);
-  const durationLabel =
-    progress.durationMs != null && progress.durationMs > 0
-      ? formatClockFromMs(progress.durationMs)
-      : '\u2014';
+  const durationLabel = computeDurationLabel(progress.durationMs);
+  const transportAccessibilityLabel = computeTransportLabel(showTransportSpinner, playbackState, isPlaying);
 
-  const actionIconColor = miniPlayerActionBusy
-    ? MINI_PLAYER_TRANSPORT_DISABLED
-    : MINI_PLAYER_TRANSPORT;
+  const actionIconColor = computeMiniPlayerIconColor(miniPlayerActionBusy);
 
   return (
     <Box
@@ -316,15 +350,7 @@ export function MiniPlayer() {
                 ? 'Playback is loading or starting.'
                 : undefined
             }
-            accessibilityLabel={
-              showTransportSpinner
-                ? playbackState === 'loading'
-                  ? 'Buffering'
-                  : 'Starting playback'
-                : isPlaying
-                  ? 'Pause'
-                  : 'Play'
-            }
+            accessibilityLabel={transportAccessibilityLabel}
             accessibilityState={{busy: showTransportSpinner}}
             disabled={playbackTransportBusy}
             onPress={() => {

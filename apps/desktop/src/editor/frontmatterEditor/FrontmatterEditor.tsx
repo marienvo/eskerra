@@ -26,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from 'react';
 import {Document, isMap, isScalar, YAMLMap, type ParsedNode} from 'yaml';
 
@@ -79,6 +80,29 @@ const ADD_PROPERTY_TYPE_CHOICES: Array<{
   value: AddPropertyTypeChoice;
   label: string;
 }> = [{value: 'auto', label: 'Auto'}, ...TYPE_CHOICES];
+
+/** String form for text inputs and “convert to list” from arbitrary YAML values. */
+function frontmatterValueAsEditableText(
+  v: FrontmatterValue | null | undefined,
+): string {
+  if (v === null || v === undefined) {
+    return '';
+  }
+  if (typeof v === 'string') {
+    return v;
+  }
+  return JSON.stringify(v);
+}
+
+function listOrTagsStringArray(value: FrontmatterValue | null): string[] {
+  if (Array.isArray(value)) {
+    return value.map(x => String(x));
+  }
+  if (value == null) {
+    return [];
+  }
+  return [String(value)];
+}
 
 function scalarKeyString(node: ParsedNode): string {
   return isScalar(node) ? String(node.value) : String(node);
@@ -164,7 +188,6 @@ export function FrontmatterEditor({
     setExpanded(false);
   }
 
-  /* eslint-disable react-hooks/set-state-in-effect -- intentional rehydration: resets local edit state when the external source of truth changes */
   /** Rehydrate when the parent source of truth changes (note switch / disk reload), not on echo. */
   useEffect(() => {
     if (rehydrateKey !== lastRehydrateKeyRef.current) {
@@ -185,8 +208,6 @@ export function FrontmatterEditor({
     setAddKeyDraft('');
     setAddKeyType('auto');
   }, [yamlInner, rehydrateKey]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
   useEffect(() => {
     return () => {
       if (emitTimerRef.current != null) {
@@ -451,12 +472,7 @@ export function FrontmatterEditor({
             }}
             onConvertTextToList={() => {
               const v = getValueAtPath(record, [key]);
-              const raw =
-                v === null || v === undefined
-                  ? ''
-                  : typeof v === 'string'
-                    ? v
-                    : JSON.stringify(v);
+              const raw = frontmatterValueAsEditableText(v);
               const arr = splitListInput(raw);
               if (arr.length === 0) {
                 return;
@@ -564,7 +580,15 @@ function TopLevelPropertyRow({
       : 'none';
 
   useEffect(() => {
-    setNameDraft(rowKey);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setNameDraft(rowKey);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [rowKey]);
 
   useLayoutEffect(() => {
@@ -601,12 +625,7 @@ function TopLevelPropertyRow({
   };
 
   const handleConvertTextToList = () => {
-    const raw =
-      value === null || value === undefined
-        ? ''
-        : typeof value === 'string'
-          ? value
-          : JSON.stringify(value);
+    const raw = frontmatterValueAsEditableText(value);
     if (splitListInput(raw).length === 0) {
       return;
     }
@@ -726,6 +745,194 @@ type ControlProps = {
   listAddInputRef?: RefObject<HTMLInputElement | null>;
 };
 
+function PropertyListTagsValueInput({
+  propType,
+  value,
+  readOnly,
+  onChange,
+  onSuggestPrefix,
+  onSuggestOpenChange,
+  listAddInputRef,
+}: {
+  propType: 'list' | 'tags';
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+  onSuggestPrefix: (prefix: string) => void;
+  onSuggestOpenChange: (open: boolean) => void;
+  listAddInputRef?: RefObject<HTMLInputElement | null>;
+}): ReactNode {
+  const arr = listOrTagsStringArray(value);
+  return (
+    <ListTagsEditor
+      inputRef={listAddInputRef}
+      asTags={propType === 'tags'}
+      items={arr}
+      readOnly={readOnly}
+      onChange={onChange}
+      onSuggestPrefix={onSuggestPrefix}
+      onSuggestOpenChange={onSuggestOpenChange}
+    />
+  );
+}
+
+function PropertyTextDefaultValueInput({
+  value,
+  readOnly,
+  onChange,
+  onSuggestPrefix,
+  onSuggestOpenChange,
+  onConvertToList,
+}: {
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+  onSuggestPrefix: (prefix: string) => void;
+  onSuggestOpenChange: (open: boolean) => void;
+  onConvertToList?: () => void;
+}): ReactNode {
+  const s = frontmatterValueAsEditableText(value);
+  const showConvertHint =
+    Boolean(onConvertToList) && !readOnly && /[\n,;\t]/u.test(s);
+  return (
+    <div className="frontmatter-editor__text-cell">
+      <input
+        type="text"
+        className="frontmatter-editor__scalar-input"
+        disabled={readOnly}
+        value={s}
+        onChange={e => {
+          onChange(e.target.value);
+          onSuggestPrefix(e.currentTarget.value.trim());
+        }}
+        onFocus={() => onSuggestOpenChange(true)}
+        onBlur={() => onSuggestOpenChange(false)}
+      />
+      {showConvertHint ? (
+        <button
+          type="button"
+          className="frontmatter-editor__convert-list"
+          disabled={readOnly}
+          onClick={() => onConvertToList?.()}
+        >
+          Convert to list
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function PropertyNumberValueInput({
+  value,
+  readOnly,
+  onChange,
+  onSuggestPrefix,
+  onSuggestOpenChange,
+}: {
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+  onSuggestPrefix: (prefix: string) => void;
+  onSuggestOpenChange: (open: boolean) => void;
+}): ReactNode {
+  const n = typeof value === 'number' ? value : Number(value);
+  return (
+    <input
+      type="number"
+      className="frontmatter-editor__scalar-input"
+      disabled={readOnly}
+      value={Number.isFinite(n) ? n : 0}
+      onChange={e => {
+        onChange(Number(e.target.value));
+        onSuggestPrefix(e.currentTarget.value.trim());
+      }}
+      onFocus={() => onSuggestOpenChange(true)}
+      onBlur={() => onSuggestOpenChange(false)}
+    />
+  );
+}
+
+function PropertyDateLikeInput({
+  inputType,
+  value,
+  readOnly,
+  onChange,
+}: {
+  inputType: 'date' | 'datetime-local';
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+}): ReactNode {
+  const s = typeof value === 'string' ? value : '';
+  return (
+    <input
+      type={inputType}
+      className="frontmatter-editor__scalar-input"
+      disabled={readOnly}
+      value={s}
+      onChange={e => onChange(e.target.value)}
+    />
+  );
+}
+
+function PropertyTimestampValueInput({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+}): ReactNode {
+  if (typeof value === 'number') {
+    return (
+      <input
+        type="number"
+        className="frontmatter-editor__scalar-input"
+        disabled={readOnly}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+      />
+    );
+  }
+  const s = typeof value === 'string' ? value : '';
+  return (
+    <input
+      type="text"
+      className="frontmatter-editor__scalar-input"
+      disabled={readOnly}
+      placeholder="ISO-8601 instant"
+      value={s}
+      onChange={e => onChange(e.target.value)}
+    />
+  );
+}
+
+function PropertyUrlValueInput({
+  value,
+  readOnly,
+  onChange,
+}: {
+  value: FrontmatterValue | null;
+  readOnly: boolean;
+  onChange: (v: FrontmatterValue) => void;
+}): ReactNode {
+  const s = typeof value === 'string' ? value : '';
+  return (
+    <input
+      type="url"
+      className="frontmatter-editor__scalar-input"
+      disabled={readOnly}
+      placeholder="https://…"
+      autoCapitalize="off"
+      autoCorrect="off"
+      spellCheck={false}
+      value={s}
+      onChange={e => onChange(e.target.value)}
+    />
+  );
+}
+
 function PropertyValueControl({
   propType,
   value,
@@ -751,102 +958,65 @@ function PropertyValueControl({
       );
     }
     case 'number': {
-      const n = typeof value === 'number' ? value : Number(value);
       return (
-        <input
-          type="number"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          value={Number.isFinite(n) ? n : 0}
-          onChange={e => {
-            onChange(Number(e.target.value));
-            onSuggestPrefix(e.currentTarget.value.trim());
-          }}
-          onFocus={() => onSuggestOpenChange(true)}
-          onBlur={() => onSuggestOpenChange(false)}
+        <PropertyNumberValueInput
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
+          onSuggestPrefix={onSuggestPrefix}
+          onSuggestOpenChange={onSuggestOpenChange}
         />
       );
     }
     case 'date': {
-      const s = typeof value === 'string' ? value : '';
       return (
-        <input
-          type="date"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          value={s}
-          onChange={e => onChange(e.target.value)}
+        <PropertyDateLikeInput
+          inputType="date"
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
         />
       );
     }
     case 'datetime': {
-      const s = typeof value === 'string' ? value : '';
       return (
-        <input
-          type="datetime-local"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          value={s}
-          onChange={e => onChange(e.target.value)}
+        <PropertyDateLikeInput
+          inputType="datetime-local"
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
         />
       );
     }
     case 'timestamp': {
-      if (typeof value === 'number') {
-        return (
-          <input
-            type="number"
-            className="frontmatter-editor__scalar-input"
-            disabled={readOnly}
-            value={value}
-            onChange={e => onChange(Number(e.target.value))}
-          />
-        );
-      }
-      const s = typeof value === 'string' ? value : '';
       return (
-        <input
-          type="text"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          placeholder="ISO-8601 instant"
-          value={s}
-          onChange={e => onChange(e.target.value)}
+        <PropertyTimestampValueInput
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
         />
       );
     }
     case 'url': {
-      const s = typeof value === 'string' ? value : '';
       return (
-        <input
-          type="url"
-          className="frontmatter-editor__scalar-input"
-          disabled={readOnly}
-          placeholder="https://…"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          value={s}
-          onChange={e => onChange(e.target.value)}
+        <PropertyUrlValueInput
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
         />
       );
     }
     case 'list':
     case 'tags': {
-      const arr = Array.isArray(value)
-        ? value.map(v => String(v))
-        : value == null
-          ? []
-          : [String(value)];
       return (
-        <ListTagsEditor
-          inputRef={listAddInputRef}
-          asTags={propType === 'tags'}
-          items={arr}
+        <PropertyListTagsValueInput
+          propType={propType}
+          value={value}
           readOnly={readOnly}
           onChange={onChange}
           onSuggestPrefix={onSuggestPrefix}
           onSuggestOpenChange={onSuggestOpenChange}
+          listAddInputRef={listAddInputRef}
         />
       );
     }
@@ -865,41 +1035,15 @@ function PropertyValueControl({
       );
     }
     default: {
-      const s =
-        value === null || value === undefined
-          ? ''
-          : typeof value === 'string'
-            ? value
-            : JSON.stringify(value);
-      const showConvertHint =
-        Boolean(onConvertToList) &&
-        !readOnly &&
-        /[\n,;\t]/u.test(s);
       return (
-        <div className="frontmatter-editor__text-cell">
-          <input
-            type="text"
-            className="frontmatter-editor__scalar-input"
-            disabled={readOnly}
-            value={s}
-            onChange={e => {
-              onChange(e.target.value);
-              onSuggestPrefix(e.currentTarget.value.trim());
-            }}
-            onFocus={() => onSuggestOpenChange(true)}
-            onBlur={() => onSuggestOpenChange(false)}
-          />
-          {showConvertHint ? (
-            <button
-              type="button"
-              className="frontmatter-editor__convert-list"
-              disabled={readOnly}
-              onClick={() => onConvertToList?.()}
-            >
-              Convert to list
-            </button>
-          ) : null}
-        </div>
+        <PropertyTextDefaultValueInput
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
+          onSuggestPrefix={onSuggestPrefix}
+          onSuggestOpenChange={onSuggestOpenChange}
+          onConvertToList={onConvertToList}
+        />
       );
     }
   }
@@ -940,15 +1084,22 @@ function ListTagsEditor({
   };
 
   const empty = items.length === 0;
+  const listClassName =
+    empty && !readOnly
+      ? 'frontmatter-editor__list frontmatter-editor__list--empty'
+      : 'frontmatter-editor__list';
+
+  let addPlaceholder: string;
+  if (empty) {
+    addPlaceholder = asTags
+      ? 'Type a tag, press Enter…'
+      : 'Type an item, press Enter…';
+  } else {
+    addPlaceholder = asTags ? 'Add tag…' : 'Add item…';
+  }
 
   return (
-    <div
-      className={
-        empty && !readOnly
-          ? 'frontmatter-editor__list frontmatter-editor__list--empty'
-          : 'frontmatter-editor__list'
-      }
-    >
+    <div className={listClassName}>
       <ul>
         {items.map((it, i) => (
           <li key={`${it}-${i}`}>
@@ -974,15 +1125,7 @@ function ListTagsEditor({
         <input
           ref={inputRef}
           className="frontmatter-editor__scalar-input"
-          placeholder={
-            empty
-              ? asTags
-                ? 'Type a tag, press Enter…'
-                : 'Type an item, press Enter…'
-              : asTags
-                ? 'Add tag…'
-                : 'Add item…'
-          }
+          placeholder={addPlaceholder}
           value={draft}
           onChange={e => {
             setDraft(e.target.value);

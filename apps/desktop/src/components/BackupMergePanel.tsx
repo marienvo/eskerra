@@ -1,9 +1,22 @@
 import type {VaultFilesystem, VaultDirEntry} from '@eskerra/core';
 import {getAutosyncBackupRootUri, splitYamlFrontmatter} from '@eskerra/core';
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react';
 
 import {normalizeVaultMarkdownDiskRead} from '../hooks/inboxNoteBodyCache';
-import {applyHunkToText, buildDiffSegments, computeOtherHunkRange, removeConflictBackupWarningLine} from '../lib/buildMarkdownLineDiff';
+import {
+  applyHunkToText,
+  buildDiffSegments,
+  computeOtherHunkRange,
+  removeConflictBackupWarningLine,
+  type DiffSegment,
+} from '../lib/buildMarkdownLineDiff';
 import {splitLines} from '../lib/lineLcs';
 
 export type MergePanelSource =
@@ -39,8 +52,16 @@ async function hasAnyFiles(fs: VaultFilesystem, dirUri: string): Promise<boolean
   return false;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
 function pathRelativeToVault(vaultRoot: string, fileUri: string): string {
-  const r = vaultRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+  const r = trimTrailingSlashes(vaultRoot.replace(/\\/g, '/'));
   const f = fileUri.replace(/\\/g, '/');
   if (f.startsWith(`${r}/`)) {
     return f.slice(r.length + 1);
@@ -48,15 +69,176 @@ function pathRelativeToVault(vaultRoot: string, fileUri: string): string {
   return f;
 }
 
-export function BackupMergePanel({
+function hunkLabelForDiffSides(
+  otherLines: readonly string[],
+  currentLines: readonly string[],
+): string {
+  const isAddition = otherLines.length > 0 && currentLines.length === 0;
+  const isDeletion = otherLines.length === 0 && currentLines.length > 0;
+  if (isAddition) {
+    return 'Addition';
+  }
+  if (isDeletion) {
+    return 'Deletion';
+  }
+  return 'Change';
+}
+
+type BackupMergeDiffSegmentsProps = {
+  segments: readonly DiffSegment[];
+  leftText: string | null;
+  loadErr: string | null;
+  hunkCount: number;
+  hunkEls: MutableRefObject<Record<number, HTMLDivElement | null>>;
+  focusedHunkIdx: number;
+  canAccept: boolean;
+  handleAcceptLeft: (hunkIdx: number) => void;
+  handleAcceptRight: (hunkIdx: number) => void;
+};
+
+function BackupMergeContextBlock({
+  seg,
+}: {
+  seg: {kind: 'context'; lines: string[]};
+}) {
+  const isEllipsis = seg.lines.length === 1 && seg.lines[0]!.startsWith('…');
+  if (isEllipsis) {
+    return (
+      <div className="backup-merge-panel__context-ellipsis">
+        {seg.lines[0]}
+      </div>
+    );
+  }
+  return (
+    <div className="backup-merge-panel__context">
+      <pre className="backup-merge-panel__context-col">
+        {seg.lines.map((line, j) => (
+          <div key={j} className="backup-merge-panel__context-line">{line}</div>
+        ))}
+      </pre>
+      <pre className="backup-merge-panel__context-col">
+        {seg.lines.map((line, j) => (
+          <div key={j} className="backup-merge-panel__context-line">{line}</div>
+        ))}
+      </pre>
+    </div>
+  );
+}
+
+function hunkLayoutIndexBySegmentIndex(segments: readonly DiffSegment[]): number[] {
+  let next = 0;
+  return segments.map(seg => (seg.kind === 'hunk' ? next++ : -1));
+}
+
+function BackupMergeDiffSegments({
+  segments,
+  leftText,
+  loadErr,
+  hunkCount,
+  hunkEls,
+  focusedHunkIdx,
+  canAccept,
+  handleAcceptLeft,
+  handleAcceptRight,
+}: BackupMergeDiffSegmentsProps) {
+  const hunkIndexAtSegI = useMemo(
+    () => hunkLayoutIndexBySegmentIndex(segments),
+    [segments],
+  );
+  return (
+    <>
+      {leftText == null && loadErr == null ? (
+        <p className="muted backup-merge-panel__loading">Loading…</p>
+      ) : null}
+      {segments.map((seg, i) => {
+        if (seg.kind === 'context') {
+          return <BackupMergeContextBlock key={i} seg={seg} />;
+        }
+        const hunkLayoutIdx = hunkIndexAtSegI[i]!;
+        const otherLines = seg.rightLines;
+        const currentLines = seg.leftLines;
+        const hunkLabel = hunkLabelForDiffSides(otherLines, currentLines);
+        const isFocused = hunkLayoutIdx === focusedHunkIdx;
+        return (
+          <div
+            key={i}
+            ref={el => {
+              if (el) {
+                hunkEls.current[hunkLayoutIdx] = el;
+              } else {
+                delete hunkEls.current[hunkLayoutIdx];
+              }
+            }}
+            className={
+              isFocused
+                ? 'backup-merge-panel__hunk backup-merge-panel__hunk--focused'
+                : 'backup-merge-panel__hunk'
+            }
+          >
+            <div className="backup-merge-panel__hunk-header">
+              <span className="backup-merge-panel__hunk-label muted">{hunkLabel}</span>
+              <button
+                type="button"
+                className="backup-merge-panel__hunk-accept"
+                disabled={!canAccept}
+                onClick={() => handleAcceptLeft(seg.index)}
+                title="Accept left — use this version from backup/disk"
+              >
+                ← Accept left
+              </button>
+              <button
+                type="button"
+                className="backup-merge-panel__hunk-accept"
+                disabled={!canAccept}
+                onClick={() => handleAcceptRight(seg.index)}
+                title="Accept right — keep your current version"
+              >
+                Accept right →
+              </button>
+            </div>
+            <div className="backup-merge-panel__hunk-cols">
+              <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--left">
+                {otherLines.length === 0 ? (
+                  <div className="backup-merge-panel__hunk-empty">(empty)</div>
+                ) : (
+                  otherLines.map((line, j) => (
+                    <div key={j} className="backup-merge-panel__line backup-merge-panel__line--ins">
+                      {line}
+                    </div>
+                  ))
+                )}
+              </pre>
+              <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--right">
+                {currentLines.length === 0 ? (
+                  <div className="backup-merge-panel__hunk-empty">(empty)</div>
+                ) : (
+                  currentLines.map((line, j) => (
+                    <div key={j} className="backup-merge-panel__line backup-merge-panel__line--del">
+                      {line}
+                    </div>
+                  ))
+                )}
+              </pre>
+            </div>
+          </div>
+        );
+      })}
+      {leftText != null && hunkCount === 0 ? (
+        <p className="muted backup-merge-panel__no-diff">
+          No differences — both sides are identical.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function useBackupMergePanelModel({
   vaultRoot,
   fs,
   source,
   currentBody,
   onClose,
-  onApplyOther,
   onApplyMergedBody,
-  onKeepLocal,
   busy,
 }: BackupMergePanelProps) {
   const [loadedText, setLoadedText] = useState<string | null>(null);
@@ -70,11 +252,20 @@ export function BackupMergePanel({
   const [leftText, setLeftText] = useState<string | null>(null);
 
   const [focusedHunkIdx, setFocusedHunkIdx] = useState(0);
-  const hunkEls = useRef<HTMLDivElement[]>([]);
+  const hunkEls = useRef<Record<number, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    setRightText(currentBody);
-    setFocusedHunkIdx(0);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setRightText(currentBody);
+      setFocusedHunkIdx(0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [currentBody]);
 
   useEffect(() => {
@@ -110,8 +301,17 @@ export function BackupMergePanel({
 
   // Sync leftText when otherText becomes available or changes (new backup loaded / source changed)
   useEffect(() => {
-    setLeftText(otherText);
-    setFocusedHunkIdx(0);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setLeftText(otherText);
+      setFocusedHunkIdx(0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [otherText]);
 
   const {segments, hunks} = useMemo(
@@ -125,7 +325,16 @@ export function BackupMergePanel({
   const hunkCount = hunks.length;
 
   useEffect(() => {
-    setFocusedHunkIdx(prev => (hunkCount === 0 ? 0 : Math.min(prev, hunkCount - 1)));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+      setFocusedHunkIdx(prev => (hunkCount === 0 ? 0 : Math.min(prev, hunkCount - 1)));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [hunkCount]);
 
   const scrollToHunk = useCallback((idx: number) => {
@@ -210,8 +419,56 @@ export function BackupMergePanel({
     setLeftText(prev => (prev != null ? applyHunkToText(prev, {start: oStart, end: oEnd, lines: rightLines}) : prev));
   }
 
-  let hunkRenderIdx = 0;
-  hunkEls.current = [];
+  return {
+    subLabel,
+    title,
+    hunkCount,
+    focusedHunkIdx,
+    goPrev,
+    goNext,
+    canApplyToEditor,
+    canAccept,
+    applyAllLabel,
+    otherColLabel,
+    hunkEls,
+    segments,
+    leftText,
+    loadErr,
+    handleDeleteBackup,
+    handleAcceptLeft,
+    handleAcceptRight,
+    rightText,
+    deleteErr,
+    deleteBusy,
+  };
+}
+
+export function BackupMergePanel(mergePanelProps: BackupMergePanelProps) {
+  const {busy, onClose, onKeepLocal, onApplyMergedBody, onApplyOther, source} =
+    mergePanelProps;
+  const v = useBackupMergePanelModel(mergePanelProps);
+  const {
+    title,
+    hunkCount,
+    focusedHunkIdx,
+    goPrev,
+    goNext,
+    subLabel,
+    canApplyToEditor,
+    applyAllLabel,
+    otherColLabel,
+    deleteErr,
+    deleteBusy,
+    handleDeleteBackup,
+    segments,
+    leftText,
+    loadErr,
+    hunkEls,
+    canAccept,
+    handleAcceptLeft,
+    handleAcceptRight,
+    rightText,
+  } = v;
 
   return (
     <div
@@ -330,109 +587,17 @@ export function BackupMergePanel({
           <span>Current</span>
         </div>
         <div className="backup-merge-panel__diff-body">
-          {leftText == null && loadErr == null ? (
-            <p className="muted backup-merge-panel__loading">Loading…</p>
-          ) : null}
-          {segments.map((seg, i) => {
-            if (seg.kind === 'context') {
-              const isEllipsis = seg.lines.length === 1 && seg.lines[0]!.startsWith('…');
-              if (isEllipsis) {
-                return (
-                  <div key={i} className="backup-merge-panel__context-ellipsis">
-                    {seg.lines[0]}
-                  </div>
-                );
-              }
-              return (
-                <div key={i} className="backup-merge-panel__context">
-                  <pre className="backup-merge-panel__context-col">
-                    {seg.lines.map((line, j) => (
-                      <div key={j} className="backup-merge-panel__context-line">{line}</div>
-                    ))}
-                  </pre>
-                  <pre className="backup-merge-panel__context-col">
-                    {seg.lines.map((line, j) => (
-                      <div key={j} className="backup-merge-panel__context-line">{line}</div>
-                    ))}
-                  </pre>
-                </div>
-              );
-            }
-
-            // Left col = other/backup (seg.rightLines), right col = current (seg.leftLines)
-            const otherLines = seg.rightLines;
-            const currentLines = seg.leftLines;
-            const isAddition = otherLines.length > 0 && currentLines.length === 0;
-            const isDeletion = otherLines.length === 0 && currentLines.length > 0;
-            const hunkLabel = isAddition ? 'Addition' : isDeletion ? 'Deletion' : 'Change';
-            const thisHunkRenderIdx = hunkRenderIdx++;
-            const isFocused = thisHunkRenderIdx === focusedHunkIdx;
-
-            return (
-              <div
-                key={i}
-                ref={el => {
-                  if (el) hunkEls.current[thisHunkRenderIdx] = el;
-                }}
-                className={
-                  isFocused
-                    ? 'backup-merge-panel__hunk backup-merge-panel__hunk--focused'
-                    : 'backup-merge-panel__hunk'
-                }
-              >
-                <div className="backup-merge-panel__hunk-header">
-                  <span className="backup-merge-panel__hunk-label muted">{hunkLabel}</span>
-                  <button
-                    type="button"
-                    className="backup-merge-panel__hunk-accept"
-                    disabled={!canAccept}
-                    onClick={() => handleAcceptLeft(seg.index)}
-                    title="Accept left — use this version from backup/disk"
-                  >
-                    ← Accept left
-                  </button>
-                  <button
-                    type="button"
-                    className="backup-merge-panel__hunk-accept"
-                    disabled={!canAccept}
-                    onClick={() => handleAcceptRight(seg.index)}
-                    title="Accept right — keep your current version"
-                  >
-                    Accept right →
-                  </button>
-                </div>
-                <div className="backup-merge-panel__hunk-cols">
-                  <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--left">
-                    {otherLines.length === 0 ? (
-                      <div className="backup-merge-panel__hunk-empty">(empty)</div>
-                    ) : (
-                      otherLines.map((line, j) => (
-                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--ins">
-                          {line}
-                        </div>
-                      ))
-                    )}
-                  </pre>
-                  <pre className="backup-merge-panel__hunk-pre backup-merge-panel__hunk-pre--right">
-                    {currentLines.length === 0 ? (
-                      <div className="backup-merge-panel__hunk-empty">(empty)</div>
-                    ) : (
-                      currentLines.map((line, j) => (
-                        <div key={j} className="backup-merge-panel__line backup-merge-panel__line--del">
-                          {line}
-                        </div>
-                      ))
-                    )}
-                  </pre>
-                </div>
-              </div>
-            );
-          })}
-          {leftText != null && hunkCount === 0 ? (
-            <p className="muted backup-merge-panel__no-diff">
-              No differences — both sides are identical.
-            </p>
-          ) : null}
+          <BackupMergeDiffSegments
+            segments={segments}
+            leftText={leftText}
+            loadErr={loadErr}
+            hunkCount={hunkCount}
+            hunkEls={hunkEls}
+            focusedHunkIdx={focusedHunkIdx}
+            canAccept={canAccept}
+            handleAcceptLeft={handleAcceptLeft}
+            handleAcceptRight={handleAcceptRight}
+          />
         </div>
       </div>
       {hunkCount > 0 ? (

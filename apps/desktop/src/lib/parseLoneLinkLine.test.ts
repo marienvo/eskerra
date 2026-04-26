@@ -43,7 +43,7 @@ describe('parseLoneLinkLine', () => {
   });
 
   it('rejects non-http schemes and obvious garbage', () => {
-    expect(parseLoneLinkLine('ftp://foo.com')).toBeNull();
+    expect(parseLoneLinkLine('sftp://foo.com')).toBeNull();
     expect(parseLoneLinkLine('https://')).toBeNull();
     expect(parseLoneLinkLine('')).toBeNull();
   });

@@ -617,6 +617,33 @@ const NoteMarkdownEditorImpl = forwardRef<
     // X11/WebKitGTK: middle-click fires a synthetic `paste` with primary selection; block briefly.
     let middleClickBlockPasteUntil = 0;
 
+    const onEditorPasteFromClipboardData = (
+      dt: DataTransfer,
+      e: ClipboardEvent,
+      view: EditorView,
+    ): boolean => {
+      const plainTrimmed = (dt.getData('text/plain') ?? '').trim();
+      const probablyImage = clipboardDataProbablyHasVaultImage(dt);
+      if (probablyImage) {
+        e.preventDefault();
+        e.stopPropagation();
+        return runVaultImagePasteFromDataTransfer(dt, view);
+      }
+      if (plainTrimmed === '' && !probablyImage) {
+        const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
+        if (
+          htmlWhenPlainEmpty.trim() !== ''
+          && tryPasteRichHtmlFromDataTransfer(dt, e, view)
+        ) {
+          return true;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        return runNativeClipboardPasteWhenWebDataEmpty(view);
+      }
+      return tryPasteRichHtmlFromDataTransfer(dt, e, view);
+    };
+
     const onEditorPaste = (e: ClipboardEvent, view: EditorView): boolean => {
       if (Date.now() < middleClickBlockPasteUntil) {
         e.preventDefault();
@@ -648,40 +675,15 @@ const NoteMarkdownEditorImpl = forwardRef<
           );
           return true;
         }
-        if (
-          e.clipboardData
+        return (
+          e.clipboardData != null
           && tryPasteRichHtmlFromDataTransfer(e.clipboardData, e, view)
-        ) {
-          return true;
-        }
-        return false;
+        );
       }
 
       const dt = e.clipboardData;
       if (dt) {
-        const plainTrimmed = (dt.getData('text/plain') ?? '').trim();
-        const probablyImage = clipboardDataProbablyHasVaultImage(dt);
-        if (probablyImage) {
-          e.preventDefault();
-          e.stopPropagation();
-          return runVaultImagePasteFromDataTransfer(dt, view);
-        }
-        if (plainTrimmed === '' && !probablyImage) {
-          const htmlWhenPlainEmpty = dt.getData('text/html') ?? '';
-          if (
-            htmlWhenPlainEmpty.trim() !== ''
-            && tryPasteRichHtmlFromDataTransfer(dt, e, view)
-          ) {
-            return true;
-          }
-          e.preventDefault();
-          e.stopPropagation();
-          return runNativeClipboardPasteWhenWebDataEmpty(view);
-        }
-        if (tryPasteRichHtmlFromDataTransfer(dt, e, view)) {
-          return true;
-        }
-        return false;
+        return onEditorPasteFromClipboardData(dt, e, view);
       }
 
       e.preventDefault();
@@ -1395,7 +1397,7 @@ const NoteMarkdownEditorImpl = forwardRef<
     }
     let unlisten: (() => void) | undefined;
     let cancelled = false;
-    void attachmentHost
+    attachmentHost
       .subscribeWindowFileDragDrop({
         onDragHover: () => {
           if (!busy) {

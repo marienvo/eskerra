@@ -77,10 +77,17 @@ function normalizeNote(raw: unknown): VaultSearchNoteResult {
       }
       const sn = s as Record<string, unknown>;
       const ln = sn.lineNumber;
+      let lineNumber: number | null;
+      if (ln === null || ln === undefined) {
+        lineNumber = null;
+      } else if (typeof ln === 'number') {
+        lineNumber = ln;
+      } else {
+        lineNumber = Number(ln);
+      }
       snippets.push({
         text: String(sn.text ?? ''),
-        lineNumber:
-          ln === null || ln === undefined ? null : typeof ln === 'number' ? ln : Number(ln),
+        lineNumber,
       });
     }
   }
@@ -219,6 +226,15 @@ export function useVaultContentSearch({
   const lastReconciledAtRef = useRef(lastReconciledAt);
   /** When native returns not-ready for a query, re-run search after index-status ready. */
   const needsSearchRetryRef = useRef(false);
+  const fallbackSearchIdCounterRef = useRef(0);
+
+  const createSearchId = useCallback((): string => {
+    if (globalThis.crypto && 'randomUUID' in globalThis.crypto) {
+      return globalThis.crypto.randomUUID();
+    }
+    fallbackSearchIdCounterRef.current += 1;
+    return `${Date.now()}-${fallbackSearchIdCounterRef.current}`;
+  }, []);
 
   useEffect(() => {
     indexReadyRef.current = indexReady;
@@ -279,10 +295,7 @@ export function useVaultContentSearch({
         return;
       }
       needsSearchRetryRef.current = false;
-      const id =
-        globalThis.crypto && 'randomUUID' in globalThis.crypto
-          ? globalThis.crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
+      const id = createSearchId();
       searchIdRef.current = id;
       clearResultHoldTimer();
       queueMicrotask(() => {
@@ -296,7 +309,7 @@ export function useVaultContentSearch({
         });
       });
     },
-    [clearResultHoldTimer],
+    [clearResultHoldTimer, createSearchId],
   );
 
   useEffect(() => {
@@ -549,6 +562,45 @@ export function useVaultContentSearch({
       setAwaitingDebouncedRun(true);
     });
 
+    const onResultHoldTimerExpiry = (holdId: string) => {
+      resultHoldTimerRef.current = null;
+      if (searchIdRef.current !== holdId) {
+        return;
+      }
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      setNotes([]);
+      setProgress(null);
+    };
+
+    const onSearchStartError = () => {
+      searchIdRef.current = null;
+      clearResultHoldTimer();
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      setScanDone(true);
+    };
+
+    const doSearchAsync = async (q: string, id: string) => {
+      await eskerraVaultSearch.cancel().catch(() => undefined);
+      if (!reconciledForSessionRef.current) {
+        reconciledForSessionRef.current = true;
+        const ready = indexReadyRef.current;
+        const lastRec = lastReconciledAtRef.current;
+        const stale =
+          lastRec == null ||
+          !Number.isFinite(lastRec) ||
+          Date.now() - lastRec > RECONCILE_STALE_MS;
+        if (ready && stale) {
+          /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
+          eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
+        }
+      }
+      await eskerraVaultSearch.start(baseUri, id, q).catch(onSearchStartError);
+    };
+
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
       const q = queryRef.current.trim();
@@ -558,10 +610,7 @@ export function useVaultContentSearch({
         });
         return;
       }
-      const id =
-        globalThis.crypto && 'randomUUID' in globalThis.crypto
-          ? globalThis.crypto.randomUUID()
-          : `${Date.now()}-${Math.random()}`;
+      const id = createSearchId();
       searchIdRef.current = id;
       clearPendingSearchFlush();
       clearResultHoldTimer();
@@ -573,17 +622,7 @@ export function useVaultContentSearch({
         queueMicrotask(() => {
           setHoldingPreviousResults(true);
         });
-        resultHoldTimerRef.current = setTimeout(() => {
-          resultHoldTimerRef.current = null;
-          if (searchIdRef.current !== id) {
-            return;
-          }
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setNotes([]);
-          setProgress(null);
-        }, PREVIOUS_RESULTS_HOLD_MS);
+        resultHoldTimerRef.current = setTimeout(() => onResultHoldTimerExpiry(id), PREVIOUS_RESULTS_HOLD_MS);
       } else {
         queueMicrotask(() => {
           setHoldingPreviousResults(false);
@@ -592,30 +631,7 @@ export function useVaultContentSearch({
         setProgress(null);
       }
       setScanDone(false);
-      (async () => {
-        await eskerraVaultSearch.cancel().catch(() => undefined);
-        if (!reconciledForSessionRef.current) {
-          reconciledForSessionRef.current = true;
-          const ready = indexReadyRef.current;
-          const lastRec = lastReconciledAtRef.current;
-          const stale =
-            lastRec == null ||
-            !Number.isFinite(lastRec) ||
-            Date.now() - lastRec > RECONCILE_STALE_MS;
-          if (ready && stale) {
-            /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
-            eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
-          }
-        }
-        await eskerraVaultSearch.start(baseUri, id, q).catch(() => {
-          searchIdRef.current = null;
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setScanDone(true);
-        });
-      })().catch(() => undefined);
+      doSearchAsync(q, id).catch(() => undefined);
     }, debounceMs);
 
     return () => {
@@ -624,7 +640,7 @@ export function useVaultContentSearch({
         debounceTimerRef.current = null;
       }
     };
-  }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer]);
+  }, [query, open, baseUri, debounceMs, resetLocal, clearPendingSearchFlush, clearResultHoldTimer, createSearchId]);
 
   const partialBodiesIndexing = useMemo(() => {
     if (bodiesIndexReadyFromOpen === false) {

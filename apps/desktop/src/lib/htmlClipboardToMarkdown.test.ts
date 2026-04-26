@@ -101,6 +101,20 @@ describe('tryClipboardHtmlToMarkdownInsert', () => {
     expect(tryClipboardHtmlToMarkdownInsert('<span>x</span>', 'x')).toBeNull();
   });
 
+  it('returns null for span-wrapped plain text without real structural tags', () => {
+    expect(
+      tryClipboardHtmlToMarkdownInsert(
+        '<span>hello world</span>',
+        'hello world',
+      ),
+    ).toBeNull();
+  });
+
+  it('still treats real <s> strikethrough as structured HTML', () => {
+    const out = tryClipboardHtmlToMarkdownInsert('<p><s>x</s></p>', 'x');
+    expect(out).toContain('~~');
+  });
+
   it('returns null when converted Markdown matches plain text', () => {
     expect(
       tryClipboardHtmlToMarkdownInsert('<p>hello</p>', 'hello'),

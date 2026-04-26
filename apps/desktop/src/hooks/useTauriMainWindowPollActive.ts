@@ -35,7 +35,7 @@ export function useTauriMainWindowPollActive(): boolean {
     queueMicrotask(() => {
       void sync();
     });
-    void getCurrentWindow()
+    getCurrentWindow()
       .onFocusChanged(() => {
         void sync();
       })

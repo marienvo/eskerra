@@ -30,7 +30,7 @@ export function useTauriWindowMaximized(): {
     queueMicrotask(refresh);
     let unlistenResize: (() => void) | undefined;
     let cancelled = false;
-    void getCurrentWindow()
+    getCurrentWindow()
       .onResized(() => {
         refresh();
       })

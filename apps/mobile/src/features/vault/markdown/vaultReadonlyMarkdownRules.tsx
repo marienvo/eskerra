@@ -157,110 +157,126 @@ async function openExternalUrl(url: string): Promise<void> {
   });
 }
 
+function normalizeForWikiMatch(u: string): string {
+  return u.trim().replace(/\\/g, '/').toLowerCase();
+}
+
+function resolveWikiPathTarget(
+  root: string,
+  wikiInner: string,
+  currentNoteUri: string,
+  noteRefs: readonly VaultMarkdownRef[],
+  onOpen: (uri: string, title: string) => void,
+): boolean {
+  const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(wikiInner);
+  if (pathHref == null) {
+    return false;
+  }
+  const vaultSource = wikiLinkInnerPathResolutionSourceDirectoryUri(root, wikiInner, currentNoteUri);
+  const sources =
+    normalizeForWikiMatch(vaultSource) === normalizeForWikiMatch(currentNoteUri)
+      ? [currentNoteUri]
+      : [vaultSource, currentNoteUri];
+  const resolveFrom = (sd: string) =>
+    resolveVaultRelativeMarkdownHref(root, sd, pathHref, noteRefs);
+  for (const sd of sources) {
+    const rel = resolveFrom(sd);
+    if (rel == null) {
+      continue;
+    }
+    const inIndex = noteRefs.some(
+      r => normalizeForWikiMatch(r.uri) === normalizeForWikiMatch(rel.uri),
+    );
+    if (inIndex) {
+      onOpen(rel.uri, vaultNoteTitleFromUri(rel.uri));
+      return true;
+    }
+  }
+  for (const sd of sources) {
+    const rel = resolveFrom(sd);
+    if (rel != null) {
+      onOpen(rel.uri, vaultNoteTitleFromUri(rel.uri));
+      return true;
+    }
+  }
+  return false;
+}
+
+function handleWikiUnsupportedLink(
+  wikiInner: string,
+  unsupportedReason: string,
+  options: VaultReadonlyMarkdownRuleOptions,
+): void {
+  if (unsupportedReason === 'empty_target') {
+    Alert.alert('Unsupported link', 'This wiki link has an empty target.');
+    return;
+  }
+  const root = options.vaultRoot?.trim();
+  if (root) {
+    const found = resolveWikiPathTarget(
+      root,
+      wikiInner,
+      options.currentNoteUri,
+      options.noteRefs,
+      options.onOpenInternalNote,
+    );
+    if (found) {
+      return;
+    }
+    Alert.alert('Note not found', 'This wiki link path does not match a note in this vault.');
+    return;
+  }
+  Alert.alert('Unsupported link', 'This wiki link uses a path target, which is not supported here.');
+}
+
+function handleWikiLinkPress(wikiInner: string, options: VaultReadonlyMarkdownRuleOptions): void {
+  const browser = wikiLinkInnerBrowserOpenableHref(wikiInner);
+  if (browser != null) {
+    openExternalUrl(browser).catch(() => undefined);
+    return;
+  }
+  const resolved = resolveInboxWikiLinkTarget(options.noteRefs, wikiInner);
+  if (resolved.kind === 'open') {
+    options.onOpenInternalNote(resolved.note.uri, vaultNoteTitleFromUri(resolved.note.uri));
+    return;
+  }
+  if (resolved.kind === 'ambiguous') {
+    options.onWikiAmbiguous({candidates: resolved.notes, inner: wikiInner});
+    return;
+  }
+  if (resolved.kind === 'unsupported') {
+    handleWikiUnsupportedLink(wikiInner, resolved.reason, options);
+    return;
+  }
+  if (resolved.kind === 'create') {
+    if (options.wikiIndexStatus === 'loading') {
+      Alert.alert('Still indexing vault', 'Try again in a moment once note names are indexed.');
+      return;
+    }
+    if (options.wikiIndexStatus === 'error') {
+      Alert.alert('Vault index unavailable', 'Could not build the note name index for wiki links.', [
+        {text: 'Cancel', style: 'cancel'},
+        {text: 'Retry', onPress: () => options.onRefreshWikiIndex()},
+      ]);
+      return;
+    }
+    Alert.alert('Note not found', 'This wiki link does not match a note in this vault.');
+  }
+}
+
 function handleLinkPress(href: string, options: VaultReadonlyMarkdownRuleOptions): void {
   const wikiInner = decodeWikiHref(href);
   if (wikiInner != null) {
-    const browser = wikiLinkInnerBrowserOpenableHref(wikiInner);
-    if (browser != null) {
-      openExternalUrl(browser).catch(() => undefined);
-      return;
-    }
-    const resolved = resolveInboxWikiLinkTarget(options.noteRefs, wikiInner);
-    if (resolved.kind === 'open') {
-      options.onOpenInternalNote(
-        resolved.note.uri,
-        vaultNoteTitleFromUri(resolved.note.uri),
-      );
-      return;
-    }
-    if (resolved.kind === 'ambiguous') {
-      options.onWikiAmbiguous({candidates: resolved.notes, inner: wikiInner});
-      return;
-    }
-    if (resolved.kind === 'unsupported') {
-      if (resolved.reason === 'empty_target') {
-        Alert.alert('Unsupported link', 'This wiki link has an empty target.');
-        return;
-      }
-      const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(wikiInner);
-      const root = options.vaultRoot?.trim();
-      if (pathHref != null && root) {
-        const fallback = options.currentNoteUri;
-        const vaultSource = wikiLinkInnerPathResolutionSourceDirectoryUri(
-          root,
-          wikiInner,
-          fallback,
-        );
-        const norm = (u: string) => u.trim().replace(/\\/g, '/').toLowerCase();
-        const sources =
-          norm(vaultSource) === norm(fallback) ? [fallback] : [vaultSource, fallback];
-
-        const resolveFrom = (sourceDir: string) =>
-          resolveVaultRelativeMarkdownHref(root, sourceDir, pathHref, options.noteRefs);
-
-        for (const sd of sources) {
-          const rel = resolveFrom(sd);
-          if (rel == null) {
-            continue;
-          }
-          const inIndex = options.noteRefs.some(
-            r => norm(r.uri) === norm(rel.uri),
-          );
-          if (inIndex) {
-            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
-            return;
-          }
-        }
-        for (const sd of sources) {
-          const rel = resolveFrom(sd);
-          if (rel != null) {
-            options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
-            return;
-          }
-        }
-        Alert.alert(
-          'Note not found',
-          'This wiki link path does not match a note in this vault.',
-        );
-        return;
-      }
-      Alert.alert(
-        'Unsupported link',
-        'This wiki link uses a path target, which is not supported here.',
-      );
-      return;
-    }
-    if (resolved.kind === 'create') {
-      if (options.wikiIndexStatus === 'loading') {
-        Alert.alert('Still indexing vault', 'Try again in a moment once note names are indexed.');
-        return;
-      }
-      if (options.wikiIndexStatus === 'error') {
-        Alert.alert('Vault index unavailable', 'Could not build the note name index for wiki links.', [
-          {text: 'Cancel', style: 'cancel'},
-          {text: 'Retry', onPress: () => options.onRefreshWikiIndex()},
-        ]);
-        return;
-      }
-      Alert.alert('Note not found', 'This wiki link does not match a note in this vault.');
-      return;
-    }
+    handleWikiLinkPress(wikiInner, options);
     return;
   }
-
   if (isBrowserOpenableMarkdownHref(href)) {
     openExternalUrl(href.trim()).catch(() => undefined);
     return;
   }
-
   const root = options.vaultRoot?.trim();
   if (root) {
-    const rel = resolveVaultRelativeMarkdownHref(
-      root,
-      options.currentNoteUri,
-      href,
-      options.noteRefs,
-    );
+    const rel = resolveVaultRelativeMarkdownHref(root, options.currentNoteUri, href, options.noteRefs);
     if (rel != null) {
       options.onOpenInternalNote(rel.uri, vaultNoteTitleFromUri(rel.uri));
       return;
@@ -277,7 +293,6 @@ function handleLinkPress(href: string, options: VaultReadonlyMarkdownRuleOptions
       return;
     }
   }
-
   Alert.alert('Link', 'This link cannot be opened from read-only view.');
 }
 

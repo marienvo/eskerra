@@ -12,7 +12,7 @@ import {
   filterPodcastRelevantGeneralMarkdownFiles,
   splitPodcastAndRssMarkdownFiles,
 } from './generalIndex';
-import {isPodcastFile} from './podcastParser';
+import {isPodcastEpisodesFile} from '@eskerra/core';
 import {listGeneralMarkdownFiles} from './podcastPhase1Desktop';
 import type {RootMarkdownFile} from './podcastTypes';
 
@@ -32,11 +32,16 @@ export type DesktopRssSyncOptions = {
   onProgress?: (payload: DesktopRssSyncProgressPayload) => void;
 };
 
-// Module-level chain so concurrent calls (e.g. double-click) coalesce into one run.
-let syncChain: Promise<DesktopRssSyncResult> | null = null;
+type ActiveRssSync = {
+  listeners: Set<(payload: DesktopRssSyncProgressPayload) => void>;
+  promise: Promise<DesktopRssSyncResult>;
+};
+
+/** Coalesces concurrent runs; every caller's `onProgress` is registered for that run. */
+let active: ActiveRssSync | null = null;
 
 export function __resetForTests(): void {
-  syncChain = null;
+  active = null;
 }
 
 function titleFromFileName(name: string): string {
@@ -117,7 +122,7 @@ async function collectRssFilesFromUncheckedHubLinks(
   const selectedNames = new Set<string>();
   const selected: RootMarkdownFile[] = [];
 
-  for (const episodesFile of podcastFiles.filter(f => isPodcastFile(f.name, currentYear))) {
+  for (const episodesFile of podcastFiles.filter(f => isPodcastEpisodesFile(f.name, currentYear))) {
     const hubName = companionHubFileName(episodesFile.name);
     if (!hubName) continue;
     const hubFile = byName.get(hubName);
@@ -136,6 +141,25 @@ async function collectRssFilesFromUncheckedHubLinks(
   return selected;
 }
 
+async function pieFilesForHubLinkedNames(
+  linkedNames: string[],
+  byName: Map<string, RootMarkdownFile>,
+  pieContentByName: Map<string, string>,
+  fs: VaultFilesystem,
+): Promise<Array<{series: string; content: string}>> {
+  const pieFiles: Array<{series: string; content: string}> = [];
+  for (const pieName of linkedNames) {
+    const pieFile = byName.get(pieName);
+    if (!pieFile) continue;
+    const content =
+      pieContentByName.get(pieName) ??
+      (await fs.readFile(pieFile.uri, {encoding: 'utf8'}));
+    const series = pieName.replace(/^📻\s*/u, '').replace(/\.md$/i, '').trim() || pieName;
+    pieFiles.push({series, content});
+  }
+  return pieFiles;
+}
+
 async function mergeIntoEpisodesFiles(
   allFiles: RootMarkdownFile[],
   pieContentByName: Map<string, string>,
@@ -143,7 +167,7 @@ async function mergeIntoEpisodesFiles(
   now: Date,
 ): Promise<void> {
   const currentYear = now.getFullYear();
-  const episodesFiles = allFiles.filter(f => isPodcastFile(f.name, currentYear));
+  const episodesFiles = allFiles.filter(f => isPodcastEpisodesFile(f.name, currentYear));
   const byName = new Map(allFiles.map(f => [f.name, f]));
 
   for (const episodesFile of episodesFiles) {
@@ -156,16 +180,12 @@ async function mergeIntoEpisodesFiles(
     const linkedNames = parseUncheckedHubLinks(hubContent);
     if (linkedNames.length === 0) continue;
 
-    const pieFiles: Array<{series: string; content: string}> = [];
-    for (const pieName of linkedNames) {
-      const pieFile = byName.get(pieName);
-      if (!pieFile) continue;
-      const content =
-        pieContentByName.get(pieName) ??
-        (await fs.readFile(pieFile.uri, {encoding: 'utf8'}));
-      const series = pieName.replace(/^📻\s*/u, '').replace(/\.md$/i, '').trim() || pieName;
-      pieFiles.push({series, content});
-    }
+    const pieFiles = await pieFilesForHubLinkedNames(
+      linkedNames,
+      byName,
+      pieContentByName,
+      fs,
+    );
     if (pieFiles.length === 0) continue;
 
     const existing = await fs.readFile(episodesFile.uri, {encoding: 'utf8'});
@@ -227,10 +247,25 @@ export function runDesktopPodcastRssSync(
   fs: VaultFilesystem,
   options?: DesktopRssSyncOptions,
 ): Promise<DesktopRssSyncResult> {
-  if (syncChain != null) return syncChain;
-  const chain = runSync(baseUri, fs, options).finally(() => {
-    syncChain = null;
+  if (active != null) {
+    if (options?.onProgress != null) {
+      active.listeners.add(options.onProgress);
+    }
+    return active.promise;
+  }
+  const listeners = new Set<(payload: DesktopRssSyncProgressPayload) => void>();
+  if (options?.onProgress != null) {
+    listeners.add(options.onProgress);
+  }
+  const promise = runSync(baseUri, fs, {
+    onProgress: payload => {
+      for (const listener of listeners) {
+        listener(payload);
+      }
+    },
+  }).finally(() => {
+    active = null;
   });
-  syncChain = chain;
-  return chain;
+  active = {listeners, promise};
+  return promise;
 }

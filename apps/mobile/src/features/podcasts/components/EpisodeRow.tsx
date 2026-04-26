@@ -7,11 +7,9 @@ import {formatRelativeCalendarLabelFromIsoDate} from '@eskerra/core';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import {PodcastEpisode} from '../../../types';
 import {PodcastArtworkImage} from './PodcastArtworkImage';
+import {SELECTED_ARTWORK_IMAGE_BLUR_RADIUS} from './episodeRowConstants';
 import {usePodcastArtwork} from '../hooks/usePodcastArtwork';
 import {PlayerState} from '../services/audioPlayer';
-
-/** Android Image blur when the row is selected (paired with selection overlay). */
-export const SELECTED_ARTWORK_IMAGE_BLUR_RADIUS = 6;
 
 type EpisodeRowProps = {
   activeEpisodeId: string | null;
@@ -58,15 +56,16 @@ export function EpisodeRow({
   const rowDisabled = playbackTransportBusy || isBatchMarking;
   const playAreaDisabled =
     rowDisabled || playbackState === 'playing' || (isActive && playbackState === 'loading');
-  const statusLine = isPlaying
-    ? 'Playing'
-    : isActive && playbackState === 'loading'
-      ? 'Buffering'
-      : isActive
-        ? 'Paused'
-        : playbackState === 'playing'
-          ? ''
-          : 'Tap to play';
+  let statusLine = 'Tap to play';
+  if (isPlaying) {
+    statusLine = 'Playing';
+  } else if (isActive && playbackState === 'loading') {
+    statusLine = 'Buffering';
+  } else if (isActive) {
+    statusLine = 'Paused';
+  } else if (playbackState === 'playing') {
+    statusLine = '';
+  }
 
   return (
     <View

@@ -2,7 +2,7 @@
  * @format
  */
 import React, {useEffect} from 'react';
-import {InteractionManager, Platform} from 'react-native';
+import {Platform} from 'react-native';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import {VaultProvider, useVaultContext, type VaultContextValue} from '../src/core/vault/VaultContext';
@@ -85,14 +85,9 @@ describe('VaultProvider markdown notes registry (Android warm path)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Object.defineProperty(Platform, 'OS', {configurable: true, value: 'android', writable: true});
-    jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation((task: () => unknown) => {
-      task();
-      return {cancel: jest.fn()};
-    });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
     Object.defineProperty(Platform, 'OS', {configurable: true, value: 'ios', writable: true});
   });
 

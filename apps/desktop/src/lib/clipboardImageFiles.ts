@@ -31,6 +31,19 @@ function dedupeFileKey(file: File): string {
   return `${file.name}\0${file.size}\0${file.lastModified}`;
 }
 
+function stripUriQueryAndHash(value: string): string {
+  const hashIndex = value.indexOf('#');
+  const queryIndex = value.indexOf('?');
+  let cut = value.length;
+  if (hashIndex >= 0 && hashIndex < cut) {
+    cut = hashIndex;
+  }
+  if (queryIndex >= 0 && queryIndex < cut) {
+    cut = queryIndex;
+  }
+  return value.slice(0, cut);
+}
+
 /** Synchronously copy clipboard strings and file references before any `await` (WebKit/Tauri). */
 export type ClipboardImageSnapshot = {
   types: string[];
@@ -129,7 +142,7 @@ function textUriListLineLooksLikeLocalImageFile(line: string): boolean {
     return false;
   }
   try {
-    const noHashOrQuery = trimmed.replace(/[?#].*$/, '');
+    const noHashOrQuery = stripUriQueryAndHash(trimmed);
     const path = decodeURIComponent(noHashOrQuery.slice('file://'.length));
     return /\.(png|jpe?g|gif|webp|svg)$/i.test(path);
   } catch {
@@ -165,7 +178,7 @@ export function absoluteImagePathsFromClipboardUriList(dt: DataTransfer): string
     if (!textUriListLineLooksLikeLocalImageFile(raw)) {
       continue;
     }
-    const baseUri = raw.trim().replace(/[?#].*$/, '');
+    const baseUri = stripUriQueryAndHash(raw.trim());
     const abs = fileUriToLocalPath(baseUri);
     if (abs && !seen.has(abs)) {
       seen.add(abs);
@@ -175,76 +188,96 @@ export function absoluteImagePathsFromClipboardUriList(dt: DataTransfer): string
   return out;
 }
 
-/** Synchronous: should we take over paste before the editor ingests `blob:` HTML? */
-export function clipboardDataProbablyHasVaultImage(dt: DataTransfer): boolean {
-  const types = Array.from(dt.types);
-  if (
-    types.some(t => {
-      const x = t.trim().toLowerCase();
-      return (
-        x === 'image/png' ||
-        x === 'image/jpeg' ||
-        x === 'image/jpg' ||
-        x === 'image/gif' ||
-        x === 'image/webp' ||
-        x === 'image/bmp' ||
-        x === 'image/x-png' ||
-        x === 'image/x-ms-bmp' ||
-        x.startsWith('image/')
-      );
-    })
-  ) {
+function clipboardMimeTypesSuggestImage(types: readonly string[]): boolean {
+  return types.some(t => {
+    const x = t.trim().toLowerCase();
+    return (
+      x === 'image/png' ||
+      x === 'image/jpeg' ||
+      x === 'image/jpg' ||
+      x === 'image/gif' ||
+      x === 'image/webp' ||
+      x === 'image/bmp' ||
+      x === 'image/x-png' ||
+      x === 'image/x-ms-bmp' ||
+      x.startsWith('image/')
+    );
+  });
+}
+
+function clipboardHtmlSuggestsVaultImage(html: string): boolean {
+  const {blobUrls, dataImageUrls} = extractClipboardImageUrlsFromHtml(html);
+  if (blobUrls.length > 0 || dataImageUrls.length > 0) {
     return true;
   }
-  const html = dt.getData('text/html');
-  if (html) {
-    const { blobUrls, dataImageUrls } = extractClipboardImageUrlsFromHtml(html);
-    if (blobUrls.length > 0 || dataImageUrls.length > 0) {
+  if (/<img\b/i.test(html)) {
+    const lower = html.toLowerCase();
+    return lower.includes('blob:') || lower.includes('data:image');
+  }
+  return false;
+}
+
+function clipboardUriListSuggestsImage(uriList: string): boolean {
+  for (const raw of uriList.split(/\r?\n/)) {
+    if (textUriListLineLooksLikeLocalImageFile(raw)) {
       return true;
     }
-    // Fallback when HTML clearly embeds an image but DOMParser missed src (edge markup).
-    if (/<img\b/i.test(html)) {
-      const lower = html.toLowerCase();
-      if (lower.includes('blob:') || lower.includes('data:image')) {
-        return true;
-      }
-    }
   }
-  const uriList = dt.getData('text/uri-list')?.trim();
-  if (uriList) {
-    for (const raw of uriList.split(/\r?\n/)) {
-      if (textUriListLineLooksLikeLocalImageFile(raw)) {
-        return true;
-      }
-    }
-  }
+  return false;
+}
+
+function clipboardFileListSuggestsImage(dt: DataTransfer): boolean {
   for (let i = 0; i < dt.files.length; i++) {
     const f = dt.files.item(i);
     if (f && fileMightBeClipboardImageByMeta(f)) {
       return true;
     }
   }
-  if (dt.items) {
-    for (let i = 0; i < dt.items.length; i++) {
-      const item = dt.items[i];
-      const ty = item.type.trim().toLowerCase();
-      if (
-        ty.startsWith('image/') ||
-        ty === 'image/bmp' ||
-        ty === 'image/x-png' ||
-        ty === 'image/x-ms-bmp'
-      ) {
+  return false;
+}
+
+function clipboardDataItemsSuggestImage(dt: DataTransfer): boolean {
+  if (!dt.items) {
+    return false;
+  }
+  for (let i = 0; i < dt.items.length; i++) {
+    const item = dt.items[i];
+    const ty = item.type.trim().toLowerCase();
+    if (
+      ty.startsWith('image/') ||
+      ty === 'image/bmp' ||
+      ty === 'image/x-png' ||
+      ty === 'image/x-ms-bmp'
+    ) {
+      return true;
+    }
+    if (item.kind === 'file') {
+      const f = item.getAsFile();
+      if (f && fileMightBeClipboardImageByMeta(f)) {
         return true;
-      }
-      if (item.kind === 'file') {
-        const f = item.getAsFile();
-        if (f && fileMightBeClipboardImageByMeta(f)) {
-          return true;
-        }
       }
     }
   }
   return false;
+}
+
+/** Synchronous: should we take over paste before the editor ingests `blob:` HTML? */
+export function clipboardDataProbablyHasVaultImage(dt: DataTransfer): boolean {
+  if (clipboardMimeTypesSuggestImage(Array.from(dt.types))) {
+    return true;
+  }
+  const html = dt.getData('text/html');
+  if (html && clipboardHtmlSuggestsVaultImage(html)) {
+    return true;
+  }
+  const uriList = dt.getData('text/uri-list')?.trim();
+  if (uriList && clipboardUriListSuggestsImage(uriList)) {
+    return true;
+  }
+  if (clipboardFileListSuggestsImage(dt)) {
+    return true;
+  }
+  return clipboardDataItemsSuggestImage(dt);
 }
 
 /** `blob:` and `data:image/` src values on `<img>` in pasted HTML. */

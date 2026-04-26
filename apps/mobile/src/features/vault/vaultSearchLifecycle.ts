@@ -26,7 +26,10 @@ export type VaultSearchIndexStatus = {
 export function canonicalizeVaultBaseUriForSearch(raw: string): string {
   let s = raw.trim();
   if (s.length > 1 && s.endsWith('/')) {
-    const withoutTrailing = s.replace(/\/+$/, '');
+    let withoutTrailing = s;
+    while (withoutTrailing.endsWith('/')) {
+      withoutTrailing = withoutTrailing.slice(0, -1);
+    }
     if (withoutTrailing !== '' && !withoutTrailing.endsWith(':')) {
       s = withoutTrailing;
     }
@@ -38,22 +41,36 @@ export function vaultSearchBaseUriHash(canonicalBaseUri: string): string {
   return createHash('sha1').update(canonicalBaseUri, 'utf8').digest('hex');
 }
 
+function parseOptionalBoolean(value: unknown): boolean | undefined {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  return undefined;
+}
+
 export function parseVaultSearchIndexStatus(raw: unknown): VaultSearchIndexStatus | null {
   if (typeof raw !== 'object' || raw === null) {
     return null;
   }
   const o = raw as Record<string, unknown>;
   const schema = o.schemaVersion;
-  const schemaNum =
-    typeof schema === 'number' ? schema : schema != null ? Number(schema) : Number.NaN;
+  let schemaNum = Number.NaN;
+  if (typeof schema === 'number') {
+    schemaNum = schema;
+  } else if (schema != null) {
+    schemaNum = Number(schema);
+  }
   return {
     vaultInstanceId: String(o.vaultInstanceId ?? ''),
     baseUriHash: String(o.baseUriHash ?? ''),
     schemaVersion: Number.isFinite(schemaNum) ? schemaNum : 0,
     indexReady: o.indexReady === true,
     isBuilding: o.isBuilding === true,
-    bodiesIndexReady: o.bodiesIndexReady === true ? true : o.bodiesIndexReady === false ? false : undefined,
-    notesRegistryReady: o.notesRegistryReady === true ? true : o.notesRegistryReady === false ? false : undefined,
+    bodiesIndexReady: parseOptionalBoolean(o.bodiesIndexReady),
+    notesRegistryReady: parseOptionalBoolean(o.notesRegistryReady),
     indexedNotes: Number(o.indexedNotes ?? 0),
     lastFullBuildAt: Number(o.lastFullBuildAt ?? 0),
     lastReconciledAt: Number(o.lastReconciledAt ?? 0),
@@ -85,12 +102,8 @@ export function fullNeedsRebuild(
     return true;
   }
   if (!status.indexReady && !status.isBuilding) {
-    /** Empty DB / never built — full rebuild. */
-    if (!persistedVaultSearchHasRows(status)) {
-      return true;
-    }
-    /** Rows exist but flags say not ready and not building — resume with reconcile, not a wipe. */
-    return false;
+    /** Empty DB / never built — full rebuild; rows exist → resume with reconcile, not a wipe. */
+    return !persistedVaultSearchHasRows(status);
   }
   return false;
 }

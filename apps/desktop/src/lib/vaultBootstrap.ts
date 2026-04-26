@@ -39,6 +39,14 @@ import {
 
 const DESKTOP_R2_HTTP = {transport: desktopR2SignedTransport} as const;
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 export async function bootstrapVaultLayout(
   root: string,
   fs: VaultFilesystem,
@@ -282,11 +290,12 @@ export async function createVaultMarkdownNoteInDirectory(
   const base = normalizeVaultBaseUri(root);
   const parent = assertVaultTreeDirectoryUriForCrud(base, parentDirectoryUri)
     .replace(/\\/g, '/')
-    .replace(/\/+$/, '');
-  if (!(await fs.exists(parent))) {
-    await fs.mkdir(parent);
+    .trim();
+  const normalizedParent = trimTrailingSlashes(parent);
+  if (!(await fs.exists(normalizedParent))) {
+    await fs.mkdir(normalizedParent);
   }
-  const rows = await fs.listFiles(parent);
+  const rows = await fs.listFiles(normalizedParent);
   const occupied = new Set(
     rows
       .filter(
@@ -298,7 +307,7 @@ export async function createVaultMarkdownNoteInDirectory(
   );
   const stem = sanitizeFileName(title);
   const fileName = pickNextInboxMarkdownFileName(stem, occupied);
-  const uri = `${parent}/${fileName}`;
+  const uri = `${normalizedParent}/${fileName}`;
   await fs.writeFile(uri, markdownBody, {
     encoding: 'utf8',
     mimeType: 'text/markdown',
@@ -409,7 +418,8 @@ export async function moveVaultTreeItemToDirectory(
 ): Promise<MoveVaultTreeItemResult> {
   const normTarget = assertVaultTreeDirectoryUriForCrud(root, options.targetDirectoryUri)
     .replace(/\\/g, '/')
-    .replace(/\/+$/, '');
+    .trim();
+  const normalizedTarget = trimTrailingSlashes(normTarget);
 
   let normalizedSource: string;
   let movedKind: 'folder' | 'article';
@@ -417,19 +427,20 @@ export async function moveVaultTreeItemToDirectory(
     normalizedSource = assertVaultMarkdownNoteUriForCrud(root, options.sourceUri);
     movedKind = 'article';
   } else {
-    normalizedSource = assertVaultTreeDirectoryUriForCrud(
+    const rawSource = assertVaultTreeDirectoryUriForCrud(
       root,
       options.sourceUri,
-    ).replace(/\\/g, '/').replace(/\/+$/, '');
+    ).replace(/\\/g, '/').trim();
+    normalizedSource = trimTrailingSlashes(rawSource);
     movedKind = 'folder';
   }
 
-  if (movedKind === 'folder' && normTarget === normalizedSource) {
+  if (movedKind === 'folder' && normalizedTarget === normalizedSource) {
     return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};
   }
 
   const baseName = normalizedSource.split('/').pop() ?? '';
-  const nextUri = `${normTarget}/${baseName}`;
+  const nextUri = `${normalizedTarget}/${baseName}`;
 
   if (nextUri === normalizedSource) {
     return {previousUri: normalizedSource, nextUri: normalizedSource, movedKind};

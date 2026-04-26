@@ -75,6 +75,21 @@ export function EditorWorkspaceToolbar({
 }: EditorWorkspaceToolbarProps) {
   const showPlaybackChrome =
     !composingNewEntry && playbackTransport != null && nowPlaying != null;
+  let toolbarCenter = null;
+  if (composingNewEntry) {
+    toolbarCenter = (
+      <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
+        {editorPaneTitle}
+      </span>
+    );
+  } else if (showPlaybackChrome) {
+    toolbarCenter = (
+      <>
+        <span className="editor-workspace-toolbar__playback-gap" aria-hidden />
+        <PlaybackTransport {...playbackTransport} variant="toolbar" />
+      </>
+    );
+  }
 
   return (
     <div
@@ -148,16 +163,7 @@ export function EditorWorkspaceToolbar({
             <ChevronRightIcon {...EDITOR_TOOLBAR_ICON_DIM} />
           </span>
         </button>
-        {composingNewEntry ? (
-          <span className="pane-title pane-title--truncate" title={editorPaneTitle}>
-            {editorPaneTitle}
-          </span>
-        ) : showPlaybackChrome ? (
-          <>
-            <span className="editor-workspace-toolbar__playback-gap" aria-hidden />
-            <PlaybackTransport {...playbackTransport} variant="toolbar" />
-          </>
-        ) : null}
+        {toolbarCenter}
       </div>
       {showPlaybackChrome ? (
         <p

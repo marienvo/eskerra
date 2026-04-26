@@ -47,23 +47,19 @@ export function todayHubStaticRichTextPointerHitsVisibleLinkToken(
  * WebKitGTK may return null from `caretRangeFromPoint`/`caretPositionFromPoint` even on plain text.
  * Find the nearest collapsed-range rect (caret position) inside `lineEl` to the click point.
  */
-function localOffsetInLineFromCaretGeometry(
+type CaretGeometryScan = {
+  bestDist: number;
+  bestOffset: number;
+  base: number;
+  maxRight: number;
+};
+
+function scanLineTextRectsForNearestCaret(
+  doc: Document,
   lineEl: HTMLElement,
   clientX: number,
   clientY: number,
-): number | null {
-  const doc = lineEl.ownerDocument;
-  const bounds = lineEl.getBoundingClientRect();
-  const pad = 6;
-  if (
-    clientX < bounds.left - pad
-    || clientX > bounds.right + pad
-    || clientY < bounds.top - pad
-    || clientY > bounds.bottom + pad
-  ) {
-    return null;
-  }
-
+): CaretGeometryScan | null {
   let bestDist = Infinity;
   let bestOffset = 0;
   let base = 0;
@@ -100,6 +96,31 @@ function localOffsetInLineFromCaretGeometry(
   if (bestDist === Infinity) {
     return null;
   }
+  return {bestDist, bestOffset, base, maxRight};
+}
+
+function localOffsetInLineFromCaretGeometry(
+  lineEl: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number | null {
+  const doc = lineEl.ownerDocument;
+  const bounds = lineEl.getBoundingClientRect();
+  const pad = 6;
+  if (
+    clientX < bounds.left - pad
+    || clientX > bounds.right + pad
+    || clientY < bounds.top - pad
+    || clientY > bounds.bottom + pad
+  ) {
+    return null;
+  }
+
+  const scan = scanLineTextRectsForNearestCaret(doc, lineEl, clientX, clientY);
+  if (!scan) {
+    return null;
+  }
+  const {bestOffset, base, maxRight} = scan;
   if (Number.isFinite(maxRight) && clientX > maxRight + TRAILING_WHITESPACE_HIT_SLACK_PX) {
     return base;
   }
@@ -139,13 +160,12 @@ function localOffsetInLineFromCaretRange(
   return pre.toString().length;
 }
 
-/** Local UTF-16 offset within `root` (sum of text-node lengths under root). Legacy: needs TEXT_NODE hits. */
-function utf16OffsetFromPointerLegacy(
+function legacyCaretTextHit(
+  doc: Document,
   root: HTMLElement,
   clientX: number,
   clientY: number,
-): number | null {
-  const doc = root.ownerDocument;
+): {offsetNode: Text; offset: number} | null {
   let offsetNode: Node | null = null;
   let offset = 0;
 
@@ -168,6 +188,21 @@ function utf16OffsetFromPointerLegacy(
   if (offsetNode == null || offsetNode.nodeType !== Node.TEXT_NODE) {
     return null;
   }
+  return {offsetNode: offsetNode as Text, offset};
+}
+
+/** Local UTF-16 offset within `root` (sum of text-node lengths under root). Legacy: needs TEXT_NODE hits. */
+function utf16OffsetFromPointerLegacy(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number | null {
+  const doc = root.ownerDocument;
+  const hit = legacyCaretTextHit(doc, root, clientX, clientY);
+  if (!hit) {
+    return null;
+  }
+  const {offsetNode, offset} = hit;
   let total = 0;
   const tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;

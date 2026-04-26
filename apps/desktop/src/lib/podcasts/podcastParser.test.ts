@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {parsePieNoteEpisodes} from './podcastParser';
+import {isPodcastFile, parsePieNoteEpisodes} from './podcastParser';
 
 const FILE_NAME = '📻 OVT.md';
 const SERIES = 'OVT';
@@ -7,6 +7,13 @@ const SERIES = 'OVT';
 function buildContent(body: string): string {
   return `---\nrssFeedUrl: "https://example.com/feed.xml"\n---\n\n${body}`;
 }
+
+describe('isPodcastFile', () => {
+  it('accepts flexible whitespace around the podcasts suffix', () => {
+    expect(isPodcastFile('2026 My Show  - podcasts.md', 2026)).toBe(true);
+    expect(isPodcastFile('2026\tMy Show - podcasts.md', 2026)).toBe(true);
+  });
+});
 
 describe('parsePieNoteEpisodes', () => {
   it('returns [] for empty content', () => {

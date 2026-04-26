@@ -66,7 +66,7 @@ export function useVaultThemes({vaultRoot, fs}: UseVaultThemesParams): {
     }
     let cancelled = false;
     let unlisten: (() => void) | undefined;
-    void listen<VaultFilesChangedPayload>('vault-files-changed', event => {
+    listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const paths = event.payload?.paths ?? [];
       const coarse = vaultFilesChangedIsCoarse(event.payload);
       if (!coarse && !themesDirHit(vaultRoot, paths)) {

@@ -1,6 +1,6 @@
-import {useCallback, useEffect, useState} from 'react';
-import {InteractionManager} from 'react-native';
+import {useCallback, useEffect, useState, type Dispatch, type SetStateAction} from 'react';
 
+import {runAfterInteractions} from '../../../core/scheduling/afterInteractions';
 import {
   clearPlaylist,
   listGeneralMarkdownFiles,
@@ -38,6 +38,44 @@ function backgroundGeneralReconcileDelayMs(): number {
   return 6000;
 }
 
+async function runBackgroundReconcile(
+  baseUri: string,
+  indexSignature: string,
+  setAllEpisodes: (episodes: PodcastEpisode[]) => void,
+  setSections: (sections: PodcastSection[]) => void,
+): Promise<void> {
+  const full = await listGeneralMarkdownFiles(baseUri);
+  const subset = filterPodcastRelevantGeneralMarkdownFiles(full);
+  await savePersistedPodcastMarkdownIndex(baseUri, subset);
+  if (podcastMarkdownIndexSignature(subset) === indexSignature) {
+    return;
+  }
+
+  const {podcastFiles: freshPodcastFiles, rssFeedFiles: freshRssFiles} =
+    splitPodcastAndRssMarkdownFiles(subset);
+  const rebuilt = await buildPodcastSectionsFromPodcastMarkdownFiles(
+    baseUri,
+    freshPodcastFiles,
+  );
+  primeArtworkForEpisodesAndSections(
+    baseUri,
+    rebuilt.nextAllEpisodes,
+    rebuilt.nextSections,
+  );
+  setAllEpisodes(rebuilt.nextAllEpisodes);
+  setSections(rebuilt.nextSections);
+
+  if (freshRssFiles.length > 0) {
+    await runRssMarkdownEnrichment(
+      baseUri,
+      rebuilt.nextAllEpisodes,
+      freshRssFiles,
+      setAllEpisodes,
+      setSections,
+    );
+  }
+}
+
 type UsePodcastsResult = {
   allEpisodes: PodcastEpisode[];
   applyOptimisticEpisodePlayed: (episodeId: string) => boolean;
@@ -47,6 +85,102 @@ type UsePodcastsResult = {
   refresh: (options?: RefreshPodcastsOptions) => Promise<void>;
   sections: PodcastSection[];
 };
+
+async function runPlaylistHousekeeping(
+  baseUri: string,
+  knownEpisodeIds: Set<string>,
+  renderedEpisodes: PodcastEpisode[],
+): Promise<void> {
+  const playlistEntry = await readPlaylistCoalesced(baseUri);
+  if (!playlistEntry) {
+    return;
+  }
+  if (!knownEpisodeIds.has(playlistEntry.episodeId)) {
+    await clearPlaylist(baseUri);
+    return;
+  }
+  const catalogEpisode = renderedEpisodes.find(ep => ep.id === playlistEntry.episodeId);
+  if (catalogEpisode?.isListened) {
+    await clearPlaylist(baseUri);
+  }
+}
+
+function scheduleDeferredBackgroundReconcile(
+  baseUri: string,
+  indexSignature: string,
+  setAllEpisodes: Dispatch<SetStateAction<PodcastEpisode[]>>,
+  setSections: Dispatch<SetStateAction<PodcastSection[]>>,
+): void {
+  const runReconcile = () => {
+    runBackgroundReconcile(baseUri, indexSignature, setAllEpisodes, setSections).catch(
+      () => undefined,
+    );
+  };
+  const delayMs = backgroundGeneralReconcileDelayMs();
+  if (delayMs === 0) {
+    setTimeout(runReconcile, 0);
+  } else {
+    runAfterInteractions(() => {
+      setTimeout(runReconcile, delayMs);
+    });
+  }
+}
+
+type CatalogRefreshPostPhase = {
+  knownEpisodeIds: Set<string> | null;
+  renderedEpisodes: PodcastEpisode[] | null;
+  rssFeedFiles: RootMarkdownFile[];
+};
+
+async function loadCatalogFromPhase1(
+  baseUri: string,
+  options: RefreshPodcastsOptions | undefined,
+  setError: Dispatch<SetStateAction<string | null>>,
+  setAllEpisodes: Dispatch<SetStateAction<PodcastEpisode[]>>,
+  setSections: Dispatch<SetStateAction<PodcastSection[]>>,
+): Promise<CatalogRefreshPostPhase> {
+  const bootstrapPayload = takePodcastBootstrapPayload(baseUri);
+  const phase1 =
+    bootstrapPayload != null
+      ? {
+          allEpisodes: bootstrapPayload.allEpisodes,
+          didFullVaultListingThisRefresh: bootstrapPayload.didFullVaultListingThisRefresh,
+          error: bootstrapPayload.error,
+          podcastRelevantFiles: bootstrapPayload.podcastRelevantFiles,
+          rssFeedFiles: bootstrapPayload.rssFeedFiles,
+          sections: bootstrapPayload.sections,
+        }
+      : await runPodcastPhase1(baseUri, options);
+
+  try {
+    if (phase1.error) {
+      setError(phase1.error);
+      setAllEpisodes([]);
+      setSections([]);
+      return {knownEpisodeIds: null, renderedEpisodes: null, rssFeedFiles: []};
+    }
+
+    setAllEpisodes(phase1.allEpisodes);
+    setSections(phase1.sections);
+    const renderedEpisodes = phase1.allEpisodes;
+    const knownEpisodeIds = new Set(phase1.allEpisodes.map(episode => episode.id));
+    const rssFeedFiles = phase1.rssFeedFiles;
+
+    const indexSignature = podcastMarkdownIndexSignature(phase1.podcastRelevantFiles);
+
+    if (!phase1.didFullVaultListingThisRefresh) {
+      scheduleDeferredBackgroundReconcile(baseUri, indexSignature, setAllEpisodes, setSections);
+    }
+
+    return {knownEpisodeIds, renderedEpisodes, rssFeedFiles};
+  } catch (loadError) {
+    const fallbackMessage = 'Could not load podcasts from vault.';
+    setError(loadError instanceof Error ? loadError.message : fallbackMessage);
+    setAllEpisodes([]);
+    setSections([]);
+    return {knownEpisodeIds: null, renderedEpisodes: null, rssFeedFiles: []};
+  }
+}
 
 export function usePodcasts(): UsePodcastsResult {
   const {baseUri, notifyPlaylistSyncAfterVaultRefresh} = useVaultContext();
@@ -75,95 +209,23 @@ export function usePodcasts(): UsePodcastsResult {
       let renderedEpisodes: PodcastEpisode[] | null = null;
       let rssFeedFiles: RootMarkdownFile[] = [];
 
-      const bootstrapPayload = takePodcastBootstrapPayload(baseUri);
-      const phase1 =
-        bootstrapPayload != null
-          ? {
-              allEpisodes: bootstrapPayload.allEpisodes,
-              didFullVaultListingThisRefresh: bootstrapPayload.didFullVaultListingThisRefresh,
-              error: bootstrapPayload.error,
-              podcastRelevantFiles: bootstrapPayload.podcastRelevantFiles,
-              rssFeedFiles: bootstrapPayload.rssFeedFiles,
-              sections: bootstrapPayload.sections,
-            }
-          : await runPodcastPhase1(baseUri, options);
-
       try {
-        if (phase1.error) {
-          setError(phase1.error);
-          setAllEpisodes([]);
-          setSections([]);
-        } else {
-          setAllEpisodes(phase1.allEpisodes);
-          setSections(phase1.sections);
-          renderedEpisodes = phase1.allEpisodes;
-          knownEpisodeIds = new Set(phase1.allEpisodes.map(episode => episode.id));
-          rssFeedFiles = phase1.rssFeedFiles;
-
-          const indexSignature = podcastMarkdownIndexSignature(phase1.podcastRelevantFiles);
-
-          if (!phase1.didFullVaultListingThisRefresh) {
-            const runReconcile = () => {
-              (async () => {
-                try {
-                  const full = await listGeneralMarkdownFiles(baseUri);
-                  const subset = filterPodcastRelevantGeneralMarkdownFiles(full);
-                  await savePersistedPodcastMarkdownIndex(baseUri, subset);
-                  if (podcastMarkdownIndexSignature(subset) === indexSignature) {
-                    return;
-                  }
-
-                  const {podcastFiles: freshPodcastFiles, rssFeedFiles: freshRssFiles} =
-                    splitPodcastAndRssMarkdownFiles(subset);
-                  const rebuilt = await buildPodcastSectionsFromPodcastMarkdownFiles(
-                    baseUri,
-                    freshPodcastFiles,
-                  );
-                  primeArtworkForEpisodesAndSections(
-                    baseUri,
-                    rebuilt.nextAllEpisodes,
-                    rebuilt.nextSections,
-                  );
-                  setAllEpisodes(rebuilt.nextAllEpisodes);
-                  setSections(rebuilt.nextSections);
-
-                  if (freshRssFiles.length > 0) {
-                    await runRssMarkdownEnrichment(
-                      baseUri,
-                      rebuilt.nextAllEpisodes,
-                      freshRssFiles,
-                      setAllEpisodes,
-                      setSections,
-                    );
-                  }
-                } catch {
-                  /* ignore background reconcile errors */
-                }
-              })().catch(() => undefined);
-            };
-            const delayMs = backgroundGeneralReconcileDelayMs();
-            if (delayMs === 0) {
-              setTimeout(runReconcile, 0);
-            } else {
-              InteractionManager.runAfterInteractions(() => {
-                setTimeout(runReconcile, delayMs);
-              });
-            }
-          }
-        }
-      } catch (loadError) {
-        const fallbackMessage = 'Could not load podcasts from vault.';
-        setError(loadError instanceof Error ? loadError.message : fallbackMessage);
-        setAllEpisodes([]);
-        setSections([]);
+        const outcome = await loadCatalogFromPhase1(
+          baseUri,
+          options,
+          setError,
+          setAllEpisodes,
+          setSections,
+        );
+        knownEpisodeIds = outcome.knownEpisodeIds;
+        renderedEpisodes = outcome.renderedEpisodes;
+        rssFeedFiles = outcome.rssFeedFiles;
       } finally {
         setCatalogReady(true);
         setIsLoading(false);
       }
 
-      if (baseUri) {
-        notifyPlaylistSyncAfterVaultRefresh();
-      }
+      notifyPlaylistSyncAfterVaultRefresh();
 
       if (!knownEpisodeIds) {
         return;
@@ -179,26 +241,7 @@ export function usePodcasts(): UsePodcastsResult {
         ).catch(() => undefined);
       }
 
-      const runPlaylistHousekeeping = async () => {
-        const playlistEntry = await readPlaylistCoalesced(baseUri);
-        if (!playlistEntry) {
-          return;
-        }
-
-        if (!knownEpisodeIds!.has(playlistEntry.episodeId)) {
-          await clearPlaylist(baseUri);
-          return;
-        }
-
-        const catalogEpisode = renderedEpisodes!.find(
-          episode => episode.id === playlistEntry.episodeId,
-        );
-        if (catalogEpisode?.isListened) {
-          await clearPlaylist(baseUri);
-        }
-      };
-
-      runPlaylistHousekeeping().catch(() => undefined);
+      runPlaylistHousekeeping(baseUri, knownEpisodeIds, renderedEpisodes ?? []).catch(() => undefined);
     },
     [baseUri, notifyPlaylistSyncAfterVaultRefresh],
   );

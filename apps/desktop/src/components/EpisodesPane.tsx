@@ -45,6 +45,38 @@ function MusicNotePlaceholderIcon(): ReactElement {
   );
 }
 
+function buildEpisodeRowClassName(
+  isActive: boolean,
+  playCtl: PlaybackTransportPlayControl | null,
+): string {
+  return [
+    'episode-row',
+    isActive ? 'episode-row--active' : '',
+    isActive && playCtl === 'playing' ? 'episode-row--playing' : '',
+    isActive && (playCtl === 'loading' || playCtl === 'buffering')
+      ? 'episode-row--buffering'
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function episodeRowStatusLabel(
+  isActive: boolean,
+  playCtl: PlaybackTransportPlayControl | null,
+): string | null {
+  if (isActive && playCtl === 'playing') {
+    return 'Playing';
+  }
+  if (isActive && (playCtl === 'loading' || playCtl === 'buffering')) {
+    return 'Buffering';
+  }
+  if (isActive && playCtl === 'paused') {
+    return 'Paused';
+  }
+  return null;
+}
+
 type EpisodeListRowProps = {
   ep: PodcastEpisode;
   sectionRssFeedUrl?: string;
@@ -74,25 +106,8 @@ function EpisodeListRow({
   const isActive = activeEpisodeId === ep.id;
   const playCtl = isActive ? activeEpisodePlayControl : null;
 
-  const rowClass = [
-    'episode-row',
-    isActive ? 'episode-row--active' : '',
-    isActive && playCtl === 'playing' ? 'episode-row--playing' : '',
-    isActive && (playCtl === 'loading' || playCtl === 'buffering')
-      ? 'episode-row--buffering'
-      : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  const statusLabel =
-    isActive && playCtl === 'playing'
-      ? 'Playing'
-      : isActive && (playCtl === 'loading' || playCtl === 'buffering')
-        ? 'Buffering'
-        : isActive && playCtl === 'paused'
-          ? 'Paused'
-          : null;
+  const rowClass = buildEpisodeRowClassName(isActive, playCtl);
+  const statusLabel = episodeRowStatusLabel(isActive, playCtl);
 
   const markPlayedDisabled =
     ep.isListened || episodeSelectLocked;
@@ -227,6 +242,14 @@ export function EpisodesPane({
     rssSyncPercent <= 100
       ? rssSyncPercent
       : null;
+  const refreshStripFill = determinateRssPercent != null
+    ? (
+      <div
+        className="episodes-refresh-strip__fill"
+        style={{width: `${determinateRssPercent}%`}}
+      />
+      )
+    : <div className="episodes-refresh-strip__segment" />;
 
   return (
     <div className="panel-surface episodes-pane-root" data-app-surface="consume">
@@ -258,16 +281,7 @@ export function EpisodesPane({
         }
         aria-hidden
       >
-        {refreshStripVisible ? (
-          determinateRssPercent != null ? (
-            <div
-              className="episodes-refresh-strip__fill"
-              style={{width: `${determinateRssPercent}%`}}
-            />
-          ) : (
-            <div className="episodes-refresh-strip__segment" />
-          )
-        ) : null}
+        {refreshStripVisible ? refreshStripFill : null}
       </div>
       <div className="episode-scroll">
         {sections.map(section => (

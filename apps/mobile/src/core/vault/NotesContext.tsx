@@ -7,10 +7,9 @@ import {
   useMemo,
   useState,
 } from 'react';
-import {InteractionManager} from 'react-native';
-
-import {resolveTodayHubPrefetchUrisForSession} from '../storage/sessionTodayHubPrefetch';
+import {runAfterInteractions} from '../scheduling/afterInteractions';
 import {tryPrepareEskerraSessionNative} from '../storage/androidVaultListing';
+import {resolveTodayHubPrefetchUrisForSession} from '../storage/sessionTodayHubPrefetch';
 import {touchMarkdownNoteUris, touchVaultSearchNoteUris} from '../../native/eskerraVaultSearch';
 import {
   createNote,
@@ -187,7 +186,7 @@ export function NotesProvider({children}: NotesProviderProps) {
       touchMarkdownNoteUris(baseUri, [createdNote.uri]).catch(() => undefined);
       scheduleDebouncedVaultMarkdownRefsRefresh();
       setNotes(previousNotes => mergeInboxNoteOptimistic(previousNotes, createdNote));
-      InteractionManager.runAfterInteractions(() => {
+      runAfterInteractions(() => {
         refresh({silent: true}).catch(() => undefined);
       });
       return createdNote;
@@ -248,7 +247,10 @@ export function NotesProvider({children}: NotesProviderProps) {
         );
       }
 
-      const normalizedBaseUri = baseUri.trim().replace(/\/+$/, '');
+      let normalizedBaseUri = baseUri.trim();
+      while (normalizedBaseUri.endsWith('/')) {
+        normalizedBaseUri = normalizedBaseUri.slice(0, -1);
+      }
       const canonicalDeleteUris = canonicalNotes.map(
         note => `${normalizedBaseUri}/Inbox/${note.name}`,
       );
@@ -263,7 +265,7 @@ export function NotesProvider({children}: NotesProviderProps) {
       setNotes(previousNotes =>
         previousNotes.filter(note => !removedUris.has(note.uri)),
       );
-      InteractionManager.runAfterInteractions(() => {
+      runAfterInteractions(() => {
         refresh({silent: true}).catch(() => undefined);
       });
     },

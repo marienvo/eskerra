@@ -185,7 +185,7 @@ export async function ensureLinkRichPreview(url: string): Promise<LinkRichCacheE
 
 /** Fire-and-forget wrapper for rendering code that doesn't need to await the result. */
 export function prefetchLinkRichPreview(url: string): void {
-  void ensureLinkRichPreview(url).catch(() => {
+  ensureLinkRichPreview(url).catch(() => {
     /* entry already recorded as error */
   });
 }

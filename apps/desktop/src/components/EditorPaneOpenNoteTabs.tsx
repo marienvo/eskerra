@@ -1,5 +1,5 @@
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import {isTauri} from '@tauri-apps/api/core';
+import {isDesktopTauriHost} from '../lib/desktopTauriWindow';
 import {Cross2Icon, DashboardIcon, ReaderIcon} from '@radix-ui/react-icons';
 import {
   memo,
@@ -29,7 +29,7 @@ const TAB_PILL_ICON_DIM = {
 const DRAG_THRESHOLD_PX = 6;
 
 function TitleBarTabStripDragFiller() {
-  const tauri = isTauri();
+  const tauri = isDesktopTauriHost();
   return (
     <div
       className="editor-open-tabs-titlebar-drag-filler"

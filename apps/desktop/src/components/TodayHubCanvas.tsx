@@ -50,6 +50,10 @@ import {
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
 import {todayHubPerfEnabled, todayHubPerfLog} from '../lib/todayHub/todayHubPerf';
 import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
+import {
+  todayHubCanvasCellSurface,
+  todayHubCanvasCellWarmOrActive,
+} from '../lib/todayHub/todayHubCanvasCellLayout';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -182,14 +186,14 @@ function TodayHubCanvasNonEmptyCell({
     };
   }, [editing, isWarm, canPrewarm]);
 
-  const cmHostClass =
-    editing
-      ? `today-hub-canvas__cm-host today-hub-canvas__cm-host--editing${
-          cmSurfaceReady ? ' today-hub-canvas__cm-host--surface-ready' : ''
-        }`
-      : warmOrActive
-        ? 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay'
-        : 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant';
+  let cmHostClass = 'today-hub-canvas__cm-host today-hub-canvas__cell-hub-underlay--dormant';
+  if (editing) {
+    cmHostClass = `today-hub-canvas__cm-host today-hub-canvas__cm-host--editing${
+      cmSurfaceReady ? ' today-hub-canvas__cm-host--surface-ready' : ''
+    }`;
+  } else if (warmOrActive) {
+    cmHostClass = 'today-hub-canvas__cm-host today-hub-canvas__cell-warm-underlay';
+  }
 
   const readonlyClassNames = [
     'today-hub-canvas__cell-readonly',
@@ -214,6 +218,65 @@ function TodayHubCanvasNonEmptyCell({
       </div>
     </div>
   );
+}
+
+function scheduleHubCellFocusWithPointerCaret(
+  apply: () => void,
+  pendingGenMatches: () => boolean,
+): void {
+  queueMicrotask(() => {
+    apply();
+    if (!pendingGenMatches()) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      apply();
+      if (!pendingGenMatches()) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        apply();
+      });
+    });
+  });
+}
+
+function scheduleHubCellFocusKeyboardRaf(apply: () => void, pendingGenMatches: () => boolean): void {
+  apply();
+  if (pendingGenMatches()) {
+    requestAnimationFrame(() => {
+      apply();
+    });
+  }
+}
+
+function runHubWarmPointerEnter(
+  canPrewarm: boolean,
+  warmKey: string,
+  warmOrder: readonly string[],
+  uri: string,
+  ci: number,
+  hubWarmDeferGenRef: MutableRefObject<Record<string, number>>,
+  touchWarmForCell: (u: string, c: number) => void,
+): void {
+  if (!canPrewarm) {
+    return;
+  }
+  if (warmOrder.includes(warmKey)) {
+    touchWarmForCell(uri, ci);
+    return;
+  }
+  const genMap = hubWarmDeferGenRef.current;
+  genMap[warmKey] = (genMap[warmKey] ?? 0) + 1;
+  const deferGen = genMap[warmKey]!;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (hubWarmDeferGenRef.current[warmKey] !== deferGen) {
+        return;
+      }
+      touchWarmForCell(uri, ci);
+    });
+  });
 }
 
 export function TodayHubCanvas({
@@ -498,7 +561,7 @@ export function TodayHubCanvas({
       };
       if (hubFlushWouldAwait) {
         const flushT0 = todayHubPerfEnabled() ? performance.now() : 0;
-        void flushScheduledPersist().then(() => {
+        flushScheduledPersist().then(() => {
           if (todayHubPerfEnabled()) {
             todayHubPerfLog('openCell_after_flush', {
               flushMs: performance.now() - flushT0,
@@ -557,27 +620,11 @@ export function TodayHubCanvas({
     // Pointer caret: sync `focus({anchor})` in this layout pass misaligns vs static rich text (see spec).
     // H1: try `queueMicrotask` first (after all layout effects flush, before paint) to avoid a full
     // frame wait; fall back to the prior rAF chain when the editor ref is not ready.
+    const genStillPending = () => pendingHubCellFocusRef.current?.gen === gen;
     if (caret != null) {
-      queueMicrotask(() => {
-        applyHubCellFocus();
-        if (pendingHubCellFocusRef.current?.gen === gen) {
-          requestAnimationFrame(() => {
-            applyHubCellFocus();
-            if (pendingHubCellFocusRef.current?.gen === gen) {
-              requestAnimationFrame(() => {
-                applyHubCellFocus();
-              });
-            }
-          });
-        }
-      });
+      scheduleHubCellFocusWithPointerCaret(applyHubCellFocus, genStillPending);
     } else {
-      applyHubCellFocus();
-      if (pendingHubCellFocusRef.current?.gen === gen) {
-        requestAnimationFrame(() => {
-          applyHubCellFocus();
-        });
-      }
+      scheduleHubCellFocusKeyboardRaf(applyHubCellFocus, genStillPending);
     }
   }, [active, cellEditorRef]);
 
@@ -779,12 +826,19 @@ export function TodayHubCanvas({
                 </div>
               </div>
               <div className="today-hub-canvas__row-cells">
-                {sections.map((chunk, ci) => {
+                {sections.map(
+                  // eslint-disable-next-line sonarjs/cognitive-complexity -- warm/CM/static cell stack; empty vs non-empty split via todayHubCanvasCellLayout + TodayHubCanvasNonEmptyCell
+                  (chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
                   const warmKey = hubCellWarmKey(uri, ci);
                   const canPrewarm = chunk.trim().length > 0;
                   const isWarm = canPrewarm && warmOrder.includes(warmKey);
-                  const emptyReadonly = !editing && !isWarm && !chunk.trim();
+                  const surface = todayHubCanvasCellSurface({
+                    editing,
+                    isWarm,
+                    chunkTrimmedLength: chunk.trim().length,
+                  });
+                  const emptyReadonly = surface === 'empty-readonly';
                   const relResolved =
                     relativeMarkdownLinkHrefIsResolvedByRowUri.get(uri)!;
                   const wikiResolved =
@@ -795,25 +849,15 @@ export function TodayHubCanvas({
                     tabIndex: 0 as const,
                     'aria-label': chunk.trim() ? undefined : 'Edit cell',
                     onPointerEnter: () => {
-                      if (canPrewarm) {
-                        if (warmOrder.includes(warmKey)) {
-                          touchWarmForCell(uri, ci);
-                        } else {
-                          hubWarmDeferGenRef.current[warmKey] =
-                            (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
-                          const deferGen = hubWarmDeferGenRef.current[warmKey];
-                          requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                              if (
-                                hubWarmDeferGenRef.current[warmKey] !== deferGen
-                              ) {
-                                return;
-                              }
-                              touchWarmForCell(uri, ci);
-                            });
-                          });
-                        }
-                      }
+                      runHubWarmPointerEnter(
+                        canPrewarm,
+                        warmKey,
+                        warmOrder,
+                        uri,
+                        ci,
+                        hubWarmDeferGenRef,
+                        touchWarmForCell,
+                      );
                     },
                     onPointerLeave: () => {
                       hubWarmDeferGenRef.current[warmKey] =
@@ -907,8 +951,8 @@ export function TodayHubCanvas({
                     />
                   );
 
-                  const warmOrActive = editing || isWarm;
-                  const showCm = warmOrActive || editing;
+                  const warmOrActive = todayHubCanvasCellWarmOrActive(editing, isWarm);
+                  const showCm = warmOrActive;
 
                   return (
                     <div

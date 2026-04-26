@@ -18,6 +18,10 @@ const SEARCHING_STATUS_VISIBLE_DELAY_MS = 100;
 /** After a new run starts, keep prior notes on screen this long if the backend is still quiet (gap smoothing). */
 const PREVIOUS_RESULTS_HOLD_MS = 100;
 
+function ignoreVaultSearchCancelError(): undefined {
+  return undefined;
+}
+
 export function isVaultSearchEventCurrent(
   payloadSearchId: string,
   currentId: string | null,
@@ -80,6 +84,31 @@ export function useVaultContentSearch({
     }
   }, []);
 
+  const queueMicrotaskSetHoldingFalse = useCallback(() => {
+    queueMicrotask(() => {
+      setHoldingPreviousResults(false);
+    });
+  }, []);
+
+  const queueMicrotaskSetHoldingTrue = useCallback(() => {
+    queueMicrotask(() => {
+      setHoldingPreviousResults(true);
+    });
+  }, []);
+
+  const queueMicrotaskSetAwaitingDebouncedRunFalse = useCallback(() => {
+    queueMicrotask(() => {
+      setAwaitingDebouncedRun(false);
+    });
+  }, []);
+
+  const onVaultSearchStartFailed = useCallback(() => {
+    searchIdRef.current = null;
+    clearResultHoldTimer();
+    queueMicrotaskSetHoldingFalse();
+    setScanDone(true);
+  }, [clearResultHoldTimer, queueMicrotaskSetHoldingFalse]);
+
   useEffect(() => {
     queryRef.current = query;
   }, [query]);
@@ -140,7 +169,7 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      vaultSearchCancel().catch(() => undefined);
     }
   }, [open, resetLocal]);
 
@@ -170,41 +199,44 @@ export function useVaultContentSearch({
       });
     };
 
+    function onVaultSearchUpdate(event: {payload: VaultSearchUpdatePayload}) {
+      const p = event.payload;
+      if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
+        return;
+      }
+      clearResultHoldTimer();
+      queueMicrotaskSetHoldingFalse();
+      pendingFlushNotesRef.current = [...p.notes];
+      pendingProgressRef.current = p.progress;
+      scheduleNotesFlush();
+    }
+
+    function onVaultSearchDone(event: {payload: VaultSearchDonePayload}) {
+      const p = event.payload;
+      if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
+        return;
+      }
+      clearResultHoldTimer();
+      queueMicrotaskSetHoldingFalse();
+      cancelNotesFlushRaf();
+      setNotes([...pendingFlushNotesRef.current]);
+      setProgress(p.progress);
+      setScanDone(true);
+    }
+
     void (async () => {
       unlistenUpdate = await listen<VaultSearchUpdatePayload>(
         'vault-search:update',
-        event => {
-          const p = event.payload;
-          if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
-            return;
-          }
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          pendingFlushNotesRef.current = [...p.notes];
-          pendingProgressRef.current = p.progress;
-          scheduleNotesFlush();
-        },
+        onVaultSearchUpdate,
       );
       if (cancelled) {
         unlistenUpdate();
         return;
       }
-      unlistenDone = await listen<VaultSearchDonePayload>('vault-search:done', event => {
-        const p = event.payload;
-        if (!isVaultSearchEventCurrent(p.searchId, searchIdRef.current)) {
-          return;
-        }
-        clearResultHoldTimer();
-        queueMicrotask(() => {
-          setHoldingPreviousResults(false);
-        });
-        cancelNotesFlushRaf();
-        setNotes([...pendingFlushNotesRef.current]);
-        setProgress(p.progress);
-        setScanDone(true);
-      });
+      unlistenDone = await listen<VaultSearchDonePayload>(
+        'vault-search:done',
+        onVaultSearchDone,
+      );
     })();
     return () => {
       cancelled = true;
@@ -213,7 +245,13 @@ export function useVaultContentSearch({
       unlistenUpdate?.();
       unlistenDone?.();
     };
-  }, [open, vaultRoot, cancelNotesFlushRaf, clearResultHoldTimer]);
+  }, [
+    open,
+    vaultRoot,
+    cancelNotesFlushRaf,
+    clearResultHoldTimer,
+    queueMicrotaskSetHoldingFalse,
+  ]);
 
   useEffect(() => {
     if (!open || !vaultRoot) {
@@ -229,7 +267,7 @@ export function useVaultContentSearch({
       queueMicrotask(() => {
         resetLocal();
       });
-      void vaultSearchCancel().catch(() => undefined);
+      vaultSearchCancel().catch(() => undefined);
       return;
     }
 
@@ -239,7 +277,7 @@ export function useVaultContentSearch({
       setHoldingPreviousResults(false);
     });
     clearPendingSearchFlush();
-    void vaultSearchCancel().catch(() => undefined);
+    vaultSearchCancel().catch(() => undefined);
     queueMicrotask(() => {
       setScanDone(true);
       setAwaitingDebouncedRun(true);
@@ -249,53 +287,44 @@ export function useVaultContentSearch({
       debounceTimerRef.current = null;
       const q = queryRef.current.trim();
       if (!q) {
-        queueMicrotask(() => {
-          setAwaitingDebouncedRun(false);
-        });
+        queueMicrotaskSetAwaitingDebouncedRunFalse();
         return;
       }
       const id = crypto.randomUUID();
+
+      function onPreviousResultsHoldElapsed() {
+        resultHoldTimerRef.current = null;
+        if (searchIdRef.current !== id) {
+          return;
+        }
+        queueMicrotaskSetHoldingFalse();
+        setNotes([]);
+        setProgress(null);
+      }
+
+      async function startVaultSearchAfterCancel() {
+        await vaultSearchCancel().catch(ignoreVaultSearchCancelError);
+        await vaultSearchStart({searchId: id, query: q}).catch(onVaultSearchStartFailed);
+      }
+
       searchIdRef.current = id;
       clearPendingSearchFlush();
       clearResultHoldTimer();
-      queueMicrotask(() => {
-        setAwaitingDebouncedRun(false);
-      });
+      queueMicrotaskSetAwaitingDebouncedRunFalse();
       const hadPriorNotes = notesRef.current.length > 0;
       if (hadPriorNotes) {
-        queueMicrotask(() => {
-          setHoldingPreviousResults(true);
-        });
-        resultHoldTimerRef.current = window.setTimeout(() => {
-          resultHoldTimerRef.current = null;
-          if (searchIdRef.current !== id) {
-            return;
-          }
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setNotes([]);
-          setProgress(null);
-        }, PREVIOUS_RESULTS_HOLD_MS);
+        queueMicrotaskSetHoldingTrue();
+        resultHoldTimerRef.current = window.setTimeout(
+          onPreviousResultsHoldElapsed,
+          PREVIOUS_RESULTS_HOLD_MS,
+        );
       } else {
-        queueMicrotask(() => {
-          setHoldingPreviousResults(false);
-        });
+        queueMicrotaskSetHoldingFalse();
         setNotes([]);
         setProgress(null);
       }
       setScanDone(false);
-      void (async () => {
-        await vaultSearchCancel().catch(() => undefined);
-        await vaultSearchStart({searchId: id, query: q}).catch(() => {
-          searchIdRef.current = null;
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setScanDone(true);
-        });
-      })();
+      void startVaultSearchAfterCancel();
     }, debounceMs);
 
     return () => {
@@ -312,6 +341,10 @@ export function useVaultContentSearch({
     resetLocal,
     clearPendingSearchFlush,
     clearResultHoldTimer,
+    queueMicrotaskSetAwaitingDebouncedRunFalse,
+    queueMicrotaskSetHoldingFalse,
+    queueMicrotaskSetHoldingTrue,
+    onVaultSearchStartFailed,
   ]);
 
   return {

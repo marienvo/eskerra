@@ -11,7 +11,11 @@ import {
 const DEFAULT_MAX_DEPTH = 64;
 
 function uriPathDepth(uri: string): number {
-  const n = uri.replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(Boolean).length;
+  let normalized = uri.replace(/\\/g, '/');
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  const n = normalized.split('/').filter(Boolean).length;
   return Math.max(0, n);
 }
 

@@ -1,9 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import {mobileAsyncStorage} from '../../../core/storage/mobileAsyncStorage';
 import {RootMarkdownFile} from '../../../types';
 import {isPodcastFile} from './podcastParser';
-
-const RSS_PODCAST_FILE_PATTERN = /^📻\s+.+\.md$/;
 
 const STORAGE_KEY_PREFIX = 'eskerra:generalPodcastMarkdownIndex:';
 
@@ -19,11 +16,20 @@ function getStorageKey(baseUri: string): string {
   return `${STORAGE_KEY_PREFIX}${baseUri}`;
 }
 
+function isRssPodcastMarkdownFile(fileName: string): boolean {
+  const trimmed = fileName.trim();
+  if (!trimmed.startsWith('📻')) {
+    return false;
+  }
+  const tail = trimmed.slice(2).trim();
+  return tail.length > 3 && tail.toLowerCase().endsWith('.md');
+}
+
 export function filterPodcastRelevantGeneralMarkdownFiles(
   files: RootMarkdownFile[],
 ): RootMarkdownFile[] {
   return files.filter(
-    file => isPodcastFile(file.name) || RSS_PODCAST_FILE_PATTERN.test(file.name),
+    file => isPodcastFile(file.name) || isRssPodcastMarkdownFile(file.name),
   );
 }
 
@@ -40,7 +46,7 @@ export function splitPodcastAndRssMarkdownFiles(relevant: RootMarkdownFile[]): {
 } {
   return {
     podcastFiles: relevant.filter(file => isPodcastFile(file.name)),
-    rssFeedFiles: relevant.filter(file => RSS_PODCAST_FILE_PATTERN.test(file.name)),
+    rssFeedFiles: relevant.filter(file => isRssPodcastMarkdownFile(file.name)),
   };
 }
 
@@ -82,7 +88,7 @@ export async function loadPersistedPodcastMarkdownIndex(
     return null;
   }
 
-  const raw = await AsyncStorage.getItem(getStorageKey(baseUri));
+  const raw = await mobileAsyncStorage.getItem(getStorageKey(baseUri));
   if (!raw?.trim()) {
     return null;
   }
@@ -115,7 +121,7 @@ export async function savePersistedPodcastMarkdownIndex(
     v: PAYLOAD_VERSION,
   };
 
-  await AsyncStorage.setItem(getStorageKey(baseUri), JSON.stringify(payload));
+  await mobileAsyncStorage.setItem(getStorageKey(baseUri), JSON.stringify(payload));
 }
 
 /**
@@ -124,5 +130,5 @@ export async function savePersistedPodcastMarkdownIndex(
 export async function clearPersistedPodcastMarkdownIndexForTesting(
   baseUri: string,
 ): Promise<void> {
-  await AsyncStorage.removeItem(getStorageKey(baseUri));
+  await mobileAsyncStorage.removeItem(getStorageKey(baseUri));
 }

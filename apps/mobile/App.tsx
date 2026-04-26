@@ -172,13 +172,7 @@ function App() {
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider initialMetrics={initialWindowMetrics}>
           <StatusBar
-            barStyle={
-              initialRoute === null
-                ? 'light-content'
-                : isDarkMode
-                  ? 'light-content'
-                  : 'dark-content'
-            }
+            barStyle={initialRoute === null || isDarkMode ? 'light-content' : 'dark-content'}
           />
           {initialRoute === null ? (
             <View accessibilityLabel="Loading" style={styles.loadingContainerSplash}>

@@ -9,9 +9,8 @@ import {
   Text,
 } from '@gluestack-ui/themed';
 import {Platform, StyleSheet} from 'react-native';
-import {openDocumentTree} from 'react-native-saf-x';
-
 import {RootStackParamList} from '../../../navigation/types';
+import {openAndroidVaultDirectoryPicker} from '../../../core/storage/openAndroidDocumentTree';
 import {saveUri} from '../../../core/storage/appStorage';
 import {initEskerra} from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
@@ -35,7 +34,7 @@ export function SetupScreen() {
     setIsSubmitting(true);
 
     try {
-      const selectedDirectory = await openDocumentTree(true);
+      const selectedDirectory = await openAndroidVaultDirectoryPicker();
 
       if (!selectedDirectory?.uri) {
         setStatusText('Selection canceled.');

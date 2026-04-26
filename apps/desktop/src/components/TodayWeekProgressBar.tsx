@@ -24,18 +24,20 @@ export function TodayWeekProgressBar({progress, weekStart, comparisonNow}: Today
   );
   const merged = segments.length === 6;
 
-  const ariaLabel =
-    progress.kind === 'past'
-      ? merged
-        ? 'Week complete, six segments (weekend as one block)'
-        : 'Week complete, all 7 days passed'
-      : progress.kind === 'future'
-        ? merged
-          ? 'Upcoming week, six segments (weekend as one block)'
-          : 'Upcoming week, no days started'
-        : merged
-          ? `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`
-          : `Day ${progress.dayIndex + 1} of 7`;
+  let ariaLabel: string;
+  if (progress.kind === 'past') {
+    ariaLabel = merged
+      ? 'Week complete, six segments (weekend as one block)'
+      : 'Week complete, all 7 days passed';
+  } else if (progress.kind === 'future') {
+    ariaLabel = merged
+      ? 'Upcoming week, six segments (weekend as one block)'
+      : 'Upcoming week, no days started';
+  } else {
+    ariaLabel = merged
+      ? `Day ${progress.dayIndex + 1} of 7, weekend shown as one block`
+      : `Day ${progress.dayIndex + 1} of 7`;
+  }
 
   return (
     <ul className="today-hub-canvas__week-progress" aria-label={ariaLabel}>

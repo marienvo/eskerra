@@ -11,7 +11,11 @@ description: >-
 
 # Desktop performance debug loop
 
-Use this workflow for **desktop React** performance work in this repo. Follow the loop in order; do not skip the logbook step before starting the next hypothesis.
+Use this workflow for **desktop React** performance work in this repo (Tauri + Vite, Linux reference: Fedora Workstation / GNOME per [CLAUDE.md](../../../CLAUDE.md)). Logbook entries are part of [specs/](../../../specs/) discipline: document what you measured, not just code changes.
+
+Follow the loop in order; do not skip the logbook step before starting the next hypothesis.
+
+**Mobile (Android):** this skill names the desktop stack, but the **same logbook discipline** applies to mobile performance work: one hypothesis per change, before/after numbers, and append results under `specs/performance/` (see existing mobile threads there). Use Android-appropriate profilers and traces; the loop steps are unchanged.
 
 ## Loop (strict)
 

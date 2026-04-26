@@ -114,7 +114,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
       for (const cb of this.progressListeners) {
         cb(progress);
       }
-      void invoke('media_set_playback', {
+      invoke('media_set_playback', {
         playing: !this.audio.paused,
         positionMs,
       }).catch(() => undefined);
@@ -133,7 +133,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
       for (const cb of this.progressListeners) {
         cb(progress);
       }
-      void invoke('media_set_playback', {
+      invoke('media_set_playback', {
         playing: false,
         positionMs,
       }).catch(() => undefined);
@@ -431,7 +431,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
         const posOut = clampMs(this.audio.currentTime * 1000);
         const durOut = Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : 0;
         void syncMprisMetadata(track, Math.max(durOut, 1), posOut, false);
-        void invoke('media_set_playback', {playing: false, positionMs: posOut}).catch(() => undefined);
+        invoke('media_set_playback', {playing: false, positionMs: posOut}).catch(() => undefined);
 
         const progress: PlayerProgress = {
           durationMs: Number.isFinite(durationSec) ? clampMs(durationSec * 1000) : null,
@@ -518,7 +518,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
     this.stateListeners.clear();
     this.bufferingListeners.clear();
     this.endedListeners.clear();
-    void invoke('media_clear_session').catch(() => undefined);
+    invoke('media_clear_session').catch(() => undefined);
   }
 
   /** Handles OS media keys / MPRIS toggle when the shell sends "play" or "toggle". */

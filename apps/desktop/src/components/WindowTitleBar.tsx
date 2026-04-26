@@ -1,26 +1,33 @@
-import {isTauri} from '@tauri-apps/api/core';
-import {getCurrentWindow} from '@tauri-apps/api/window';
-
 import type {WindowTilingState} from '../lib/windowTiling';
+import {
+  closeDesktopMainWindow,
+  isDesktopTauriHost,
+  minimizeDesktopMainWindow,
+} from '../lib/desktopTauriWindow';
 import {
   TodayHubWorkspaceSelect,
   type TodayHubWorkspaceSelectItem,
 } from './TodayHubWorkspaceSelect';
 
+export type WindowTitleBarTodayHubSelect =
+  | {
+      items: readonly TodayHubWorkspaceSelectItem[];
+      activeTodayNoteUri: string | null;
+      activeLabel: string;
+      /** Match title bar editor tab pill active styling on the workspace main control. */
+      mainShowsActiveTabPill?: boolean;
+      onMainActivate: () => void;
+      onPickHub: (todayNoteUri: string) => void;
+      onOpenHubInNewTab: (todayNoteUri: string) => void;
+    }
+  | null
+  | undefined;
+
 type WindowTitleBarProps = {
   tiling?: WindowTilingState;
   /** Mount point for editor open-note tabs (React portal target). */
   onEditorTabsHostRef?: (el: HTMLDivElement | null) => void;
-  todayHubSelect?: {
-    items: readonly TodayHubWorkspaceSelectItem[];
-    activeTodayNoteUri: string | null;
-    activeLabel: string;
-    /** Match title bar editor tab pill active styling on the workspace main control. */
-    mainShowsActiveTabPill?: boolean;
-    onMainActivate: () => void;
-    onPickHub: (todayNoteUri: string) => void;
-    onOpenHubInNewTab: (todayNoteUri: string) => void;
-  } | null;
+  todayHubSelect?: WindowTitleBarTodayHubSelect;
 };
 
 export function WindowTitleBar({
@@ -28,20 +35,14 @@ export function WindowTitleBar({
   onEditorTabsHostRef,
   todayHubSelect = null,
 }: WindowTitleBarProps) {
-  const tauri = isTauri();
+  const tauri = isDesktopTauriHost();
 
   const onMinimize = () => {
-    if (!tauri) {
-      return;
-    }
-    void getCurrentWindow().minimize();
+    minimizeDesktopMainWindow();
   };
 
   const onClose = () => {
-    if (!tauri) {
-      return;
-    }
-    void getCurrentWindow().close();
+    closeDesktopMainWindow();
   };
 
   return (

@@ -20,11 +20,13 @@ import {keymap} from '@codemirror/view';
 
 const htmlNoMatch = html({matchClosingTags: false});
 
+type CodeParserLanguages =
+  | readonly LanguageDescription[]
+  | ((info: string) => Language | LanguageDescription | null)
+  | undefined;
+
 function getCodeParser(
-  languages:
-    | readonly LanguageDescription[]
-    | ((info: string) => Language | LanguageDescription | null)
-    | undefined,
+  languages: CodeParserLanguages,
   defaultLanguage: Language | undefined,
 ) {
   return (info: string) => {
@@ -110,7 +112,9 @@ function htmlTagCompletions(): readonly Completion[] {
   const result = htmlCompletionSource(
     new CompletionContext(EditorState.create({extensions: htmlNoMatch}), 0, true),
   );
-  return (htmlTagCompletionOptionsMemo = result ? result.options : []);
+  const options = result ? result.options : [];
+  htmlTagCompletionOptionsMemo = options;
+  return options;
 }
 
 function htmlTagCompletion(context: CompletionContext) {

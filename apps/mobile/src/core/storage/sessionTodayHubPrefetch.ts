@@ -27,18 +27,26 @@ function extractSafDocumentId(uri: string): string | null {
   }
 }
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 function vaultUriBelongsToBase(hubUri: string, baseUri: string): boolean {
   const hubId = extractSafDocumentId(hubUri);
   const baseId = extractSafDocumentId(baseUri);
   if (hubId != null && baseId != null) {
-    const h = hubId.replace(/\\/g, '/').replace(/\/+$/, '');
-    const b = baseId.replace(/\\/g, '/').replace(/\/+$/, '');
+    const h = trimTrailingSlashes(hubId.replace(/\\/g, '/'));
+    const b = trimTrailingSlashes(baseId.replace(/\\/g, '/'));
     if (h === b || h.startsWith(`${b}/`)) {
       return true;
     }
   }
   const hRaw = hubUri.replace(/\\/g, '/').trim();
-  const bRaw = baseUri.replace(/\\/g, '/').replace(/\/+$/, '');
+  const bRaw = trimTrailingSlashes(baseUri.replace(/\\/g, '/'));
   return hRaw.startsWith(`${bRaw}/`) || hRaw === bRaw;
 }
 

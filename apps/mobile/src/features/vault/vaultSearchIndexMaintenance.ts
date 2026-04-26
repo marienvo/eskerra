@@ -1,6 +1,7 @@
-import {AppState, type AppStateStatus, InteractionManager} from 'react-native';
+import {AppState, type AppStateStatus} from 'react-native';
 
 import {appBreadcrumb} from '../../core/observability';
+import {runAfterInteractions} from '../../core/scheduling/afterInteractions';
 import {eskerraVaultSearch, type VaultSearchOpenResult} from '../../native/eskerraVaultSearch';
 import {
   canonicalizeVaultBaseUriForSearch,
@@ -147,7 +148,7 @@ export function requestVaultSearchIndexWarmup(baseUri: string | null | undefined
     return;
   }
   const trimmed = baseUri.trim();
-  InteractionManager.runAfterInteractions(() => {
+  runAfterInteractions(() => {
     runVaultSearchIndexMaintenance(trimmed);
   });
 }

@@ -1,6 +1,5 @@
 import {collectVaultMarkdownRefs} from '@eskerra/core';
 import React, {useEffect} from 'react';
-import {InteractionManager} from 'react-native';
 import TestRenderer, {act} from 'react-test-renderer';
 
 import {VaultProvider, useVaultContext, type VaultContextValue} from '../src/core/vault/VaultContext';
@@ -45,14 +44,6 @@ function Harness({onVault}: {onVault: (v: VaultContextValue) => void}) {
 describe('VaultProvider vault markdown refs (wiki index)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation((task: () => unknown) => {
-      task();
-      return {cancel: jest.fn()};
-    });
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   test('indexes markdown refs when initial session uri is set', async () => {

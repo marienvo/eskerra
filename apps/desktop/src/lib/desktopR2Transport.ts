@@ -5,17 +5,7 @@ import type {R2SignedRequestTransport} from '@eskerra/core';
 /** Fetch forbids a body for these statuses; WebKit throws if `new Response` gets a string (even empty). */
 const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
-/**
- * Runs pre-signed R2/S3 requests in Rust. The WebView cannot reach the R2 API
- * due to CORS ("Load failed" on fetch).
- */
-export const desktopR2SignedTransport: R2SignedRequestTransport = async (
-  signedRequest: Request,
-): Promise<Response> => {
-  let body: string | null = null;
-  if (signedRequest.body) {
-    body = await signedRequest.clone().text();
-  }
+function desktopR2InvokeHeaders(signedRequest: Request): [string, string][] {
   const headers: [string, string][] = [];
   const isPresigned = signedRequest.url.includes('X-Amz-Signature=');
   if (isPresigned) {
@@ -37,6 +27,21 @@ export const desktopR2SignedTransport: R2SignedRequestTransport = async (
       headers.push([k, v]);
     }
   }
+  return headers;
+}
+
+/**
+ * Runs pre-signed R2/S3 requests in Rust. The WebView cannot reach the R2 API
+ * due to CORS ("Load failed" on fetch).
+ */
+export const desktopR2SignedTransport: R2SignedRequestTransport = async (
+  signedRequest: Request,
+): Promise<Response> => {
+  let body: string | null = null;
+  if (signedRequest.body) {
+    body = await signedRequest.clone().text();
+  }
+  const headers = desktopR2InvokeHeaders(signedRequest);
   const result = await invoke<{status: number; body: string; etag?: string | null}>('r2_signed_fetch', {
     method: signedRequest.method,
     url: signedRequest.url,

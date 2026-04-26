@@ -1,0 +1,14 @@
+{
+  "allowedFileLevelEslintDisablePaths": [
+    "apps/desktop/src/lib/cleanNoteMarkdown.ts"
+  ],
+  "allowedSonarjsEslintDisableFingerprints": [
+    "apps/desktop/src/lib/cleanNoteMarkdown.ts:1:sonarjs/slow-regex",
+    "apps/desktop/src/editor/noteEditor/wikiLinkAutocomplete.ts:17:sonarjs/slow-regex",
+    "apps/desktop/src/components/TodayHubCanvas.tsx:830:sonarjs/cognitive-complexity",
+    "apps/desktop/src/editor/noteEditor/noteMarkdownLinkInsert.ts:12:sonarjs/no-invariant-returns",
+    "apps/desktop/src/editor/noteEditor/noteMarkdownLinkInsert.ts:41:sonarjs/no-invariant-returns",
+    "apps/desktop/src/editor/noteEditor/eskerraTableV1/EskerraTableShell.tsx:485:sonarjs/no-invariant-returns",
+    "apps/desktop/src/editor/noteEditor/eskerraTableV1/EskerraTableShell.tsx:526:sonarjs/no-invariant-returns"
+  ]
+}

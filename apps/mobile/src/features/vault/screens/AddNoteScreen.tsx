@@ -4,18 +4,12 @@ import type {StackNavigationProp} from '@react-navigation/stack';
 import {StackScreenProps} from '@react-navigation/stack';
 import {useCallback, useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Box, Pressable, Spinner, Text, useColorMode} from '@gluestack-ui/themed';
-import {
-  ActivityIndicator,
-  InteractionManager,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import {ActivityIndicator, Keyboard, Platform, StyleSheet, TextInput} from 'react-native';
 import {KeyboardStickyView} from 'react-native-keyboard-controller';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import {runAfterInteractions} from '../../../core/scheduling/afterInteractions';
 import {getNoteTitle} from '../../../core/storage/eskerraStorage';
 import {
   buildInboxMarkdownFromCompose,
@@ -26,7 +20,7 @@ import {safeNavigationState} from '../../../navigation/safeNavigationState';
 import {AddNoteStackParamList, InboxStackParamList} from '../../../navigation/types';
 import type {NoteSummary} from '../../../types';
 import {useSaveInboxMarkdownNote} from '../../inbox/hooks/useSaveInboxMarkdownNote';
-import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/MiniPlayer';
+import {MINI_PLAYER_LAYOUT_HEIGHT} from '../../podcasts/components/miniPlayerLayout';
 import {usePlayerContext} from '../../podcasts/context/PlayerContext';
 import {useNotes} from '../hooks/useNotes';
 
@@ -270,7 +264,7 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
 
       if (Platform.OS === 'android') {
         let delayedFocusId: ReturnType<typeof setTimeout> | undefined;
-        const task = InteractionManager.runAfterInteractions(() => {
+        const task = runAfterInteractions(() => {
           delayedFocusId = setTimeout(focusInput, 250);
         });
         return () => {
@@ -282,7 +276,7 @@ export function AddNoteScreen({navigation, route}: AddNoteScreenProps) {
         };
       }
 
-      const task = InteractionManager.runAfterInteractions(focusInput);
+      const task = runAfterInteractions(focusInput);
       return () => {
         cancelled = true;
         task.cancel();

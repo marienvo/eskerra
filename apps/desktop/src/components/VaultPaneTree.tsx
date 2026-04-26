@@ -39,6 +39,7 @@ import {
   buildSparseLonelyExpandPlan,
   createVaultSparsePlanLoader,
   pickLonelySubfolderWhenNoMarkdown,
+  type SparseLonelyExpandBatch,
 } from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {filterTopLevelInboxFolderFromChildRows} from '../lib/vaultTreeFilterTopLevelInbox';
 import {
@@ -59,7 +60,77 @@ import {vaultTreeItemToFileTreeRowViewModel} from './fileTree/vaultTreeItemToFil
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
 const VAULT_TREE_ROW_HEIGHT_PX = FILE_TREE_ROW_HEIGHT_PX;
 
+function mergeExpandedItemsWithChain(
+  expandChain: readonly string[],
+  expandedItems: string[],
+): string[] {
+  const expanded = new Set(expandedItems);
+  for (const id of expandChain) {
+    expanded.add(id);
+  }
+  return [...expanded];
+}
+
+function applySparseLonelyPlanToTree(
+  t: TreeInstance<VaultTreeItemData>,
+  plan: {cacheBatches: SparseLonelyExpandBatch[]; expandChain: string[]},
+): void {
+  for (const batch of plan.cacheBatches) {
+    const parentInst = t.getItemInstance(batch.parentUri);
+    if (!parentInst) {
+      continue;
+    }
+    for (const row of batch.rows) {
+      t.getItemInstance(row.id).updateCachedData(row.data, true);
+    }
+    parentInst.updateCachedChildrenIds(
+      batch.rows.map(r => r.id),
+      true,
+    );
+  }
+  if (plan.expandChain.length > 0) {
+    t.applySubStateUpdate('expandedItems', expandedItems =>
+      mergeExpandedItemsWithChain(plan.expandChain, expandedItems),
+    );
+  }
+}
+
+function vaultTreeFileNodeRowClassName(
+  rowPropClassName: string | undefined,
+  selected: boolean,
+  isDropTargetDir: boolean,
+  isActiveDrop: boolean,
+  isDragSource: boolean,
+): string {
+  return [
+    rowPropClassName,
+    selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
+    isDropTargetDir && isActiveDrop ? 'vault-tree-row--drop-target' : '',
+    isDragSource ? 'vault-tree-row--dragging' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function vaultTreeMiddleClickApplies(
+  data: VaultTreeItemData,
+  primaryMdUri: string | null,
+): boolean {
+  if (!primaryMdUri) {
+    return false;
+  }
+  return data.kind === 'article' || data.kind === 'todayHub';
+}
+
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
+
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
 
 function vaultTreeDragGhostIconMarkup(kind: VaultTreeDragGhostIcon): string {
   const p = {
@@ -159,7 +230,7 @@ function mountVaultTreeDragGhost(options: {
   ghost.appendChild(icon);
   ghost.appendChild(text);
   document.body.appendChild(ghost);
-  void ghost.offsetWidth;
+  ghost.getBoundingClientRect();
 
   const btnRect = sourceButton.getBoundingClientRect();
   const relX = pointerClientX - btnRect.left;
@@ -244,11 +315,11 @@ export const VaultPaneTree = memo(function VaultPaneTree({
   treeScope = 'vaultRoot',
 }: VaultPaneTreeProps) {
   const vaultBaseUri = useMemo(
-    () => normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/').replace(/\/+$/, ''),
+    () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
     [vaultRoot],
   );
   const inboxDirectoryUri = useMemo(
-    () => getInboxDirectoryUri(vaultBaseUri).replace(/\\/g, '/').replace(/\/+$/, ''),
+    () => trimTrailingSlashes(getInboxDirectoryUri(vaultBaseUri).replace(/\\/g, '/')),
     [vaultBaseUri],
   );
   const rootId = treeScope === 'inboxRoot' ? inboxDirectoryUri : vaultBaseUri;
@@ -379,28 +450,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     itemStoreRef,
                     loadChildRows,
                   });
-                  for (const batch of plan.cacheBatches) {
-                    const parentInst = t.getItemInstance(batch.parentUri);
-                    if (!parentInst) {
-                      continue;
-                    }
-                    for (const row of batch.rows) {
-                      t.getItemInstance(row.id).updateCachedData(row.data, true);
-                    }
-                    parentInst.updateCachedChildrenIds(
-                      batch.rows.map(r => r.id),
-                      true,
-                    );
-                  }
-                  if (plan.expandChain.length > 0) {
-                    t.applySubStateUpdate('expandedItems', expandedItems => {
-                      const expanded = new Set(expandedItems);
-                      for (const id of plan.expandChain) {
-                        expanded.add(id);
-                      }
-                      return [...expanded];
-                    });
-                  }
+                  applySparseLonelyPlanToTree(t, plan);
                 } catch {
                   /* ignore */
                 } finally {
@@ -451,7 +501,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     const inboxUri = treeScope === 'inboxRoot' ? rootId : inboxDirectoryUri;
     const warmupPromise = warmInboxChildrenAtUri(t, inboxUri);
     inboxWarmupPromiseRef.current = warmupPromise;
-    void warmupPromise.finally(() => {
+    warmupPromise.finally(() => {
       if (inboxWarmupPromiseRef.current === warmupPromise) {
         inboxWarmupPromiseRef.current = null;
       }
@@ -487,7 +537,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
     const pathDepth = (uri: string) => uri.split('/').filter(Boolean).length;
     const asyncRef = t.getDataRef<AsyncDataLoaderDataRef<VaultTreeItemData>>().current;
     const parentsToReload = Object.keys(asyncRef.childrenIds ?? {}).filter(id => {
-      const n = id.replace(/\\/g, '/').replace(/\/+$/, '');
+      const n = trimTrailingSlashes(id.replace(/\\/g, '/'));
       return n === rootId || n.startsWith(`${rootId}/`);
     });
     parentsToReload.sort((a, b) => pathDepth(a) - pathDepth(b) || a.localeCompare(b));
@@ -525,7 +575,6 @@ export const VaultPaneTree = memo(function VaultPaneTree({
       });
   }, [fsRefreshNonce, rootId, treeScope, inboxDirectoryUri]);
 
-  void treeViewRevision;
   const items = tree.getItems();
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -714,12 +763,12 @@ export const VaultPaneTree = memo(function VaultPaneTree({
         return;
       }
       if (resolved.mode === 'bulk') {
-        void Promise.resolve(
+        Promise.resolve(
           onBulkMoveVaultTreeItems(resolved.items, targetDirectoryUri),
         );
         return;
       }
-      void Promise.resolve(
+      Promise.resolve(
         onMoveVaultTreeItem(
           resolved.sourceUri,
           resolved.sourceKind,
@@ -845,14 +894,13 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 treeType={rowVm.treeType}
                 isFolderExpanded={rowVm.isExpanded}
                 selected={selected}
-                className={[
+                className={vaultTreeFileNodeRowClassName(
                   rowPropClassName,
-                  selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
-                  isDropTargetDir && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
-                  draggingSourceUri === data.uri ? 'vault-tree-row--dragging' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
+                  selected,
+                  isDropTargetDir,
+                  dropTargetUri === data.uri,
+                  draggingSourceUri === data.uri,
+                )}
                 disabled={busy}
                 draggable={canDragFromRow}
                 onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -875,10 +923,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   if (e.button !== 1 || busy) {
                     return;
                   }
-                  if (
-                    !primaryMdUri
-                    || (data.kind !== 'article' && data.kind !== 'todayHub')
-                  ) {
+                  if (!vaultTreeMiddleClickApplies(data, primaryMdUri)) {
                     return;
                   }
                   e.preventDefault();
@@ -891,15 +936,12 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
                     return;
                   }
-                  if (
-                    !primaryMdUri
-                    || (data.kind !== 'article' && data.kind !== 'todayHub')
-                  ) {
+                  if (!vaultTreeMiddleClickApplies(data, primaryMdUri)) {
                     return;
                   }
                   e.preventDefault();
                   e.stopPropagation();
-                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri);
+                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri!);
                 }}
                 onDoubleClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
                   if (busy || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
@@ -1025,7 +1067,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                               } else if (data.kind === 'article') {
                                 onOpenMarkdownNote(data.uri);
                               } else {
-                                void item.expand();
+                                item.expand();
                               }
                             }}
                           >

@@ -27,8 +27,12 @@ function toSeconds(milliseconds: number): number {
 }
 
 function isAlreadyInitializedError(error: unknown): boolean {
-  const message =
-    error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  let message = '';
+  if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === 'string') {
+    message = error;
+  }
   return /already.*initialized/i.test(message);
 }
 

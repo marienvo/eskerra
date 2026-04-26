@@ -7,6 +7,14 @@ import {normalizeVaultBaseUri} from '@eskerra/core';
 
 import {normalizeEditorDocUri} from '../lib/editorDocumentHistory';
 
+function trimTrailingSlashes(value: string): string {
+  let out = value;
+  while (out.endsWith('/')) {
+    out = out.slice(0, -1);
+  }
+  return out;
+}
+
 function normalizeMarkdownLineEndingsToLf(markdown: string): string {
   return markdown.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
@@ -122,7 +130,7 @@ export function fsChangePathsMayAffectUri(
     return true;
   }
   const u = normalizeEditorDocUri(noteUri);
-  const root = normalizeVaultBaseUri(vaultRoot).replace(/\/+$/, '');
+  const root = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot));
   if (u !== root && !u.startsWith(`${root}/`)) {
     return false;
   }
@@ -134,7 +142,7 @@ export function fsChangePathsMayAffectUri(
     if (p === u) {
       return true;
     }
-    const prefix = p.replace(/\/+$/, '');
+    const prefix = trimTrailingSlashes(p);
     if (u.startsWith(`${prefix}/`)) {
       return true;
     }
