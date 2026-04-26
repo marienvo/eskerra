@@ -43,6 +43,10 @@ import {
   normalizeVaultMarkdownRefsBaseUri,
 } from './vaultMarkdownRefsSession';
 
+function fireAndForgetAsyncWalk(run: () => Promise<void>): void {
+  run().catch(() => undefined);
+}
+
 type InboxContentCacheSession = {
   map: Map<string, string>;
   uri: string;
@@ -101,28 +105,10 @@ type VaultProviderProps = {
   } | null;
 };
 
-function recordToTodayHubContentCache(
+function recordToContentCache(
   vaultUri: string,
   record: Record<string, string> | null | undefined,
-): TodayHubContentCacheSession | null {
-  if (!record) {
-    return null;
-  }
-  const entries = Object.entries(record);
-  if (entries.length === 0) {
-    return null;
-  }
-  const map = new Map<string, string>();
-  for (const [k, v] of entries) {
-    map.set(normalizeNoteUri(k), v);
-  }
-  return {map, uri: vaultUri};
-}
-
-function recordToInboxContentCache(
-  vaultUri: string,
-  record: Record<string, string> | null | undefined,
-): InboxContentCacheSession | null {
+): {map: Map<string, string>; uri: string} | null {
   if (!record) {
     return null;
   }
@@ -156,7 +142,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
 
   const inboxContentCacheRef = useRef<InboxContentCacheSession | null>(
     initialSession
-      ? recordToInboxContentCache(
+      ? recordToContentCache(
           initialSession.uri,
           initialSession.inboxContentByUri,
         )
@@ -165,7 +151,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
 
   const todayHubContentCacheRef = useRef<TodayHubContentCacheSession | null>(
     initialSession
-      ? recordToTodayHubContentCache(
+      ? recordToContentCache(
           initialSession.uri,
           initialSession.todayHubContentByUri ?? null,
         )
@@ -209,7 +195,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       if (baseUri == null) {
         return;
       }
-      inboxContentCacheRef.current = recordToInboxContentCache(
+      inboxContentCacheRef.current = recordToContentCache(
         baseUri,
         inboxContentByUri,
       );
@@ -248,7 +234,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
       if (baseUri == null) {
         return;
       }
-      todayHubContentCacheRef.current = recordToTodayHubContentCache(
+      todayHubContentCacheRef.current = recordToContentCache(
         baseUri,
         todayHubContentByUri,
       );
@@ -447,7 +433,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         if (ac.signal.aborted || settledFromRegistry) {
           return;
         }
-        runMarkdownRefsFromWalk().catch(() => undefined);
+        fireAndForgetAsyncWalk(runMarkdownRefsFromWalk);
       });
 
       ac.signal.addEventListener(
@@ -482,11 +468,11 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
     if (prepared.inboxPrefetch !== null) {
       inboxPrefetchRef.current = {uri: nextUri, notes: prepared.inboxPrefetch};
     }
-    inboxContentCacheRef.current = recordToInboxContentCache(
+    inboxContentCacheRef.current = recordToContentCache(
       nextUri,
       prepared.inboxContentByUri,
     );
-    todayHubContentCacheRef.current = recordToTodayHubContentCache(
+    todayHubContentCacheRef.current = recordToContentCache(
       nextUri,
       prepared.todayHubContentByUri,
     );

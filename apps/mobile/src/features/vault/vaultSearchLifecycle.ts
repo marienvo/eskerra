@@ -102,12 +102,8 @@ export function fullNeedsRebuild(
     return true;
   }
   if (!status.indexReady && !status.isBuilding) {
-    /** Empty DB / never built — full rebuild. */
-    if (!persistedVaultSearchHasRows(status)) {
-      return true;
-    }
-    /** Rows exist but flags say not ready and not building — resume with reconcile, not a wipe. */
-    return false;
+    /** Empty DB / never built — full rebuild; rows exist → resume with reconcile, not a wipe. */
+    return !persistedVaultSearchHasRows(status);
   }
   return false;
 }

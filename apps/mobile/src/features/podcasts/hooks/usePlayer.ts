@@ -66,6 +66,33 @@ function toSnapshot(ep: PodcastEpisode): PlayerEpisodeSnapshot {
   };
 }
 
+async function readStartPositionForEpisode(
+  uri: string | null,
+  episodeId: string,
+): Promise<{prior: PlaylistEntry | null; startPositionMs: number}> {
+  if (!uri) {
+    return {prior: null, startPositionMs: 0};
+  }
+  const prior = await readPlaylistCoalesced(uri);
+  const startPositionMs = prior?.episodeId === episodeId ? prior.positionMs : 0;
+  return {prior, startPositionMs};
+}
+
+function buildPlaylistBaseEntry(prior: PlaylistEntry | null, episode: PodcastEpisode): PlaylistEntry {
+  if (prior?.episodeId === episode.id) {
+    return prior;
+  }
+  return {
+    controlRevision: 0,
+    durationMs: null,
+    episodeId: episode.id,
+    mp3Url: episode.mp3Url,
+    playbackOwnerId: '',
+    positionMs: 0,
+    updatedAt: 0,
+  };
+}
+
 export function usePlayer(
   episodesById: Map<string, PodcastEpisode>,
   {onMarkAsPlayed, podcastsCatalogReady, podcastsLoading}: UsePlayerOptions,
@@ -208,9 +235,6 @@ export function usePlayer(
         }
         if (!saved) {
           await setupPromise;
-          if (!isMounted) {
-            return;
-          }
           if (snapshotRef.current.context.episode == null) {
             send({type: 'RESET'});
             hasRestoredForBaseUriRef.current = baseUri;
@@ -218,31 +242,9 @@ export function usePlayer(
           return;
         }
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
-        if (!catalogEp) {
+        if (!catalogEp || catalogEp.isListened) {
           await setupPromise;
-          if (!isMounted) {
-            return;
-          }
-          try {
-            await player.stop();
-          } catch {
-            // ignore stop errors during invalid-restore cleanup
-          }
-          await clearPlaylist(baseUri);
-          send({type: 'RESET'});
-          hasRestoredForBaseUriRef.current = baseUri;
-          return;
-        }
-        if (catalogEp.isListened) {
-          await setupPromise;
-          if (!isMounted) {
-            return;
-          }
-          try {
-            await player.stop();
-          } catch {
-            // ignore stop errors during invalid-restore cleanup
-          }
+          await player.stop().catch(() => undefined);
           await clearPlaylist(baseUri);
           send({type: 'RESET'});
           hasRestoredForBaseUriRef.current = baseUri;
@@ -257,9 +259,6 @@ export function usePlayer(
         hasRestoredForBaseUriRef.current = baseUri;
 
         await setupPromise;
-        if (!isMounted) {
-          return;
-        }
         const st = await player.getState();
         if (st === 'playing' || userPlaybackDepthRef.current > 0) {
           return;
@@ -302,9 +301,6 @@ export function usePlayer(
           return;
         }
         const st = await player.getState();
-        if (cancelled) {
-          return;
-        }
         if (st === 'playing' || userPlaybackDepthRef.current > 0) {
           return;
         }
@@ -327,28 +323,14 @@ export function usePlayer(
 
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
         if (!catalogEp || catalogEp.isListened) {
-          try {
-            await player.stop();
-          } catch {
-            // ignore stop errors during invalid-remote cleanup
-          }
+          await player.stop().catch(() => undefined);
           await clearPlaylist(baseUri);
           send({type: 'RESET'});
           return;
         }
 
         const snapEpId = currentCtx.episode?.id;
-        if (saved.episodeId === snapEpId) {
-          send({
-            type: 'HYDRATE',
-            episode: toSnapshot(catalogEp),
-            entry: saved,
-            baseline: saved,
-          });
-          return;
-        }
-
-        if (!snapEpId) {
+        if (!snapEpId || saved.episodeId === snapEpId) {
           send({
             type: 'HYDRATE',
             episode: toSnapshot(catalogEp),
@@ -467,7 +449,6 @@ export function usePlayer(
     if (!baseUri) {
       send({type: 'RESET'});
       setError(null);
-      return;
     }
   }, [baseUri, send]);
 
@@ -521,17 +502,8 @@ export function usePlayer(
         const uri = baseUriRef.current;
         const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
 
-        let startPositionMs = 0;
-        let prior: PlaylistEntry | null = null;
-        if (uri) {
-          prior = await readPlaylistCoalesced(uri);
-          if (prior?.episodeId === episode.id) {
-            startPositionMs = prior.positionMs;
-          }
-        }
-        if (ctx.episode != null && ctx.episode.id !== episode.id) {
-          startPositionMs = 0;
-        }
+        const {prior, startPositionMs: rawStart} = await readStartPositionForEpisode(uri, episode.id);
+        const startPositionMs = ctx.episode != null && ctx.episode.id !== episode.id ? 0 : rawStart;
 
         let artwork: string | undefined;
         if (uri && episode.rssFeedUrl) {
@@ -546,18 +518,7 @@ export function usePlayer(
         });
 
         if (deviceId && uri) {
-          const base: PlaylistEntry =
-            prior?.episodeId === episode.id
-              ? prior
-              : {
-                  durationMs: null,
-                  episodeId: episode.id,
-                  mp3Url: episode.mp3Url,
-                  positionMs: 0,
-                  updatedAt: 0,
-                  playbackOwnerId: '',
-                  controlRevision: 0,
-                };
+          const base = buildPlaylistBaseEntry(prior, episode);
           const entry = buildPlaylistEntryForWrite(
             base,
             {
@@ -586,8 +547,9 @@ export function usePlayer(
         );
         loadedEpisodeIdRef.current = episode.id;
       } catch (playError) {
-        setError(playError instanceof Error ? playError.message : 'Could not start playback.');
-        send({type: 'ERROR', message: playError instanceof Error ? playError.message : String(playError)});
+        const errMsg = playError instanceof Error ? playError.message : String(playError);
+        setError(playError instanceof Error ? errMsg : 'Could not start playback.');
+        send({type: 'ERROR', message: errMsg});
       } finally {
         setIsLoading(false);
         userPlaybackDepthRef.current -= 1;
@@ -598,6 +560,30 @@ export function usePlayer(
 
   const playEpisodeRef = useRef(playEpisode);
   playEpisodeRef.current = playEpisode;
+
+  const handleTogglePause = useCallback(
+    async (ep: PodcastEpisode): Promise<void> => {
+      await player.pause();
+      const latestProgress = await player.getProgress();
+      send({type: 'PROGRESS', positionMs: latestProgress.positionMs, durationMs: latestProgress.durationMs});
+      send({type: 'NATIVE', state: 'paused'});
+      const uri = baseUriRef.current;
+      if (!uri) {
+        return;
+      }
+      const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
+      if (!deviceId) {
+        setError('Device id missing from local settings.');
+        return;
+      }
+      if (latestProgress.positionMs < MIN_PROGRESS_MS) {
+        await clearPlaylist(uri);
+        return;
+      }
+      queuePersist(ep, latestProgress.positionMs, latestProgress.durationMs);
+    },
+    [localSettings?.deviceInstanceId, player, queuePersist, send],
+  );
 
   const togglePlayback = useCallback(async () => {
     const epSnap = snapshotRef.current.context.episode;
@@ -614,29 +600,7 @@ export function usePlayer(
     try {
       const st = await player.getState();
       if (st === 'playing') {
-        await player.pause();
-        const latestProgress = await player.getProgress();
-        send({
-          type: 'PROGRESS',
-          positionMs: latestProgress.positionMs,
-          durationMs: latestProgress.durationMs,
-        });
-        send({type: 'NATIVE', state: 'paused'});
-
-        const uri = baseUriRef.current;
-        if (!uri) {
-          return;
-        }
-        const deviceId = localSettings?.deviceInstanceId?.trim() ?? '';
-        if (!deviceId) {
-          setError('Device id missing from local settings.');
-          return;
-        }
-        if (latestProgress.positionMs < MIN_PROGRESS_MS) {
-          await clearPlaylist(uri);
-          return;
-        }
-        queuePersist(ep, latestProgress.positionMs, latestProgress.durationMs);
+        await handleTogglePause(ep);
         return;
       }
 
@@ -666,7 +630,7 @@ export function usePlayer(
     } finally {
       setIsLoading(false);
     }
-  }, [localSettings?.deviceInstanceId, player, queuePersist, send]);
+  }, [handleTogglePause, localSettings?.deviceInstanceId, player, queuePersist, send]);
 
   const seekTo = useCallback(
     async (positionMs: number) => {

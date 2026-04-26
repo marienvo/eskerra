@@ -143,6 +143,26 @@ function isValidPersistedPayload(parsed: unknown): parsed is PersistedRssPayload
   return true;
 }
 
+function loadRssFeedUrlCacheMap(
+  map: Map<string, string>,
+  entries: Record<string, unknown>,
+  prefix: string,
+): void {
+  for (const [key, url] of Object.entries(entries)) {
+    if (typeof url !== 'string') {
+      continue;
+    }
+    const trimmed = url.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const fullKey = `${prefix}${key}`;
+    if (!map.has(fullKey)) {
+      map.set(fullKey, trimmed);
+    }
+  }
+}
+
 export async function loadPersistentRssFeedUrlCache(baseUri: string): Promise<void> {
   if (!baseUri) {
     return;
@@ -166,34 +186,8 @@ export async function loadPersistentRssFeedUrlCache(baseUri: string): Promise<vo
   }
 
   const prefix = `${baseUri}::`;
-
-  for (const [seriesName, url] of Object.entries(parsed.bySeries)) {
-    if (typeof url !== 'string') {
-      continue;
-    }
-    const trimmed = url.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const fullKey = `${prefix}${seriesName}`;
-    if (!rssFeedUrlBySeriesName.has(fullKey)) {
-      rssFeedUrlBySeriesName.set(fullKey, trimmed);
-    }
-  }
-
-  for (const [normalizedKey, url] of Object.entries(parsed.byNormalized)) {
-    if (typeof url !== 'string') {
-      continue;
-    }
-    const trimmed = url.trim();
-    if (!trimmed) {
-      continue;
-    }
-    const fullKey = `${prefix}${normalizedKey}`;
-    if (!rssFeedUrlByNormalizedSeriesName.has(fullKey)) {
-      rssFeedUrlByNormalizedSeriesName.set(fullKey, trimmed);
-    }
-  }
+  loadRssFeedUrlCacheMap(rssFeedUrlBySeriesName, parsed.bySeries, prefix);
+  loadRssFeedUrlCacheMap(rssFeedUrlByNormalizedSeriesName, parsed.byNormalized, prefix);
 }
 
 /**

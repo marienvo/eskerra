@@ -11,6 +11,8 @@ import {usePlayer} from '../src/features/podcasts/hooks/usePlayer';
 import {getAudioPlayer} from '../src/features/podcasts/services/audioPlayer';
 import {PodcastEpisode} from '../src/types';
 
+type TestPlayerState = 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error';
+
 jest.mock('../src/core/storage/eskerraStorage', () => ({
   clearPlaylist: jest.fn(),
   readPlaylistCoalesced: jest.fn(),
@@ -659,7 +661,7 @@ describe('usePlayer restore state', () => {
     const onMarkAsPlayed = jest.fn(async () => undefined);
     let progressCb: ((p: {durationMs: number | null; positionMs: number}) => void) | null =
       null;
-    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+    let stateListener: ((s: TestPlayerState) => void) | null =
       null;
 
     getAudioPlayerMock.mockReturnValue({
@@ -992,7 +994,7 @@ describe('usePlayer restore state', () => {
     const onMarkAsPlayed = jest.fn(async () => undefined);
     let progressCb: ((p: {durationMs: number | null; positionMs: number}) => void) | null =
       null;
-    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+    let stateListener: ((s: TestPlayerState) => void) | null =
       null;
 
     getAudioPlayerMock.mockReturnValue({
@@ -1100,7 +1102,7 @@ describe('usePlayer restore state', () => {
     });
 
     const episodesById = new Map([[episode.id, episode]]);
-    let stateListener: ((s: 'playing' | 'paused' | 'loading' | 'idle' | 'ended' | 'error') => void) | null =
+    let stateListener: ((s: TestPlayerState) => void) | null =
       null;
 
     getAudioPlayerMock.mockReturnValue({

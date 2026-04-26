@@ -145,15 +145,11 @@ async function resolveRenderableUriAfterDiskHit(
 ): Promise<string | null> {
   let renderableUri = getRenderableArtworkUri(cachedEntry);
   if (
-    renderableUri?.startsWith('content://') &&
-    isRenderableUri(renderableUri) &&
-    !(await isVaultArtworkUriStillReadable(renderableUri))
-  ) {
-    await repairPodcastImageCacheEntryWhenLocalMissing(baseUri, cacheKey, cachedEntry);
-    const reRead = await readPodcastImageCacheEntry(baseUri, cacheKey);
-    renderableUri = getRenderableArtworkUri(reRead);
-  } else if (
-    renderableUri?.startsWith('file://') &&
+    renderableUri != null &&
+    (
+      (renderableUri.startsWith('content://') && isRenderableUri(renderableUri)) ||
+      renderableUri.startsWith('file://')
+    ) &&
     !(await isVaultArtworkUriStillReadable(renderableUri))
   ) {
     await repairPodcastImageCacheEntryWhenLocalMissing(baseUri, cacheKey, cachedEntry);
@@ -445,6 +441,16 @@ export function warmPodcastArtworkCache(
   getPodcastArtworkUri(baseUri, rssFeedUrl).catch(() => undefined);
 }
 
+async function isArtworkCacheEntryUsable(normalizedValue: string): Promise<boolean> {
+  if (normalizedValue.startsWith('content://')) {
+    return isRenderableUri(normalizedValue) && (await isVaultArtworkUriStillReadable(normalizedValue));
+  }
+  if (normalizedValue.startsWith('file://')) {
+    return podcastArtworkFileUriExists(normalizedValue);
+  }
+  return true;
+}
+
 export async function loadPersistentArtworkUriCache(baseUri: string): Promise<void> {
   if (!baseUri) {
     return;
@@ -467,20 +473,12 @@ export async function loadPersistentArtworkUriCache(baseUri: string): Promise<vo
     if (typeof cacheValue !== 'string') {
       continue;
     }
-
     const normalizedValue = cacheValue.trim();
     if (!normalizedValue) {
       continue;
     }
-    if (normalizedValue.startsWith('content://')) {
-      if (!isRenderableUri(normalizedValue) || !(await isVaultArtworkUriStillReadable(normalizedValue))) {
-        continue;
-      }
-    }
-    if (normalizedValue.startsWith('file://')) {
-      if (!(await podcastArtworkFileUriExists(normalizedValue))) {
-        continue;
-      }
+    if (!(await isArtworkCacheEntryUsable(normalizedValue))) {
+      continue;
     }
     if (!artworkUriMemoryCache.has(cacheKey)) {
       artworkUriMemoryCache.set(cacheKey, normalizedValue);

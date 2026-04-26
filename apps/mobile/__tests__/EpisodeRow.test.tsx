@@ -15,7 +15,6 @@ import {usePodcastArtwork} from '../src/features/podcasts/hooks/usePodcastArtwor
 import {PodcastEpisode} from '../src/types';
 
 jest.mock('react-native-vector-icons/MaterialIcons', () => {
-  const React = require('react');
   const {Text} = require('react-native');
 
   return function MaterialIconsMock({name}: {name: string}) {

@@ -562,6 +562,45 @@ export function useVaultContentSearch({
       setAwaitingDebouncedRun(true);
     });
 
+    const onResultHoldTimerExpiry = (holdId: string) => {
+      resultHoldTimerRef.current = null;
+      if (searchIdRef.current !== holdId) {
+        return;
+      }
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      setNotes([]);
+      setProgress(null);
+    };
+
+    const onSearchStartError = () => {
+      searchIdRef.current = null;
+      clearResultHoldTimer();
+      queueMicrotask(() => {
+        setHoldingPreviousResults(false);
+      });
+      setScanDone(true);
+    };
+
+    const doSearchAsync = async (q: string, id: string) => {
+      await eskerraVaultSearch.cancel().catch(() => undefined);
+      if (!reconciledForSessionRef.current) {
+        reconciledForSessionRef.current = true;
+        const ready = indexReadyRef.current;
+        const lastRec = lastReconciledAtRef.current;
+        const stale =
+          lastRec == null ||
+          !Number.isFinite(lastRec) ||
+          Date.now() - lastRec > RECONCILE_STALE_MS;
+        if (ready && stale) {
+          /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
+          eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
+        }
+      }
+      await eskerraVaultSearch.start(baseUri, id, q).catch(onSearchStartError);
+    };
+
     debounceTimerRef.current = setTimeout(() => {
       debounceTimerRef.current = null;
       const q = queryRef.current.trim();
@@ -583,17 +622,7 @@ export function useVaultContentSearch({
         queueMicrotask(() => {
           setHoldingPreviousResults(true);
         });
-        resultHoldTimerRef.current = setTimeout(() => {
-          resultHoldTimerRef.current = null;
-          if (searchIdRef.current !== id) {
-            return;
-          }
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setNotes([]);
-          setProgress(null);
-        }, PREVIOUS_RESULTS_HOLD_MS);
+        resultHoldTimerRef.current = setTimeout(() => onResultHoldTimerExpiry(id), PREVIOUS_RESULTS_HOLD_MS);
       } else {
         queueMicrotask(() => {
           setHoldingPreviousResults(false);
@@ -602,30 +631,7 @@ export function useVaultContentSearch({
         setProgress(null);
       }
       setScanDone(false);
-      (async () => {
-        await eskerraVaultSearch.cancel().catch(() => undefined);
-        if (!reconciledForSessionRef.current) {
-          reconciledForSessionRef.current = true;
-          const ready = indexReadyRef.current;
-          const lastRec = lastReconciledAtRef.current;
-          const stale =
-            lastRec == null ||
-            !Number.isFinite(lastRec) ||
-            Date.now() - lastRec > RECONCILE_STALE_MS;
-          if (ready && stale) {
-            /** Do not await — reconcile walks the whole vault on SAF and would block FTS search (WAL allows both). */
-            eskerraVaultSearch.reconcile(baseUri).catch(() => undefined);
-          }
-        }
-        await eskerraVaultSearch.start(baseUri, id, q).catch(() => {
-          searchIdRef.current = null;
-          clearResultHoldTimer();
-          queueMicrotask(() => {
-            setHoldingPreviousResults(false);
-          });
-          setScanDone(true);
-        });
-      })().catch(() => undefined);
+      doSearchAsync(q, id).catch(() => undefined);
     }, debounceMs);
 
     return () => {

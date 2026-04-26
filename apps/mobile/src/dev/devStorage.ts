@@ -492,10 +492,5 @@ export async function clearPlaylist(baseUri: string): Promise<void> {
  * Dev mock: treat non-empty URIs as resolvable (vault paths are not backed by real SAF in dev).
  */
 export async function safUriExists(uri: string): Promise<boolean> {
-  const normalizedUri = uri.trim();
-  if (!normalizedUri) {
-    return false;
-  }
-
-  return true;
+  return !!uri.trim();
 }

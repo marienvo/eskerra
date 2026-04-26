@@ -16,6 +16,10 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import {
   compareVaultSearchNotes,
   vaultSearchHighlightSegments,
+  type VaultSearchIndexProgress,
+  type VaultSearchIndexStatusPayload,
+  type VaultSearchNoteResult,
+  type VaultSearchProgress,
 } from '@eskerra/core';
 
 import {useVaultContext} from '../../../core/vault/VaultContext';
@@ -43,28 +47,23 @@ function SearchVaultHeaderBackButton({onPress}: SearchVaultHeaderBackButtonProps
   );
 }
 
-export function VaultSearchScreen({navigation}: Props) {
-  const {baseUri} = useVaultContext();
+type VaultSearchIndexState = {
+  vaultInstanceId: string | null;
+  indexReady: boolean;
+  bodiesIndexReady: boolean;
+  lastReconciledAt: number | null;
+  searchIndexOpening: boolean;
+  indexMaintenancePending: boolean;
+};
+
+function useVaultSearchIndexSetup(baseUri: string | null): VaultSearchIndexState {
   const [vaultInstanceId, setVaultInstanceId] = useState<string | null>(null);
   const [indexReady, setIndexReady] = useState(false);
   const [bodiesIndexReady, setBodiesIndexReady] = useState(true);
   const [lastReconciledAt, setLastReconciledAt] = useState<number | null>(null);
-  const [hookOpen, setHookOpen] = useState(true);
-  /** True until the fast native `open()` returns so the search hook can pin `vaultInstanceId` before maintenance finishes. */
   const [searchIndexOpening, setSearchIndexOpening] = useState(false);
-  /** Full maintenance (open + status + optional reconcile) still in flight after bootstrap `open`. */
   const [indexMaintenancePending, setIndexMaintenancePending] = useState(false);
 
-  const goBack = useCallback(() => {
-    navigation.goBack();
-  }, [navigation]);
-
-  const renderHeaderLeft = useCallback(
-    () => <SearchVaultHeaderBackButton onPress={goBack} />,
-    [goBack],
-  );
-
-  /** Pin vault instance + flags as soon as native has opened the DB — do not block first search on full maintenance. */
   useEffect(() => {
     let cancelled = false;
     if (!baseUri || !eskerraVaultSearch.isAvailable()) {
@@ -136,6 +135,189 @@ export function VaultSearchScreen({navigation}: Props) {
     };
   }, [baseUri]);
 
+  return {vaultInstanceId, indexReady, bodiesIndexReady, lastReconciledAt, searchIndexOpening, indexMaintenancePending};
+}
+
+type SearchStatusLineInput = {
+  trimmedLength: number;
+  searchIndexOpening: boolean;
+  vaultInstanceId: string | null;
+  scanDone: boolean;
+  backgroundIndexRefresh: boolean;
+  searchingStatusVisible: boolean;
+  awaitingDebouncedRun: boolean;
+  progress: VaultSearchProgress | null;
+  indexHint: string;
+};
+
+function computeSearchStatusLine(p: SearchStatusLineInput): string | null {
+  if (p.trimmedLength === 0) {
+    return null;
+  }
+  if (p.searchIndexOpening || (p.vaultInstanceId == null && !p.scanDone)) {
+    return 'Opening search index…';
+  }
+  if (p.backgroundIndexRefresh) {
+    return 'Updating search index in the background…';
+  }
+  if (!p.scanDone && p.searchingStatusVisible) {
+    return p.progress != null
+      ? `Searching… · ${p.progress.totalHits} notes${p.indexHint}`
+      : 'Searching…';
+  }
+  if (p.awaitingDebouncedRun) {
+    return p.progress != null ? `${p.progress.totalHits} notes found` : null;
+  }
+  return p.progress != null ? `${p.progress.totalHits} notes found${p.indexHint}` : null;
+}
+
+function computeIndexProgressLabel(
+  indexProgress: VaultSearchIndexProgress | null,
+  indexStatusLive: VaultSearchIndexStatusPayload | null,
+): string {
+  if (indexProgress != null) {
+    return `Building search index (${indexProgress.phase})… ${indexProgress.processed} / ${indexProgress.total}`;
+  }
+  if (indexStatusLive?.indexedNotes != null) {
+    return `Building search index… (${indexStatusLive.indexedNotes} notes)`;
+  }
+  return 'Building search index…';
+}
+
+type VaultSearchEmptyStateProps = {
+  muted: string;
+  trimmed: string;
+  scanDone: boolean;
+  awaitingDebouncedRun: boolean;
+  notes: VaultSearchNoteResult[];
+  indexStatusLive: VaultSearchIndexStatusPayload | null;
+  indexingHint: boolean;
+  indexProgressLabel: string;
+  progress: VaultSearchProgress | null;
+  searchIndexOpening: boolean;
+  vaultInstanceId: string | null;
+  retryFullRebuild: () => void;
+};
+
+function VaultSearchEmptyState({
+  muted,
+  trimmed,
+  scanDone,
+  awaitingDebouncedRun,
+  notes,
+  indexStatusLive,
+  indexingHint,
+  indexProgressLabel,
+  progress,
+  searchIndexOpening,
+  vaultInstanceId,
+  retryFullRebuild,
+}: VaultSearchEmptyStateProps) {
+  if (trimmed.length === 0) {
+    return <Text style={[styles.hint, {color: muted}]}>Type to search markdown in the vault.</Text>;
+  }
+  if (scanDone && !awaitingDebouncedRun && notes.length === 0) {
+    if (indexStatusLive?.status === 'error') {
+      return (
+        <Box style={styles.hintCol}>
+          <Text style={[styles.hint, {color: muted}]}>Indexing failed.</Text>
+          <Pressable
+            accessibilityLabel="Retry indexing"
+            onPress={retryFullRebuild}
+            testID="vault-search-retry-indexing">
+            <Text style={[styles.retryLink, {color: muted}]}>Retry</Text>
+          </Pressable>
+        </Box>
+      );
+    }
+    if (indexingHint) {
+      return <Text style={[styles.hint, {color: muted}]}>{indexProgressLabel}</Text>;
+    }
+    return (
+      <Text style={[styles.hint, {color: muted}]}>
+        {progress != null && !progress.indexReady
+          ? 'Search index not ready on this device yet — try again in a moment.'
+          : 'No matches.'}
+      </Text>
+    );
+  }
+  if (!scanDone) {
+    return (
+      <Box style={styles.hintCol}>
+        {(searchIndexOpening || vaultInstanceId == null) && trimmed.length > 0 ? (
+          <Text style={[styles.hint, {color: muted}]}>Opening search index…</Text>
+        ) : null}
+        <Spinner style={styles.spinner} />
+      </Box>
+    );
+  }
+  return null;
+}
+
+type VaultSearchResultItemProps = {
+  item: VaultSearchNoteResult;
+  trimmed: string;
+  muted: string;
+  onPick: (uri: string, title: string) => void;
+};
+
+function VaultSearchResultItem({item, trimmed, muted, onPick}: VaultSearchResultItemProps) {
+  const sn = item.snippets[0];
+  const preview = sn?.text ?? '';
+  const rel = item.relativePath;
+  return (
+    <Pressable
+      onPress={() => onPick(item.uri, item.title || rel)}
+      style={[styles.row, {borderBottomColor: muted}]}>
+      <Text style={styles.title}>
+        {vaultSearchHighlightSegments(item.title || rel, trimmed).map((seg, i) => (
+          <Text key={i} style={seg.highlighted ? styles.highlight : undefined}>
+            {seg.text}
+          </Text>
+        ))}
+      </Text>
+      <Text numberOfLines={1} style={[styles.rel, {color: muted}]}>
+        {vaultSearchHighlightSegments(rel, trimmed).map((seg, i) => (
+          <Text key={i} style={seg.highlighted ? styles.highlight : undefined}>
+            {seg.text}
+          </Text>
+        ))}
+      </Text>
+      {preview.length > 0 ? (
+        <Text numberOfLines={2} style={[styles.snippet, {color: muted}]}>
+          {sn?.lineNumber != null && sn.lineNumber > 0 ? `${sn.lineNumber} · ` : null}
+          {vaultSearchHighlightSegments(preview, trimmed).map((seg, i) => (
+            <Text key={i} style={seg.highlighted ? styles.highlight : undefined}>
+              {seg.text}
+            </Text>
+          ))}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export function VaultSearchScreen({navigation}: Props) {
+  const {baseUri} = useVaultContext();
+  const [hookOpen, setHookOpen] = useState(true);
+  const {
+    vaultInstanceId,
+    indexReady,
+    bodiesIndexReady,
+    lastReconciledAt,
+    searchIndexOpening,
+    indexMaintenancePending,
+  } = useVaultSearchIndexSetup(baseUri);
+
+  const goBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  const renderHeaderLeft = useCallback(
+    () => <SearchVaultHeaderBackButton onPress={goBack} />,
+    [goBack],
+  );
+
   const retryFullRebuild = useCallback(() => {
     if (!baseUri || !eskerraVaultSearch.isAvailable()) {
       return;
@@ -200,50 +382,31 @@ export function VaultSearchScreen({navigation}: Props) {
   );
 
   const indexHint =
-    progress != null && !progress.indexReady
-      ? ` · index ${progress.indexStatus}`
-      : '';
+    progress != null && !progress.indexReady ? ` · index ${progress.indexStatus}` : '';
   const indexUsableForSearch =
     indexReady &&
     indexStatusLive?.status !== 'building' &&
     !(progress?.isBuilding === true && progress.indexReady !== true);
-
   const heavyIndexingHint =
     indexStatusLive?.status === 'building' ||
     (progress?.isBuilding === true && progress.indexReady !== true) ||
-    (indexProgress != null && (indexProgress.phase === 'titles' || indexProgress.phase === 'bodies'));
-
-  /** Full rebuild / title phase — block empty-state on “not ready” copy. */
+    (indexProgress != null &&
+      (indexProgress.phase === 'titles' || indexProgress.phase === 'bodies'));
   const indexingHint = heavyIndexingHint || bodiesIndexReady === false;
-
   const backgroundIndexRefresh =
     indexMaintenancePending && indexUsableForSearch && !heavyIndexingHint && trimmed.length > 0;
-
-  const indexProgressLabel =
-    indexProgress != null
-      ? `Building search index (${indexProgress.phase})… ${indexProgress.processed} / ${indexProgress.total}`
-      : indexStatusLive?.indexedNotes != null
-        ? `Building search index… (${indexStatusLive.indexedNotes} notes)`
-        : 'Building search index…';
-
-  const statusLine =
-    trimmed.length === 0
-      ? null
-      : searchIndexOpening || (vaultInstanceId == null && !scanDone)
-        ? 'Opening search index…'
-      : backgroundIndexRefresh
-        ? 'Updating search index in the background…'
-      : !scanDone && searchingStatusVisible
-        ? progress != null
-          ? `Searching… · ${progress.totalHits} notes${indexHint}`
-          : 'Searching…'
-        : awaitingDebouncedRun
-          ? progress != null
-            ? `${progress.totalHits} notes found`
-            : null
-          : progress != null
-            ? `${progress.totalHits} notes found${indexHint}`
-            : null;
+  const indexProgressLabel = computeIndexProgressLabel(indexProgress, indexStatusLive);
+  const statusLine = computeSearchStatusLine({
+    trimmedLength: trimmed.length,
+    searchIndexOpening,
+    vaultInstanceId,
+    scanDone,
+    backgroundIndexRefresh,
+    searchingStatusVisible,
+    awaitingDebouncedRun,
+    progress,
+    indexHint,
+  });
 
   return (
     <Box style={styles.container}>
@@ -270,78 +433,24 @@ export function VaultSearchScreen({navigation}: Props) {
         data={sortedNotes}
         keyExtractor={item => item.uri}
         ListEmptyComponent={
-          trimmed.length === 0 ? (
-            <Text style={[styles.hint, {color: muted}]}>Type to search markdown in the vault.</Text>
-          ) : scanDone && !awaitingDebouncedRun && notes.length === 0 ? (
-            indexStatusLive?.status === 'error' ? (
-              <Box style={styles.hintCol}>
-                <Text style={[styles.hint, {color: muted}]}>Indexing failed.</Text>
-                <Pressable
-                  accessibilityLabel="Retry indexing"
-                  onPress={retryFullRebuild}
-                  testID="vault-search-retry-indexing">
-                  <Text style={[styles.retryLink, {color: muted}]}>Retry</Text>
-                </Pressable>
-              </Box>
-            ) : indexingHint ? (
-              <Text style={[styles.hint, {color: muted}]}>{indexProgressLabel}</Text>
-            ) : (
-              <Text style={[styles.hint, {color: muted}]}>
-                {progress != null && !progress.indexReady
-                  ? 'Search index not ready on this device yet — try again in a moment.'
-                  : 'No matches.'}
-              </Text>
-            )
-          ) : !scanDone ? (
-            <Box style={styles.hintCol}>
-              {(searchIndexOpening || vaultInstanceId == null) && trimmed.length > 0 ? (
-                <Text style={[styles.hint, {color: muted}]}>Opening search index…</Text>
-              ) : null}
-              <Spinner style={styles.spinner} />
-            </Box>
-          ) : null
+          <VaultSearchEmptyState
+            muted={muted}
+            trimmed={trimmed}
+            scanDone={scanDone}
+            awaitingDebouncedRun={awaitingDebouncedRun}
+            notes={notes}
+            indexStatusLive={indexStatusLive}
+            indexingHint={indexingHint}
+            indexProgressLabel={indexProgressLabel}
+            progress={progress}
+            searchIndexOpening={searchIndexOpening}
+            vaultInstanceId={vaultInstanceId}
+            retryFullRebuild={retryFullRebuild}
+          />
         }
-        renderItem={({item}) => {
-          const sn = item.snippets[0];
-          const preview = sn?.text ?? '';
-          const rel = item.relativePath;
-          return (
-            <Pressable
-              onPress={() => onPick(item.uri, item.title || rel)}
-              style={[styles.row, {borderBottomColor: muted}]}>
-              <Text style={styles.title}>
-                {vaultSearchHighlightSegments(item.title || rel, trimmed).map((seg, i) => (
-                  <Text
-                    key={i}
-                    style={seg.highlighted ? styles.highlight : undefined}>
-                    {seg.text}
-                  </Text>
-                ))}
-              </Text>
-              <Text numberOfLines={1} style={[styles.rel, {color: muted}]}>
-                {vaultSearchHighlightSegments(rel, trimmed).map((seg, i) => (
-                  <Text
-                    key={i}
-                    style={seg.highlighted ? styles.highlight : undefined}>
-                    {seg.text}
-                  </Text>
-                ))}
-              </Text>
-              {preview.length > 0 ? (
-                <Text numberOfLines={2} style={[styles.snippet, {color: muted}]}>
-                  {sn?.lineNumber != null && sn.lineNumber > 0 ? `${sn.lineNumber} · ` : null}
-                  {vaultSearchHighlightSegments(preview, trimmed).map((seg, i) => (
-                    <Text
-                      key={i}
-                      style={seg.highlighted ? styles.highlight : undefined}>
-                      {seg.text}
-                    </Text>
-                  ))}
-                </Text>
-              ) : null}
-            </Pressable>
-          );
-        }}
+        renderItem={({item}) => (
+          <VaultSearchResultItem item={item} trimmed={trimmed} muted={muted} onPick={onPick} />
+        )}
       />
       {trimmed.length > 0 && partialBodiesIndexing ? (
         <Text style={[styles.footerHint, {color: muted}]}>
