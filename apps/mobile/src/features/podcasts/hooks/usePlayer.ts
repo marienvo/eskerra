@@ -376,6 +376,48 @@ export function usePlayer(
 
     let cancelled = false;
 
+    const applyRemotePlaylistAfterSavedRead = async (
+      saved: PlaylistEntry | null,
+    ): Promise<void> => {
+      const currentCtx = snapshotRef.current.context;
+
+      if (!saved) {
+        // Another device cleared R2 `playlist.json`; skip while we are in our own near-end flow.
+        if (currentCtx.inNearEndZone) {
+          return;
+        }
+        send({type: 'RESET'});
+        return;
+      }
+
+      const catalogEp = episodesByIdRef.current.get(saved.episodeId);
+      if (!catalogEp || catalogEp.isListened) {
+        await player.stop().catch(() => undefined);
+        await clearPlaylist(baseUri);
+        send({type: 'RESET'});
+        return;
+      }
+
+      const snapEpId = currentCtx.episode?.id;
+      if (!snapEpId || saved.episodeId === snapEpId) {
+        send({
+          type: 'HYDRATE',
+          episode: toSnapshot(catalogEp),
+          entry: saved,
+          baseline: saved,
+        });
+        return;
+      }
+
+      send({type: 'RESET'});
+      send({
+        type: 'HYDRATE',
+        episode: toSnapshot(catalogEp),
+        entry: saved,
+        baseline: saved,
+      });
+    };
+
     const syncRemotePlaylist = async () => {
       const ctx = snapshotRef.current.context;
       if (ctx.native === 'playing') {
@@ -399,43 +441,7 @@ export function usePlayer(
           return;
         }
 
-        const currentCtx = snapshotRef.current.context;
-
-        if (!saved) {
-          // Another device cleared R2 `playlist.json`; skip while we are in our own near-end flow.
-          if (currentCtx.inNearEndZone) {
-            return;
-          }
-          send({type: 'RESET'});
-          return;
-        }
-
-        const catalogEp = episodesByIdRef.current.get(saved.episodeId);
-        if (!catalogEp || catalogEp.isListened) {
-          await player.stop().catch(() => undefined);
-          await clearPlaylist(baseUri);
-          send({type: 'RESET'});
-          return;
-        }
-
-        const snapEpId = currentCtx.episode?.id;
-        if (!snapEpId || saved.episodeId === snapEpId) {
-          send({
-            type: 'HYDRATE',
-            episode: toSnapshot(catalogEp),
-            entry: saved,
-            baseline: saved,
-          });
-          return;
-        }
-
-        send({type: 'RESET'});
-        send({
-          type: 'HYDRATE',
-          episode: toSnapshot(catalogEp),
-          entry: saved,
-          baseline: saved,
-        });
+        await applyRemotePlaylistAfterSavedRead(saved);
       } catch (syncError) {
         if (!cancelled) {
           setError(

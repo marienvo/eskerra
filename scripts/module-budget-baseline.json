@@ -14,8 +14,8 @@
     "apps/desktop/src/hooks/useMainWindowWorkspace.ts": 4490,
     "apps/desktop/src/hooks/workspaceFsWatchReconcile.ts": 590,
     "apps/desktop/src/lib/cleanNoteMarkdown.ts": 1006,
-    "apps/mobile/__tests__/usePlayer.test.ts": 1247,
-    "apps/mobile/src/features/podcasts/hooks/usePlayer.ts": 833,
+    "apps/mobile/__tests__/usePlayer.test.ts": 1248,
+    "apps/mobile/src/features/podcasts/hooks/usePlayer.ts": 839,
     "packages/eskerra-core/src/playerMachine.ts": 892
   }
 }
