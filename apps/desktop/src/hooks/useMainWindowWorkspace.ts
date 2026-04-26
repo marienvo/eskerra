@@ -2372,20 +2372,47 @@ export function useMainWindowWorkspace(options: {
       todayHubSettingsRef,
       todayHubBridgeRef,
     };
+    let vaultFsReconcileQueue: Promise<void> = Promise.resolve();
+    const enqueueVaultFsReconcileJob = (
+      label: string,
+      job: () => Promise<void>,
+    ): Promise<void> => {
+      const run = async () => {
+        if (cancelled) {
+          return;
+        }
+        try {
+          await job();
+        } catch (e) {
+          console.warn(`[vault-files-changed] reconcile failed: ${label}`, e);
+        }
+      };
+      const queued = vaultFsReconcileQueue.then(run, run);
+      vaultFsReconcileQueue = queued.catch(() => undefined);
+      return queued;
+    };
     const rerunFsReconcileForTab = (normTab: string) => {
-      void reconcileOpenNotesAfterFsChangeFromVaultWatch(
-        reconcileFsOpenEnv,
-        reconcileFsTodayEnv,
-        [normTab],
-        rerunFsReconcileForTab,
+      void enqueueVaultFsReconcileJob(
+        'deferred-tab',
+        () =>
+          reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            reconcileFsOpenEnv,
+            reconcileFsTodayEnv,
+            [normTab],
+            rerunFsReconcileForTab,
+          ),
       );
     };
     const reconcileOpenNotesAfterFsChange = (rawPaths: string[]) =>
-      reconcileOpenNotesAfterFsChangeFromVaultWatch(
-        reconcileFsOpenEnv,
-        reconcileFsTodayEnv,
-        rawPaths,
-        rerunFsReconcileForTab,
+      enqueueVaultFsReconcileJob(
+        'watch-event',
+        () =>
+          reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            reconcileFsOpenEnv,
+            reconcileFsTodayEnv,
+            rawPaths,
+            rerunFsReconcileForTab,
+          ),
       );
 
     const runOpenTabProbe = (trigger: 'focus' | 'interval') => {
@@ -2394,12 +2421,13 @@ export function useMainWindowWorkspace(options: {
         return;
       }
       lastOpenTabProbeAtMs = now;
-      const before = lastPersistedRef.current;
-      const externalMutationSeqBefore =
-        lastPersistedExternalMutationSeqRef.current;
-      const vaultFilesChangedEventSeqBefore = vaultFilesChangedEventSeq;
-      void (async () => {
-        try {
+      void enqueueVaultFsReconcileJob(
+        `open-tab-probe:${trigger}`,
+        async () => {
+          const before = lastPersistedRef.current;
+          const externalMutationSeqBefore =
+            lastPersistedExternalMutationSeqRef.current;
+          const vaultFilesChangedEventSeqBefore = vaultFilesChangedEventSeq;
           await reconcileOpenNotesAfterFsChangeFromVaultWatch(
             {
               ...reconcileFsOpenEnv,
@@ -2453,10 +2481,8 @@ export function useMainWindowWorkspace(options: {
               ],
             });
           }
-        } catch (probeError) {
-          console.warn('[vault-watch] open-tab probe failed', probeError);
-        }
-      })();
+        },
+      );
     };
 
     const onWindowFocus = () => runOpenTabProbe('focus');
