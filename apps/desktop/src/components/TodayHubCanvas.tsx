@@ -50,6 +50,10 @@ import {
 import {INBOX_AUTOSAVE_DEBOUNCE_MS} from '../lib/inboxAutosaveScheduler';
 import {todayHubPerfEnabled, todayHubPerfLog} from '../lib/todayHub/todayHubPerf';
 import {todayHubStaticCellDocOffsetFromPointer} from '../lib/todayHubCellStaticPointer';
+import {
+  todayHubCanvasCellSurface,
+  todayHubCanvasCellWarmOrActive,
+} from '../lib/todayHub/todayHubCanvasCellLayout';
 import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
@@ -823,13 +827,18 @@ export function TodayHubCanvas({
               </div>
               <div className="today-hub-canvas__row-cells">
                 {sections.map(
-                  // eslint-disable-next-line sonarjs/cognitive-complexity -- cell combines warm LRU, CM, static rich; warm + focus paths extracted to module helpers
+                  // eslint-disable-next-line sonarjs/cognitive-complexity -- warm/CM/static cell stack; empty vs non-empty split via todayHubCanvasCellLayout + TodayHubCanvasNonEmptyCell
                   (chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
                   const warmKey = hubCellWarmKey(uri, ci);
                   const canPrewarm = chunk.trim().length > 0;
                   const isWarm = canPrewarm && warmOrder.includes(warmKey);
-                  const emptyReadonly = !editing && !isWarm && !chunk.trim();
+                  const surface = todayHubCanvasCellSurface({
+                    editing,
+                    isWarm,
+                    chunkTrimmedLength: chunk.trim().length,
+                  });
+                  const emptyReadonly = surface === 'empty-readonly';
                   const relResolved =
                     relativeMarkdownLinkHrefIsResolvedByRowUri.get(uri)!;
                   const wikiResolved =
@@ -942,8 +951,8 @@ export function TodayHubCanvas({
                     />
                   );
 
-                  const warmOrActive = editing || isWarm;
-                  const showCm = warmOrActive || editing;
+                  const warmOrActive = todayHubCanvasCellWarmOrActive(editing, isWarm);
+                  const showCm = warmOrActive;
 
                   return (
                     <div

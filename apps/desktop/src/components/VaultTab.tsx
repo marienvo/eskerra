@@ -1,3 +1,8 @@
+/**
+ * Vault tab shell: layout, tree/episodes/editor split, dialogs, and editor pane composition.
+ *
+ * Ownership: UI composition + local dialog state; workspace policy lives in `useMainWindowWorkspace`.
+ */
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import type {

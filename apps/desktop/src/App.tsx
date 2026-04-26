@@ -1,3 +1,8 @@
+/**
+ * Desktop app root: window chrome, global shortcuts, vault session, and shell around `VaultTab`.
+ *
+ * Ownership: app-level orchestration and Tauri window integration; vault editing behavior is in `VaultTab` / workspace hook.
+ */
 import {invoke, isTauri} from '@tauri-apps/api/core';
 import {getCurrentWindow, PhysicalSize} from '@tauri-apps/api/window';
 import {open} from '@tauri-apps/plugin-dialog';

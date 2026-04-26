@@ -1,3 +1,8 @@
+/**
+ * Inbox / editor shell restore: merge persisted tabs and Today hub workspaces (pure helpers).
+ *
+ * Ownership: restore-time tab filtering and hub selection; runtime FS reconcile lives in `workspaceFsWatchReconcile`.
+ */
 import {
   tabsFromStored,
   tabsToStored,
