@@ -31,7 +31,7 @@ Expected tags on related events:
 - `watch_session_id=<uuid-or-start>`
 - `vault_root_hash=<non-PII hash>`
 - `backend=<recommended|poll|startup|open_tab_probe>`
-- `reason=<coarse-reason-or-trigger>`
+- `reason=<normalized-reason-or-trigger>` (`vault_watch_start_failed` keeps the raw error message in event extras only)
 
 ## Alert Rules
 

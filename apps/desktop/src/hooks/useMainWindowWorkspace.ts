@@ -233,6 +233,30 @@ function vaultWatchBackendFromReason(reason: string | null): string {
   return parts.length >= 2 && parts[1] ? parts[1] : 'unknown';
 }
 
+function normalizeVaultWatchErrorReason(message: string): string {
+  const lower = message.toLowerCase();
+  const osMatch = lower.match(/\(os error (\d+)\)/);
+  if (osMatch?.[1]) {
+    return `os_error_${osMatch[1]}`;
+  }
+  if (lower.includes('permission denied') || lower.includes('operation not permitted')) {
+    return 'permission_denied';
+  }
+  if (lower.includes('no such file') || lower.includes('not found')) {
+    return 'not_found';
+  }
+  if (lower.includes('too many open files')) {
+    return 'too_many_open_files';
+  }
+  if (lower.includes('recommended watcher')) {
+    return 'recommended_watcher_error';
+  }
+  if (lower.includes('poll watcher')) {
+    return 'poll_watcher_error';
+  }
+  return 'unknown';
+}
+
 function snapshotEditorShellScrollForOpenNote(
   scrollEl: HTMLDivElement | null,
   selectedUri: string | null,
@@ -2251,11 +2275,13 @@ export function useMainWindowWorkspace(options: {
         } catch (watchError) {
           const reason =
             watchError instanceof Error ? watchError.message : String(watchError);
+          const normalizedReason = normalizeVaultWatchErrorReason(reason);
           captureObservabilityMessage({
             message: 'eskerra.desktop.vault_watch_start_failed',
             level: 'warning',
             extra: {
               reason,
+              normalizedReason,
               vaultRootHash: fingerprintUtf16ForDebug(root),
             },
             tags: {
@@ -2263,12 +2289,12 @@ export function useMainWindowWorkspace(options: {
               watch_session_id: 'start',
               vault_root_hash: fingerprintUtf16ForDebug(root),
               backend: 'startup',
-              reason,
+              reason: normalizedReason,
             },
             fingerprint: [
               'eskerra.desktop',
               'vault_watch_start_failed',
-              reason,
+              normalizedReason,
             ],
           });
           throw watchError;
