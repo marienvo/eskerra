@@ -148,6 +148,14 @@ import {
 } from '../lib/vaultFilesChangedPayload';
 import {isPodcastFile} from '../lib/podcasts/podcastParser';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
+import {
+  buildRestoredEditorWorkspace,
+  isUriValidVaultMarkdown,
+  makeStoredTabFilter,
+  mergeStoredHubWorkspaces,
+  pickFinalActiveHub,
+  resolveActiveHubAndTabsSource,
+} from './inboxShellRestoreHelpers';
 
 function trimTrailingSlashes(value: string): string {
   let end = value.length;
@@ -321,6 +329,29 @@ function equalReadonlyStringArrays(
   return true;
 }
 
+function pickVaultLinkFallbackSource(args: {
+  base: string;
+  composingNewEntry: boolean;
+  showTodayHubCanvas: boolean;
+  todayHubWikiNavParent: string | null;
+  selectedUri: string | null;
+}): string {
+  const {
+    base,
+    composingNewEntry,
+    showTodayHubCanvas,
+    todayHubWikiNavParent,
+    selectedUri,
+  } = args;
+  if (composingNewEntry) {
+    return getInboxDirectoryUri(base);
+  }
+  if (showTodayHubCanvas) {
+    return getGeneralDirectoryUri(base);
+  }
+  return todayHubWikiNavParent ?? selectedUri ?? getInboxDirectoryUri(base);
+}
+
 async function loadMarkdownBodiesForWikiMaintenance(
   fs: VaultFilesystem,
   refs: ReadonlyArray<{uri: string}>,
@@ -345,6 +376,143 @@ async function loadMarkdownBodiesForWikiMaintenance(
     }
   }
   return out;
+}
+
+/**
+ * Decide whether a foreground open should use a hub workspace shell variant: full shell (no tabs),
+ * preserve-tabs shell (tabs visible but no active pill), or normal tab navigation.
+ */
+function decideWorkspaceShellMode(args: {
+  targetNorm: string;
+  activeTodayHubUri: string | null;
+  options:
+    | {workspaceShell?: boolean; workspaceShellPreserveTabs?: boolean}
+    | undefined;
+}): 'shell' | 'preserveTabs' | 'normal' {
+  const {targetNorm, activeTodayHubUri, options} = args;
+  const activeHubNorm = normalizeEditorDocUri(activeTodayHubUri ?? '');
+  const isActiveHubFile =
+    activeHubNorm != null
+    && activeHubNorm !== ''
+    && targetNorm === activeHubNorm
+    && vaultUriIsTodayMarkdownFile(targetNorm);
+  if (!isActiveHubFile) {
+    return 'normal';
+  }
+  if (options?.workspaceShell === true) {
+    return 'shell';
+  }
+  if (options?.workspaceShellPreserveTabs === true) {
+    return 'preserveTabs';
+  }
+  return 'normal';
+}
+
+/**
+ * Place a target URI into the editor tab strip for the foreground open path:
+ * either as a new active tab (with optional insertion index/position), or by
+ * navigating the active tab's history when no `newTab` is requested.
+ */
+function applyForegroundOpenTabPlacement(args: {
+  uri: string;
+  targetNorm: string;
+  tabs: readonly EditorWorkspaceTab[];
+  activeId: string | null;
+  options:
+    | {
+        newTab?: boolean;
+        activateNewTab?: boolean;
+        insertAfterActive?: boolean;
+        insertAtIndex?: number;
+        skipHistory?: boolean;
+      }
+    | undefined;
+}): {nextTabs: EditorWorkspaceTab[]; nextActiveId: string | null} {
+  const {uri, targetNorm, tabs, activeId, options} = args;
+  const wantNewTab = options?.newTab === true && options?.activateNewTab !== false;
+  if (wantNewTab) {
+    const newTab = createEditorWorkspaceTab(targetNorm);
+    if (
+      typeof options?.insertAtIndex === 'number'
+      && Number.isFinite(options.insertAtIndex)
+    ) {
+      return {
+        nextTabs: insertTabAtIndex(tabs, options.insertAtIndex, newTab),
+        nextActiveId: newTab.id,
+      };
+    }
+    if (options?.insertAfterActive) {
+      return {
+        nextTabs: insertTabAfterActive(tabs, activeId, newTab),
+        nextActiveId: newTab.id,
+      };
+    }
+    return {nextTabs: [...tabs, newTab], nextActiveId: newTab.id};
+  }
+  const ensuredActive = ensureActiveTabId(tabs, activeId);
+  if (ensuredActive == null) {
+    const first = createEditorWorkspaceTab(targetNorm);
+    return {nextTabs: [first], nextActiveId: first.id};
+  }
+  const navigated = tabs.map(t => {
+    if (t.id !== ensuredActive) return t;
+    if (options?.skipHistory) return t;
+    return pushNavigateOnTab(t, uri);
+  });
+  return {nextTabs: navigated, nextActiveId: ensuredActive};
+}
+
+function refToNameAndUri(ref: {name: string; uri: string}): {name: string; uri: string} {
+  return {name: ref.name, uri: ref.uri};
+}
+
+function refToNameAndUriList(
+  refs: ReadonlyArray<{name: string; uri: string}>,
+): {name: string; uri: string}[] {
+  return refs.map(refToNameAndUri);
+}
+
+async function computeSelectedNoteBacklinkUris(args: {
+  fs: VaultFilesystem;
+  vaultRoot: string;
+  targetUri: string;
+  refs: VaultMarkdownRef[];
+  diskBodyCache: Record<string, string>;
+  inboxContentByUri: Readonly<Record<string, string>>;
+  activeUri: string | null;
+  activeBody: string;
+}): Promise<{uris: readonly string[]; pruned: Record<string, string>}> {
+  const {
+    fs,
+    vaultRoot,
+    targetUri,
+    refs,
+    diskBodyCache,
+    inboxContentByUri,
+    activeUri,
+    activeBody,
+  } = args;
+  const seed = mergeVaultBacklinkBodySeed(diskBodyCache, inboxContentByUri);
+  const expanded = await loadMarkdownBodiesForWikiMaintenance(
+    fs,
+    refs,
+    seed,
+    activeUri,
+    activeBody,
+  );
+  const pruned: Record<string, string> = {};
+  for (const {uri} of refs) {
+    pruned[uri] = expanded[uri] ?? '';
+  }
+  const uris = listInboxAllBacklinkReferrersForTarget({
+    vaultRoot,
+    targetUri,
+    notes: refToNameAndUriList(refs),
+    contentByUri: expanded,
+    activeUri,
+    activeBody,
+  });
+  return {uris, pruned};
 }
 
 export type UseMainWindowWorkspaceResult = {
@@ -567,7 +735,7 @@ export function useMainWindowWorkspace(options: {
   const skipRecencyDeferForUriRef = useRef<Set<string>>(new Set());
   const diskConflictDeferTimerRef = useRef<number | null>(null);
   const [composingNewEntry, setComposingNewEntry] = useState(false);
-  const [showTodayHubCanvas, setShowTodayHubCanvas] = useState(false);
+  // showTodayHubCanvas derives from selection; see useMemo below.
   const [inboxContentByUri, setInboxContentByUri] = useState<Record<string, string>>({});
   const [vaultMarkdownRefs, setVaultMarkdownRefs] = useState<VaultMarkdownRef[]>([]);
   const [fsRefreshNonce, setFsRefreshNonce] = useState(0);
@@ -632,6 +800,9 @@ export function useMainWindowWorkspace(options: {
     string | null
   >(null);
   const inboxYamlFrontmatterInnerRef = useRef<string | null>(null);
+  /** Mirror of leading-before-frontmatter (paired with inner) for use in render-time memos. */
+  const [inboxEditorYamlLeadingBeforeFrontmatter, setInboxEditorYamlLeadingBeforeFrontmatter] =
+    useState('');
   const inboxEditorYamlLeadingBeforeFrontmatterRef = useRef('');
   const autosaveSchedulerRef = useRef(
     createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
@@ -666,11 +837,17 @@ export function useMainWindowWorkspace(options: {
     inboxYamlFrontmatterInnerRef.current = inboxYamlFrontmatterInner;
   }, [inboxYamlFrontmatterInner]);
 
+  useLayoutEffect(() => {
+    inboxEditorYamlLeadingBeforeFrontmatterRef.current =
+      inboxEditorYamlLeadingBeforeFrontmatter;
+  }, [inboxEditorYamlLeadingBeforeFrontmatter]);
+
   const syncFrontmatterStateFromDisk = useCallback(
     (nextInner: string | null, leading: string) => {
       inboxYamlFrontmatterInnerRef.current = nextInner;
       setInboxYamlFrontmatterInner(nextInner);
       inboxEditorYamlLeadingBeforeFrontmatterRef.current = leading;
+      setInboxEditorYamlLeadingBeforeFrontmatter(leading);
     },
     [],
   );
@@ -705,10 +882,6 @@ export function useMainWindowWorkspace(options: {
   useLayoutEffect(() => {
     composingNewEntryRef.current = composingNewEntry;
   }, [composingNewEntry]);
-
-  useLayoutEffect(() => {
-    showTodayHubCanvasRef.current = showTodayHubCanvas;
-  }, [showTodayHubCanvas]);
 
   useLayoutEffect(() => {
     editorBodyRef.current = editorBody;
@@ -907,60 +1080,43 @@ export function useMainWindowWorkspace(options: {
     const selected = selectedUri;
     let cancelled = false;
 
+    const runBacklinkScan = async () => {
+      const activeUri = selectedUriRef.current;
+      const activeBody = backlinksActiveBodyRef.current;
+      if (cancelled || activeUri !== selected) {
+        return;
+      }
+      try {
+        const {uris, pruned} = await computeSelectedNoteBacklinkUris({
+          fs,
+          vaultRoot,
+          targetUri: selected,
+          refs: vaultMarkdownRefsRef.current,
+          diskBodyCache: vaultBacklinkDiskBodyCacheRef.current,
+          inboxContentByUri: inboxContentByUriRef.current,
+          activeUri,
+          activeBody,
+        });
+        vaultBacklinkDiskBodyCacheRef.current = pruned;
+        if (cancelled || selectedUriRef.current !== selected) {
+          return;
+        }
+        setSelectedNoteBacklinkUris(prev =>
+          equalReadonlyStringArrays(prev, uris) ? prev : uris,
+        );
+      } catch {
+        if (cancelled || selectedUriRef.current !== selected) {
+          return;
+        }
+        setSelectedNoteBacklinkUris(prev => (prev.length === 0 ? prev : []));
+      }
+    };
+
     const tid = window.setTimeout(() => {
       if (cancelled) {
         return;
       }
-      void (async () => {
-        try {
-          const refs = vaultMarkdownRefsRef.current;
-          const activeUri = selectedUriRef.current;
-          const activeBody = backlinksActiveBodyRef.current;
-          if (cancelled || activeUri !== selected) {
-            return;
-          }
-
-          const seed = mergeVaultBacklinkBodySeed(
-            vaultBacklinkDiskBodyCacheRef.current,
-            inboxContentByUriRef.current,
-          );
-          const expanded = await loadMarkdownBodiesForWikiMaintenance(
-            fs,
-            refs,
-            seed,
-            activeUri,
-            activeBody,
-          );
-          const pruned: Record<string, string> = {};
-          for (const {uri} of refs) {
-            pruned[uri] = expanded[uri] ?? '';
-          }
-          vaultBacklinkDiskBodyCacheRef.current = pruned;
-          if (cancelled || selectedUriRef.current !== selected) {
-            return;
-          }
-
-          const uris = listInboxAllBacklinkReferrersForTarget({
-            vaultRoot,
-            targetUri: selected,
-            notes: refs.map(r => ({name: r.name, uri: r.uri})),
-            contentByUri: expanded,
-            activeUri,
-            activeBody,
-          });
-          if (!cancelled && selectedUriRef.current === selected) {
-            setSelectedNoteBacklinkUris(prev =>
-              equalReadonlyStringArrays(prev, uris) ? prev : uris,
-            );
-          }
-        } catch {
-          if (!cancelled && selectedUriRef.current === selected) {
-            setSelectedNoteBacklinkUris(prev =>
-              prev.length === 0 ? prev : [],
-            );
-          }
-        }
-      })();
+      void runBacklinkScan();
     }, VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS);
 
     return () => {
@@ -981,19 +1137,21 @@ export function useMainWindowWorkspace(options: {
     vaultMarkdownRefsRef.current = vaultMarkdownRefs;
   }, [vaultMarkdownRefs]);
 
-  useEffect(() => {
+  const showTodayHubCanvas = useMemo(() => {
     if (!vaultRoot || !selectedUri || composingNewEntry) {
-      setShowTodayHubCanvas(false);
-      return;
+      return false;
     }
     const normRoot = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
     const normSel = selectedUri.replace(/\\/g, '/');
     if (!normSel.startsWith(`${normRoot}/`)) {
-      setShowTodayHubCanvas(false);
-      return;
+      return false;
     }
-    setShowTodayHubCanvas(vaultUriIsTodayMarkdownFile(normSel));
+    return vaultUriIsTodayMarkdownFile(normSel);
   }, [vaultRoot, selectedUri, composingNewEntry]);
+
+  useLayoutEffect(() => {
+    showTodayHubCanvasRef.current = showTodayHubCanvas;
+  }, [showTodayHubCanvas]);
 
   // Use `inboxYamlFrontmatterInner` state in the merge (not only the ref) so deps match and Today hub
   // refreshes on frontmatter-only edits. Leading still comes from the ref (updated with inner on disk sync).
@@ -1006,10 +1164,17 @@ export function useMainWindowWorkspace(options: {
       selectedUri,
       composingNewEntry,
       inboxYamlFrontmatterInner,
-      inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+      inboxEditorYamlLeadingBeforeFrontmatter,
     );
     return parseTodayHubFrontmatter(full);
-  }, [showTodayHubCanvas, selectedUri, editorBody, composingNewEntry, inboxYamlFrontmatterInner]);
+  }, [
+    showTodayHubCanvas,
+    selectedUri,
+    editorBody,
+    composingNewEntry,
+    inboxYamlFrontmatterInner,
+    inboxEditorYamlLeadingBeforeFrontmatter,
+  ]);
 
   useLayoutEffect(() => {
     todayHubSettingsRef.current = todayHubSettings;
@@ -1027,6 +1192,25 @@ export function useMainWindowWorkspace(options: {
     [fs],
   );
 
+  /** Merge a known-good body for `norm` into the inbox content cache (state + ref). No-op if no change. */
+  const mergeInboxNoteBodyCacheRefAndState = useCallback(
+    (norm: string, body: string) => {
+      const nextCache = mergeInboxNoteBodyIntoCache(
+        inboxContentByUriRef.current,
+        norm,
+        body,
+      );
+      if (!nextCache) {
+        return;
+      }
+      inboxContentByUriRef.current = nextCache;
+      setInboxContentByUri(prev =>
+        mergeInboxNoteBodyIntoCache(prev, norm, body) ?? prev,
+      );
+    },
+    [],
+  );
+
   /**
    * Persists a fixed URI + markdown captured when leaving a dirty note, chained like
    * `enqueueInboxPersist` but **not** awaited by `openMarkdownInEditor`. Uses stale-cache guards so
@@ -1036,81 +1220,51 @@ export function useMainWindowWorkspace(options: {
   const enqueuePersistOutgoingNoteMarkdown = useCallback(
     (uri: string, leaveSnapshotMarkdown: string): void => {
       const norm = normalizeEditorDocUri(uri);
-      const run = async (): Promise<void> => {
+
+      const persistOutgoingNoteSnapshot = async (): Promise<void> => {
         const root = vaultRootRef.current;
-        if (!root) {
-          return;
-        }
+        if (!root) return;
         const dc = diskConflictRef.current;
-        if (dc && normalizeEditorDocUri(dc.uri) === norm) {
-          return;
-        }
+        if (dc && normalizeEditorDocUri(dc.uri) === norm) return;
         const memStart = inboxContentByUriRef.current[norm];
-        if (shouldSkipOutgoingPersistAfterNoteLeave(memStart, leaveSnapshotMarkdown)) {
+        if (shouldSkipOutgoingPersistAfterNoteLeave(memStart, leaveSnapshotMarkdown)) return;
+
+        setErr(null);
+        const md = await persistTransientMarkdownImages(leaveSnapshotMarkdown, root);
+        if (markdownContainsTransientImageUrls(md)) {
+          setErr(
+            'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
+          );
           return;
         }
+        if (md !== leaveSnapshotMarkdown) {
+          mergeInboxNoteBodyCacheRefAndState(norm, md);
+          const active = selectedUriRef.current;
+          if (active && normalizeEditorDocUri(active) === norm) {
+            loadFullMarkdownIntoInboxEditor(md, norm, 'preserve');
+            scheduleBacklinksDeferOneFrameAfterLoad();
+          }
+        }
+        const memBeforeSave = inboxContentByUriRef.current[norm];
+        if (shouldSkipOutgoingPersistBeforeWrite(memBeforeSave, leaveSnapshotMarkdown, md)) {
+          return;
+        }
+        await saveNoteMarkdown(norm, fs, md);
+        refreshNotes(root).catch(() => undefined);
+
+        const activeSel = selectedUriRef.current;
+        if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
+          lastPersistedRef.current = {uri: norm, markdown: md};
+        }
+        const memAfter = inboxContentByUriRef.current[norm];
+        if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
+          mergeInboxNoteBodyCacheRefAndState(norm, md);
+        }
+      };
+
+      const run = async (): Promise<void> => {
         try {
-          setErr(null);
-          const md = await persistTransientMarkdownImages(
-            leaveSnapshotMarkdown,
-            root,
-          );
-          if (markdownContainsTransientImageUrls(md)) {
-            setErr(
-              'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
-            );
-            return;
-          }
-          if (md !== leaveSnapshotMarkdown) {
-            const nextCache = mergeInboxNoteBodyIntoCache(
-              inboxContentByUriRef.current,
-              norm,
-              md,
-            );
-            if (nextCache) {
-              inboxContentByUriRef.current = nextCache;
-              setInboxContentByUri(prev =>
-                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
-              );
-            }
-            const active = selectedUriRef.current;
-            if (active && normalizeEditorDocUri(active) === norm) {
-              loadFullMarkdownIntoInboxEditor(md, norm, 'preserve');
-              scheduleBacklinksDeferOneFrameAfterLoad();
-            }
-          }
-          const memBeforeSave = inboxContentByUriRef.current[norm];
-          if (
-            shouldSkipOutgoingPersistBeforeWrite(
-              memBeforeSave,
-              leaveSnapshotMarkdown,
-              md,
-            )
-          ) {
-            return;
-          }
-          await saveNoteMarkdown(norm, fs, md);
-          refreshNotes(root).catch(() => undefined);
-
-          const activeSel = selectedUriRef.current;
-          if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
-            lastPersistedRef.current = {uri: norm, markdown: md};
-          }
-
-          const memAfter = inboxContentByUriRef.current[norm];
-          if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
-            const nextCache2 = mergeInboxNoteBodyIntoCache(
-              inboxContentByUriRef.current,
-              norm,
-              md,
-            );
-            if (nextCache2) {
-              inboxContentByUriRef.current = nextCache2;
-              setInboxContentByUri(prev =>
-                mergeInboxNoteBodyIntoCache(prev, norm, md) ?? prev,
-              );
-            }
-          }
+          await persistOutgoingNoteSnapshot();
         } catch (e) {
           setErr(e instanceof Error ? e.message : String(e));
         }
@@ -1127,6 +1281,7 @@ export function useMainWindowWorkspace(options: {
       refreshNotes,
       loadFullMarkdownIntoInboxEditor,
       scheduleBacklinksDeferOneFrameAfterLoad,
+      mergeInboxNoteBodyCacheRefAndState,
     ],
   );
 
@@ -1313,7 +1468,7 @@ export function useMainWindowWorkspace(options: {
       saveChainRef.current = next.catch(() => undefined);
       await next;
     },
-    [fs, refreshNotes],
+    [fs, refreshNotes, subtreeMarkdownCache],
   );
 
   const resolveDiskConflictReloadFromDisk = useCallback(() => {
@@ -1397,7 +1552,170 @@ export function useMainWindowWorkspace(options: {
     await enqueueInboxPersist();
   }, [enqueueInboxPersist]);
 
-  flushInboxSaveRef.current = flushInboxSave;
+  useLayoutEffect(() => {
+    flushInboxSaveRef.current = flushInboxSave;
+  }, [flushInboxSave]);
+
+  const clearStaleDiskConflictsForOpen = useCallback((targetNorm: string) => {
+    const prevConflict = diskConflictRef.current;
+    if (prevConflict && normalizeEditorDocUri(prevConflict.uri) !== targetNorm) {
+      setDiskConflict(null);
+      diskConflictRef.current = null;
+    }
+    const prevSoft = diskConflictSoftRef.current;
+    if (prevSoft && normalizeEditorDocUri(prevSoft.uri) !== targetNorm) {
+      setDiskConflictSoft(null);
+      diskConflictSoftRef.current = null;
+    }
+  }, []);
+
+  const prepareInboxScrollDirectiveForOpen = useCallback(
+    (targetNorm: string, skipHistory: boolean) => {
+      if (skipHistory) {
+        const saved =
+          editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
+        inboxEditorShellScrollDirectiveRef.current = {
+          kind: 'restore',
+          top: saved.top,
+          left: saved.left,
+        };
+        return;
+      }
+      inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
+    },
+    [],
+  );
+
+  /** Snapshot the currently open note into the cache, and enqueue a deferred persist if dirty. */
+  const snapshotAndPersistCurrentNoteBeforeOpen = useCallback(() => {
+    const root = vaultRootRef.current;
+    const curUri = selectedUriRef.current;
+    if (curUri == null || composingNewEntryRef.current) {
+      return;
+    }
+    const snapMdForSlice =
+      inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current;
+    const snapshot = inboxEditorSliceToFullMarkdown(
+      snapMdForSlice,
+      curUri,
+      false,
+      inboxYamlFrontmatterInnerRef.current,
+      inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+    );
+    mergeInboxNoteBodyCacheRefAndState(curUri, snapshot);
+    const prev = lastPersistedRef.current;
+    const needsPersist =
+      root != null && !(prev && prev.uri === curUri && prev.markdown === snapshot);
+    if (needsPersist) {
+      enqueuePersistOutgoingNoteMarkdown(curUri, snapshot);
+    }
+  }, [
+    inboxEditorRef,
+    enqueuePersistOutgoingNoteMarkdown,
+    mergeInboxNoteBodyCacheRefAndState,
+  ]);
+
+  const tryPrefetchTargetBody = useCallback(
+    async (targetNorm: string, openGen: number): Promise<string | undefined> => {
+      try {
+        const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
+        if (openGen !== openMarkdownGenerationRef.current) {
+          return undefined;
+        }
+        return normalizeVaultMarkdownDiskRead(raw);
+      } catch (e) {
+        if (openGen !== openMarkdownGenerationRef.current) {
+          return undefined;
+        }
+        setErr(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    },
+    [fs],
+  );
+
+  /**
+   * After a foreground open has placed the tab, resolve the body to load (prefetched or cached),
+   * load it into the inbox editor, and commit selection state.
+   */
+  const loadOpenedNoteBodyAndApplySelection = useCallback(
+    (targetNorm: string, prefetchBody: string | undefined) => {
+      if (prefetchBody !== undefined) {
+        lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
+        inboxContentByUriRef.current = {
+          ...inboxContentByUriRef.current,
+          [targetNorm]: prefetchBody,
+        };
+      }
+      const resolvedEditorBody =
+        prefetchBody !== undefined
+          ? prefetchBody
+          : inboxContentByUriRef.current[targetNorm];
+      if (resolvedEditorBody !== undefined) {
+        lastPersistedRef.current = {uri: targetNorm, markdown: resolvedEditorBody};
+        eagerEditorLoadUriRef.current = targetNorm;
+        backlinksActiveBodyRef.current = resolvedEditorBody;
+        loadFullMarkdownIntoInboxEditor(resolvedEditorBody, targetNorm, 'start');
+        scheduleBacklinksDeferOneFrameAfterLoad();
+      }
+      selectedUriRef.current = targetNorm;
+      composingNewEntryRef.current = false;
+      if (prefetchBody !== undefined) {
+        setInboxContentByUri(prev => {
+          if (prev[targetNorm] === prefetchBody) {
+            return prev;
+          }
+          return {...prev, [targetNorm]: prefetchBody};
+        });
+      }
+      if (resolvedEditorBody !== undefined) {
+        setBacklinksActiveBody(resolvedEditorBody);
+      }
+      setComposingNewEntry(false);
+      setSelectedUri(targetNorm);
+    },
+    [loadFullMarkdownIntoInboxEditor, scheduleBacklinksDeferOneFrameAfterLoad],
+  );
+
+  const applyBackgroundNewTabOpen = useCallback(
+    (
+      targetNorm: string,
+      options:
+        | {insertAtIndex?: number; insertAfterActive?: boolean}
+        | undefined,
+      prefetchBody: string | undefined,
+    ) => {
+      const newTab = createEditorWorkspaceTab(targetNorm);
+      const curTabs = editorWorkspaceTabsRef.current;
+      const activeId = activeEditorTabIdRef.current;
+      let nextTabs: EditorWorkspaceTab[];
+      if (
+        typeof options?.insertAtIndex === 'number'
+        && Number.isFinite(options.insertAtIndex)
+      ) {
+        nextTabs = insertTabAtIndex(curTabs, options.insertAtIndex, newTab);
+      } else if (options?.insertAfterActive) {
+        nextTabs = insertTabAfterActive(curTabs, activeId, newTab);
+      } else {
+        nextTabs = [...curTabs, newTab];
+      }
+      editorWorkspaceTabsRef.current = nextTabs;
+      setEditorWorkspaceTabs(nextTabs);
+      if (prefetchBody !== undefined) {
+        inboxContentByUriRef.current = {
+          ...inboxContentByUriRef.current,
+          [targetNorm]: prefetchBody,
+        };
+        setInboxContentByUri(prev => {
+          if (prev[targetNorm] === prefetchBody) {
+            return prev;
+          }
+          return {...prev, [targetNorm]: prefetchBody};
+        });
+      }
+    },
+    [],
+  );
 
   const openMarkdownInEditor = useCallback(
     async (
@@ -1452,196 +1770,56 @@ export function useMainWindowWorkspace(options: {
         composingNewEntryRef.current,
         editorShellScrollByUriRef.current,
       );
-      const prevConflict = diskConflictRef.current;
-      if (
-        prevConflict &&
-        normalizeEditorDocUri(prevConflict.uri) !== targetNorm
-      ) {
-        setDiskConflict(null);
-        diskConflictRef.current = null;
-      }
-      const prevSoft = diskConflictSoftRef.current;
-      if (
-        prevSoft &&
-        normalizeEditorDocUri(prevSoft.uri) !== targetNorm
-      ) {
-        setDiskConflictSoft(null);
-        diskConflictSoftRef.current = null;
-      }
+      clearStaleDiskConflictsForOpen(targetNorm);
       const isBackgroundNewTab =
         options?.newTab === true && options?.activateNewTab === false;
 
       if (!isBackgroundNewTab) {
-        if (options?.skipHistory) {
-          const saved =
-            editorShellScrollByUriRef.current.get(targetNorm) ?? {top: 0, left: 0};
-          inboxEditorShellScrollDirectiveRef.current = {
-            kind: 'restore',
-            top: saved.top,
-            left: saved.left,
-          };
-        } else {
-          inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
-        }
+        prepareInboxScrollDirectiveForOpen(targetNorm, options?.skipHistory === true);
       }
 
-      const root = vaultRootRef.current;
-      const curUri = selectedUriRef.current;
-      const snapMdForSlice =
-        curUri != null && !composingNewEntryRef.current
-          ? inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current
-          : undefined;
-      const snapshot =
-        curUri != null && !composingNewEntryRef.current && snapMdForSlice !== undefined
-          ? inboxEditorSliceToFullMarkdown(
-              snapMdForSlice,
-              curUri,
-              false,
-              inboxYamlFrontmatterInnerRef.current,
-              inboxEditorYamlLeadingBeforeFrontmatterRef.current,
-            )
-          : undefined;
-      if (curUri != null && snapshot !== undefined) {
-        const nextCache = mergeInboxNoteBodyIntoCache(
-          inboxContentByUriRef.current,
-          curUri,
-          snapshot,
-        );
-        if (nextCache) {
-          inboxContentByUriRef.current = nextCache;
-          setInboxContentByUri(prev =>
-            mergeInboxNoteBodyIntoCache(prev, curUri, snapshot) ?? prev,
-          );
-        }
-      }
-      const needsPersist =
-        root != null &&
-        curUri != null &&
-        snapshot !== undefined &&
-        (() => {
-          const prev = lastPersistedRef.current;
-          return !(prev && prev.uri === curUri && prev.markdown === snapshot);
-        })();
-      if (needsPersist && curUri != null && snapshot !== undefined) {
-        enqueuePersistOutgoingNoteMarkdown(curUri, snapshot);
-      }
+      snapshotAndPersistCurrentNoteBeforeOpen();
       if (openGen !== openMarkdownGenerationRef.current) {
         return;
       }
 
-      const cacheMissPrefetch =
-        root != null &&
-        inboxContentByUriRef.current[targetNorm] === undefined;
       let prefetchBody: string | undefined;
-      if (cacheMissPrefetch) {
-        try {
-          const raw = await fs.readFile(targetNorm, {encoding: 'utf8'});
-          if (openGen !== openMarkdownGenerationRef.current) {
-            return;
-          }
-          prefetchBody = normalizeVaultMarkdownDiskRead(raw);
-        } catch (e) {
-          if (openGen !== openMarkdownGenerationRef.current) {
-            return;
-          }
-          setErr(e instanceof Error ? e.message : String(e));
+      const root = vaultRootRef.current;
+      if (root != null && inboxContentByUriRef.current[targetNorm] === undefined) {
+        prefetchBody = await tryPrefetchTargetBody(targetNorm, openGen);
+        if (openGen !== openMarkdownGenerationRef.current) {
+          return;
         }
-      }
-
-      if (openGen !== openMarkdownGenerationRef.current) {
-        return;
       }
 
       if (isBackgroundNewTab) {
-        const newTab = createEditorWorkspaceTab(targetNorm);
-        const curTabs = editorWorkspaceTabsRef.current;
-        const activeId = activeEditorTabIdRef.current;
-        let nextTabs: EditorWorkspaceTab[];
-        if (
-          typeof options?.insertAtIndex === 'number'
-          && Number.isFinite(options.insertAtIndex)
-        ) {
-          nextTabs = insertTabAtIndex(curTabs, options.insertAtIndex, newTab);
-        } else if (options?.insertAfterActive) {
-          nextTabs = insertTabAfterActive(curTabs, activeId, newTab);
-        } else {
-          nextTabs = [...curTabs, newTab];
-        }
-        editorWorkspaceTabsRef.current = nextTabs;
-        setEditorWorkspaceTabs(nextTabs);
-        if (prefetchBody !== undefined) {
-          inboxContentByUriRef.current = {
-            ...inboxContentByUriRef.current,
-            [targetNorm]: prefetchBody,
-          };
-          setInboxContentByUri(prev => {
-            if (prev[targetNorm] === prefetchBody) {
-              return prev;
-            }
-            return {...prev, [targetNorm]: prefetchBody!};
-          });
-        }
+        applyBackgroundNewTabOpen(targetNorm, options, prefetchBody);
         return;
       }
 
       let nextTabs = editorWorkspaceTabsRef.current;
       let nextActiveId = activeEditorTabIdRef.current;
-
-      const activeHubNorm = normalizeEditorDocUri(
-        activeTodayHubUriRef.current ?? '',
-      );
-      const useWorkspaceShell =
-        options?.workspaceShell === true
-        && activeHubNorm != null
-        && activeHubNorm !== ''
-        && targetNorm === activeHubNorm
-        && vaultUriIsTodayMarkdownFile(targetNorm);
-
-      const useWorkspaceShellPreserveTabs =
-        !useWorkspaceShell
-        && options?.workspaceShellPreserveTabs === true
-        && activeHubNorm != null
-        && activeHubNorm !== ''
-        && targetNorm === activeHubNorm
-        && vaultUriIsTodayMarkdownFile(targetNorm);
-
-      if (useWorkspaceShell) {
+      const shellMode = decideWorkspaceShellMode({
+        targetNorm,
+        activeTodayHubUri: activeTodayHubUriRef.current,
+        options,
+      });
+      if (shellMode === 'shell') {
         nextTabs = [];
         nextActiveId = null;
-      } else if (useWorkspaceShellPreserveTabs) {
+      } else if (shellMode === 'preserveTabs') {
         nextTabs = [...editorWorkspaceTabsRef.current];
         nextActiveId = null;
-      } else if (options?.newTab && options?.activateNewTab !== false) {
-        const newTab = createEditorWorkspaceTab(targetNorm);
-        if (
-          typeof options?.insertAtIndex === 'number'
-          && Number.isFinite(options.insertAtIndex)
-        ) {
-          nextTabs = insertTabAtIndex(nextTabs, options.insertAtIndex, newTab);
-        } else if (options?.insertAfterActive) {
-          nextTabs = insertTabAfterActive(nextTabs, nextActiveId, newTab);
-        } else {
-          nextTabs = [...nextTabs, newTab];
-        }
-        nextActiveId = newTab.id;
       } else {
-        const activeId = ensureActiveTabId(nextTabs, nextActiveId);
-        if (activeId == null) {
-          const first = createEditorWorkspaceTab(targetNorm);
-          nextTabs = [first];
-          nextActiveId = first.id;
-        } else {
-          nextTabs = nextTabs.map(t => {
-            if (t.id !== activeId) {
-              return t;
-            }
-            if (options?.skipHistory) {
-              return t;
-            }
-            return pushNavigateOnTab(t, uri);
-          });
-          nextActiveId = activeId;
-        }
+        const placement = applyForegroundOpenTabPlacement({
+          uri,
+          targetNorm,
+          tabs: nextTabs,
+          activeId: nextActiveId,
+          options,
+        });
+        nextTabs = placement.nextTabs;
+        nextActiveId = placement.nextActiveId;
       }
 
       editorWorkspaceTabsRef.current = nextTabs;
@@ -1649,64 +1827,16 @@ export function useMainWindowWorkspace(options: {
       setEditorWorkspaceTabs(nextTabs);
       setActiveEditorTabId(nextActiveId);
 
-      if (prefetchBody !== undefined) {
-        lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
-        inboxContentByUriRef.current = {...inboxContentByUriRef.current, [targetNorm]: prefetchBody};
-      }
-
-      const resolvedEditorBody =
-        prefetchBody !== undefined
-          ? prefetchBody
-          : inboxContentByUriRef.current[targetNorm];
-
-      if (resolvedEditorBody !== undefined) {
-        lastPersistedRef.current = {uri: targetNorm, markdown: resolvedEditorBody};
-        eagerEditorLoadUriRef.current = targetNorm;
-        backlinksActiveBodyRef.current = resolvedEditorBody;
-        loadFullMarkdownIntoInboxEditor(
-          resolvedEditorBody,
-          targetNorm,
-          'start',
-        );
-        scheduleBacklinksDeferOneFrameAfterLoad();
-      }
-
-      selectedUriRef.current = targetNorm;
-      composingNewEntryRef.current = false;
-
-      if (prefetchBody !== undefined) {
-        setInboxContentByUri(prev => {
-          if (prev[targetNorm] === prefetchBody) {
-            return prev;
-          }
-          return {...prev, [targetNorm]: prefetchBody!};
-        });
-      }
-      if (resolvedEditorBody !== undefined) {
-        setBacklinksActiveBody(resolvedEditorBody);
-      }
-      setComposingNewEntry(false);
-      {
-        const vr = vaultRootRef.current;
-        let nextShowTodayHub = false;
-        if (vr && targetNorm) {
-          const normRootTrimmed = trimTrailingSlashes(normalizeVaultBaseUri(vr).replace(/\\/g, '/'));
-          const normSel = targetNorm.replace(/\\/g, '/');
-          if (normSel.startsWith(`${normRootTrimmed}/`)) {
-            nextShowTodayHub = vaultUriIsTodayMarkdownFile(normSel);
-          }
-        }
-        setShowTodayHubCanvas(nextShowTodayHub);
-      }
-      setSelectedUri(targetNorm);
+      loadOpenedNoteBodyAndApplySelection(targetNorm, prefetchBody);
     },
     [
-      enqueuePersistOutgoingNoteMarkdown,
-      fs,
-      inboxEditorRef,
       inboxEditorShellScrollRef,
-      loadFullMarkdownIntoInboxEditor,
-      scheduleBacklinksDeferOneFrameAfterLoad,
+      clearStaleDiskConflictsForOpen,
+      prepareInboxScrollDirectiveForOpen,
+      snapshotAndPersistCurrentNoteBeforeOpen,
+      tryPrefetchTargetBody,
+      applyBackgroundNewTabOpen,
+      loadOpenedNoteBodyAndApplySelection,
     ],
   );
 
@@ -1928,6 +2058,74 @@ export function useMainWindowWorkspace(options: {
     [busy],
   );
 
+  /** Reset the inbox editor body, frontmatter state, and any reset-nonce-driven CodeMirror reload. */
+  const resetInboxEditorComposeState = useCallback(() => {
+    clearInboxYamlFrontmatterEditorRefs({
+      inner: inboxYamlFrontmatterInnerRef,
+      leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
+      setInner: setInboxYamlFrontmatterInner,
+      setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
+    });
+    setEditorBody('');
+    setInboxEditorResetNonce(n => n + 1);
+  }, []);
+
+  /** Drop the active inbox selection entirely — clear refs, state, and editor. */
+  const clearInboxSelection = useCallback(() => {
+    selectedUriRef.current = null;
+    composingNewEntryRef.current = false;
+    lastPersistedRef.current = null;
+    setSelectedUri(null);
+    setComposingNewEntry(false);
+    resetInboxEditorComposeState();
+  }, [resetInboxEditorComposeState]);
+
+  const recordClosedTabAndPruneScroll = useCallback(
+    (tabsBefore: readonly EditorWorkspaceTab[], tabId: string, tabClosing: EditorWorkspaceTab | undefined) => {
+      const closedUri = tabClosing ? tabCurrentUri(tabClosing) : null;
+      if (closedUri) {
+        const closedIndex = tabsBefore.findIndex(t => t.id === tabId);
+        editorClosedTabsStackRef.current.push({
+          uri: closedUri,
+          index: closedIndex >= 0 ? closedIndex : tabsBefore.length - 1,
+        });
+      }
+      bumpEditorClosedStack();
+      if (tabClosing) {
+        for (const u of tabClosing.history.entries) {
+          editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(u));
+        }
+      }
+    },
+    [bumpEditorClosedStack],
+  );
+
+  const refocusAfterClosingActiveTab = useCallback(
+    async (nextTabId: string | null, nextTabs: readonly EditorWorkspaceTab[]) => {
+      if (nextTabId) {
+        activeEditorTabIdRef.current = nextTabId;
+        setActiveEditorTabId(nextTabId);
+      }
+      const neighbor = nextTabId ? findTabById(nextTabs, nextTabId) : undefined;
+      const nextUri = neighbor ? tabCurrentUri(neighbor) : null;
+      if (nextUri) {
+        await openMarkdownInEditor(nextUri, {skipHistory: true});
+        return;
+      }
+      const shellHub = activeTodayHubUriRef.current;
+      if (shellHub) {
+        await openMarkdownInEditor(shellHub, {workspaceShell: true});
+        return;
+      }
+      if (!nextTabId) {
+        activeEditorTabIdRef.current = null;
+        setActiveEditorTabId(null);
+      }
+      clearInboxSelection();
+    },
+    [openMarkdownInEditor, clearInboxSelection],
+  );
+
   const closeEditorTab = useCallback(
     (tabId: string) => {
       void (async () => {
@@ -1941,21 +2139,7 @@ export function useMainWindowWorkspace(options: {
           await saveChainRef.current.catch(() => undefined);
         }
 
-        const closedUri = tabClosing ? tabCurrentUri(tabClosing) : null;
-        if (closedUri) {
-          const closedIndex = tabsBefore.findIndex(t => t.id === tabId);
-          editorClosedTabsStackRef.current.push({
-            uri: closedUri,
-            index: closedIndex >= 0 ? closedIndex : tabsBefore.length - 1,
-          });
-        }
-        bumpEditorClosedStack();
-
-        if (tabClosing) {
-          for (const u of tabClosing.history.entries) {
-            editorShellScrollByUriRef.current.delete(normalizeEditorDocUri(u));
-          }
-        }
+        recordClosedTabAndPruneScroll(tabsBefore, tabId, tabClosing);
 
         const nextTabId = pickNeighborTabIdAfterRemovingTab(tabsBefore, tabId);
         const nextTabs = tabsBefore.filter(t => t.id !== tabId);
@@ -1965,59 +2149,10 @@ export function useMainWindowWorkspace(options: {
         if (!wasActive) {
           return;
         }
-
-        if (nextTabId) {
-          activeEditorTabIdRef.current = nextTabId;
-          setActiveEditorTabId(nextTabId);
-          const neighbor = findTabById(nextTabs, nextTabId);
-          const nextUri = neighbor ? tabCurrentUri(neighbor) : null;
-          if (nextUri) {
-            await openMarkdownInEditor(nextUri, {skipHistory: true});
-          } else {
-            const shellHubNeighbor = activeTodayHubUriRef.current;
-            if (shellHubNeighbor) {
-              await openMarkdownInEditor(shellHubNeighbor, {workspaceShell: true});
-            } else {
-              activeEditorTabIdRef.current = null;
-              setActiveEditorTabId(null);
-              selectedUriRef.current = null;
-              composingNewEntryRef.current = false;
-              lastPersistedRef.current = null;
-              setSelectedUri(null);
-              setComposingNewEntry(false);
-              clearInboxYamlFrontmatterEditorRefs({
-                inner: inboxYamlFrontmatterInnerRef,
-                leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-                setInner: setInboxYamlFrontmatterInner,
-              });
-              setEditorBody('');
-              setInboxEditorResetNonce(n => n + 1);
-            }
-          }
-        } else {
-          const shellHub = activeTodayHubUriRef.current;
-          if (shellHub) {
-            await openMarkdownInEditor(shellHub, {workspaceShell: true});
-            return;
-          }
-          activeEditorTabIdRef.current = null;
-          setActiveEditorTabId(null);
-          selectedUriRef.current = null;
-          composingNewEntryRef.current = false;
-          lastPersistedRef.current = null;
-          setSelectedUri(null);
-          setComposingNewEntry(false);
-          clearInboxYamlFrontmatterEditorRefs({
-            inner: inboxYamlFrontmatterInnerRef,
-            leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-            setInner: setInboxYamlFrontmatterInner,
-          });
-          setEditorBody('');
-          setInboxEditorResetNonce(n => n + 1);
-        }
+        await refocusAfterClosingActiveTab(nextTabId, nextTabs);
       })();
     },
-    [openMarkdownInEditor, bumpEditorClosedStack],
+    [recordClosedTabAndPruneScroll, refocusAfterClosingActiveTab],
   );
 
   const closeOtherEditorTabs = useCallback(
@@ -2095,6 +2230,7 @@ export function useMainWindowWorkspace(options: {
         inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
         setInner: setInboxYamlFrontmatterInner,
+        setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
       });
       setEditorBody('');
       setInboxEditorResetNonce(n => n + 1);
@@ -2171,6 +2307,7 @@ export function useMainWindowWorkspace(options: {
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
           setInner: setInboxYamlFrontmatterInner,
+          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
         });
         setEditorBody('');
         lastPersistedRef.current = null;
@@ -2190,7 +2327,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [fs, refreshNotes, clearRenameNotice, bumpEditorClosedStack],
+    [fs, refreshNotes, clearRenameNotice, bumpEditorClosedStack, subtreeMarkdownCache],
   );
 
   useEffect(() => {
@@ -2289,6 +2426,7 @@ export function useMainWindowWorkspace(options: {
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
           setInner: setInboxYamlFrontmatterInner,
+          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -2656,11 +2794,14 @@ export function useMainWindowWorkspace(options: {
     openMarkdownInEditor,
     loadFullMarkdownIntoInboxEditor,
     scheduleBacklinksDeferOneFrameAfterLoad,
+    subtreeMarkdownCache,
   ]);
 
   useEffect(() => {
     if (!vaultRoot) {
-      setVaultMarkdownRefs([]);
+      queueMicrotask(() => {
+        setVaultMarkdownRefs([]);
+      });
       return;
     }
     const gen = ++vaultRefsBuildGenRef.current;
@@ -2722,6 +2863,7 @@ export function useMainWindowWorkspace(options: {
         inner: inboxYamlFrontmatterInnerRef,
         leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
         setInner: setInboxYamlFrontmatterInner,
+        setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
       });
       setEditorBody('');
       lastPersistedRef.current = null;
@@ -2747,8 +2889,11 @@ export function useMainWindowWorkspace(options: {
       return;
     }
     inboxYamlFrontmatterInnerRef.current = null;
-    setInboxYamlFrontmatterInner(null);
     inboxEditorYamlLeadingBeforeFrontmatterRef.current = '';
+    queueMicrotask(() => {
+      setInboxYamlFrontmatterInner(null);
+      setInboxEditorYamlLeadingBeforeFrontmatter('');
+    });
     inboxEditorRef.current?.loadMarkdown('', {selection: 'start'});
     scheduleBacklinksDeferOneFrameAfterLoad();
   }, [vaultRoot, selectedUri, inboxEditorRef, scheduleBacklinksDeferOneFrameAfterLoad]);
@@ -2756,14 +2901,20 @@ export function useMainWindowWorkspace(options: {
 
   useLayoutEffect(() => {
     if (composingNewEntry || !selectedUri) {
-      setBacklinksActiveBody('');
+      if (backlinksActiveBodyRef.current !== '') {
+        queueMicrotask(() => {
+          setBacklinksActiveBody('');
+        });
+      }
       return;
     }
     const snap = inboxContentByUriRef.current[selectedUri] ?? '';
     if (backlinksActiveBodyRef.current === snap) {
       return;
     }
-    setBacklinksActiveBody(snap);
+    queueMicrotask(() => {
+      setBacklinksActiveBody(snap);
+    });
   }, [selectedUri, composingNewEntry, vaultRoot]);
 
   useEffect(() => {
@@ -2903,7 +3054,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor, subtreeMarkdownCache],
   );
 
   const startNewEntry = useCallback(() => {
@@ -2917,30 +3068,43 @@ export function useMainWindowWorkspace(options: {
       inboxEditorShellScrollDirectiveRef.current = {kind: 'snapTop'};
       setComposingNewEntry(true);
       setSelectedUri(null);
-      clearInboxYamlFrontmatterEditorRefs({
-        inner: inboxYamlFrontmatterInnerRef,
-        leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-        setInner: setInboxYamlFrontmatterInner,
-      });
-      setEditorBody('');
       lastPersistedRef.current = null;
-      setInboxEditorResetNonce(n => n + 1);
+      resetInboxEditorComposeState();
     })();
-  }, []);
+  }, [resetInboxEditorComposeState]);
 
   const cancelNewEntry = useCallback(() => {
     void (async () => {
       await flushInboxSaveRef.current();
       setComposingNewEntry(false);
-      clearInboxYamlFrontmatterEditorRefs({
-        inner: inboxYamlFrontmatterInnerRef,
-        leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-        setInner: setInboxYamlFrontmatterInner,
-      });
-      setEditorBody('');
-      setInboxEditorResetNonce(n => n + 1);
+      resetInboxEditorComposeState();
     })();
-  }, []);
+  }, [resetInboxEditorComposeState]);
+
+  /** Pick where to refocus after the active tab is closed: surviving tab → workspace shell hub → empty. */
+  const refocusAfterActiveTabRemoved = useCallback(
+    async (
+      closedNorm: string,
+      nextTabs: readonly EditorWorkspaceTab[],
+      nextActive: string | null,
+    ) => {
+      const activeTab = nextActive ? findTabById(nextTabs, nextActive) : undefined;
+      const nextAfterRemove =
+        (activeTab ? tabCurrentUri(activeTab) : null)
+        ?? firstSurvivorUriFromTabs(nextTabs);
+      if (nextAfterRemove) {
+        await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
+        return;
+      }
+      const shellHub = activeTodayHubUriRef.current;
+      if (shellHub && shellHub !== closedNorm) {
+        await openMarkdownInEditor(shellHub, {workspaceShell: true});
+        return;
+      }
+      clearInboxSelection();
+    },
+    [openMarkdownInEditor, clearInboxSelection],
+  );
 
   const selectNote = useCallback(
     (uri: string) => {
@@ -3008,6 +3172,7 @@ export function useMainWindowWorkspace(options: {
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
           setInner: setInboxYamlFrontmatterInner,
+          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -3208,33 +3373,7 @@ export function useMainWindowWorkspace(options: {
       editorShellScrollByUriRef.current.delete(norm);
 
       if (wasOpen) {
-        const activeTab = nextActive
-          ? findTabById(nextTabs, nextActive)
-          : undefined;
-        const nextAfterRemove =
-          (activeTab ? tabCurrentUri(activeTab) : null)
-          ?? firstSurvivorUriFromTabs(nextTabs);
-        if (nextAfterRemove) {
-          await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
-        } else {
-          const shellHub = activeTodayHubUriRef.current;
-          if (shellHub && shellHub !== norm) {
-            await openMarkdownInEditor(shellHub, {workspaceShell: true});
-          } else {
-            selectedUriRef.current = null;
-            composingNewEntryRef.current = false;
-            lastPersistedRef.current = null;
-            setSelectedUri(null);
-            setComposingNewEntry(false);
-            clearInboxYamlFrontmatterEditorRefs({
-              inner: inboxYamlFrontmatterInnerRef,
-              leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-              setInner: setInboxYamlFrontmatterInner,
-            });
-            setEditorBody('');
-            setInboxEditorResetNonce(n => n + 1);
-          }
-        }
+        await refocusAfterActiveTabRemoved(norm, nextTabs, nextActive);
       }
 
       setBusy(true);
@@ -3255,7 +3394,91 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
+    [
+      vaultRoot,
+      fs,
+      refreshNotes,
+      subtreeMarkdownCache,
+      refocusAfterActiveTabRemoved,
+    ],
+  );
+
+  const remapInboxStateAfterRename = useCallback(
+    (
+      uri: string,
+      nextUri: string,
+      rewritePlan: ReturnType<typeof planVaultWikiLinkRenameMaintenance>,
+      applyResult: Awaited<ReturnType<typeof applyVaultWikiLinkRenameMaintenance>>,
+    ) => {
+      const succeededWriteUris = new Set(applyResult.succeededUris);
+      const plannedContentByWriteUri = new Map<string, string>();
+      for (const update of rewritePlan.updates) {
+        const writeUri = update.uri === uri ? nextUri : update.uri;
+        plannedContentByWriteUri.set(writeUri, update.markdown);
+      }
+      setInboxContentByUri(prev => {
+        const next = {...prev};
+        if (nextUri !== uri && prev[uri] !== undefined) {
+          next[nextUri] = prev[uri];
+          delete next[uri];
+        }
+        for (const [writeUri, markdown] of plannedContentByWriteUri) {
+          if (succeededWriteUris.has(writeUri)) {
+            next[writeUri] = markdown;
+          }
+        }
+        return next;
+      });
+      if (selectedUriRef.current === uri) {
+        selectedUriRef.current = nextUri;
+        setSelectedUri(nextUri);
+        const previousPersisted = lastPersistedRef.current;
+        if (previousPersisted && previousPersisted.uri === uri) {
+          lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
+        }
+      }
+      if (nextUri !== uri) {
+        remapEditorShellScrollMapExact(editorShellScrollByUriRef.current, uri, nextUri);
+        const remappedRenameTabs = remapAllTabsUriPrefix(
+          editorWorkspaceTabsRef.current,
+          uri,
+          nextUri,
+        );
+        editorWorkspaceTabsRef.current = remappedRenameTabs;
+        setEditorWorkspaceTabs(remappedRenameTabs);
+      }
+    },
+    [],
+  );
+
+  const applyRenameWithProgress = useCallback(
+    async (
+      rewritePlan: ReturnType<typeof planVaultWikiLinkRenameMaintenance>,
+      oldUri: string,
+      newUri: string,
+    ) => {
+      const showLargeImpactProgress =
+        rewritePlan.skippedAmbiguousLinkCount === 0
+        && (rewritePlan.touchedFileCount >= LARGE_RENAME_MIN_TOUCHED_FILES
+          || rewritePlan.touchedBytes >= LARGE_RENAME_MIN_TOUCHED_BYTES);
+      if (showLargeImpactProgress && rewritePlan.touchedFileCount > 0) {
+        setRenameLinkProgress({done: 0, total: rewritePlan.touchedFileCount});
+      }
+      return applyVaultWikiLinkRenameMaintenance({
+        fs,
+        oldUri,
+        newUri,
+        updates: rewritePlan.updates,
+        onProgress:
+          showLargeImpactProgress && rewritePlan.touchedFileCount > 0
+            ? (done, total) => {
+                setRenameLinkProgress({done, total});
+              }
+            : undefined,
+        yieldEveryWrites: showLargeImpactProgress ? RENAME_APPLY_YIELD_EVERY_WRITES : 0,
+      });
+    },
+    [fs],
   );
 
   const runRenameWithWikiLinkMaintenance = useCallback(
@@ -3275,11 +3498,9 @@ export function useMainWindowWorkspace(options: {
       setErr(null);
       clearRenameNotice();
       setRenameLinkProgress(null);
+
       try {
-        const wikiRefs = vaultMarkdownRefsRef.current.map(r => ({
-          name: r.name,
-          uri: r.uri,
-        }));
+        const wikiRefs = refToNameAndUriList(vaultMarkdownRefsRef.current);
         const activeUri = selectedUriRef.current;
         const activeBody =
           activeUri != null
@@ -3298,32 +3519,33 @@ export function useMainWindowWorkspace(options: {
           activeUri,
           activeBody,
         );
+
+        const planRename = (renamedStem: string | null, newTargetUri: string) =>
+          renamedStem
+            ? planVaultWikiLinkRenameMaintenance({
+                vaultRoot,
+                oldTargetUri: uri,
+                renamedStem,
+                newTargetUri,
+                notes: wikiRefs,
+                contentByUri: expandedContent,
+                activeUri,
+                activeBody,
+              })
+            : {
+                updates: [] as Array<{uri: string; markdown: string}>,
+                scannedFileCount: wikiRefs.length,
+                touchedFileCount: 0,
+                touchedBytes: 0,
+                updatedLinkCount: 0,
+                skippedAmbiguousLinkCount: 0,
+              };
+
         const planStartedAt = performance.now();
         const plannedStem = sanitizeInboxNoteStem(nextDisplayName);
-        const preRenamePlan = plannedStem
-          ? planVaultWikiLinkRenameMaintenance({
-              vaultRoot,
-              oldTargetUri: uri,
-              renamedStem: plannedStem,
-              newTargetUri: uri,
-              notes: wikiRefs,
-              contentByUri: expandedContent,
-              activeUri,
-              activeBody,
-            })
-          : {
-              updates: [],
-              scannedFileCount: wikiRefs.length,
-              touchedFileCount: 0,
-              touchedBytes: 0,
-              updatedLinkCount: 0,
-              skippedAmbiguousLinkCount: 0,
-            };
+        const preRenamePlan = planRename(plannedStem, uri);
         const planDurationMs = performance.now() - planStartedAt;
-        if (
-          preRenamePlan.skippedAmbiguousLinkCount > 0
-          && !forceApplyDespiteAmbiguity
-        ) {
+        if (preRenamePlan.skippedAmbiguousLinkCount > 0 && !forceApplyDespiteAmbiguity) {
           setPendingWikiLinkAmbiguityRename({
             uri,
             nextDisplayName,
@@ -3342,49 +3564,8 @@ export function useMainWindowWorkspace(options: {
         const nextUri = await renameVaultMarkdownNote(vaultRoot, uri, nextDisplayName, fs);
         const nextName = nextUri.split('/').pop();
         const renamedStem = nextName ? stemFromMarkdownFileName(nextName) : plannedStem;
-        const rewritePlan = renamedStem
-          ? planVaultWikiLinkRenameMaintenance({
-              vaultRoot,
-              oldTargetUri: uri,
-              renamedStem,
-              newTargetUri: nextUri,
-              notes: wikiRefs,
-              contentByUri: expandedContent,
-              activeUri,
-              activeBody,
-            })
-          : {
-              updates: [],
-              scannedFileCount: wikiRefs.length,
-              touchedFileCount: 0,
-              touchedBytes: 0,
-              updatedLinkCount: 0,
-              skippedAmbiguousLinkCount: 0,
-            };
-        const showLargeImpactProgress =
-          rewritePlan.skippedAmbiguousLinkCount === 0 &&
-          (rewritePlan.touchedFileCount >= LARGE_RENAME_MIN_TOUCHED_FILES ||
-            rewritePlan.touchedBytes >= LARGE_RENAME_MIN_TOUCHED_BYTES);
-        if (showLargeImpactProgress && rewritePlan.touchedFileCount > 0) {
-          setRenameLinkProgress({done: 0, total: rewritePlan.touchedFileCount});
-        }
-        const applyStartedAt = performance.now();
-        const applyResult = await applyVaultWikiLinkRenameMaintenance({
-          fs,
-          oldUri: uri,
-          newUri: nextUri,
-          updates: rewritePlan.updates,
-          onProgress:
-            showLargeImpactProgress && rewritePlan.touchedFileCount > 0
-              ? (done, total) => {
-                  setRenameLinkProgress({done, total});
-                }
-              : undefined,
-          yieldEveryWrites: showLargeImpactProgress
-            ? RENAME_APPLY_YIELD_EVERY_WRITES
-            : 0,
-        });
-        const applyDurationMs = performance.now() - applyStartedAt;
+        const rewritePlan = planRename(renamedStem, nextUri);
+        const applyResult = await applyRenameWithProgress(rewritePlan, uri, nextUri);
         console.info('[WL-5] rename-maintenance', {
           oldUri: uri,
           newUri: nextUri,
@@ -3395,49 +3576,8 @@ export function useMainWindowWorkspace(options: {
           skippedAmbiguous: rewritePlan.skippedAmbiguousLinkCount,
           failedWrites: applyResult.failed.length,
           planDurationMs: Math.round(planDurationMs),
-          applyDurationMs: Math.round(applyDurationMs),
         });
-        const succeededWriteUris = new Set(applyResult.succeededUris);
-        const plannedContentByWriteUri = new Map<string, string>();
-        for (const update of rewritePlan.updates) {
-          const writeUri = update.uri === uri ? nextUri : update.uri;
-          plannedContentByWriteUri.set(writeUri, update.markdown);
-        }
-        setInboxContentByUri(prev => {
-          const next = {...prev};
-          if (nextUri !== uri && prev[uri] !== undefined) {
-            next[nextUri] = prev[uri];
-            delete next[uri];
-          }
-          for (const [writeUri, markdown] of plannedContentByWriteUri) {
-            if (succeededWriteUris.has(writeUri)) {
-              next[writeUri] = markdown;
-            }
-          }
-          return next;
-        });
-        if (selectedUriRef.current === uri) {
-          selectedUriRef.current = nextUri;
-          setSelectedUri(nextUri);
-          const previousPersisted = lastPersistedRef.current;
-          if (previousPersisted && previousPersisted.uri === uri) {
-            lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
-          }
-        }
-        if (nextUri !== uri) {
-          remapEditorShellScrollMapExact(
-            editorShellScrollByUriRef.current,
-            uri,
-            nextUri,
-          );
-          const remappedRenameTabs = remapAllTabsUriPrefix(
-            editorWorkspaceTabsRef.current,
-            uri,
-            nextUri,
-          );
-          editorWorkspaceTabsRef.current = remappedRenameTabs;
-          setEditorWorkspaceTabs(remappedRenameTabs);
-        }
+        remapInboxStateAfterRename(uri, nextUri, rewritePlan, applyResult);
         if (applyResult.failed.length > 0) {
           const list = applyResult.failed.map(f => f.uri).join(', ');
           setErr(
@@ -3469,6 +3609,9 @@ export function useMainWindowWorkspace(options: {
       inboxEditorRef,
       clearRenameNotice,
       setTransientRenameNotice,
+      subtreeMarkdownCache,
+      remapInboxStateAfterRename,
+      applyRenameWithProgress,
     ],
   );
 
@@ -3521,6 +3664,169 @@ export function useMainWindowWorkspace(options: {
     [activateOpenTab, openMarkdownInEditor],
   );
 
+  /**
+   * After a vault link resolves to a target URI, route to the right surface:
+   * backup merge view, background new tab, foreground new tab on Today surfaces, or normal editor.
+   */
+  const routeOpenedVaultLink = useCallback(
+    async (
+      uri: string,
+      options: {openInBackgroundTab: boolean; allowBackupMergeView: boolean},
+    ): Promise<void> => {
+      if (options.allowBackupMergeView && (await tryEnterBackupMergeView(uri))) {
+        return;
+      }
+      if (options.openInBackgroundTab) {
+        await openNoteRespectingExistingTab(uri, 'background-new-tab');
+        return;
+      }
+      if (
+        isActiveWorkspaceTodayLinkSurface({
+          composingNewEntry: composingNewEntryRef.current,
+          activeTodayHubUri: activeTodayHubUriRef.current,
+          selectedUri: selectedUriRef.current,
+        })
+      ) {
+        await openNoteRespectingExistingTab(uri, 'foreground-new-tab');
+        return;
+      }
+      await openMarkdownInEditor(uri);
+    },
+    [tryEnterBackupMergeView, openNoteRespectingExistingTab, openMarkdownInEditor],
+  );
+
+  /** Apply a canonical wiki-link inner replacement to the right editor (Today Hub cell or main inbox). */
+  const replaceWikiLinkInnerAtTargetEditor = useCallback(
+    (at: number, expectedInner: string, replacementInner: string) => {
+      const hubEd = todayHubCellEditorRef.current;
+      if (hubEd && todayHubWikiNavParentRef.current) {
+        hubEd.replaceWikiLinkInnerAt({at, expectedInner, replacementInner});
+        return;
+      }
+      inboxEditorRef.current?.replaceWikiLinkInnerAt({at, expectedInner, replacementInner});
+    },
+    [inboxEditorRef],
+  );
+
+  /**
+   * Wiki-link target rejected for `path_not_supported`: try opening or creating it as a relative
+   * markdown link via `openOrCreateVaultWikiPathMarkdownLink`. Returns whether the link was handled.
+   */
+  const handleWikiLinkPathNotSupported = useCallback(
+    async (args: {inner: string; at: number; openInBackgroundTab: boolean}): Promise<boolean> => {
+      if (!vaultRoot) return false;
+      const {inner, at, openInBackgroundTab} = args;
+      const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
+      if (pathHref == null) {
+        return false;
+      }
+      const base = normalizeVaultBaseUri(vaultRoot);
+      const wikiPathFallbackSource = pickVaultLinkFallbackSource({
+        base,
+        composingNewEntry: composingNewEntryRef.current,
+        showTodayHubCanvas: showTodayHubCanvasRef.current,
+        todayHubWikiNavParent: todayHubWikiNavParentRef.current,
+        selectedUri: selectedUriRef.current,
+      });
+      const relResult = await openOrCreateVaultWikiPathMarkdownLink({
+        inner,
+        notes: vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri})),
+        vaultRoot,
+        fs,
+        fallbackSourceMarkdownUriOrDir: wikiPathFallbackSource,
+      });
+      if (relResult.kind === 'cannot_create_parent') {
+        setErr(
+          'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
+        );
+        return true;
+      }
+      if (relResult.kind !== 'open' && relResult.kind !== 'created') {
+        return false;
+      }
+      if (relResult.kind === 'created') {
+        subtreeMarkdownCache.invalidateForMutation(vaultRoot, relResult.uri, 'file');
+        await refreshNotes(vaultRoot);
+        setFsRefreshNonce(n => n + 1);
+      } else if (relResult.canonicalHref) {
+        const pipeAt = inner.indexOf('|');
+        const replacementInner =
+          pipeAt >= 0
+            ? `${relResult.canonicalHref}${inner.slice(pipeAt)}`
+            : relResult.canonicalHref;
+        replaceWikiLinkInnerAtTargetEditor(at, inner, replacementInner);
+      }
+      await routeOpenedVaultLink(relResult.uri, {
+        openInBackgroundTab,
+        allowBackupMergeView: relResult.kind === 'open',
+      });
+      return true;
+    },
+    [
+      vaultRoot,
+      fs,
+      refreshNotes,
+      replaceWikiLinkInnerAtTargetEditor,
+      routeOpenedVaultLink,
+      subtreeMarkdownCache,
+    ],
+  );
+
+  const handleResolvedWikiLinkResult = useCallback(
+    async (
+      payload: {inner: string; at: number; openInBackgroundTab: boolean},
+      result: Awaited<ReturnType<typeof openOrCreateInboxWikiLinkTarget>>,
+    ): Promise<void> => {
+      const {inner, at, openInBackgroundTab} = payload;
+      if (!vaultRoot) return;
+      if (result.kind === 'open' || result.kind === 'created') {
+        if (result.kind === 'created') {
+          subtreeMarkdownCache.invalidateForMutation(vaultRoot, result.uri, 'file');
+          await refreshNotes(vaultRoot);
+          setFsRefreshNonce(n => n + 1);
+        } else if (result.canonicalInner) {
+          replaceWikiLinkInnerAtTargetEditor(at, inner, result.canonicalInner);
+        }
+        await routeOpenedVaultLink(result.uri, {
+          openInBackgroundTab,
+          allowBackupMergeView: result.kind === 'open',
+        });
+        return;
+      }
+      if (result.kind === 'ambiguous') {
+        const names = result.notes.map(n => n.name).join(', ');
+        setErr(
+          `Ambiguous wiki link target: "${inner}" matches multiple notes (${names}).`,
+        );
+        return;
+      }
+      if (result.kind === 'unsupported') {
+        if (result.reason !== 'path_not_supported') {
+          setErr('Wiki link target is empty.');
+          return;
+        }
+        const handled = await handleWikiLinkPathNotSupported({
+          inner,
+          at,
+          openInBackgroundTab,
+        });
+        if (!handled) {
+          setErr(
+            `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
+          );
+        }
+      }
+    },
+    [
+      vaultRoot,
+      refreshNotes,
+      replaceWikiLinkInnerAtTargetEditor,
+      routeOpenedVaultLink,
+      handleWikiLinkPathNotSupported,
+      subtreeMarkdownCache,
+    ],
+  );
+
   const activateWikiLink = useCallback(
     async ({inner, at, openInBackgroundTab}: VaultWikiLinkActivatePayload) => {
       if (!vaultRoot) {
@@ -3550,163 +3856,12 @@ export function useMainWindowWorkspace(options: {
           activeMarkdownUri: composingNewEntryRef.current ? null : wikiParent,
           newNoteParentDirectory: todayHubNewNoteParent,
         });
-        if (result.kind === 'open' || result.kind === 'created') {
-          if (result.kind === 'created') {
-            subtreeMarkdownCache.invalidateForMutation(
-              vaultRoot,
-              result.uri,
-              'file',
-            );
-            await refreshNotes(vaultRoot);
-            setFsRefreshNonce(n => n + 1);
-          } else if (result.canonicalInner) {
-            const hubEd = todayHubCellEditorRef.current;
-            if (hubEd && todayHubWikiNavParentRef.current) {
-              hubEd.replaceWikiLinkInnerAt({
-                at,
-                expectedInner: inner,
-                replacementInner: result.canonicalInner,
-              });
-            } else {
-              inboxEditorRef.current?.replaceWikiLinkInnerAt({
-                at,
-                expectedInner: inner,
-                replacementInner: result.canonicalInner,
-              });
-            }
-          }
-          if (result.kind === 'open') {
-            if (await tryEnterBackupMergeView(result.uri)) {
-              return;
-            }
-          }
-          if (openInBackgroundTab) {
-            await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
-            return;
-          }
-          if (
-            isActiveWorkspaceTodayLinkSurface({
-              composingNewEntry: composingNewEntryRef.current,
-              activeTodayHubUri: activeTodayHubUriRef.current,
-              selectedUri: selectedUriRef.current,
-            })
-          ) {
-            await openNoteRespectingExistingTab(result.uri, 'foreground-new-tab');
-            return;
-          }
-          await openMarkdownInEditor(result.uri);
-          return;
-        }
-        if (result.kind === 'ambiguous') {
-          const names = result.notes.map(n => n.name).join(', ');
-          setErr(
-            `Ambiguous wiki link target: "${inner}" matches multiple notes (${names}).`,
-          );
-          return;
-        }
-        if (result.kind === 'unsupported') {
-            if (result.reason === 'path_not_supported') {
-              const pathHref = wikiLinkInnerVaultRelativeMarkdownHref(inner);
-              if (pathHref != null) {
-                const base = normalizeVaultBaseUri(vaultRoot);
-                const relParent = showTodayHubCanvasRef.current
-                  ? todayHubWikiNavParentRef.current
-                  : null;
-                const wikiPathFallbackSource = composingNewEntryRef.current
-                  ? getInboxDirectoryUri(base)
-                  : showTodayHubCanvasRef.current && !composingNewEntryRef.current
-                    ? getGeneralDirectoryUri(base)
-                    : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
-                const relResult = await openOrCreateVaultWikiPathMarkdownLink({
-                  inner,
-                  notes: vaultMarkdownRefsRef.current.map(r => ({
-                    name: r.name,
-                    uri: r.uri,
-                  })),
-                  vaultRoot,
-                  fs,
-                  fallbackSourceMarkdownUriOrDir: wikiPathFallbackSource,
-                });
-              if (relResult.kind === 'cannot_create_parent') {
-                setErr(
-                  'That file was not found on disk (check spelling and special characters). Notebox cannot create notes inside dot-prefixed hidden folders (names starting with .).',
-                );
-                return;
-              }
-              if (relResult.kind === 'open' || relResult.kind === 'created') {
-                if (relResult.kind === 'created') {
-                  subtreeMarkdownCache.invalidateForMutation(
-                    vaultRoot,
-                    relResult.uri,
-                    'file',
-                  );
-                  await refreshNotes(vaultRoot);
-                  setFsRefreshNonce(n => n + 1);
-                } else if (relResult.canonicalHref) {
-                  const pipeAt = inner.indexOf('|');
-                  const replacementInner =
-                    pipeAt >= 0
-                      ? `${relResult.canonicalHref}${inner.slice(pipeAt)}`
-                      : relResult.canonicalHref;
-                  const hubEd = todayHubCellEditorRef.current;
-                  if (hubEd && todayHubWikiNavParentRef.current) {
-                    hubEd.replaceWikiLinkInnerAt({
-                      at,
-                      expectedInner: inner,
-                      replacementInner,
-                    });
-                  } else {
-                    inboxEditorRef.current?.replaceWikiLinkInnerAt({
-                      at,
-                      expectedInner: inner,
-                      replacementInner,
-                    });
-                  }
-                }
-                if (relResult.kind === 'open') {
-                  if (await tryEnterBackupMergeView(relResult.uri)) {
-                    return;
-                  }
-                }
-                if (openInBackgroundTab) {
-                  await openNoteRespectingExistingTab(relResult.uri, 'background-new-tab');
-                  return;
-                }
-                if (
-                  isActiveWorkspaceTodayLinkSurface({
-                    composingNewEntry: composingNewEntryRef.current,
-                    activeTodayHubUri: activeTodayHubUriRef.current,
-                    selectedUri: selectedUriRef.current,
-                  })
-                ) {
-                  await openNoteRespectingExistingTab(relResult.uri, 'foreground-new-tab');
-                  return;
-                }
-                await openMarkdownInEditor(relResult.uri);
-                return;
-              }
-            }
-            setErr(
-              `Wiki link targets must be a single note name, not a path (link: "${inner}").`,
-            );
-            return;
-          }
-          setErr('Wiki link target is empty.');
-          return;
-        }
+        await handleResolvedWikiLinkResult({inner, at, openInBackgroundTab}, result);
       } catch (e) {
         setErr(e instanceof Error ? e.message : String(e));
       }
     },
-    [
-      vaultRoot,
-      fs,
-      refreshNotes,
-      inboxEditorRef,
-      openMarkdownInEditor,
-      openNoteRespectingExistingTab,
-      tryEnterBackupMergeView,
-    ],
+    [vaultRoot, fs, handleResolvedWikiLinkResult],
   );
 
   const onWikiLinkActivate = useCallback(
@@ -3727,12 +3882,13 @@ export function useMainWindowWorkspace(options: {
       }
       await flushInboxSaveRef.current();
       const base = normalizeVaultBaseUri(vaultRoot);
-      const relParent = showTodayHubCanvasRef.current ? todayHubWikiNavParentRef.current : null;
-      const sourceMarkdownUriOrDir = composingNewEntryRef.current
-        ? getInboxDirectoryUri(base)
-        : showTodayHubCanvasRef.current && !composingNewEntryRef.current
-          ? getGeneralDirectoryUri(base)
-          : (relParent ?? selectedUriRef.current ?? getInboxDirectoryUri(base));
+      const sourceMarkdownUriOrDir = pickVaultLinkFallbackSource({
+        base,
+        composingNewEntry: composingNewEntryRef.current,
+        showTodayHubCanvas: showTodayHubCanvasRef.current,
+        todayHubWikiNavParent: todayHubWikiNavParentRef.current,
+        selectedUri: selectedUriRef.current,
+      });
       try {
         const result = await openOrCreateVaultRelativeMarkdownLink({
           href,
@@ -3746,49 +3902,26 @@ export function useMainWindowWorkspace(options: {
         });
         if (result.kind === 'open' || result.kind === 'created') {
           if (result.kind === 'created') {
-            subtreeMarkdownCache.invalidateForMutation(
-              vaultRoot,
-              result.uri,
-              'file',
-            );
+            subtreeMarkdownCache.invalidateForMutation(vaultRoot, result.uri, 'file');
             await refreshNotes(vaultRoot);
             setFsRefreshNonce(n => n + 1);
           } else if (result.canonicalHref) {
             const hubEd = todayHubCellEditorRef.current;
+            const replacement = {
+              at,
+              expectedHref: href,
+              replacementHref: result.canonicalHref,
+            };
             if (hubEd && todayHubWikiNavParentRef.current) {
-              hubEd.replaceMarkdownLinkHrefAt({
-                at,
-                expectedHref: href,
-                replacementHref: result.canonicalHref,
-              });
+              hubEd.replaceMarkdownLinkHrefAt(replacement);
             } else {
-              inboxEditorRef.current?.replaceMarkdownLinkHrefAt({
-                at,
-                expectedHref: href,
-                replacementHref: result.canonicalHref,
-              });
+              inboxEditorRef.current?.replaceMarkdownLinkHrefAt(replacement);
             }
           }
-          if (result.kind === 'open') {
-            if (await tryEnterBackupMergeView(result.uri)) {
-              return;
-            }
-          }
-          if (openInBackgroundTab) {
-            await openNoteRespectingExistingTab(result.uri, 'background-new-tab');
-            return;
-          }
-          if (
-            isActiveWorkspaceTodayLinkSurface({
-              composingNewEntry: composingNewEntryRef.current,
-              activeTodayHubUri: activeTodayHubUriRef.current,
-              selectedUri: selectedUriRef.current,
-            })
-          ) {
-            await openNoteRespectingExistingTab(result.uri, 'foreground-new-tab');
-            return;
-          }
-          await openMarkdownInEditor(result.uri);
+          await routeOpenedVaultLink(result.uri, {
+            openInBackgroundTab,
+            allowBackupMergeView: result.kind === 'open',
+          });
           return;
         }
         if (result.kind === 'cannot_create_parent') {
@@ -3807,9 +3940,8 @@ export function useMainWindowWorkspace(options: {
       fs,
       refreshNotes,
       inboxEditorRef,
-      openMarkdownInEditor,
-      openNoteRespectingExistingTab,
-      tryEnterBackupMergeView,
+      routeOpenedVaultLink,
+      subtreeMarkdownCache,
     ],
   );
 
@@ -3854,6 +3986,7 @@ export function useMainWindowWorkspace(options: {
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
           setInner: setInboxYamlFrontmatterInner,
+          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -3914,7 +4047,7 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, openMarkdownInEditor],
+    [vaultRoot, fs, refreshNotes, openMarkdownInEditor, subtreeMarkdownCache],
   );
 
   const renameFolder = useCallback(
@@ -4000,83 +4133,88 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, clearRenameNotice, subtreeMarkdownCache],
   );
 
+  const commitMovedArticleResult = useCallback(
+    (previousUri: string, nextUri: string) => {
+      setInboxContentByUri(prev => {
+        if (prev[previousUri] === undefined) {
+          return prev;
+        }
+        const next = {...prev};
+        next[nextUri] = next[previousUri]!;
+        delete next[previousUri];
+        return next;
+      });
+      remapEditorShellScrollMapExact(
+        editorShellScrollByUriRef.current,
+        previousUri,
+        nextUri,
+      );
+      if (selectedUriRef.current !== previousUri) {
+        return;
+      }
+      selectedUriRef.current = nextUri;
+      setSelectedUri(nextUri);
+      const lp = lastPersistedRef.current;
+      if (lp && lp.uri === previousUri) {
+        lastPersistedRef.current = {...lp, uri: nextUri};
+      }
+    },
+    [],
+  );
+
+  const commitMovedDirectoryResult = useCallback(
+    (oldUri: string, newUri: string) => {
+      setInboxContentByUri(prev => {
+        const next = {...prev};
+        for (const k of Object.keys(prev)) {
+          const mapped = remapVaultUriPrefix(k, oldUri, newUri);
+          if (mapped && mapped !== k && prev[k] !== undefined) {
+            next[mapped] = prev[k]!;
+            delete next[k];
+          }
+        }
+        return next;
+      });
+      remapEditorShellScrollMapTreePrefix(
+        editorShellScrollByUriRef.current,
+        oldUri,
+        newUri,
+      );
+      let nextSel: string | null = selectedUriRef.current;
+      if (nextSel) {
+        const mappedSel = remapVaultUriPrefix(
+          nextSel.replace(/\\/g, '/'),
+          oldUri,
+          newUri,
+        );
+        nextSel = mappedSel ?? nextSel;
+      }
+      selectedUriRef.current = nextSel;
+      setSelectedUri(nextSel);
+      const lp = lastPersistedRef.current;
+      if (lp) {
+        const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, newUri);
+        if (mappedLp) {
+          lastPersistedRef.current = {...lp, uri: mappedLp};
+        }
+      }
+    },
+    [],
+  );
+
   const commitMoveVaultTreeResult = useCallback(
     (result: MoveVaultTreeItemResult) => {
       if (!vaultRoot || result.previousUri === result.nextUri) {
         return;
       }
       const invKind = result.movedKind === 'article' ? 'file' : 'directory';
-      subtreeMarkdownCache.invalidateForMutation(
-        vaultRoot,
-        result.previousUri,
-        invKind,
-      );
-      subtreeMarkdownCache.invalidateForMutation(
-        vaultRoot,
-        result.nextUri,
-        invKind,
-      );
+      subtreeMarkdownCache.invalidateForMutation(vaultRoot, result.previousUri, invKind);
+      subtreeMarkdownCache.invalidateForMutation(vaultRoot, result.nextUri, invKind);
 
       if (result.movedKind === 'article') {
-        setInboxContentByUri(prev => {
-          if (prev[result.previousUri] === undefined) {
-            return prev;
-          }
-          const next = {...prev};
-          next[result.nextUri] = next[result.previousUri]!;
-          delete next[result.previousUri];
-          return next;
-        });
-        remapEditorShellScrollMapExact(
-          editorShellScrollByUriRef.current,
-          result.previousUri,
-          result.nextUri,
-        );
-        if (selectedUriRef.current === result.previousUri) {
-          selectedUriRef.current = result.nextUri;
-          setSelectedUri(result.nextUri);
-          const lp = lastPersistedRef.current;
-          if (lp && lp.uri === result.previousUri) {
-            lastPersistedRef.current = {...lp, uri: result.nextUri};
-          }
-        }
+        commitMovedArticleResult(result.previousUri, result.nextUri);
       } else {
-        const oldUri = result.previousUri;
-        const newUri = result.nextUri;
-        setInboxContentByUri(prev => {
-          const next = {...prev};
-          for (const k of Object.keys(prev)) {
-            const mapped = remapVaultUriPrefix(k, oldUri, newUri);
-            if (mapped && mapped !== k && prev[k] !== undefined) {
-              next[mapped] = prev[k]!;
-              delete next[k];
-            }
-          }
-          return next;
-        });
-        remapEditorShellScrollMapTreePrefix(
-          editorShellScrollByUriRef.current,
-          oldUri,
-          newUri,
-        );
-        let nextSel: string | null = selectedUriRef.current;
-        if (nextSel) {
-          const mappedSel = remapVaultUriPrefix(
-            nextSel.replace(/\\/g, '/'),
-            oldUri,
-            newUri,
-          );
-          nextSel = mappedSel ?? nextSel;
-        }
-        selectedUriRef.current = nextSel;
-        setSelectedUri(nextSel);
-        const lp = lastPersistedRef.current;
-        if (lp) {
-          const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, newUri);
-          if (mappedLp) {
-            lastPersistedRef.current = {...lp, uri: mappedLp};
-          }
-        }
+        commitMovedDirectoryResult(result.previousUri, result.nextUri);
       }
       const remappedMoveTabs = remapAllTabsUriPrefix(
         editorWorkspaceTabsRef.current,
@@ -4086,7 +4224,7 @@ export function useMainWindowWorkspace(options: {
       editorWorkspaceTabsRef.current = remappedMoveTabs;
       setEditorWorkspaceTabs(remappedMoveTabs);
     },
-    [vaultRoot, subtreeMarkdownCache],
+    [vaultRoot, subtreeMarkdownCache, commitMovedArticleResult, commitMovedDirectoryResult],
   );
 
   const moveVaultTreeItem = useCallback(
@@ -4120,6 +4258,69 @@ export function useMainWindowWorkspace(options: {
     [vaultRoot, fs, refreshNotes, commitMoveVaultTreeResult],
   );
 
+  const bulkDeleteRemoveVaultEntry = useCallback(
+    async (entry: VaultTreeBulkItem, root: string) => {
+      if (entry.kind === 'article') {
+        await deleteVaultMarkdownNote(root, entry.uri, fs);
+        subtreeMarkdownCache.invalidateForMutation(root, entry.uri, 'file');
+        setInboxContentByUri(prev => {
+          if (prev[entry.uri] === undefined) {
+            return prev;
+          }
+          const next = {...prev};
+          delete next[entry.uri];
+          return next;
+        });
+        return;
+      }
+      const normDir = trimTrailingSlashes(entry.uri.replace(/\\/g, '/'));
+      await deleteVaultTreeDirectory(root, entry.uri, fs);
+      subtreeMarkdownCache.invalidateForMutation(root, entry.uri, 'directory');
+      setInboxContentByUri(prev => {
+        const next = {...prev};
+        for (const k of Object.keys(next)) {
+          const kn = k.replace(/\\/g, '/');
+          if (kn === normDir || kn.startsWith(`${normDir}/`)) {
+            delete next[k];
+          }
+        }
+        return next;
+      });
+    },
+    [fs, subtreeMarkdownCache],
+  );
+
+  const bulkDeletePruneTabsAndScroll = useCallback(
+    (plan: readonly VaultTreeBulkItem[]) => {
+      const deletedFiles = new Set<string>();
+      const deletedFolders: string[] = [];
+      for (const entry of plan) {
+        if (entry.kind === 'article') {
+          deletedFiles.add(normalizeEditorDocUri(entry.uri));
+        } else {
+          deletedFolders.push(trimTrailingSlashes(entry.uri.replace(/\\/g, '/')));
+        }
+      }
+      const newTabs = removeUriFromAllTabs(
+        editorWorkspaceTabsRef.current,
+        u => vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
+      );
+      const nextActive = ensureActiveTabId(newTabs, activeEditorTabIdRef.current);
+      editorWorkspaceTabsRef.current = newTabs;
+      setEditorWorkspaceTabs(newTabs);
+      activeEditorTabIdRef.current = nextActive;
+      setActiveEditorTabId(nextActive);
+      const sm = editorShellScrollByUriRef.current;
+      for (const key of [...sm.keys()]) {
+        if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
+          sm.delete(key);
+        }
+      }
+      return {newTabs, nextActive};
+    },
+    [],
+  );
+
   const bulkDeleteVaultTreeItems = useCallback(
     async (items: VaultTreeBulkItem[]) => {
       if (!vaultRoot) {
@@ -4134,7 +4335,7 @@ export function useMainWindowWorkspace(options: {
       const normSel = selectedUriRef.current?.replace(/\\/g, '/');
       const shouldClearEditor =
         normSel != null
-          && plan.some(entry => {
+        && plan.some(entry => {
           const d = trimTrailingSlashes(entry.uri.replace(/\\/g, '/'));
           if (entry.kind === 'folder' || entry.kind === 'todayHub') {
             return normSel === d || normSel.startsWith(`${d}/`);
@@ -4142,92 +4343,18 @@ export function useMainWindowWorkspace(options: {
           return normSel === d;
         });
       if (shouldClearEditor) {
-        selectedUriRef.current = null;
-        composingNewEntryRef.current = false;
-        lastPersistedRef.current = null;
-        setSelectedUri(null);
-        setComposingNewEntry(false);
-        clearInboxYamlFrontmatterEditorRefs({
-          inner: inboxYamlFrontmatterInnerRef,
-          leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-          setInner: setInboxYamlFrontmatterInner,
-        });
-        setEditorBody('');
-        setInboxEditorResetNonce(n => n + 1);
+        clearInboxSelection();
       }
       await saveChainRef.current.catch(() => undefined);
       setBusy(true);
       setErr(null);
       try {
         for (const entry of plan) {
-          if (entry.kind === 'article') {
-            await deleteVaultMarkdownNote(vaultRoot, entry.uri, fs);
-            subtreeMarkdownCache.invalidateForMutation(
-              vaultRoot,
-              entry.uri,
-              'file',
-            );
-            setInboxContentByUri(prev => {
-              if (prev[entry.uri] === undefined) {
-                return prev;
-              }
-              const next = {...prev};
-              delete next[entry.uri];
-              return next;
-            });
-          } else {
-            const normDir = trimTrailingSlashes(entry.uri.replace(/\\/g, '/'));
-            await deleteVaultTreeDirectory(vaultRoot, entry.uri, fs);
-            subtreeMarkdownCache.invalidateForMutation(
-              vaultRoot,
-              entry.uri,
-              'directory',
-            );
-            setInboxContentByUri(prev => {
-              const next = {...prev};
-              for (const k of Object.keys(next)) {
-                const kn = k.replace(/\\/g, '/');
-                if (kn === normDir || kn.startsWith(`${normDir}/`)) {
-                  delete next[k];
-                }
-              }
-              return next;
-            });
-          }
+          await bulkDeleteRemoveVaultEntry(entry, vaultRoot);
         }
-        const deletedFiles = new Set<string>();
-        const deletedFolders: string[] = [];
-        for (const entry of plan) {
-          if (entry.kind === 'article') {
-            deletedFiles.add(normalizeEditorDocUri(entry.uri));
-          } else {
-            deletedFolders.push(
-              trimTrailingSlashes(entry.uri.replace(/\\/g, '/')),
-            );
-          }
-        }
-        const newTabs = removeUriFromAllTabs(
-          editorWorkspaceTabsRef.current,
-          u => vaultUriDeletedByTreeChange(u, deletedFiles, deletedFolders),
-        );
-        const nextActive = ensureActiveTabId(
-          newTabs,
-          activeEditorTabIdRef.current,
-        );
-        editorWorkspaceTabsRef.current = newTabs;
-        setEditorWorkspaceTabs(newTabs);
-        activeEditorTabIdRef.current = nextActive;
-        setActiveEditorTabId(nextActive);
-        const sm = editorShellScrollByUriRef.current;
-        for (const key of [...sm.keys()]) {
-          if (vaultUriDeletedByTreeChange(key, deletedFiles, deletedFolders)) {
-            sm.delete(key);
-          }
-        }
+        const {newTabs, nextActive} = bulkDeletePruneTabsAndScroll(plan);
         if (shouldClearEditor) {
-          const activeTab = nextActive
-            ? findTabById(newTabs, nextActive)
-            : undefined;
+          const activeTab = nextActive ? findTabById(newTabs, nextActive) : undefined;
           const nextUri =
             (activeTab ? tabCurrentUri(activeTab) : null)
             ?? firstSurvivorUriFromTabs(newTabs);
@@ -4244,7 +4371,14 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [vaultRoot, fs, refreshNotes, openMarkdownInEditor, subtreeMarkdownCache],
+    [
+      vaultRoot,
+      refreshNotes,
+      openMarkdownInEditor,
+      bulkDeleteRemoveVaultEntry,
+      bulkDeletePruneTabsAndScroll,
+      clearInboxSelection,
+    ],
   );
 
   const bulkMoveVaultTreeItems = useCallback(
@@ -4325,6 +4459,7 @@ export function useMainWindowWorkspace(options: {
           inner: inboxYamlFrontmatterInnerRef,
           leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
           setInner: setInboxYamlFrontmatterInner,
+          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
         });
         setEditorBody('');
         setInboxEditorResetNonce(n => n + 1);
@@ -4393,6 +4528,104 @@ export function useMainWindowWorkspace(options: {
     });
   }, [vaultRoot, clearRenameNotice]);
 
+  const applyRestoredEditorWorkspaceTabs = useCallback(
+    (
+      chosenTabsSource: ReadonlyArray<{id: string; entries: string[]; index: number}>
+        | null
+        | undefined,
+      chosenActiveEditorTabId: string | null,
+      filter: (raw: string) => boolean,
+    ): string[] => {
+      if (chosenTabsSource == null) {
+        return [];
+      }
+      const built = buildRestoredEditorWorkspace({
+        chosenTabsSource,
+        chosenActiveEditorTabId,
+        filter,
+      });
+      if (built == null) {
+        return [];
+      }
+      editorWorkspaceTabsRef.current = built.tabs;
+      activeEditorTabIdRef.current = built.activeEditorTabId;
+      queueMicrotask(() => {
+        setEditorWorkspaceTabs(built.tabs);
+        setActiveEditorTabId(built.activeEditorTabId);
+      });
+      return built.uris;
+    },
+    [],
+  );
+
+  const migrateLegacyOpenTabsIfNeeded = useCallback(
+    (
+      rawTabs: readonly string[] | null | undefined,
+      filter: (raw: string) => boolean,
+    ): string[] => {
+      if (
+        editorWorkspaceTabsRef.current.length > 0
+        || rawTabs == null
+        || rawTabs.length === 0
+      ) {
+        return [];
+      }
+      const filtered = rawTabs.filter(filter);
+      const migrated = migrateOpenTabUrisToWorkspaceTabs(filtered);
+      if (migrated.length === 0) {
+        return [];
+      }
+      const nextActive = migrated[0]!.id;
+      editorWorkspaceTabsRef.current = migrated;
+      activeEditorTabIdRef.current = nextActive;
+      queueMicrotask(() => {
+        setEditorWorkspaceTabs(migrated);
+        setActiveEditorTabId(nextActive);
+      });
+      return migrated
+        .map(t => tabCurrentUri(t))
+        .filter((u): u is string => u != null);
+    },
+    [],
+  );
+
+  const restoreInboxSelectionAfterShellRestore = useCallback(
+    (root: string, restoredTabs: readonly string[], hubUrisLength: number) => {
+      const knownNoteUris = new Set(notesRef.current.map(n => n.uri));
+      if (restoredInboxState!.composingNewEntry) {
+        startNewEntry();
+        return;
+      }
+      if (restoredInboxState!.selectedUri) {
+        const selectedOk = isUriValidVaultMarkdown({
+          uri: restoredInboxState!.selectedUri,
+          root,
+          knownNoteUris,
+        });
+        if (selectedOk) {
+          selectNote(restoredInboxState!.selectedUri);
+          return;
+        }
+        if (restoredTabs.length > 0) {
+          selectNote(restoredTabs[0]!);
+        }
+        return;
+      }
+      if (restoredTabs.length > 0) {
+        selectNote(restoredTabs[0]!);
+        return;
+      }
+      if (
+        hubUrisLength > 0
+        && editorWorkspaceTabsRef.current.length === 0
+        && activeTodayHubUriRef.current
+      ) {
+        selectNote(activeTodayHubUriRef.current);
+      }
+    },
+    [restoredInboxState, startNewEntry, selectNote],
+  );
+
   useEffect(() => {
     if (!vaultRoot) {
       return;
@@ -4403,223 +4636,56 @@ export function useMainWindowWorkspace(options: {
     if (restoredInboxState && restoredInboxState.vaultRoot === vaultRoot) {
       const root = trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/'));
       const hubUris = sortedTodayHubNoteUrisFromRefs(vaultMarkdownRefs);
-      const filterStoredTab = (raw: string) => {
-        const uri = raw.replace(/\\/g, '/');
-        const inVault = uri === root || uri.startsWith(`${root}/`);
-        return (
-          inVault
-          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'))
+      const knownNoteUris = new Set(notes.map(n => n.uri));
+      const filter = makeStoredTabFilter({root, knownNoteUris});
+
+      const {resolvedActiveHub, chosenTabsSource, chosenActiveEditorTabId} =
+        resolveActiveHubAndTabsSource({hubUris, restored: restoredInboxState, filter});
+
+      let restoredTabs = applyRestoredEditorWorkspaceTabs(
+        chosenTabsSource,
+        chosenActiveEditorTabId,
+        filter,
+      );
+      if (restoredTabs.length === 0 && editorWorkspaceTabsRef.current.length === 0) {
+        restoredTabs = migrateLegacyOpenTabsIfNeeded(
+          restoredInboxState.openTabUris,
+          filter,
         );
-      };
-
-      const sanitizeStoredWorkspaceRows = (
-        tabs:
-          | ReadonlyArray<{id: string; entries: string[]; index: number}>
-          | null
-          | undefined,
-      ): {id: string; entries: string[]; index: number}[] | null => {
-        if (tabs == null) {
-          return null;
-        }
-        if (tabs.length === 0) {
-          return [];
-        }
-        const sanitized = tabs
-          .map(t => {
-            const entries = t.entries
-              .map(e => e.replace(/\\/g, '/'))
-              .filter(filterStoredTab);
-            if (entries.length === 0) {
-              return null;
-            }
-            let index =
-              typeof t.index === 'number' && Number.isFinite(t.index)
-                ? Math.floor(t.index)
-                : 0;
-            if (index < 0 || index >= entries.length) {
-              index = entries.length - 1;
-            }
-            const id = typeof t.id === 'string' ? t.id.trim() : '';
-            if (!id) {
-              return null;
-            }
-            return {id, entries, index};
-          })
-          .filter((x): x is {id: string; entries: string[]; index: number} => x != null);
-        return sanitized;
-      };
-
-      let chosenTabsSource = restoredInboxState.editorWorkspaceTabs;
-      let chosenActiveEditorTabId = restoredInboxState.activeEditorTabId ?? null;
-      let resolvedActiveHub: string | null = null;
-
-      if (hubUris.length > 0) {
-        const ws = restoredInboxState.todayHubWorkspaces;
-        if (ws && Object.keys(ws).length > 0) {
-          const rawActive =
-            typeof restoredInboxState.activeTodayHubUri === 'string'
-              ? restoredInboxState.activeTodayHubUri
-                  .replace(/\\/g, '/')
-                  .replace(/\/+/g, '/')
-                  .trim()
-              : null;
-          resolvedActiveHub =
-            rawActive && hubUris.includes(rawActive)
-              ? rawActive
-              : pickDefaultActiveTodayHubUri({
-                  hubUris,
-                  selectedUri: restoredInboxState.selectedUri,
-                  editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
-                  openTabUris: restoredInboxState.openTabUris,
-                });
-          const snap = resolvedActiveHub ? ws[resolvedActiveHub] : undefined;
-          const fromSnap = snap
-            ? sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs)
-            : null;
-          if (fromSnap != null) {
-            chosenTabsSource = fromSnap;
-            if (snap!.activeEditorTabId === null) {
-              chosenActiveEditorTabId = null;
-            } else if (typeof snap!.activeEditorTabId === 'string') {
-              const aid = snap!.activeEditorTabId.trim();
-              chosenActiveEditorTabId = aid === '' ? null : aid;
-            }
-          }
-        } else {
-          resolvedActiveHub = pickDefaultActiveTodayHubUri({
-            hubUris,
-            selectedUri: restoredInboxState.selectedUri,
-            editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
-            openTabUris: restoredInboxState.openTabUris,
-          });
-        }
       }
 
-      const rawTabs = restoredInboxState.openTabUris;
-      let restoredTabs: string[] = [];
-
-      if (chosenTabsSource != null && chosenTabsSource.length === 0) {
-        editorWorkspaceTabsRef.current = [];
-        activeEditorTabIdRef.current = null;
-        queueMicrotask(() => {
-          setEditorWorkspaceTabs([]);
-          setActiveEditorTabId(null);
+      if (hubUris.length > 0) {
+        const activeHubFinal = pickFinalActiveHub({
+          resolvedActiveHub,
+          hubUris,
+          restored: restoredInboxState,
         });
-        restoredTabs = [];
-      } else if (chosenTabsSource != null && chosenTabsSource.length > 0) {
-        const sanitized = sanitizeStoredWorkspaceRows(chosenTabsSource);
-        if (sanitized != null && sanitized.length > 0) {
-          const nextTabs = tabsFromStored(sanitized);
-          let nextActive =
-            typeof chosenActiveEditorTabId === 'string'
-              ? chosenActiveEditorTabId.trim()
-              : null;
-          if (nextActive && !nextTabs.some(t => t.id === nextActive)) {
-            nextActive = null;
-          }
-          nextActive = ensureActiveTabId(nextTabs, nextActive);
-          editorWorkspaceTabsRef.current = nextTabs;
-          activeEditorTabIdRef.current = nextActive;
-          queueMicrotask(() => {
-            setEditorWorkspaceTabs(nextTabs);
-            setActiveEditorTabId(nextActive);
-          });
-          restoredTabs = nextTabs
-            .map(t => tabCurrentUri(t))
-            .filter((u): u is string => u != null);
-        }
-      }
-
-      if (
-        editorWorkspaceTabsRef.current.length === 0
-        && rawTabs != null
-        && rawTabs.length > 0
-      ) {
-        const filtered = rawTabs.filter(filterStoredTab);
-        const migrated = migrateOpenTabUrisToWorkspaceTabs(filtered);
-        if (migrated.length > 0) {
-          const nextActive = migrated[0]!.id;
-          editorWorkspaceTabsRef.current = migrated;
-          activeEditorTabIdRef.current = nextActive;
-          queueMicrotask(() => {
-            setEditorWorkspaceTabs(migrated);
-            setActiveEditorTabId(nextActive);
-          });
-          restoredTabs = migrated
-            .map(t => tabCurrentUri(t))
-            .filter((u): u is string => u != null);
-        }
-      }
-
-      if (hubUris.length > 0) {
-        const mergedWs: Record<string, TodayHubWorkspaceSnapshot> = {};
-        const ws = restoredInboxState.todayHubWorkspaces;
-        if (ws) {
-          for (const [rawKey, snap] of Object.entries(ws)) {
-            const h = rawKey.replace(/\\/g, '/').replace(/\/+/g, '/').trim();
-            if (!h || !hubUris.includes(h)) {
-              continue;
-            }
-            const rows = sanitizeStoredWorkspaceRows(snap.editorWorkspaceTabs);
-            if (rows == null) {
-              continue;
-            }
-            let aid: string | null = null;
-            if (snap.activeEditorTabId === null) {
-              aid = null;
-            } else if (typeof snap.activeEditorTabId === 'string') {
-              const t = snap.activeEditorTabId.trim();
-              aid = t === '' ? null : t;
-            }
-            mergedWs[h] = {editorWorkspaceTabs: rows, activeEditorTabId: aid};
-          }
-        }
-        const activeHubFinal =
-          resolvedActiveHub
-          ?? pickDefaultActiveTodayHubUri({
-            hubUris,
-            selectedUri: restoredInboxState.selectedUri,
-            editorWorkspaceTabs: restoredInboxState.editorWorkspaceTabs,
-            openTabUris: restoredInboxState.openTabUris,
-          })
-          ?? hubUris[0]!;
-        mergedWs[activeHubFinal] = {
-          editorWorkspaceTabs: tabsToStored(editorWorkspaceTabsRef.current),
-          activeEditorTabId: activeEditorTabIdRef.current,
-        };
-        setTodayHubWorkspacesForSave(mergedWs);
-        setActiveTodayHubUri(activeHubFinal);
+        const mergedWs = mergeStoredHubWorkspaces({
+          hubUris,
+          restored: restoredInboxState,
+          filter,
+          activeHub: activeHubFinal,
+          activeHubTabs: editorWorkspaceTabsRef.current,
+          activeHubActiveTabId: activeEditorTabIdRef.current,
+        });
         activeTodayHubUriRef.current = activeHubFinal;
+        queueMicrotask(() => {
+          setTodayHubWorkspacesForSave(mergedWs);
+          setActiveTodayHubUri(activeHubFinal);
+        });
       } else if (vaultMarkdownRefs.length > 0) {
-        setTodayHubWorkspacesForSave({});
-        setActiveTodayHubUri(null);
         activeTodayHubUriRef.current = null;
+        queueMicrotask(() => {
+          setTodayHubWorkspacesForSave({});
+          setActiveTodayHubUri(null);
+        });
       }
 
-      if (restoredInboxState.composingNewEntry) {
-        startNewEntry();
-      } else if (restoredInboxState.selectedUri) {
-        const uri = restoredInboxState.selectedUri.replace(/\\/g, '/');
-        const inVault = uri === root || uri.startsWith(`${root}/`);
-        const selectedOk =
-          inVault
-          && (notes.some(n => n.uri === uri) || uri.toLowerCase().endsWith('.md'));
-        if (selectedOk) {
-          selectNote(restoredInboxState.selectedUri);
-        } else if (restoredTabs.length > 0) {
-          selectNote(restoredTabs[0]!);
-        }
-      } else if (restoredTabs.length > 0) {
-        selectNote(restoredTabs[0]!);
-      } else if (
-        hubUris.length > 0
-        && editorWorkspaceTabsRef.current.length === 0
-        && activeTodayHubUriRef.current
-      ) {
-        selectNote(activeTodayHubUriRef.current);
-      }
+      restoreInboxSelectionAfterShellRestore(root, restoredTabs, hubUris.length);
     }
-    setInboxShellRestored(true);
+    queueMicrotask(() => {
+      setInboxShellRestored(true);
+    });
   }, [
     vaultRoot,
     inboxRestoreEnabled,
@@ -4627,8 +4693,9 @@ export function useMainWindowWorkspace(options: {
     restoredInboxState,
     notes,
     vaultMarkdownRefs,
-    startNewEntry,
-    selectNote,
+    applyRestoredEditorWorkspaceTabs,
+    migrateLegacyOpenTabsIfNeeded,
+    restoreInboxSelectionAfterShellRestore,
   ]);
 
   useEffect(() => {

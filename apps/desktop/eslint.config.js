@@ -69,13 +69,4 @@ export default defineConfig([
       'sonarjs/publicly-writable-directories': 'off',
     },
   },
-  {
-    files: ['src/hooks/useMainWindowWorkspace.ts'],
-    rules: {
-      // Imperative workspace shell state uses refs/effects intentionally; full refactor is tracked separately.
-      'react-hooks/refs': 'off',
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/exhaustive-deps': 'off',
-    },
-  },
 ])

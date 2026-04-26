@@ -24,8 +24,10 @@ export function clearInboxYamlFrontmatterEditorRefs(args: {
   inner: MutableRefObject<string | null>;
   leading: MutableRefObject<string>;
   setInner: (inner: string | null) => void;
+  setLeading?: (leading: string) => void;
 }): void {
   args.inner.current = null;
   args.leading.current = '';
   args.setInner(null);
+  args.setLeading?.('');
 }
