@@ -37,7 +37,22 @@ Expected tags on related events:
 
 Create **Metric Alerts** in Sentry project `eskerra-desktop` using dataset **Errors**.
 
-### Rule 1 (critical): burst in one watch session
+### Rule 1 (critical): sustained burst in one watch session
+
+- Query:
+  - `event.type:default level:warning message:"eskerra.desktop.vault_watch_coarse_invalidation" obs_surface:vault_watch`
+- Aggregate:
+  - `count()`
+- Group by:
+  - `tags[watch_session_id]`
+- Threshold:
+  - `> 12` in `5 minutes`
+- Action:
+  - Page / critical notification channel.
+
+Rationale: the desktop now runs two watcher backends (`recommended` and stat-based `poll`), so low-volume backend flakes can appear twice as often as the original single-backend baseline. Page only on sustained degradation.
+
+### Rule 2 (warning): repeated degradation in one watch session
 
 - Query:
   - `event.type:default level:warning message:"eskerra.desktop.vault_watch_coarse_invalidation" obs_surface:vault_watch`
@@ -48,24 +63,13 @@ Create **Metric Alerts** in Sentry project `eskerra-desktop` using dataset **Err
 - Threshold:
   - `> 4` in `5 minutes`
 - Action:
-  - Page / critical notification channel.
-
-Rationale: this indicates repeated watcher degradation while one vault session is active, which risks sustained UI-vs-disk drift.
-
-### Rule 2 (warning): early degradation in one watch session
-
-- Query:
-  - `event.type:default level:warning message:"eskerra.desktop.vault_watch_coarse_invalidation" obs_surface:vault_watch`
-- Aggregate:
-  - `count()`
-- Group by:
-  - `tags[watch_session_id]`
-- Threshold:
-  - `> 1` in `5 minutes`
-- Action:
   - Team warning channel (non-paging).
 
-Rationale: catches regressions quickly while keeping false positives tolerable.
+Rationale: catches real repeated watcher fallback while avoiding noise from one-off empty-path or poll/backend transients.
+
+## Client-side throttling
+
+The renderer still records every coarse event for Sentry, but heavy local refresh work is throttled: repeated coarse events within a short window do not repeatedly invalidate markdown caches, refresh notes, bump filesystem nonces, reread settings, refresh podcasts, or run full open-tab reconcile. This prevents a recurring poll/backend flake from hammering the UI while preserving the alert signal.
 
 ## Triage checklist
 

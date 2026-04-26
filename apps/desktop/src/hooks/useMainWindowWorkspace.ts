@@ -216,6 +216,7 @@ function isPodcastRelevantPath(p: string): boolean {
 const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
 const VAULT_OPEN_TAB_PROBE_INTERVAL_MS = 10000;
 const VAULT_OPEN_TAB_PROBE_MIN_GAP_MS = 2500;
+const VAULT_COARSE_REFRESH_DEDUP_MS = 30000;
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -2350,6 +2351,7 @@ export function useMainWindowWorkspace(options: {
       | {signature: string; touchedAtMs: number}
       | null = null;
     let lastOpenTabProbeAtMs = 0;
+    let lastCoarseRefreshAtMs = 0;
     let vaultFilesChangedEventSeq = 0;
     const markExternalLastPersistedMutation = () => {
       lastPersistedExternalMutationSeqRef.current += 1;
@@ -2527,9 +2529,11 @@ export function useMainWindowWorkspace(options: {
       });
       const {paths, coarse} = plan;
       const coarseReason = event.payload?.coarseReason ?? null;
+      const now = Date.now();
+      const shouldRunRefreshWork =
+        !coarse || now - lastCoarseRefreshAtMs >= VAULT_COARSE_REFRESH_DEDUP_MS;
       if (plan.shouldTouchPathsIncrementally) {
         const signature = vaultChangedPathsSignature(paths);
-        const now = Date.now();
         const duplicate =
           lastIncrementalIndexTouch?.signature === signature
           && now - lastIncrementalIndexTouch.touchedAtMs < VAULT_INDEX_TOUCH_DEDUP_MS;
@@ -2600,6 +2604,12 @@ export function useMainWindowWorkspace(options: {
             ],
           });
         }
+      }
+      if (!shouldRunRefreshWork) {
+        return;
+      }
+      if (coarse) {
+        lastCoarseRefreshAtMs = now;
       }
       subtreeMarkdownCache.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
