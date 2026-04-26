@@ -102,6 +102,7 @@ import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
 import {
   applyVaultWikiLinkRenameMaintenance,
   planVaultWikiLinkRenameMaintenance,
+  type VaultWikiLinkRenamePlanResult,
 } from '../lib/vaultWikiLinkRenameMaintenance';
 import {
   normalizeEditorDocUri,
@@ -3520,7 +3521,10 @@ export function useMainWindowWorkspace(options: {
           activeBody,
         );
 
-        const planRename = (renamedStem: string | null, newTargetUri: string) =>
+        const planRename = (
+          renamedStem: string | null,
+          newTargetUri: string,
+        ): VaultWikiLinkRenamePlanResult =>
           renamedStem
             ? planVaultWikiLinkRenameMaintenance({
                 vaultRoot,
@@ -3533,7 +3537,7 @@ export function useMainWindowWorkspace(options: {
                 activeBody,
               })
             : {
-                updates: [] as Array<{uri: string; markdown: string}>,
+                updates: [],
                 scannedFileCount: wikiRefs.length,
                 touchedFileCount: 0,
                 touchedBytes: 0,
@@ -3828,7 +3832,7 @@ export function useMainWindowWorkspace(options: {
   );
 
   const activateWikiLink = useCallback(
-    async ({inner, at, openInBackgroundTab}: VaultWikiLinkActivatePayload) => {
+    async ({inner, at, openInBackgroundTab = false}: VaultWikiLinkActivatePayload) => {
       if (!vaultRoot) {
         return;
       }
@@ -3875,7 +3879,7 @@ export function useMainWindowWorkspace(options: {
     async ({
       href,
       at,
-      openInBackgroundTab,
+      openInBackgroundTab = false,
     }: VaultRelativeMarkdownLinkActivatePayload) => {
       if (!vaultRoot) {
         return;
