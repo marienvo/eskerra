@@ -24,26 +24,65 @@ type ParsePodcastLineInput = {
   sourceFile: string;
 };
 
-function parsePodcastFileDetails(fileName: string): PodcastFileDetails | null {
-  const trimmed = fileName.trim();
-  const bodyMatch = trimmed.match(/^(.+)\s+-\s+podcasts\.md$/i);
-  if (!bodyMatch) {
+const PODCASTS_MD_SUFFIX = 'podcasts.md';
+
+/** Strips trailing ` - … podcasts.md` without backtracking-heavy regex (vault filenames vary). */
+function stemBeforePodcastsMd(trimmed: string): string | null {
+  const lower = trimmed.toLowerCase();
+  if (!lower.endsWith(PODCASTS_MD_SUFFIX)) {
     return null;
   }
-  const stem = bodyMatch[1];
-  const yearHeading = stem.match(/^(\d{4})\s+(.+)$/);
-  if (!yearHeading) {
+  const withoutExt = trimmed.slice(0, -PODCASTS_MD_SUFFIX.length).trimEnd();
+  let i = withoutExt.length - 1;
+  while (i >= 0 && /\s/.test(withoutExt[i]!)) {
+    i -= 1;
+  }
+  if (i < 0 || withoutExt[i] !== '-') {
     return null;
   }
-  const yearToken = yearHeading[1];
-  const year = Number(yearToken);
-  const sectionTitle = yearHeading[2].trim();
+  i -= 1;
+  while (i >= 0 && /\s/.test(withoutExt[i]!)) {
+    i -= 1;
+  }
+  if (i < 0) {
+    return null;
+  }
+  return withoutExt.slice(0, i + 1).trimEnd();
+}
+
+/** Parses `YYYY Section title` from stem without nested quantifiers. */
+function parseYearAndSectionTitle(stem: string): {sectionTitle: string; year: number} | null {
+  if (stem.length < 6 || !/^\d{4}$/.test(stem.slice(0, 4))) {
+    return null;
+  }
+  let pos = 4;
+  while (pos < stem.length && /\s/.test(stem[pos]!)) {
+    pos += 1;
+  }
+  if (pos === 4) {
+    return null;
+  }
+  const sectionTitle = stem.slice(pos).trim();
+  const year = Number(stem.slice(0, 4));
 
   if (!sectionTitle) {
     return null;
   }
 
   return {sectionTitle, year};
+}
+
+function parsePodcastFileDetails(fileName: string): PodcastFileDetails | null {
+  const trimmed = fileName.trim();
+  const stem = stemBeforePodcastsMd(trimmed);
+  if (!stem) {
+    return null;
+  }
+  const parsed = parseYearAndSectionTitle(stem);
+  if (!parsed) {
+    return null;
+  }
+  return parsed;
 }
 
 function isSupportedYear(year: number, currentYear: number): boolean {

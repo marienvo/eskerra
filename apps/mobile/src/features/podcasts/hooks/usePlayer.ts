@@ -7,11 +7,20 @@ import {
   type PlaylistEntry,
   podcastPlayerMachine,
   type PodcastPlayerDeps,
+  type PodcastPlayerMachineEvent,
   type PodcastPlayerPlaybackState,
   getPlaybackSubstate,
 } from '@eskerra/core';
 import {useMachine} from '@xstate/react';
-import {useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState} from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from 'react';
 
 import {
   clearPlaylist,
@@ -20,7 +29,7 @@ import {
 } from '../../../core/storage/eskerraStorage';
 import {useVaultContext} from '../../../core/vault/VaultContext';
 import type {PodcastEpisode} from '../../../types';
-import {getAudioPlayer, PlayerProgress, PlayerState} from '../services/audioPlayer';
+import {getAudioPlayer, type AudioPlayer, PlayerProgress, PlayerState} from '../services/audioPlayer';
 import {
   getCachedPodcastArtworkUri,
   warmPodcastArtworkCache,
@@ -91,6 +100,77 @@ function buildPlaylistBaseEntry(prior: PlaylistEntry | null, episode: PodcastEpi
     positionMs: 0,
     updatedAt: 0,
   };
+}
+
+async function restoreWhenPlaylistFileMissing(
+  restoreStillValid: () => boolean,
+  setupPromise: Promise<void>,
+  contextEpisodeStillNull: () => boolean,
+  send: (event: PodcastPlayerMachineEvent) => void,
+  markRestoredForVault: () => void,
+): Promise<void> {
+  await setupPromise;
+  if (!restoreStillValid()) {
+    return;
+  }
+  if (contextEpisodeStillNull()) {
+    send({type: 'RESET'});
+    markRestoredForVault();
+  }
+}
+
+async function restoreWhenEpisodeInvalidOrListened(
+  restoreStillValid: () => boolean,
+  setupPromise: Promise<void>,
+  baseUri: string,
+  player: AudioPlayer,
+  send: (event: PodcastPlayerMachineEvent) => void,
+  markRestoredForVault: () => void,
+): Promise<void> {
+  await setupPromise;
+  if (!restoreStillValid()) {
+    return;
+  }
+  await player.stop().catch(() => undefined);
+  if (!restoreStillValid()) {
+    return;
+  }
+  await clearPlaylist(baseUri);
+  if (!restoreStillValid()) {
+    return;
+  }
+  send({type: 'RESET'});
+  markRestoredForVault();
+}
+
+async function restoreHydrateFromSavedEntry(
+  restoreStillValid: () => boolean,
+  catalogEp: PodcastEpisode,
+  saved: PlaylistEntry,
+  send: (event: PodcastPlayerMachineEvent) => void,
+  markRestoredForVault: () => void,
+  setupPromise: Promise<void>,
+  player: AudioPlayer,
+  userPlaybackDepthRef: MutableRefObject<number>,
+): Promise<void> {
+  if (!restoreStillValid()) {
+    return;
+  }
+  send({
+    type: 'HYDRATE',
+    episode: toSnapshot(catalogEp),
+    entry: saved,
+    baseline: saved,
+  });
+  markRestoredForVault();
+  await setupPromise;
+  if (!restoreStillValid()) {
+    return;
+  }
+  const st = await player.getState();
+  if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+    return;
+  }
 }
 
 export function usePlayer(
@@ -216,6 +296,10 @@ export function usePlayer(
     const restoreStillValid = () =>
       isMounted && baseUriRef.current === baseUri;
 
+    const markRestoredForVault = () => {
+      hasRestoredForBaseUriRef.current = baseUri;
+    };
+
     const restore = async () => {
       try {
         if (!podcastsCatalogReady || podcastsLoading) {
@@ -225,7 +309,7 @@ export function usePlayer(
           return;
         }
         if (snapshotRef.current.context.episode != null) {
-          hasRestoredForBaseUriRef.current = baseUri;
+          markRestoredForVault();
           return;
         }
 
@@ -237,53 +321,37 @@ export function usePlayer(
           return;
         }
         if (!saved) {
-          await setupPromise;
-          if (!restoreStillValid()) {
-            return;
-          }
-          if (snapshotRef.current.context.episode == null) {
-            send({type: 'RESET'});
-            hasRestoredForBaseUriRef.current = baseUri;
-          }
+          await restoreWhenPlaylistFileMissing(
+            restoreStillValid,
+            setupPromise,
+            () => snapshotRef.current.context.episode == null,
+            send,
+            markRestoredForVault,
+          );
           return;
         }
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
         if (!catalogEp || catalogEp.isListened) {
-          await setupPromise;
-          if (!restoreStillValid()) {
-            return;
-          }
-          await player.stop().catch(() => undefined);
-          if (!restoreStillValid()) {
-            return;
-          }
-          await clearPlaylist(baseUri);
-          if (!restoreStillValid()) {
-            return;
-          }
-          send({type: 'RESET'});
-          hasRestoredForBaseUriRef.current = baseUri;
+          await restoreWhenEpisodeInvalidOrListened(
+            restoreStillValid,
+            setupPromise,
+            baseUri,
+            player,
+            send,
+            markRestoredForVault,
+          );
           return;
         }
-        if (!restoreStillValid()) {
-          return;
-        }
-        send({
-          type: 'HYDRATE',
-          episode: toSnapshot(catalogEp),
-          entry: saved,
-          baseline: saved,
-        });
-        hasRestoredForBaseUriRef.current = baseUri;
-
-        await setupPromise;
-        if (!restoreStillValid()) {
-          return;
-        }
-        const st = await player.getState();
-        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
-          return;
-        }
+        await restoreHydrateFromSavedEntry(
+          restoreStillValid,
+          catalogEp,
+          saved,
+          send,
+          markRestoredForVault,
+          setupPromise,
+          player,
+          userPlaybackDepthRef,
+        );
       } catch (restoreError) {
         if (!restoreStillValid()) {
           return;
