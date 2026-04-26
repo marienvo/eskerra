@@ -95,6 +95,7 @@ export type ReconcileFsOpenMarkdownEnv = {
   lastInboxEditorActivityAtRef: MutableRefObject<number>;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   autosaveSchedulerRef: MutableRefObject<InboxAutosaveScheduler>;
+  markLastPersistedMutation: () => void;
   setEditorWorkspaceTabs: Dispatch<SetStateAction<EditorWorkspaceTab[]>>;
   setActiveEditorTabId: Dispatch<SetStateAction<string | null>>;
   setDiskConflict: Dispatch<SetStateAction<DiskConflictState | null>>;
@@ -253,6 +254,7 @@ async function applyExternalOpenNoteDeletedForFsWatch(
     });
     open.setEditorBody('');
     open.setInboxEditorResetNonce(n => n + 1);
+    open.markLastPersistedMutation();
   }
 }
 
@@ -277,6 +279,7 @@ async function applyReloadFromDiskForFsWatch(
   open.loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'preserve');
   open.scheduleBacklinksDeferOneFrameAfterLoad();
   open.lastPersistedRef.current = {uri: normTab, markdown: diskBody};
+  open.markLastPersistedMutation();
   mergeInboxCacheWithDiskBodyForUri(open, normTab, diskBody);
   clearDiskConflictRefsForMatchingUri(open, normTab);
 }
@@ -365,6 +368,7 @@ async function reconcileDiskConflictKindForSelectedTab(
       open.loadFullMarkdownIntoInboxEditor(mergedCanon, normTab, 'preserve');
       open.scheduleBacklinksDeferOneFrameAfterLoad();
       open.lastPersistedRef.current = {uri: normTab, markdown: mergedCanon};
+      open.markLastPersistedMutation();
       mergeInboxCacheWithDiskBodyForUri(open, normTab, mergedCanon);
       clearDiskConflictRefsForMatchingUri(open, normTab);
       console.debug('[disk-merge]', {

@@ -23,7 +23,7 @@ Related diagnostic events:
 
 - `eskerra.desktop.vault_watch_start_failed` — watcher setup failed after vault selection/hydration.
 - `eskerra.desktop.vault_watch_backend_error` — one watcher backend (`recommended` or `poll`) reported a native notify error.
-- `eskerra.desktop.vault_watch_open_tab_probe_reload` — the focus/interval open-tab probe found active-note disk drift that was not already reflected in `lastPersistedRef`.
+- `eskerra.desktop.vault_watch_open_tab_probe_reload` — the focus/interval open-tab probe found active-note disk drift that was not already reflected in `lastPersistedRef`; emission is suppressed when a real watcher event or another save/reload path mutates `lastPersistedRef` during the probe window.
 
 Expected tags on related events:
 

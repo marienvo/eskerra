@@ -710,6 +710,7 @@ export function useMainWindowWorkspace(options: {
   const showTodayHubCanvasRef = useRef(false);
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
+  const lastPersistedExternalMutationSeqRef = useRef(0);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const saveActiveRef = useRef(false);
   const eagerEditorLoadUriRef = useRef<string | null>(null);
@@ -1174,6 +1175,7 @@ export function useMainWindowWorkspace(options: {
         const activeSel = selectedUriRef.current;
         if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
           lastPersistedRef.current = {uri: norm, markdown: md};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
         const memAfter = inboxContentByUriRef.current[norm];
         if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
@@ -1249,6 +1251,7 @@ export function useMainWindowWorkspace(options: {
           return;
         }
         lastPersistedRef.current = {uri, markdown: md};
+        lastPersistedExternalMutationSeqRef.current += 1;
         const nextCache = mergeInboxNoteBodyIntoCache(
           inboxContentByUriRef.current,
           uri,
@@ -1400,6 +1403,7 @@ export function useMainWindowWorkspace(options: {
     loadFullMarkdownIntoInboxEditor(md, uri, 'start');
     scheduleBacklinksDeferOneFrameAfterLoad();
     lastPersistedRef.current = {uri: c.uri, markdown: md};
+    lastPersistedExternalMutationSeqRef.current += 1;
     const nextCache = mergeInboxNoteBodyIntoCache(
       inboxContentByUriRef.current,
       c.uri,
@@ -1426,6 +1430,7 @@ export function useMainWindowWorkspace(options: {
     }
     autosaveSchedulerRef.current.cancel();
     lastPersistedRef.current = {uri: c.uri, markdown: c.diskMarkdown};
+    lastPersistedExternalMutationSeqRef.current += 1;
     setDiskConflict(null);
     diskConflictRef.current = null;
     setDiskConflictSoft(null);
@@ -1561,6 +1566,7 @@ export function useMainWindowWorkspace(options: {
     (targetNorm: string, prefetchBody: string | undefined) => {
       if (prefetchBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
+        lastPersistedExternalMutationSeqRef.current += 1;
         inboxContentByUriRef.current = {
           ...inboxContentByUriRef.current,
           [targetNorm]: prefetchBody,
@@ -1572,6 +1578,7 @@ export function useMainWindowWorkspace(options: {
           : inboxContentByUriRef.current[targetNorm];
       if (resolvedEditorBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: resolvedEditorBody};
+        lastPersistedExternalMutationSeqRef.current += 1;
         eagerEditorLoadUriRef.current = targetNorm;
         backlinksActiveBodyRef.current = resolvedEditorBody;
         loadFullMarkdownIntoInboxEditor(resolvedEditorBody, targetNorm, 'start');
@@ -1890,6 +1897,7 @@ export function useMainWindowWorkspace(options: {
         const dc = diskConflictRef.current;
         if (dc) {
           lastPersistedRef.current = {uri: dc.uri, markdown: dc.diskMarkdown};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
         setDiskConflict(null);
         diskConflictRef.current = null;
@@ -1994,6 +2002,7 @@ export function useMainWindowWorkspace(options: {
     selectedUriRef.current = null;
     composingNewEntryRef.current = false;
     lastPersistedRef.current = null;
+    lastPersistedExternalMutationSeqRef.current += 1;
     setSelectedUri(null);
     setComposingNewEntry(false);
     resetInboxEditorComposeState();
@@ -2143,6 +2152,7 @@ export function useMainWindowWorkspace(options: {
       selectedUriRef.current = null;
       composingNewEntryRef.current = false;
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
       setSelectedUri(null);
       setComposingNewEntry(false);
       clearInboxYamlFrontmatterEditorRefs({
@@ -2230,6 +2240,7 @@ export function useMainWindowWorkspace(options: {
         });
         setEditorBody('');
         lastPersistedRef.current = null;
+        lastPersistedExternalMutationSeqRef.current += 1;
         setInboxEditorResetNonce(n => n + 1);
         setVaultRoot(root);
         const store = await load(STORE_PATH);
@@ -2313,6 +2324,11 @@ export function useMainWindowWorkspace(options: {
       | {signature: string; touchedAtMs: number}
       | null = null;
     let lastOpenTabProbeAtMs = 0;
+    let vaultFilesChangedEventSeq = 0;
+    const markExternalLastPersistedMutation = () => {
+      lastPersistedExternalMutationSeqRef.current += 1;
+    };
+    const markProbeLastPersistedMutation = () => undefined;
 
     const reconcileFsOpenEnv: ReconcileFsOpenMarkdownEnv = {
       cancelled: () => cancelled,
@@ -2335,6 +2351,7 @@ export function useMainWindowWorkspace(options: {
       lastInboxEditorActivityAtRef,
       inboxEditorRef,
       autosaveSchedulerRef,
+      markLastPersistedMutation: markExternalLastPersistedMutation,
       setEditorWorkspaceTabs,
       setActiveEditorTabId,
       setDiskConflict,
@@ -2378,10 +2395,30 @@ export function useMainWindowWorkspace(options: {
       }
       lastOpenTabProbeAtMs = now;
       const before = lastPersistedRef.current;
+      const externalMutationSeqBefore =
+        lastPersistedExternalMutationSeqRef.current;
+      const vaultFilesChangedEventSeqBefore = vaultFilesChangedEventSeq;
       void (async () => {
         try {
-          await reconcileOpenNotesAfterFsChange([]);
+          await reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            {
+              ...reconcileFsOpenEnv,
+              markLastPersistedMutation: markProbeLastPersistedMutation,
+            },
+            reconcileFsTodayEnv,
+            [],
+            rerunFsReconcileForTab,
+          );
           if (cancelled) {
+            return;
+          }
+          if (
+            lastPersistedExternalMutationSeqRef.current
+            !== externalMutationSeqBefore
+          ) {
+            return;
+          }
+          if (vaultFilesChangedEventSeq !== vaultFilesChangedEventSeqBefore) {
             return;
           }
           const after = lastPersistedRef.current;
@@ -2430,6 +2467,7 @@ export function useMainWindowWorkspace(options: {
     );
 
     listen<VaultFilesChangedPayload>('vault-files-changed', event => {
+      vaultFilesChangedEventSeq += 1;
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
         isPodcastRelevantPath,
@@ -2616,6 +2654,7 @@ export function useMainWindowWorkspace(options: {
         }
       }
       lastPersistedRef.current = {uri: selectedUri, markdown: body};
+      lastPersistedExternalMutationSeqRef.current += 1;
       loadFullMarkdownIntoInboxEditor(body, selectedUri, 'start');
       scheduleBacklinksDeferOneFrameAfterLoad();
     } else {
@@ -2628,6 +2667,7 @@ export function useMainWindowWorkspace(options: {
       });
       setEditorBody('');
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
     }
   }, [
     vaultRoot,
@@ -2712,6 +2752,7 @@ export function useMainWindowWorkspace(options: {
         if (!cancelled) {
           const normalized = normalizeVaultMarkdownDiskRead(raw);
           lastPersistedRef.current = {uri: selectedUri, markdown: normalized};
+          lastPersistedExternalMutationSeqRef.current += 1;
           setInboxContentByUri(prev => {
             if (prev[selectedUri] === normalized) {
               return prev;
@@ -2830,6 +2871,7 @@ export function useMainWindowWorkspace(options: {
       setComposingNewEntry(true);
       setSelectedUri(null);
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
       resetInboxEditorComposeState();
     })();
   }, [resetInboxEditorComposeState]);
@@ -3196,6 +3238,7 @@ export function useMainWindowWorkspace(options: {
         const previousPersisted = lastPersistedRef.current;
         if (previousPersisted && previousPersisted.uri === uri) {
           lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
       }
       if (nextUri !== uri) {
@@ -3744,6 +3787,7 @@ export function useMainWindowWorkspace(options: {
         selectedUriRef.current = null;
         composingNewEntryRef.current = false;
         lastPersistedRef.current = null;
+        lastPersistedExternalMutationSeqRef.current += 1;
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
@@ -3877,6 +3921,7 @@ export function useMainWindowWorkspace(options: {
           const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, normalizedNext);
           if (mappedLp) {
             lastPersistedRef.current = {...lp, uri: mappedLp};
+            lastPersistedExternalMutationSeqRef.current += 1;
           }
         }
         const remappedTabs = remapAllTabsUriPrefix(
@@ -3921,6 +3966,7 @@ export function useMainWindowWorkspace(options: {
       const lp = lastPersistedRef.current;
       if (lp && lp.uri === previousUri) {
         lastPersistedRef.current = {...lp, uri: nextUri};
+        lastPersistedExternalMutationSeqRef.current += 1;
       }
     },
     [],
@@ -3960,6 +4006,7 @@ export function useMainWindowWorkspace(options: {
         const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, newUri);
         if (mappedLp) {
           lastPersistedRef.current = {...lp, uri: mappedLp};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
       }
     },
