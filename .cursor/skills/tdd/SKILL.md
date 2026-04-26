@@ -5,6 +5,18 @@ description: Test-driven development with red-green-refactor loop. Use when user
 
 # Test-Driven Development
 
+## This monorepo (Eskerra)
+
+From the repo root ([CLAUDE.md](../../../CLAUDE.md)):
+
+- **All tests:** `npm test` (Vitest + Jest + scripts)
+- **One Vitest file:** `npx vitest run packages/eskerra-core/src/some.test.ts` or `npx vitest run apps/desktop/src/some.test.ts`
+- **One Jest file (mobile):** `cd apps/mobile && npx jest src/path/to/test.test.ts`
+
+Use the same runner as existing tests in the package you are changing.
+
+- **Desktop Vitest:** when adding or changing desktop tests, follow the repo’s workspace rules (request them if needed): [testing.mdc](../../rules/testing.mdc) and [vitest-desktop-test-isolation.mdc](../../rules/vitest-desktop-test-isolation.mdc).
+
 ## Philosophy
 
 **Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.

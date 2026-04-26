@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Agent skills** for this repo live under [`.cursor/skills/`](.cursor/skills/) (see [`README.md`](.cursor/skills/README.md) there). `.claude/skills` symlinks to that directory so there is a single copy to maintain.
+
 ## Commands
 
 Run from repo root (npm workspaces — deps are hoisted):

@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
+description: Find deepening opportunities in a codebase, informed by CLAUDE.md, specs, and optional CONTEXT/ADR. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
 ---
 
 # Improve Codebase Architecture
@@ -26,18 +26,20 @@ Key principles (see [LANGUAGE.md](LANGUAGE.md) for the full list):
 - **The interface is the test surface.**
 - **One adapter = hypothetical seam. Two adapters = real seam.**
 
-This skill is _informed_ by the project's domain model — `CONTEXT.md` and any `docs/adr/`. The domain language gives names to good seams; ADRs record decisions the skill should not re-litigate. See [CONTEXT-FORMAT.md](../domain-model/CONTEXT-FORMAT.md) and [ADR-FORMAT.md](../domain-model/ADR-FORMAT.md).
+In **this** repo, domain and invariants are anchored in [CLAUDE.md](../../../CLAUDE.md) and [specs/](../../../specs/). Optional extras: a repo-root `CONTEXT.md` and `docs/adr/` when the project adds them. For format notes see [CONTEXT-FORMAT.md](CONTEXT-FORMAT.md) and [ADR-FORMAT.md](ADR-FORMAT.md).
 
 ## Process
 
 ### 1. Explore
 
-Read existing documentation first:
+Read existing documentation first, in this order:
 
-- `CONTEXT.md` (or `CONTEXT-MAP.md` + each `CONTEXT.md` in a multi-context repo)
-- Relevant ADRs in `docs/adr/` (and any context-scoped `docs/adr/` directories)
+1. [CLAUDE.md](../../../CLAUDE.md) (architecture, vault contract, platform targets)
+2. Relevant files under [specs/](../../../specs/) (business rules, performance notes, non-obvious decisions)
+3. If present: `CONTEXT.md` (or `CONTEXT-MAP.md` + per-area `CONTEXT.md` in a multi-context repo)
+4. If present: `docs/adr/`
 
-If any of these files don't exist, proceed silently — don't flag their absence or suggest creating them upfront.
+If optional files in steps 3–4 don't exist, proceed silently — don't flag their absence or suggest creating them upfront.
 
 Then use the Agent tool with `subagent_type=Explore` to walk the codebase. Don't follow rigid heuristics — explore organically and note where you experience friction:
 
@@ -58,7 +60,7 @@ Present a numbered list of deepening opportunities. For each candidate:
 - **Solution** — plain English description of what would change
 - **Benefits** — explained in terms of locality and leverage, and also in how tests would improve
 
-**Use CONTEXT.md vocabulary for the domain, and [LANGUAGE.md](LANGUAGE.md) vocabulary for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module" — not "the FooBarHandler," and not "the Order service."
+**Use [CLAUDE.md](../../../CLAUDE.md) / [specs/](../../../specs/) vocabulary for the product domain, and [LANGUAGE.md](LANGUAGE.md) vocabulary for the architecture.** If a `CONTEXT.md` exists and defines a term, prefer that for naming. If not, use vocabulary from `CLAUDE.md` — e.g. talk about "the vault filesystem seam" or "the playlist merge path," not opaque handler names. Example: if `CLAUDE.md` centers the **vault**, refer to "the module that mediates **vault** reads" rather than "the `FooService`."
 
 **ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly (e.g. _"contradicts ADR-0007 — but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
 
@@ -70,7 +72,7 @@ Once the user picks a candidate, drop into a grilling conversation. Walk the des
 
 Side effects happen inline as decisions crystallize:
 
-- **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md` — same discipline as `/domain-model` (see [CONTEXT-FORMAT.md](../domain-model/CONTEXT-FORMAT.md)). Create the file lazily if it doesn't exist.
-- **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
-- **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing — skip ephemeral reasons ("not worth it right now") and self-evident ones. See [ADR-FORMAT.md](../domain-model/ADR-FORMAT.md).
+- **Naming a deepened module after a concept not in `CLAUDE.md` or specs?** Add the term to the most appropriate place: a relevant `specs/` doc, and optionally `CONTEXT.md` if the team maintains one (see [CONTEXT-FORMAT.md](CONTEXT-FORMAT.md)).
+- **Sharpening a fuzzy term during the conversation?** Update that doc in the same pass.
+- **User rejects the candidate with a load-bearing reason?** Offer a durable record: either a short addition under `specs/` or, if the project uses `docs/adr/`, an ADR (see [ADR-FORMAT.md](ADR-FORMAT.md)). Only offer when the reason would help a future explorer avoid re-suggesting the same thing — skip ephemeral or self-evident reasons.
 - **Want to explore alternative interfaces for the deepened module?** See [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md).

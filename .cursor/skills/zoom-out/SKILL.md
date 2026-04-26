@@ -5,3 +5,5 @@ disable-model-invocation: true
 ---
 
 I don't know this area of code well. Go up a layer of abstraction. Give me a map of all the relevant modules and callers.
+
+Start from [CLAUDE.md](../../../CLAUDE.md) and `packages/eskerra-core` / `apps/desktop` or `apps/mobile` layout when the change crosses layers.

@@ -1,7 +1,12 @@
 ---
 name: request-refactor-plan
-description: Create a detailed refactor plan with tiny commits via user interview, then file it as a GitHub issue. Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps.
+description: Create a detailed refactor plan with tiny commits via user interview, then file it as a GitHub issue (default) or as a spec under specs/rfcs/ or specs/ when the user prefers no issue tracker. Use when the user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps.
 ---
+
+## Where to file the output
+
+- **Default (this repo / team):** create a **GitHub issue** in this repository with the plan as the issue body, unless the user explicitly asks for a repo-only artifact.
+- **Alternative:** if the user does not use issues, write `specs/rfcs/<short-slug>.md` (or another path under [specs/](../../../specs/) that matches existing layout) and mention it in the chat. Keep durable decisions consistent with [CLAUDE.md](../../../CLAUDE.md) spec discipline.
 
 This skill will be invoked when the user wants to create a refactor request. You should go through the steps below. You may skip steps if you don't consider them necessary.
 
@@ -19,7 +24,7 @@ This skill will be invoked when the user wants to create a refactor request. You
 
 7. Break the implementation into a plan of tiny commits. Remember Martin Fowler's advice to "make each refactoring step as small as possible, so that you can always see the program working."
 
-8. Create a GitHub issue with the refactor plan. Use the following template for the issue description:
+8. File the plan per **Where to file the output** above. If using a GitHub issue, use the following template for the issue body (or the same structure in a `specs/` markdown file):
 
 <refactor-plan-template>
 
