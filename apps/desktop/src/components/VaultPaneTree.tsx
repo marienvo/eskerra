@@ -39,6 +39,7 @@ import {
   buildSparseLonelyExpandPlan,
   createVaultSparsePlanLoader,
   pickLonelySubfolderWhenNoMarkdown,
+  type SparseLonelyExpandBatch,
 } from '../lib/vaultTreeAutoExpandThroughSparseFolders';
 import {filterTopLevelInboxFolderFromChildRows} from '../lib/vaultTreeFilterTopLevelInbox';
 import {
@@ -58,6 +59,68 @@ import {vaultTreeItemToFileTreeRowViewModel} from './fileTree/vaultTreeItemToFil
 
 /** Must match `.vault-tree-row` height in `App.css` and virtual row wrapper height. */
 const VAULT_TREE_ROW_HEIGHT_PX = FILE_TREE_ROW_HEIGHT_PX;
+
+function mergeExpandedItemsWithChain(
+  expandChain: readonly string[],
+  expandedItems: string[],
+): string[] {
+  const expanded = new Set(expandedItems);
+  for (const id of expandChain) {
+    expanded.add(id);
+  }
+  return [...expanded];
+}
+
+function applySparseLonelyPlanToTree(
+  t: TreeInstance<VaultTreeItemData>,
+  plan: {cacheBatches: SparseLonelyExpandBatch[]; expandChain: string[]},
+): void {
+  for (const batch of plan.cacheBatches) {
+    const parentInst = t.getItemInstance(batch.parentUri);
+    if (!parentInst) {
+      continue;
+    }
+    for (const row of batch.rows) {
+      t.getItemInstance(row.id).updateCachedData(row.data, true);
+    }
+    parentInst.updateCachedChildrenIds(
+      batch.rows.map(r => r.id),
+      true,
+    );
+  }
+  if (plan.expandChain.length > 0) {
+    t.applySubStateUpdate('expandedItems', expandedItems =>
+      mergeExpandedItemsWithChain(plan.expandChain, expandedItems),
+    );
+  }
+}
+
+function vaultTreeFileNodeRowClassName(
+  rowPropClassName: string | undefined,
+  selected: boolean,
+  isDropTargetDir: boolean,
+  isActiveDrop: boolean,
+  isDragSource: boolean,
+): string {
+  return [
+    rowPropClassName,
+    selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
+    isDropTargetDir && isActiveDrop ? 'vault-tree-row--drop-target' : '',
+    isDragSource ? 'vault-tree-row--dragging' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function vaultTreeMiddleClickApplies(
+  data: VaultTreeItemData,
+  primaryMdUri: string | null,
+): boolean {
+  if (!primaryMdUri) {
+    return false;
+  }
+  return data.kind === 'article' || data.kind === 'todayHub';
+}
 
 type VaultTreeDragGhostIcon = 'folder' | 'article' | 'today';
 
@@ -387,28 +450,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                     itemStoreRef,
                     loadChildRows,
                   });
-                  for (const batch of plan.cacheBatches) {
-                    const parentInst = t.getItemInstance(batch.parentUri);
-                    if (!parentInst) {
-                      continue;
-                    }
-                    for (const row of batch.rows) {
-                      t.getItemInstance(row.id).updateCachedData(row.data, true);
-                    }
-                    parentInst.updateCachedChildrenIds(
-                      batch.rows.map(r => r.id),
-                      true,
-                    );
-                  }
-                  if (plan.expandChain.length > 0) {
-                    t.applySubStateUpdate('expandedItems', expandedItems => {
-                      const expanded = new Set(expandedItems);
-                      for (const id of plan.expandChain) {
-                        expanded.add(id);
-                      }
-                      return [...expanded];
-                    });
-                  }
+                  applySparseLonelyPlanToTree(t, plan);
                 } catch {
                   /* ignore */
                 } finally {
@@ -852,14 +894,13 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                 treeType={rowVm.treeType}
                 isFolderExpanded={rowVm.isExpanded}
                 selected={selected}
-                className={[
+                className={vaultTreeFileNodeRowClassName(
                   rowPropClassName,
-                  selected ? 'vault-tree-row vault-tree-row--selected' : 'vault-tree-row',
-                  isDropTargetDir && dropTargetUri === data.uri ? 'vault-tree-row--drop-target' : '',
-                  draggingSourceUri === data.uri ? 'vault-tree-row--dragging' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
+                  selected,
+                  isDropTargetDir,
+                  dropTargetUri === data.uri,
+                  draggingSourceUri === data.uri,
+                )}
                 disabled={busy}
                 draggable={canDragFromRow}
                 onClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
@@ -882,10 +923,7 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   if (e.button !== 1 || busy) {
                     return;
                   }
-                  if (
-                    !primaryMdUri
-                    || (data.kind !== 'article' && data.kind !== 'todayHub')
-                  ) {
+                  if (!vaultTreeMiddleClickApplies(data, primaryMdUri)) {
                     return;
                   }
                   e.preventDefault();
@@ -898,15 +936,12 @@ export const VaultPaneTree = memo(function VaultPaneTree({
                   if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
                     return;
                   }
-                  if (
-                    !primaryMdUri
-                    || (data.kind !== 'article' && data.kind !== 'todayHub')
-                  ) {
+                  if (!vaultTreeMiddleClickApplies(data, primaryMdUri)) {
                     return;
                   }
                   e.preventDefault();
                   e.stopPropagation();
-                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri);
+                  onOpenMarkdownNoteInNewActiveTab(primaryMdUri!);
                 }}
                 onDoubleClick={(e: ReactMouseEvent<HTMLButtonElement>) => {
                   if (busy || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {

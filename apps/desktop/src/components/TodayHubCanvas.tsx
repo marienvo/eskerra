@@ -216,6 +216,65 @@ function TodayHubCanvasNonEmptyCell({
   );
 }
 
+function scheduleHubCellFocusWithPointerCaret(
+  apply: () => void,
+  pendingGenMatches: () => boolean,
+): void {
+  queueMicrotask(() => {
+    apply();
+    if (!pendingGenMatches()) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      apply();
+      if (!pendingGenMatches()) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        apply();
+      });
+    });
+  });
+}
+
+function scheduleHubCellFocusKeyboardRaf(apply: () => void, pendingGenMatches: () => boolean): void {
+  apply();
+  if (pendingGenMatches()) {
+    requestAnimationFrame(() => {
+      apply();
+    });
+  }
+}
+
+function runHubWarmPointerEnter(
+  canPrewarm: boolean,
+  warmKey: string,
+  warmOrder: readonly string[],
+  uri: string,
+  ci: number,
+  hubWarmDeferGenRef: MutableRefObject<Record<string, number>>,
+  touchWarmForCell: (u: string, c: number) => void,
+): void {
+  if (!canPrewarm) {
+    return;
+  }
+  if (warmOrder.includes(warmKey)) {
+    touchWarmForCell(uri, ci);
+    return;
+  }
+  const genMap = hubWarmDeferGenRef.current;
+  genMap[warmKey] = (genMap[warmKey] ?? 0) + 1;
+  const deferGen = genMap[warmKey]!;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (hubWarmDeferGenRef.current[warmKey] !== deferGen) {
+        return;
+      }
+      touchWarmForCell(uri, ci);
+    });
+  });
+}
+
 export function TodayHubCanvas({
   vaultRoot,
   todayNoteUri,
@@ -557,27 +616,11 @@ export function TodayHubCanvas({
     // Pointer caret: sync `focus({anchor})` in this layout pass misaligns vs static rich text (see spec).
     // H1: try `queueMicrotask` first (after all layout effects flush, before paint) to avoid a full
     // frame wait; fall back to the prior rAF chain when the editor ref is not ready.
+    const genStillPending = () => pendingHubCellFocusRef.current?.gen === gen;
     if (caret != null) {
-      queueMicrotask(() => {
-        applyHubCellFocus();
-        if (pendingHubCellFocusRef.current?.gen === gen) {
-          requestAnimationFrame(() => {
-            applyHubCellFocus();
-            if (pendingHubCellFocusRef.current?.gen === gen) {
-              requestAnimationFrame(() => {
-                applyHubCellFocus();
-              });
-            }
-          });
-        }
-      });
+      scheduleHubCellFocusWithPointerCaret(applyHubCellFocus, genStillPending);
     } else {
-      applyHubCellFocus();
-      if (pendingHubCellFocusRef.current?.gen === gen) {
-        requestAnimationFrame(() => {
-          applyHubCellFocus();
-        });
-      }
+      scheduleHubCellFocusKeyboardRaf(applyHubCellFocus, genStillPending);
     }
   }, [active, cellEditorRef]);
 
@@ -779,7 +822,9 @@ export function TodayHubCanvas({
                 </div>
               </div>
               <div className="today-hub-canvas__row-cells">
-                {sections.map((chunk, ci) => {
+                {sections.map(
+                  // eslint-disable-next-line sonarjs/cognitive-complexity -- cell combines warm LRU, CM, static rich; warm + focus paths extracted to module helpers
+                  (chunk, ci) => {
                   const editing = isActiveRow && active?.col === ci;
                   const warmKey = hubCellWarmKey(uri, ci);
                   const canPrewarm = chunk.trim().length > 0;
@@ -795,25 +840,15 @@ export function TodayHubCanvas({
                     tabIndex: 0 as const,
                     'aria-label': chunk.trim() ? undefined : 'Edit cell',
                     onPointerEnter: () => {
-                      if (canPrewarm) {
-                        if (warmOrder.includes(warmKey)) {
-                          touchWarmForCell(uri, ci);
-                        } else {
-                          hubWarmDeferGenRef.current[warmKey] =
-                            (hubWarmDeferGenRef.current[warmKey] ?? 0) + 1;
-                          const deferGen = hubWarmDeferGenRef.current[warmKey];
-                          requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                              if (
-                                hubWarmDeferGenRef.current[warmKey] !== deferGen
-                              ) {
-                                return;
-                              }
-                              touchWarmForCell(uri, ci);
-                            });
-                          });
-                        }
-                      }
+                      runHubWarmPointerEnter(
+                        canPrewarm,
+                        warmKey,
+                        warmOrder,
+                        uri,
+                        ci,
+                        hubWarmDeferGenRef,
+                        touchWarmForCell,
+                      );
                     },
                     onPointerLeave: () => {
                       hubWarmDeferGenRef.current[warmKey] =

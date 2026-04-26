@@ -1,6 +1,7 @@
 import {ensureSyntaxTree} from '@codemirror/language';
+import type {EditorState} from '@codemirror/state';
 import type {EditorView} from '@codemirror/view';
-import {useMemo, type ReactElement} from 'react';
+import {useMemo, type PointerEvent, type ReactElement} from 'react';
 
 import {isBrowserOpenableMarkdownHref} from '@eskerra/core';
 
@@ -12,7 +13,10 @@ import {wikiLinkPointerActivatableInnerAtDocPosition} from '../wikiLinkInnerAtDo
 import {wikiLinkIsResolvedFacet} from '../wikiLinkCodemirror';
 import {useEskerraCellStaticCache} from './eskerraTableCellStaticCacheContext';
 import {buildCellStaticSegments} from './eskerraTableCellStaticSegments';
-import {eskerraTableShellLinkBridgeFacet} from './eskerraTableShellLinkBridgeFacet';
+import {
+  eskerraTableShellLinkBridgeFacet,
+  type EskerraTableShellLinkBridge,
+} from './eskerraTableShellLinkBridgeFacet';
 
 const HIT_TREE_MS = 200;
 
@@ -22,34 +26,38 @@ export type EskerraTableCellStaticRichTextProps = {
   staticRichPaintKey: number;
 };
 
+function textNodeHitFromPoint(
+  doc: Document,
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+): {node: Text; offset: number} | null {
+  if (doc.caretPositionFromPoint) {
+    const pos = doc.caretPositionFromPoint(clientX, clientY);
+    if (pos && root.contains(pos.offsetNode) && pos.offsetNode.nodeType === Node.TEXT_NODE) {
+      return {node: pos.offsetNode as Text, offset: pos.offset};
+    }
+  }
+  if (doc.caretRangeFromPoint) {
+    const range = doc.caretRangeFromPoint(clientX, clientY);
+    if (range && root.contains(range.startContainer) && range.startContainer.nodeType === Node.TEXT_NODE) {
+      return {node: range.startContainer as Text, offset: range.startOffset};
+    }
+  }
+  return null;
+}
+
 function utf16OffsetFromPointer(
   root: HTMLElement,
   clientX: number,
   clientY: number,
 ): number | null {
   const doc = root.ownerDocument;
-  let offsetNode: Node | null = null;
-  let offset = 0;
-
-  if (doc.caretPositionFromPoint) {
-    const pos = doc.caretPositionFromPoint(clientX, clientY);
-    if (pos && root.contains(pos.offsetNode)) {
-      offsetNode = pos.offsetNode;
-      offset = pos.offset;
-    }
-  }
-  if (offsetNode == null && doc.caretRangeFromPoint) {
-    const range = doc.caretRangeFromPoint(clientX, clientY);
-    if (range && root.contains(range.startContainer)) {
-      if (range.startContainer.nodeType === Node.TEXT_NODE) {
-        offsetNode = range.startContainer;
-        offset = range.startOffset;
-      }
-    }
-  }
-  if (offsetNode == null || offsetNode.nodeType !== Node.TEXT_NODE) {
+  const hit = textNodeHitFromPoint(doc, root, clientX, clientY);
+  if (hit == null) {
     return null;
   }
+  const {node: offsetNode, offset} = hit;
   let total = 0;
   const tw = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;
@@ -60,6 +68,67 @@ function utf16OffsetFromPointer(
     total += (n as Text).length;
   }
   return null;
+}
+
+function staticCellPointerDownHandler(
+  e: PointerEvent<HTMLDivElement>,
+  hitState: EditorState,
+  cellText: string,
+  bridge: EskerraTableShellLinkBridge,
+): void {
+  if (e.button !== 0 || e.shiftKey) {
+    return;
+  }
+  const root = e.currentTarget;
+  const pos = utf16OffsetFromPointer(root, e.clientX, e.clientY);
+  if (pos == null) {
+    return;
+  }
+  ensureSyntaxTree(hitState, cellText.length, HIT_TREE_MS);
+  const inner = wikiLinkPointerActivatableInnerAtDocPosition(hitState.doc, pos);
+  if (inner != null) {
+    e.preventDefault();
+    e.stopPropagation();
+    bridge.onWikiLinkActivate({inner, at: pos});
+    return;
+  }
+  const relHit = markdownActivatableRelativeMdLinkAtPosition(
+    hitState,
+    pos,
+    isActivatableRelativeMarkdownHref,
+  );
+  if (relHit != null) {
+    e.preventDefault();
+    e.stopPropagation();
+    bridge.onMarkdownRelativeLinkActivate({
+      href: relHit.href,
+      at: relHit.hrefFrom,
+    });
+    return;
+  }
+  const extHit = markdownActivatableRelativeMdLinkAtPosition(
+    hitState,
+    pos,
+    isBrowserOpenableMarkdownHref,
+  );
+  if (extHit != null) {
+    e.preventDefault();
+    e.stopPropagation();
+    bridge.onMarkdownExternalLinkOpen({
+      href: extHit.href,
+      at: extHit.hrefFrom,
+    });
+    return;
+  }
+  const bareHit = markdownBareBrowserUrlAtPosition(hitState, pos);
+  if (bareHit != null) {
+    e.preventDefault();
+    e.stopPropagation();
+    bridge.onMarkdownExternalLinkOpen({
+      href: bareHit.href,
+      at: bareHit.hrefFrom,
+    });
+  }
 }
 
 /**
@@ -96,66 +165,11 @@ export function EskerraTableCellStaticRichText(
     <div
       className="cm-eskerra-table-shell__cell-static-rich"
       onPointerDown={e => {
-        if (e.button !== 0 || e.shiftKey) {
-          return;
-        }
         const bridge = parentView.state.facet(eskerraTableShellLinkBridgeFacet);
         if (!bridge) {
           return;
         }
-        const root = e.currentTarget;
-        const pos = utf16OffsetFromPointer(root, e.clientX, e.clientY);
-        if (pos == null) {
-          return;
-        }
-        ensureSyntaxTree(hitState, cellText.length, HIT_TREE_MS);
-        const inner = wikiLinkPointerActivatableInnerAtDocPosition(
-          hitState.doc,
-          pos,
-        );
-        if (inner != null) {
-          e.preventDefault();
-          e.stopPropagation();
-          bridge.onWikiLinkActivate({inner, at: pos});
-          return;
-        }
-        const relHit = markdownActivatableRelativeMdLinkAtPosition(
-          hitState,
-          pos,
-          isActivatableRelativeMarkdownHref,
-        );
-        if (relHit != null) {
-          e.preventDefault();
-          e.stopPropagation();
-          bridge.onMarkdownRelativeLinkActivate({
-            href: relHit.href,
-            at: relHit.hrefFrom,
-          });
-          return;
-        }
-        const extHit = markdownActivatableRelativeMdLinkAtPosition(
-          hitState,
-          pos,
-          isBrowserOpenableMarkdownHref,
-        );
-        if (extHit != null) {
-          e.preventDefault();
-          e.stopPropagation();
-          bridge.onMarkdownExternalLinkOpen({
-            href: extHit.href,
-            at: extHit.hrefFrom,
-          });
-          return;
-        }
-        const bareHit = markdownBareBrowserUrlAtPosition(hitState, pos);
-        if (bareHit != null) {
-          e.preventDefault();
-          e.stopPropagation();
-          bridge.onMarkdownExternalLinkOpen({
-            href: bareHit.href,
-            at: bareHit.hrefFrom,
-          });
-        }
+        staticCellPointerDownHandler(e, hitState, cellText, bridge);
       }}
     >
       {segments.map((seg, i) => (

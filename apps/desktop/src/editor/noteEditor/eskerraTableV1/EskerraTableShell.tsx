@@ -85,6 +85,10 @@ export type EskerraTableShellProps = {
   initialAlign: EskerraTableAlignment[];
 };
 
+type TableDragSession =
+  | {kind: 'col'; source: number}
+  | {kind: 'row'; source: number};
+
 function modelFromDraft(
   cells: string[][],
   align: EskerraTableAlignment[],
@@ -100,6 +104,18 @@ function modelFromDraft(
     cells: cells.map(r => [...r]),
     align: alignOut,
   };
+}
+
+function cellTextAlign(
+  a: EskerraTableAlignment | undefined,
+): 'left' | 'center' | 'right' {
+  if (a === 'center') {
+    return 'center';
+  }
+  if (a === 'right') {
+    return 'right';
+  }
+  return 'left';
 }
 
 type NestedCellPointerCaret = {
@@ -313,9 +329,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     setActiveCell({row, col});
   }, []);
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const dragSessionRef = useRef<null | {kind: 'col' | 'row'; source: number}>(
-    null,
-  );
+  const dragSessionRef = useRef<null | TableDragSession>(null);
   const lastPointerRef = useRef({x: 0, y: 0});
   const [dropLine, setDropLine] = useState<null | {
     left: number;
@@ -468,6 +482,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, []);
 
   const moveTabFrom = useCallback(
+    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Tab
     (fromRow: number, fromCol: number, shift: boolean) => {
       const rowCount = draftRef.current.cells.length;
       const nCols = draftRef.current.cells[0]?.length ?? 0;
@@ -508,6 +523,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, [colCount, parentView, snapshotAllCellDocs]);
 
   const runEnterFrom = useCallback(
+    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Enter
     (fromRow: number, fromCol: number) => {
       const rowCount = draftRef.current.cells.length;
       if (fromRow < rowCount - 1) {
@@ -779,6 +795,64 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       refreshFromPointer();
     };
 
+    const applyColDragResult = (
+      sess: {kind: 'col'; source: number},
+      merged: string[][],
+    ) => {
+      const n = merged[0]?.length ?? 0;
+      if (n === 0) {
+        return;
+      }
+      const rects = measureColumnRects();
+      if (rects.length === 0) {
+        return;
+      }
+      const drop = pickColumnDropIndex(lastPointerRef.current.x, rects);
+      const perm = columnReorderPermutation(n, sess.source, drop);
+      if (!perm || isIdentityPermutation(perm)) {
+        return;
+      }
+      const alignNow = [...draftRef.current.align];
+      const {cells: nc, align: na} = applyColumnPermutation(
+        merged.map(r => [...r]),
+        alignNow,
+        perm,
+      );
+      draftRef.current.cells = nc.map(r => [...r]);
+      draftRef.current.align = [...na];
+      setCells(nc.map(r => [...r]));
+      setAlign(na);
+      const {row, col} = activeCellRef.current;
+      syncActiveCellCoords(row, perm.indexOf(col));
+    };
+
+    const applyRowDragResult = (
+      sess: {kind: 'row'; source: number},
+      merged: string[][],
+    ) => {
+      const m = merged.length - 1;
+      const rects = measureBodyRowRects();
+      if (rects.length === 0) {
+        return;
+      }
+      const drop = pickRowDropIndex(lastPointerRef.current.y, rects);
+      const perm = bodyRowReorderPermutation(m, sess.source, drop);
+      if (!perm || isIdentityPermutation(perm)) {
+        return;
+      }
+      const next = moveBodyRowBefore(merged, sess.source, drop);
+      if (!next) {
+        return;
+      }
+      draftRef.current.cells = next.map(r => [...r]);
+      setCells(next.map(r => [...r]));
+      const {row, col} = activeCellRef.current;
+      const oldB = row - 1;
+      if (oldB >= 0) {
+        syncActiveCellCoords(perm.indexOf(oldB) + 1, col);
+      }
+    };
+
     const endDrag = () => {
       const sess = dragSessionRef.current;
       dragSessionRef.current = null;
@@ -790,50 +864,9 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       }
       const merged = snapshotAllCellDocs();
       if (sess.kind === 'col') {
-        const n = merged[0]?.length ?? 0;
-        if (n === 0) {
-          return;
-        }
-        const rects = measureColumnRects();
-        if (rects.length === 0) {
-          return;
-        }
-        const drop = pickColumnDropIndex(lastPointerRef.current.x, rects);
-        const perm = columnReorderPermutation(n, sess.source, drop);
-        if (perm && !isIdentityPermutation(perm)) {
-          const alignNow = [...draftRef.current.align];
-          const {cells: nc, align: na} = applyColumnPermutation(
-            merged.map(r => [...r]),
-            alignNow,
-            perm,
-          );
-          draftRef.current.cells = nc.map(r => [...r]);
-          draftRef.current.align = [...na];
-          setCells(nc.map(r => [...r]));
-          setAlign(na);
-          const {row, col} = activeCellRef.current;
-          syncActiveCellCoords(row, perm.indexOf(col));
-        }
+        applyColDragResult(sess, merged);
       } else {
-        const m = merged.length - 1;
-        const rects = measureBodyRowRects();
-        if (rects.length === 0) {
-          return;
-        }
-        const drop = pickRowDropIndex(lastPointerRef.current.y, rects);
-        const perm = bodyRowReorderPermutation(m, sess.source, drop);
-        if (perm && !isIdentityPermutation(perm)) {
-          const next = moveBodyRowBefore(merged, sess.source, drop);
-          if (next) {
-            draftRef.current.cells = next.map(r => [...r]);
-            setCells(next.map(r => [...r]));
-            const {row, col} = activeCellRef.current;
-            const oldB = row - 1;
-            if (oldB >= 0) {
-              syncActiveCellCoords(perm.indexOf(oldB) + 1, col);
-            }
-          }
-        }
+        applyRowDragResult(sess, merged);
       }
       parentView.requestMeasure();
       requestAnimationFrame(() => {
@@ -874,8 +907,110 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
 
   const renderColumnHandle = (ci: number): ReactNode => {
     const n = colCount;
-    const run = (patch: () => void) => {
-      patch();
+    const onSortBodyAsc = () => {
+      const merged = snapshotAllCellDocs();
+      const sorted = sortBodyByColumn(merged, ci, 'asc');
+      if (sorted) {
+        draftRef.current.cells = sorted.map(r => [...r]);
+        setCells(sorted.map(r => [...r]));
+      }
+      parentView.requestMeasure();
+    };
+    const onSortBodyDesc = () => {
+      const merged = snapshotAllCellDocs();
+      const sorted = sortBodyByColumn(merged, ci, 'desc');
+      if (sorted) {
+        draftRef.current.cells = sorted.map(r => [...r]);
+        setCells(sorted.map(r => [...r]));
+      }
+      parentView.requestMeasure();
+    };
+    const onInsertColLeft = () => {
+      const merged = snapshotAllCellDocs();
+      const out = insertColumnAt(merged, align, ci);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+      }
+      parentView.requestMeasure();
+    };
+    const onInsertColRight = () => {
+      const merged = snapshotAllCellDocs();
+      const out = insertColumnAt(merged, align, ci + 1);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+      }
+      parentView.requestMeasure();
+    };
+    const onMoveColLeft = () => {
+      const merged = snapshotAllCellDocs();
+      const out = moveColumnStep(merged, align, ci, -1);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+        const {row, col} = activeCellRef.current;
+        if (col === ci) {
+          syncActiveCellCoords(row, col - 1);
+        }
+      }
+      parentView.requestMeasure();
+    };
+    const onMoveColRight = () => {
+      const merged = snapshotAllCellDocs();
+      const out = moveColumnStep(merged, align, ci, 1);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+        const {row, col} = activeCellRef.current;
+        if (col === ci) {
+          syncActiveCellCoords(row, col + 1);
+        }
+      }
+      parentView.requestMeasure();
+    };
+    const onAlign = (side: 'left' | 'center' | 'right') => {
+      const na = setColumnAlignment(align, ci, side);
+      if (na) {
+        draftRef.current.align = na;
+        setAlign(na);
+      }
+      parentView.requestMeasure();
+    };
+    const onDuplicateCol = () => {
+      const merged = snapshotAllCellDocs();
+      const out = duplicateColumnAt(merged, align, ci);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+      }
+      parentView.requestMeasure();
+    };
+    const onDeleteCol = () => {
+      const merged = snapshotAllCellDocs();
+      const out = removeColumnAt(merged, align, ci);
+      if (out) {
+        draftRef.current.cells = out.cells.map(r => [...r]);
+        draftRef.current.align = [...out.align];
+        setCells(out.cells.map(r => [...r]));
+        setAlign(out.align);
+        const {row, col} = activeCellRef.current;
+        const nextCol = Math.min(
+          col >= ci ? Math.max(0, col - 1) : col,
+          out.cells[0]!.length - 1,
+        );
+        syncActiveCellCoords(row, nextCol);
+      }
       parentView.requestMeasure();
     };
     return (
@@ -911,32 +1046,14 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           >
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const sorted = sortBodyByColumn(merged, ci, 'asc');
-                  if (sorted) {
-                    draftRef.current.cells = sorted.map(r => [...r]);
-                    setCells(sorted.map(r => [...r]));
-                  }
-                });
-              }}
+              onSelect={onSortBodyAsc}
             >
               {menuIcon('sort_by_alpha')}
               Sort by column (A to Z)
             </ContextMenu.Item>
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const sorted = sortBodyByColumn(merged, ci, 'desc');
-                  if (sorted) {
-                    draftRef.current.cells = sorted.map(r => [...r]);
-                    setCells(sorted.map(r => [...r]));
-                  }
-                });
-              }}
+              onSelect={onSortBodyDesc}
             >
               {menuIcon('sort_by_alpha')}
               Sort by column (Z to A)
@@ -944,36 +1061,14 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = insertColumnAt(merged, align, ci);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                  }
-                });
-              }}
+              onSelect={onInsertColLeft}
             >
               {menuIcon('keyboard_arrow_left')}
               Add column to the left
             </ContextMenu.Item>
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = insertColumnAt(merged, align, ci + 1);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                  }
-                });
-              }}
+              onSelect={onInsertColRight}
             >
               {menuIcon('keyboard_arrow_right')}
               Add column to the right
@@ -982,22 +1077,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
               disabled={ci <= 0}
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = moveColumnStep(merged, align, ci, -1);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                    const {row, col} = activeCellRef.current;
-                    if (col === ci) {
-                      syncActiveCellCoords(row, col - 1);
-                    }
-                  }
-                });
-              }}
+              onSelect={onMoveColLeft}
             >
               {menuIcon('arrow_back')}
               Move column left
@@ -1005,22 +1085,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
               disabled={ci >= n - 1}
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = moveColumnStep(merged, align, ci, 1);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                    const {row, col} = activeCellRef.current;
-                    if (col === ci) {
-                      syncActiveCellCoords(row, col + 1);
-                    }
-                  }
-                });
-              }}
+              onSelect={onMoveColRight}
             >
               {menuIcon('arrow_forward')}
               Move column right
@@ -1028,45 +1093,21 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const na = setColumnAlignment(align, ci, 'left');
-                  if (na) {
-                    draftRef.current.align = na;
-                    setAlign(na);
-                  }
-                });
-              }}
+              onSelect={() => onAlign('left')}
             >
               {menuIcon('format_align_left')}
               Align left
             </ContextMenu.Item>
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const na = setColumnAlignment(align, ci, 'center');
-                  if (na) {
-                    draftRef.current.align = na;
-                    setAlign(na);
-                  }
-                });
-              }}
+              onSelect={() => onAlign('center')}
             >
               {menuIcon('format_align_center')}
               Align center
             </ContextMenu.Item>
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const na = setColumnAlignment(align, ci, 'right');
-                  if (na) {
-                    draftRef.current.align = na;
-                    setAlign(na);
-                  }
-                });
-              }}
+              onSelect={() => onAlign('right')}
             >
               {menuIcon('format_align_right')}
               Align right
@@ -1074,18 +1115,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Separator className="eskerra-table-handle-menu__sep" />
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item"
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = duplicateColumnAt(merged, align, ci);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                  }
-                });
-              }}
+              onSelect={onDuplicateCol}
             >
               {menuIcon('content_copy')}
               Duplicate column
@@ -1093,24 +1123,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             <ContextMenu.Item
               className="eskerra-table-handle-menu__item eskerra-table-handle-menu__item--danger"
               disabled={n <= 1}
-              onSelect={() => {
-                run(() => {
-                  const merged = snapshotAllCellDocs();
-                  const out = removeColumnAt(merged, align, ci);
-                  if (out) {
-                    draftRef.current.cells = out.cells.map(r => [...r]);
-                    draftRef.current.align = [...out.align];
-                    setCells(out.cells.map(r => [...r]));
-                    setAlign(out.align);
-                    const {row, col} = activeCellRef.current;
-                    const nextCol = Math.min(
-                      col >= ci ? Math.max(0, col - 1) : col,
-                      out.cells[0]!.length - 1,
-                    );
-                    syncActiveCellCoords(row, nextCol);
-                  }
-                });
-              }}
+              onSelect={onDeleteCol}
             >
               {menuIcon('delete')}
               Delete column
@@ -1606,8 +1619,7 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
   }, [cellText, isActive]);
 
   const CellTag = isHeader ? 'th' : 'td';
-  const ta =
-    align === 'center' ? 'center' : align === 'right' ? 'right' : 'left';
+  const ta = cellTextAlign(align);
   const thProps =
     headerColIndex !== undefined
       ? {'data-eskerra-col-header': String(headerColIndex)}

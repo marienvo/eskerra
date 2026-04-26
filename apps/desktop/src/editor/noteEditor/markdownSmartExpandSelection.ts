@@ -139,40 +139,68 @@ function findAncestorNamed(
 ): SyntaxNode | null {
   ensureSyntaxTree(state, state.doc.length);
   let n: SyntaxNode | null = syntaxTree(state).resolveInner(pos, -1);
-  for (; n; n = n.parent) {
+  while (n) {
     if (n.type.name === name) {
       return n;
     }
+    n = n.parent;
   }
   return null;
+}
+
+function pushSentenceSliceIfNonEmpty(
+  slices: {from: number; to: number}[],
+  from: number,
+  to: number,
+): void {
+  if (to > from) {
+    slices.push({from, to});
+  }
+}
+
+/** Returns next index and start after a sentence-ending `.?!` when the pattern matches; else null. */
+function endSentenceAfterPunctuation(
+  text: string,
+  i: number,
+  start: number,
+  slices: {from: number; to: number}[],
+): {nextI: number; newStart: number} | null {
+  const ch = text[i];
+  if (ch !== '.' && ch !== '!' && ch !== '?') {
+    return null;
+  }
+  let j = i + 1;
+  while (j < text.length && (text[j] === '"' || text[j] === "'")) {
+    j++;
+  }
+  if (j < text.length && !/\s/.test(text[j])) {
+    return null;
+  }
+  slices.push({from: start, to: j});
+  while (j < text.length && /\s/.test(text[j])) {
+    j++;
+  }
+  return {nextI: j, newStart: j};
 }
 
 /** US English–centric: segments at `.?!` + optional quotes + whitespace, and at newlines. */
 function sentenceSlicesInParagraph(text: string): readonly {from: number; to: number}[] {
   const slices: {from: number; to: number}[] = [];
   let start = 0;
-  for (let i = 0; i < text.length; i++) {
+  for (let i = 0; i < text.length; ) {
     if (text[i] === '\n') {
-      if (i > start) {
-        slices.push({from: start, to: i});
-      }
+      pushSentenceSliceIfNonEmpty(slices, start, i);
       start = i + 1;
+      i += 1;
       continue;
     }
-    if (text[i] === '.' || text[i] === '!' || text[i] === '?') {
-      let j = i + 1;
-      while (j < text.length && (text[j] === '"' || text[j] === "'")) {
-        j++;
-      }
-      if (j >= text.length || /\s/.test(text[j])) {
-        slices.push({from: start, to: j});
-        while (j < text.length && /\s/.test(text[j])) {
-          j++;
-        }
-        start = j;
-        i = Math.max(i, start - 1);
-      }
+    const ended = endSentenceAfterPunctuation(text, i, start, slices);
+    if (ended) {
+      i = ended.nextI;
+      start = ended.newStart;
+      continue;
     }
+    i += 1;
   }
   if (start < text.length) {
     slices.push({from: start, to: text.length});
@@ -237,50 +265,42 @@ function graphemeLooksLikeEmoji(segment: string): boolean {
   return !!ri && ri.length >= 2;
 }
 
-/**
- * When the caret is collapsed and touches an emoji grapheme (immediately before or after it),
- * first expand selects exactly that emoji (before word / bracket / … expansion).
- *
- * If the caret sits between two emojis with no separator, the emoji **to the right** wins.
- */
-function candidateEmojiAdjacentToCursor(
+function candidateEmojiAfterCaret(
   state: EditorState,
   main: SelectionRange,
+  pos: number,
+  docLen: number,
+  segIntl: Intl.Segmenter,
 ): SelectionRange | null {
-  if (!main.empty) {
+  if (pos >= docLen) {
     return null;
   }
-  if (inOpaqueBlock(state, main.head)) {
+  const winEnd = Math.min(docLen, pos + 256);
+  const forward = state.sliceDoc(pos, winEnd);
+  if (forward.length === 0) {
     return null;
   }
-  const pos = main.head;
-  const segIntl = getGraphemeSegmenter();
-  if (!segIntl) {
-    return null;
-  }
-  const docLen = state.doc.length;
-
-  // Caret immediately *before* an emoji: select the grapheme starting at `pos`.
-  if (pos < docLen) {
-    const winEnd = Math.min(docLen, pos + 256);
-    const forward = state.sliceDoc(pos, winEnd);
-    if (forward.length > 0) {
-      for (const {segment, index} of segIntl.segment(forward)) {
-        if (index !== 0) {
-          break;
-        }
-        if (graphemeLooksLikeEmoji(segment)) {
-          const r = asRange(pos, pos + segment.length);
-          if (strictlyWider(r, main)) {
-            return r;
-          }
-        }
-        break;
+  for (const {segment, index} of segIntl.segment(forward)) {
+    if (index !== 0) {
+      break;
+    }
+    if (graphemeLooksLikeEmoji(segment)) {
+      const r = asRange(pos, pos + segment.length);
+      if (strictlyWider(r, main)) {
+        return r;
       }
     }
+    break;
   }
+  return null;
+}
 
-  // Caret immediately *after* an emoji: select the grapheme ending at `pos`.
+function candidateEmojiBeforeCaret(
+  state: EditorState,
+  main: SelectionRange,
+  pos: number,
+  segIntl: Intl.Segmenter,
+): SelectionRange | null {
   if (pos <= 0) {
     return null;
   }
@@ -306,6 +326,41 @@ function candidateEmojiAdjacentToCursor(
   return strictlyWider(r, main) ? r : null;
 }
 
+/**
+ * When the caret is collapsed and touches an emoji grapheme (immediately before or after it),
+ * first expand selects exactly that emoji (before word / bracket / … expansion).
+ *
+ * If the caret sits between two emojis with no separator, the emoji **to the right** wins.
+ */
+function candidateEmojiAdjacentToCursor(
+  state: EditorState,
+  main: SelectionRange,
+): SelectionRange | null {
+  if (!main.empty) {
+    return null;
+  }
+  if (inOpaqueBlock(state, main.head)) {
+    return null;
+  }
+  const pos = main.head;
+  const segIntl = getGraphemeSegmenter();
+  if (!segIntl) {
+    return null;
+  }
+  const docLen = state.doc.length;
+  const forwardHit = candidateEmojiAfterCaret(
+    state,
+    main,
+    pos,
+    docLen,
+    segIntl,
+  );
+  if (forwardHit) {
+    return forwardHit;
+  }
+  return candidateEmojiBeforeCaret(state, main, pos, segIntl);
+}
+
 function candidateWord(state: EditorState, main: SelectionRange): SelectionRange | null {
   const w = state.wordAt(main.head);
   if (!w || w.from >= w.to) {
@@ -315,6 +370,54 @@ function candidateWord(state: EditorState, main: SelectionRange): SelectionRange
     return null;
   }
   return w;
+}
+
+function clauseLeftBound(
+  text: string,
+  relClamped: number,
+  sliceStart: number,
+): number {
+  let left = sliceStart;
+  for (let i = relClamped - 1; i >= sliceStart; i--) {
+    const c = text[i];
+    if (c === ',' || c === ';' || c === '\n') {
+      left = i + 1;
+      break;
+    }
+  }
+  return left;
+}
+
+function clauseRightBound(
+  text: string,
+  relClamped: number,
+  sliceEnd: number,
+): number {
+  let right = sliceEnd;
+  for (let i = relClamped; i < sliceEnd; i++) {
+    const c = text[i];
+    if (c === ',' || c === ';' || c === '\n') {
+      right = i;
+      break;
+    }
+  }
+  return right;
+}
+
+function trimInteriorWhitespace(
+  text: string,
+  left: number,
+  right: number,
+): {left: number; right: number} {
+  let l = left;
+  let r = right;
+  while (l < r && /\s/.test(text[l])) {
+    l++;
+  }
+  while (r > l && /\s/.test(text[r - 1])) {
+    r--;
+  }
+  return {left: l, right: r};
 }
 
 /** Comma/semicolon/newline-delimited span within [sliceStart, sliceEnd) (paragraph-local offsets). */
@@ -328,40 +431,56 @@ function computeClauseInTextSlice(
     return null;
   }
   const relClamped = Math.min(Math.max(rel, sliceStart), sliceEnd - 1);
-  let left = sliceStart;
-  let right = sliceEnd;
-  for (let i = relClamped - 1; i >= sliceStart; i--) {
-    const c = text[i];
-    if (c === ',' || c === ';') {
-      left = i + 1;
-      break;
-    }
-    if (c === '\n') {
-      left = i + 1;
-      break;
-    }
-  }
-  for (let i = relClamped; i < sliceEnd; i++) {
-    const c = text[i];
-    if (c === ',' || c === ';') {
-      right = i;
-      break;
-    }
-    if (c === '\n') {
-      right = i;
-      break;
-    }
-  }
-  while (left < right && /\s/.test(text[left])) {
-    left++;
-  }
-  while (right > left && /\s/.test(text[right - 1])) {
-    right--;
-  }
+  const left0 = clauseLeftBound(text, relClamped, sliceStart);
+  const right0 = clauseRightBound(text, relClamped, sliceEnd);
+  const {left, right} = trimInteriorWhitespace(text, left0, right0);
   if (left >= right) {
     return null;
   }
   return {left, right};
+}
+
+function sliceBoundsForBracketPairOrDefer(
+  para: SyntaxNode,
+  text: string,
+  main: SelectionRange,
+  m: ParenPairMatch,
+): {sliceStart: number; sliceEnd: number} | null {
+  if (!m.matched || !m.end) {
+    return {sliceStart: 0, sliceEnd: text.length};
+  }
+  const ia = Math.min(main.anchor, main.head);
+  const ib = Math.max(main.anchor, main.head);
+  if (ia <= m.start.from && ib >= m.end.to) {
+    // Selection already spans the full matched pair; defer to sentence / larger steps.
+    return null;
+  }
+  if (ia >= m.start.to && ib <= m.end.from) {
+    const innerFrom = m.start.to - para.from;
+    const innerTo = m.end.from - para.from;
+    return {
+      sliceStart: Math.max(0, innerFrom),
+      sliceEnd: Math.min(text.length, innerTo),
+    };
+  }
+  return {sliceStart: 0, sliceEnd: text.length};
+}
+
+function bracketClauseSliceBoundsForExpand(
+  state: EditorState,
+  para: SyntaxNode,
+  text: string,
+  main: SelectionRange,
+  focus: number,
+): {sliceStart: number; sliceEnd: number} | null {
+  if (wikiLinkMatchAtDocPosition(state.doc, focus)) {
+    return {sliceStart: 0, sliceEnd: text.length};
+  }
+  const m = tryMatchBracketsForClauseSlice(state, main);
+  if (!m) {
+    return {sliceStart: 0, sliceEnd: text.length};
+  }
+  return sliceBoundsForBracketPairOrDefer(para, text, main, m);
 }
 
 function candidateClause(state: EditorState, main: SelectionRange): SelectionRange | null {
@@ -375,29 +494,11 @@ function candidateClause(state: EditorState, main: SelectionRange): SelectionRan
   if (rel < 0 || rel > text.length) {
     return null;
   }
-
-  const ia = Math.min(main.anchor, main.head);
-  const ib = Math.max(main.anchor, main.head);
-
-  let sliceStart = 0;
-  let sliceEnd = text.length;
-
-  if (!wikiLinkMatchAtDocPosition(state.doc, focus)) {
-    const m = tryMatchBracketsForClauseSlice(state, main);
-    if (m?.matched && m.end) {
-      if (ia <= m.start.from && ib >= m.end.to) {
-        // Selection already spans the full matched pair; defer to sentence / larger steps.
-        return null;
-      }
-      if (ia >= m.start.to && ib <= m.end.from) {
-        const innerFrom = m.start.to - para.from;
-        const innerTo = m.end.from - para.from;
-        sliceStart = Math.max(0, innerFrom);
-        sliceEnd = Math.min(text.length, innerTo);
-      }
-    }
+  const bounds = bracketClauseSliceBoundsForExpand(state, para, text, main, focus);
+  if (!bounds) {
+    return null;
   }
-
+  const {sliceStart, sliceEnd} = bounds;
   const window = computeClauseInTextSlice(text, rel, sliceStart, sliceEnd);
   if (!window) {
     return null;
@@ -408,18 +509,73 @@ function candidateClause(state: EditorState, main: SelectionRange): SelectionRan
 
 type ParenPairMatch = NonNullable<ReturnType<typeof matchBrackets>>;
 
+function scanOpenDelimiterLeft(
+  text: string,
+  rel: number,
+  openCh: string,
+  closeCh: string,
+): number {
+  let depth = 0;
+  for (let i = rel; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === closeCh) {
+      depth++;
+    } else if (ch === openCh) {
+      if (depth === 0) {
+        return i;
+      }
+      depth--;
+    }
+  }
+  return -1;
+}
+
+function scanCloseDelimiterRight(
+  text: string,
+  openRel: number,
+  openCh: string,
+  closeCh: string,
+): number {
+  let depth = 0;
+  for (let i = openRel + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === openCh) {
+      depth++;
+    } else if (ch === closeCh) {
+      if (depth === 0) {
+        return i;
+      }
+      depth--;
+    }
+  }
+  return -1;
+}
+
 /**
- * When Lezer token types differ inside prose, {@link matchBrackets} often yields null. Scan plain `(` `)`
- * within the current paragraph so smart expand still respects parentheses (see plan: v1 text scan).
+ * Text-local scan for the innermost `open`…`close` pair that strictly contains `rel` (e.g. `(`…`)` or `{`…`}`).
  */
-function matchRoundParensTextFallback(
-  state: EditorState,
-  docPos: number,
-): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
-  if (inOpaqueBlock(state, docPos)) {
+function findEnclosingDelimitedPairRels(
+  text: string,
+  rel: number,
+  openCh: string,
+  closeCh: string,
+): {openRel: number; closeRel: number} | null {
+  const openRel = scanOpenDelimiterLeft(text, rel, openCh, closeCh);
+  if (openRel < 0) {
     return null;
   }
-  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
+  const closeRel = scanCloseDelimiterRight(text, openRel, openCh, closeCh);
+  if (closeRel < 0 || rel < openRel || rel > closeRel) {
+    return null;
+  }
+  return {openRel, closeRel};
+}
+
+function paragraphTextAndRelOrNull(
+  state: EditorState,
+  docPos: number,
+): {base: number; text: string; rel: number} | null {
+  if (inOpaqueBlock(state, docPos) || wikiLinkMatchAtDocPosition(state.doc, docPos)) {
     return null;
   }
   const para = findAncestorNamed(state, docPos, 'Paragraph');
@@ -432,40 +588,27 @@ function matchRoundParensTextFallback(
   if (rel < 0 || rel >= text.length) {
     return null;
   }
-  let depth = 0;
-  let openRel = -1;
-  for (let i = rel; i >= 0; i--) {
-    const ch = text[i];
-    if (ch === ')') {
-      depth++;
-    } else if (ch === '(') {
-      if (depth === 0) {
-        openRel = i;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (openRel < 0) {
+  return {base, text, rel};
+}
+
+/**
+ * When Lezer token types differ inside prose, {@link matchBrackets} often yields null. Scan plain `(` `)`
+ * within the current paragraph so smart expand still respects parentheses (see plan: v1 text scan).
+ */
+function matchRoundParensTextFallback(
+  state: EditorState,
+  docPos: number,
+): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
+  const pr = paragraphTextAndRelOrNull(state, docPos);
+  if (!pr) {
     return null;
   }
-  depth = 0;
-  let closeRel = -1;
-  for (let i = openRel + 1; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '(') {
-      depth++;
-    } else if (ch === ')') {
-      if (depth === 0) {
-        closeRel = i;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (closeRel < 0 || rel < openRel || rel > closeRel) {
+  const pair = findEnclosingDelimitedPairRels(pr.text, pr.rel, '(', ')');
+  if (!pair) {
     return null;
   }
+  const {base} = pr;
+  const {openRel, closeRel} = pair;
   return {
     start: {from: base + openRel, to: base + openRel + 1},
     end: {from: base + closeRel, to: base + closeRel + 1},
@@ -479,56 +622,16 @@ function matchCurlyBracesTextFallback(
   state: EditorState,
   docPos: number,
 ): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
-  if (inOpaqueBlock(state, docPos)) {
+  const pr = paragraphTextAndRelOrNull(state, docPos);
+  if (!pr) {
     return null;
   }
-  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
+  const pair = findEnclosingDelimitedPairRels(pr.text, pr.rel, '{', '}');
+  if (!pair) {
     return null;
   }
-  const para = findAncestorNamed(state, docPos, 'Paragraph');
-  if (!para) {
-    return null;
-  }
-  const base = para.from;
-  const text = state.sliceDoc(para.from, para.to);
-  const rel = docPos - base;
-  if (rel < 0 || rel >= text.length) {
-    return null;
-  }
-  let depth = 0;
-  let openRel = -1;
-  for (let i = rel; i >= 0; i--) {
-    const ch = text[i];
-    if (ch === '}') {
-      depth++;
-    } else if (ch === '{') {
-      if (depth === 0) {
-        openRel = i;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (openRel < 0) {
-    return null;
-  }
-  depth = 0;
-  let closeRel = -1;
-  for (let i = openRel + 1; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '{') {
-      depth++;
-    } else if (ch === '}') {
-      if (depth === 0) {
-        closeRel = i;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (closeRel < 0 || rel < openRel || rel > closeRel) {
-    return null;
-  }
+  const {base} = pr;
+  const {openRel, closeRel} = pair;
   return {
     start: {from: base + openRel, to: base + openRel + 1},
     end: {from: base + closeRel, to: base + closeRel + 1},
@@ -553,40 +656,25 @@ function pairsAreSameOuter(a: ParenPairMatch, b: ParenPairMatch): boolean {
   return a.start.from === b.start.from && a.end!.to === b.end!.to;
 }
 
-/** Narrowest outer span wins so `({a})` expands `a` → `{a}` → `({a})` instead of skipping the brace pair. */
-function tryParenPairForSmartExpand(state: EditorState, docPos: number): ParenPairMatch | null {
-  const candidates: ParenPairMatch[] = [];
-  const cm = matchBrackets(state, docPos, 1) ?? matchBrackets(state, docPos, -1);
-  if (cm?.matched && cm.end && posStrictlyInsidePair(cm, docPos)) {
-    candidates.push(cm);
+function pushUniqueInnerParenCandidate(
+  candidates: ParenPairMatch[],
+  m: ParenPairMatch,
+  docPos: number,
+): void {
+  if (!posStrictlyInsidePair(m, docPos)) {
+    return;
   }
-  const roundFb = matchRoundParensTextFallback(state, docPos);
-  if (roundFb) {
-    const m = parenPairFromFallback(roundFb);
-    if (
-      posStrictlyInsidePair(m, docPos)
-      && !candidates.some(c => pairsAreSameOuter(c, m))
-    ) {
-      candidates.push(m);
-    }
+  if (candidates.some(c => pairsAreSameOuter(c, m))) {
+    return;
   }
-  const curlyFb = matchCurlyBracesTextFallback(state, docPos);
-  if (curlyFb) {
-    const m = parenPairFromFallback(curlyFb);
-    if (
-      posStrictlyInsidePair(m, docPos)
-      && !candidates.some(c => pairsAreSameOuter(c, m))
-    ) {
-      candidates.push(m);
-    }
-  }
-  if (!candidates.length) {
-    return null;
-  }
-  let best = candidates[0];
+  candidates.push(m);
+}
+
+function pickNarrowestOuterParen(candidates: ParenPairMatch[]): ParenPairMatch {
+  let best = candidates[0]!;
   let bestW = pairOuterWidth(best);
   for (let i = 1; i < candidates.length; i++) {
-    const c = candidates[i];
+    const c = candidates[i]!;
     const w = pairOuterWidth(c);
     if (w < bestW) {
       best = c;
@@ -596,30 +684,39 @@ function tryParenPairForSmartExpand(state: EditorState, docPos: number): ParenPa
   return best;
 }
 
-/**
- * Conservative ASCII `"`…`"` pair in the paragraph: inner may not contain `"`; picks the narrowest span that
- * strictly contains `docPos`.
- */
-function matchAsciiDoubleQuoteTextFallback(
-  state: EditorState,
-  docPos: number,
-): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
-  if (inOpaqueBlock(state, docPos)) {
+/** Narrowest outer span wins so `({a})` expands `a` → `{a}` → `({a})` instead of skipping the brace pair. */
+function tryParenPairForSmartExpand(state: EditorState, docPos: number): ParenPairMatch | null {
+  const candidates: ParenPairMatch[] = [];
+  const cm = matchBrackets(state, docPos, 1) ?? matchBrackets(state, docPos, -1);
+  if (cm?.matched && cm.end && posStrictlyInsidePair(cm, docPos)) {
+    candidates.push(cm);
+  }
+  const roundFb = matchRoundParensTextFallback(state, docPos);
+  if (roundFb) {
+    pushUniqueInnerParenCandidate(
+      candidates,
+      parenPairFromFallback(roundFb),
+      docPos,
+    );
+  }
+  const curlyFb = matchCurlyBracesTextFallback(state, docPos);
+  if (curlyFb) {
+    pushUniqueInnerParenCandidate(
+      candidates,
+      parenPairFromFallback(curlyFb),
+      docPos,
+    );
+  }
+  if (!candidates.length) {
     return null;
   }
-  if (wikiLinkMatchAtDocPosition(state.doc, docPos)) {
-    return null;
-  }
-  const para = findAncestorNamed(state, docPos, 'Paragraph');
-  if (!para) {
-    return null;
-  }
-  const base = para.from;
-  const text = state.sliceDoc(para.from, para.to);
-  const rel = docPos - base;
-  if (rel < 0 || rel >= text.length) {
-    return null;
-  }
+  return pickNarrowestOuterParen(candidates);
+}
+
+function narrowestAsciiDoubleQuotePairRels(
+  text: string,
+  rel: number,
+): {openI: number; closeJ: number} | null {
   let bestOpen = -1;
   let bestClose = -1;
   let bestSpan = Number.POSITIVE_INFINITY;
@@ -647,9 +744,29 @@ function matchAsciiDoubleQuoteTextFallback(
   if (bestOpen < 0) {
     return null;
   }
+  return {openI: bestOpen, closeJ: bestClose};
+}
+
+/**
+ * Conservative ASCII `"`…`"` pair in the paragraph: inner may not contain `"`; picks the narrowest span that
+ * strictly contains `docPos`.
+ */
+function matchAsciiDoubleQuoteTextFallback(
+  state: EditorState,
+  docPos: number,
+): {start: {from: number; to: number}; end: {from: number; to: number}} | null {
+  const pr = paragraphTextAndRelOrNull(state, docPos);
+  if (!pr) {
+    return null;
+  }
+  const pair = narrowestAsciiDoubleQuotePairRels(pr.text, pr.rel);
+  if (!pair) {
+    return null;
+  }
+  const {base} = pr;
   return {
-    start: {from: base + bestOpen, to: base + bestOpen + 1},
-    end: {from: base + bestClose, to: base + bestClose + 1},
+    start: {from: base + pair.openI, to: base + pair.openI + 1},
+    end: {from: base + pair.closeJ, to: base + pair.closeJ + 1},
   };
 }
 
@@ -1068,6 +1185,39 @@ function candidateListSiblingGroup(
 }
 
 /**
+ * One step: from a `ListItem`, consider moving to the parent `ListItem` or that parent's sibling
+ * group (used by {@link candidateListNestAscend}).
+ */
+function selectionExpandingListNestAtList(
+  state: EditorState,
+  main: SelectionRange,
+  list: SyntaxNode,
+): SelectionRange | null {
+  const sibs = unionDirectListItemRange(list);
+  if (!sibs) {
+    return null;
+  }
+  const pItem = parentListItemOfList(list);
+  if (
+    pItem &&
+    rangesEqualDocBounds(main, sibs.from, sibs.to) &&
+    strictlyWiderForListExpand(state, asRange(pItem.from, pItem.to), main)
+  ) {
+    return asRange(pItem.from, pItem.to);
+  }
+  if (pItem && rangesEqualDocBounds(main, pItem.from, pItem.to)) {
+    const gList = parentListOfListItem(pItem);
+    if (gList) {
+      const gSibs = unionDirectListItemRange(gList);
+      if (gSibs && strictlyWiderForListExpand(state, gSibs, main)) {
+        return gSibs;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * After the sibling group at a level, expand to parent `ListItem`, then to that level's sibling
  * group, repeating up the nested list chain (one ring per keypress).
  */
@@ -1081,29 +1231,11 @@ function candidateListNestAscend(state: EditorState, main: SelectionRange): Sele
     if (!list) {
       return null;
     }
-    const sibs = unionDirectListItemRange(list);
-    if (!sibs) {
-      return null;
+    const hit = selectionExpandingListNestAtList(state, main, list);
+    if (hit) {
+      return hit;
     }
-    const pItem = parentListItemOfList(list);
-
-    if (
-      pItem &&
-      rangesEqualDocBounds(main, sibs.from, sibs.to) &&
-      strictlyWiderForListExpand(state, asRange(pItem.from, pItem.to), main)
-    ) {
-      return asRange(pItem.from, pItem.to);
-    }
-    if (pItem && rangesEqualDocBounds(main, pItem.from, pItem.to)) {
-      const gList = parentListOfListItem(pItem);
-      if (gList) {
-        const gSibs = unionDirectListItemRange(gList);
-        if (gSibs && strictlyWiderForListExpand(state, gSibs, main)) {
-          return gSibs;
-        }
-      }
-    }
-    item = pItem;
+    item = parentListItemOfList(list);
   }
   return null;
 }

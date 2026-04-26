@@ -43,6 +43,50 @@ function joinOrPush(
   }
 }
 
+function appendMergedClassForWindow(
+  out: CellStaticSegment[],
+  a: number,
+  b: number,
+  active: StyledInterval[],
+): void {
+  const covering = active.filter(iv => a >= iv.from && a < iv.to);
+  if (covering.length === 0) {
+    joinOrPush(out, a, b, '');
+    return;
+  }
+  const maxP = Math.max(...covering.map(c => c.priority));
+  const winners = covering.filter(c => c.priority === maxP);
+  const classSet = new Set<string>();
+  for (const w of winners) {
+    for (const p of w.classes.split(/\s+/)) {
+      if (p) {
+        classSet.add(p);
+      }
+    }
+  }
+  joinOrPush(out, a, b, [...classSet].sort().join(' '));
+}
+
+function pruneAndExtendActive(
+  active: StyledInterval[],
+  a: number,
+  byStart: StyledInterval[],
+  startIdx: {n: number},
+): void {
+  for (let i = active.length - 1; i >= 0; i -= 1) {
+    if (active[i]!.to <= a) {
+      active.splice(i, 1);
+    }
+  }
+  while (startIdx.n < byStart.length && byStart[startIdx.n]!.from <= a) {
+    const iv = byStart[startIdx.n]!;
+    if (iv.to > a) {
+      active.push(iv);
+    }
+    startIdx.n += 1;
+  }
+}
+
 export function mergeStyledIntervals(
   textLen: number,
   intervals: StyledInterval[],
@@ -64,7 +108,7 @@ export function mergeStyledIntervals(
   const sorted = [...breaks].sort((x, y) => x - y);
   const byStart = [...clipped].sort((x, y) => x.from - y.from || x.to - y.to);
   const active: StyledInterval[] = [];
-  let startIdx = 0;
+  const startIdx = {n: 0};
   const out: CellStaticSegment[] = [];
 
   for (let k = 0; k < sorted.length - 1; k += 1) {
@@ -73,34 +117,8 @@ export function mergeStyledIntervals(
     if (a === b) {
       continue;
     }
-    for (let i = active.length - 1; i >= 0; i -= 1) {
-      if (active[i]!.to <= a) {
-        active.splice(i, 1);
-      }
-    }
-    while (startIdx < byStart.length && byStart[startIdx]!.from <= a) {
-      const iv = byStart[startIdx]!;
-      if (iv.to > a) {
-        active.push(iv);
-      }
-      startIdx += 1;
-    }
-    const covering = active.filter(iv => a >= iv.from && a < iv.to);
-    if (covering.length === 0) {
-      joinOrPush(out, a, b, '');
-      continue;
-    }
-    const maxP = Math.max(...covering.map(c => c.priority));
-    const winners = covering.filter(c => c.priority === maxP);
-    const classSet = new Set<string>();
-    for (const w of winners) {
-      for (const p of w.classes.split(/\s+/)) {
-        if (p) {
-          classSet.add(p);
-        }
-      }
-    }
-    joinOrPush(out, a, b, [...classSet].sort().join(' '));
+    pruneAndExtendActive(active, a, byStart, startIdx);
+    appendMergedClassForWindow(out, a, b, active);
   }
   return out;
 }

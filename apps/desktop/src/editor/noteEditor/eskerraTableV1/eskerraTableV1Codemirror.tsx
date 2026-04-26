@@ -34,39 +34,50 @@ type BuildResult = {
   decorations: DecorationSet;
 };
 
+function mapSuppressedLinesAfterDocChange(
+  value: Set<number>,
+  tr: Transaction,
+): Set<number> {
+  const next = new Set<number>();
+  for (const pos of value) {
+    const mapped = tr.changes.mapPos(pos, -1);
+    if (mapped === null) {
+      continue;
+    }
+    try {
+      const line = tr.state.doc.lineAt(mapped);
+      if (!looksLikeDelimitedTableLine(line.text)) {
+        continue;
+      }
+      next.add(line.from);
+    } catch {
+      /* line no longer exists */
+    }
+  }
+  return next;
+}
+
+function applySuppressionEffects(
+  next: Set<number>,
+  tr: Transaction,
+): void {
+  for (const effect of tr.effects) {
+    if (effect.is(suppressTableWidgetAt)) {
+      next.add(effect.value.lineFrom);
+    }
+    if (effect.is(clearTableSuppressionAt)) {
+      next.delete(effect.value.lineFrom);
+    }
+  }
+}
+
 const suppressedTableLines = StateField.define<Set<number>>({
   create: () => new Set(),
   update(value, tr) {
-    let next: Set<number>;
-    if (tr.docChanged) {
-      next = new Set();
-      for (const pos of value) {
-        const mapped = tr.changes.mapPos(pos, -1);
-        if (mapped === null) {
-          continue;
-        }
-        try {
-          const line = tr.state.doc.lineAt(mapped);
-          if (!looksLikeDelimitedTableLine(line.text)) {
-            continue;
-          }
-          next.add(line.from);
-        } catch {
-          /* line no longer exists */
-        }
-      }
-    } else {
-      next = new Set(value);
-    }
-
-    for (const effect of tr.effects) {
-      if (effect.is(suppressTableWidgetAt)) {
-        next.add(effect.value.lineFrom);
-      }
-      if (effect.is(clearTableSuppressionAt)) {
-        next.delete(effect.value.lineFrom);
-      }
-    }
+    const next = tr.docChanged
+      ? mapSuppressedLinesAfterDocChange(value, tr)
+      : new Set(value);
+    applySuppressionEffects(next, tr);
     return next;
   },
 });
@@ -102,22 +113,46 @@ function initialTableShellOpenForState(state: EditorState): TableShellOpen | nul
   return null;
 }
 
+function mapOpenHeaderAfterDocChange(
+  current: TableShellOpen,
+  tr: Transaction,
+): TableShellOpen | null {
+  const mapped = tr.changes.mapPos(current.headerLineFrom, -1);
+  if (mapped === null) {
+    return null;
+  }
+  try {
+    const line = tr.state.doc.lineAt(mapped);
+    return {...current, headerLineFrom: line.from};
+  } catch {
+    return null;
+  }
+}
+
+function isOpenTableStillValid(
+  open: TableShellOpen,
+  tr: Transaction,
+): boolean {
+  const {headerLineFrom} = open;
+  if (tr.state.field(suppressedTableLines).has(headerLineFrom)) {
+    return false;
+  }
+  const block = tr.state.field(eskerraTableDocBlocksField).find(
+    b => b.lineFrom === headerLineFrom,
+  );
+  if (!block) {
+    return false;
+  }
+  const raw = tr.state.doc.sliceString(block.from, block.to).split('\n');
+  return parseEskerraTableV1FromLines(raw).ok;
+}
+
 const tableShellOpenField = StateField.define<TableShellOpen | null>({
   create: initialTableShellOpenForState,
   update(value, tr) {
-    let next = value;
+    let next: TableShellOpen | null = value;
     if (next && tr.docChanged) {
-      const mapped = tr.changes.mapPos(next.headerLineFrom, -1);
-      if (mapped === null) {
-        next = null;
-      } else {
-        try {
-          const line = tr.state.doc.lineAt(mapped);
-          next = {...next, headerLineFrom: line.from};
-        } catch {
-          next = null;
-        }
-      }
+      next = mapOpenHeaderAfterDocChange(next, tr);
     }
     for (const effect of tr.effects) {
       if (effect.is(openTableShellEffect)) {
@@ -127,24 +162,8 @@ const tableShellOpenField = StateField.define<TableShellOpen | null>({
         next = null;
       }
     }
-    if (next) {
-      const headerLineFrom = next.headerLineFrom;
-      const suppressed = tr.state.field(suppressedTableLines);
-      if (suppressed.has(headerLineFrom)) {
-        next = null;
-      } else {
-        const block = tr.state.field(eskerraTableDocBlocksField).find(
-          b => b.lineFrom === headerLineFrom,
-        );
-        if (!block) {
-          next = null;
-        } else {
-          const raw = tr.state.doc.sliceString(block.from, block.to).split('\n');
-          if (!parseEskerraTableV1FromLines(raw).ok) {
-            next = null;
-          }
-        }
-      }
+    if (next && !isOpenTableStillValid(next, tr)) {
+      return null;
     }
     return next;
   },
