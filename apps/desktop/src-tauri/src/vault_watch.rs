@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, Event, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 
@@ -10,6 +10,8 @@ use crate::vault::VaultRootState;
 
 const WATCH_DEBOUNCE_MS: u64 = 200;
 const WATCH_MAX_BATCH_MS: u64 = 900;
+const WATCH_POLL_INTERVAL_MS: u64 = 750;
+const WATCH_POLL_COMPARE_CONTENTS: bool = false;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,8 +29,13 @@ enum VaultWatchSignal {
     Coarse(String),
 }
 
+struct VaultWatchers {
+    _recommended: RecommendedWatcher,
+    _poll: PollWatcher,
+}
+
 pub struct VaultWatchState {
-    watcher: Mutex<Option<RecommendedWatcher>>,
+    watchers: Mutex<Option<VaultWatchers>>,
     notify_tx: std::sync::mpsc::Sender<VaultWatchSignal>,
 }
 
@@ -36,10 +43,39 @@ pub fn setup_vault_watch(app: &mut App) -> Result<(), Box<dyn std::error::Error>
     let (tx, rx) = std::sync::mpsc::channel();
     spawn_vault_debouncer(app.handle().clone(), rx);
     app.manage(VaultWatchState {
-        watcher: Mutex::new(None),
+        watchers: Mutex::new(None),
         notify_tx: tx,
     });
     Ok(())
+}
+
+fn send_notify_event(
+    tx: &std::sync::mpsc::Sender<VaultWatchSignal>,
+    backend: &'static str,
+    res: Result<Event, notify::Error>,
+) {
+    match res {
+        Ok(ev) => {
+            let batch: Vec<String> = ev
+                .paths
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
+            if batch.is_empty() {
+                let _ = tx.send(VaultWatchSignal::Coarse(format!(
+                    "notify_event_empty_paths:{backend}"
+                )));
+            } else {
+                let _ = tx.send(VaultWatchSignal::Paths(batch));
+            }
+        }
+        Err(err) => {
+            eprintln!("[vault-watch] {backend} watcher error: {err}");
+            let _ = tx.send(VaultWatchSignal::Coarse(format!(
+                "notify_error:{backend}:{err}"
+            )));
+        }
+    }
 }
 
 fn apply_watch_signal(
@@ -118,50 +154,50 @@ pub fn vault_start_watch(
     drop(vault);
 
     {
-        let mut guard = watch_state.watcher.lock().map_err(|e| e.to_string())?;
+        let mut guard = watch_state.watchers.lock().map_err(|e| e.to_string())?;
         *guard = None;
     }
 
     let tx_recommended = watch_state.notify_tx.clone();
-    let mut watcher = RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| match res {
-            Ok(ev) => {
-                let batch: Vec<String> = ev
-                    .paths
-                    .iter()
-                    .map(|p| p.to_string_lossy().into_owned())
-                    .collect();
-                if batch.is_empty() {
-                    let _ = tx_recommended.send(VaultWatchSignal::Coarse(
-                        "notify_event_empty_paths:recommended".to_string(),
-                    ));
-                } else {
-                    let _ = tx_recommended.send(VaultWatchSignal::Paths(batch));
-                }
-            }
-            Err(err) => {
-                eprintln!("[vault-watch] recommended watcher error: {err}");
-                let _ = tx_recommended.send(VaultWatchSignal::Coarse(format!(
-                    "notify_error:recommended:{err}"
-                )));
-            }
+    let mut recommended = RecommendedWatcher::new(
+        move |res: Result<Event, notify::Error>| {
+            send_notify_event(&tx_recommended, "recommended", res);
         },
         Config::default(),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| format!("recommended watcher: {e}"))?;
+
+    let tx_poll = watch_state.notify_tx.clone();
+    // Keep the poll fallback stat-based. `compare_contents=true` would recursively
+    // read and hash every file in the vault on every poll, including attachments.
+    let poll_config = Config::default()
+        .with_poll_interval(Duration::from_millis(WATCH_POLL_INTERVAL_MS))
+        .with_compare_contents(WATCH_POLL_COMPARE_CONTENTS);
+    let mut poll = PollWatcher::new(
+        move |res: Result<Event, notify::Error>| {
+            send_notify_event(&tx_poll, "poll", res);
+        },
+        poll_config,
+    )
+    .map_err(|e| format!("poll watcher: {e}"))?;
 
     if root.exists() {
-        watcher
+        recommended
             .watch(&root, RecursiveMode::Recursive)
-            .map_err(|e| format!("watch {}: {e}", root.display()))?;
+            .map_err(|e| format!("recommended watch {}: {e}", root.display()))?;
+        poll.watch(&root, RecursiveMode::Recursive)
+            .map_err(|e| format!("poll watch {}: {e}", root.display()))?;
     } else {
         let _ = watch_state.notify_tx.send(VaultWatchSignal::Coarse(
             "vault_root_missing_at_watch_start".to_string(),
         ));
     }
 
-    let mut guard = watch_state.watcher.lock().map_err(|e| e.to_string())?;
-    *guard = Some(watcher);
+    let mut guard = watch_state.watchers.lock().map_err(|e| e.to_string())?;
+    *guard = Some(VaultWatchers {
+        _recommended: recommended,
+        _poll: poll,
+    });
     Ok(())
 }
 
@@ -172,10 +208,14 @@ mod tests {
     #[test]
     fn collect_debounced_payload_marks_coarse_when_any_coarse_signal_arrives() {
         let (tx, rx) = std::sync::mpsc::channel();
-        tx.send(VaultWatchSignal::Paths(vec!["/vault/Inbox/A.md".to_string()]))
-            .expect("send path signal");
-        tx.send(VaultWatchSignal::Coarse("notify_error:recommended:overflow".to_string()))
-            .expect("send coarse signal");
+        tx.send(VaultWatchSignal::Paths(vec![
+            "/vault/Inbox/A.md".to_string()
+        ]))
+        .expect("send path signal");
+        tx.send(VaultWatchSignal::Coarse(
+            "notify_error:recommended:overflow".to_string(),
+        ))
+        .expect("send coarse signal");
 
         let payload = collect_debounced_payload(
             &rx,
@@ -194,11 +234,38 @@ mod tests {
     }
 
     #[test]
+    fn collect_debounced_payload_deduplicates_paths_from_dual_backends() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(VaultWatchSignal::Paths(vec![
+            "/vault/Inbox/A.md".to_string(),
+            "/vault/Inbox/B.md".to_string(),
+        ]))
+        .expect("send poll paths");
+
+        let payload = collect_debounced_payload(
+            &rx,
+            VaultWatchSignal::Paths(vec![
+                "/vault/Inbox/A.md".to_string(),
+                "/vault/Inbox/B.md".to_string(),
+            ]),
+            10,
+            50,
+        )
+        .expect("payload");
+        assert!(!payload.coarse);
+        assert_eq!(payload.paths.len(), 2);
+        assert!(payload.paths.contains(&"/vault/Inbox/A.md".to_string()));
+        assert!(payload.paths.contains(&"/vault/Inbox/B.md".to_string()));
+    }
+
+    #[test]
     fn collect_debounced_payload_respects_max_batch_duration_for_continuous_stream() {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             for i in 0..200 {
-                let _ = tx.send(VaultWatchSignal::Paths(vec![format!("/vault/Inbox/{i}.md")]));
+                let _ = tx.send(VaultWatchSignal::Paths(vec![format!(
+                    "/vault/Inbox/{i}.md"
+                )]));
                 std::thread::sleep(Duration::from_millis(2));
             }
         });

@@ -214,6 +214,8 @@ function isPodcastRelevantPath(p: string): boolean {
 }
 
 const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
+const VAULT_OPEN_TAB_PROBE_INTERVAL_MS = 10000;
+const VAULT_OPEN_TAB_PROBE_MIN_GAP_MS = 2500;
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -221,6 +223,14 @@ export type InboxEditorShellScrollDirective =
 
 function vaultChangedPathsSignature(paths: readonly string[]): string {
   return [...new Set(paths.map(p => p.trim()).filter(Boolean))].sort().join('\n');
+}
+
+function vaultWatchBackendFromReason(reason: string | null): string {
+  if (!reason) {
+    return 'unknown';
+  }
+  const parts = reason.split(':');
+  return parts.length >= 2 && parts[1] ? parts[1] : 'unknown';
 }
 
 function snapshotEditorShellScrollForOpenNote(
@@ -2225,7 +2235,33 @@ export function useMainWindowWorkspace(options: {
         const store = await load(STORE_PATH);
         await store.set(STORE_KEY_VAULT, root);
         await store.save();
-        await startVaultWatch();
+        try {
+          await startVaultWatch();
+        } catch (watchError) {
+          const reason =
+            watchError instanceof Error ? watchError.message : String(watchError);
+          captureObservabilityMessage({
+            message: 'eskerra.desktop.vault_watch_start_failed',
+            level: 'warning',
+            extra: {
+              reason,
+              vaultRootHash: fingerprintUtf16ForDebug(root),
+            },
+            tags: {
+              obs_surface: 'vault_watch',
+              watch_session_id: 'start',
+              vault_root_hash: fingerprintUtf16ForDebug(root),
+              backend: 'startup',
+              reason,
+            },
+            fingerprint: [
+              'eskerra.desktop',
+              'vault_watch_start_failed',
+              reason,
+            ],
+          });
+          throw watchError;
+        }
         queueMicrotask(() => {
           vaultSearchIndexSchedule().catch(() => undefined);
           vaultFrontmatterIndexSchedule().catch(() => undefined);
@@ -2276,6 +2312,7 @@ export function useMainWindowWorkspace(options: {
     let lastIncrementalIndexTouch:
       | {signature: string; touchedAtMs: number}
       | null = null;
+    let lastOpenTabProbeAtMs = 0;
 
     const reconcileFsOpenEnv: ReconcileFsOpenMarkdownEnv = {
       cancelled: () => cancelled,
@@ -2334,6 +2371,64 @@ export function useMainWindowWorkspace(options: {
         rerunFsReconcileForTab,
       );
 
+    const runOpenTabProbe = (trigger: 'focus' | 'interval') => {
+      const now = Date.now();
+      if (now - lastOpenTabProbeAtMs < VAULT_OPEN_TAB_PROBE_MIN_GAP_MS) {
+        return;
+      }
+      lastOpenTabProbeAtMs = now;
+      const before = lastPersistedRef.current;
+      void (async () => {
+        try {
+          await reconcileOpenNotesAfterFsChange([]);
+          if (cancelled) {
+            return;
+          }
+          const after = lastPersistedRef.current;
+          const selected = selectedUriRef.current;
+          if (
+            selected
+            && before?.uri === selected
+            && after?.uri === selected
+            && before.markdown !== after.markdown
+          ) {
+            captureObservabilityMessage({
+              message: 'eskerra.desktop.vault_watch_open_tab_probe_reload',
+              level: 'warning',
+              extra: {
+                trigger,
+                watchSessionId,
+                vaultRootHash,
+                markdownBeforeHash: fingerprintUtf16ForDebug(before.markdown),
+                markdownAfterHash: fingerprintUtf16ForDebug(after.markdown),
+              },
+              tags: {
+                obs_surface: 'vault_watch',
+                watch_session_id: watchSessionId,
+                vault_root_hash: vaultRootHash,
+                backend: 'open_tab_probe',
+                reason: trigger,
+              },
+              fingerprint: [
+                'eskerra.desktop',
+                'vault_watch_open_tab_probe_reload',
+                trigger,
+              ],
+            });
+          }
+        } catch (probeError) {
+          console.warn('[vault-watch] open-tab probe failed', probeError);
+        }
+      })();
+    };
+
+    const onWindowFocus = () => runOpenTabProbe('focus');
+    window.addEventListener('focus', onWindowFocus);
+    const openTabProbeInterval = window.setInterval(
+      () => runOpenTabProbe('interval'),
+      VAULT_OPEN_TAB_PROBE_INTERVAL_MS,
+    );
+
     listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
@@ -2362,6 +2457,7 @@ export function useMainWindowWorkspace(options: {
         vaultFrontmatterIndexSchedule().catch(() => undefined);
       }
       if (coarse) {
+        const backend = vaultWatchBackendFromReason(coarseReason);
         console.warn('[vault-files-changed] coarse invalidation', {
           reason: coarseReason,
           pathCount: paths.length,
@@ -2389,6 +2485,31 @@ export function useMainWindowWorkspace(options: {
             coarseReason ?? 'unknown',
           ],
         });
+        if (coarseReason?.startsWith('notify_error:')) {
+          captureObservabilityMessage({
+            message: 'eskerra.desktop.vault_watch_backend_error',
+            level: 'warning',
+            extra: {
+              reason: coarseReason,
+              backend,
+              pathCount: paths.length,
+              watchSessionId,
+              vaultRootHash,
+            },
+            tags: {
+              obs_surface: 'vault_watch',
+              watch_session_id: watchSessionId,
+              vault_root_hash: vaultRootHash,
+              backend,
+              reason: coarseReason,
+            },
+            fingerprint: [
+              'eskerra.desktop',
+              'vault_watch_backend_error',
+              backend,
+            ],
+          });
+        }
       }
       subtreeMarkdownCache.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
@@ -2418,6 +2539,8 @@ export function useMainWindowWorkspace(options: {
       .catch(() => undefined);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', onWindowFocus);
+      window.clearInterval(openTabProbeInterval);
       unlisten?.();
       if (diskConflictDeferTimerRef.current != null) {
         window.clearTimeout(diskConflictDeferTimerRef.current);

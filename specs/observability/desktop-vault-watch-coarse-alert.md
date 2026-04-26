@@ -19,6 +19,20 @@ Expected Sentry tags on this message event:
 - `vault_root_hash=<non-PII hash>`
 - `coarse_reason=<reason-or-unknown>`
 
+Related diagnostic events:
+
+- `eskerra.desktop.vault_watch_start_failed` — watcher setup failed after vault selection/hydration.
+- `eskerra.desktop.vault_watch_backend_error` — one watcher backend (`recommended` or `poll`) reported a native notify error.
+- `eskerra.desktop.vault_watch_open_tab_probe_reload` — the focus/interval open-tab probe found active-note disk drift that was not already reflected in `lastPersistedRef`.
+
+Expected tags on related events:
+
+- `obs_surface=vault_watch`
+- `watch_session_id=<uuid-or-start>`
+- `vault_root_hash=<non-PII hash>`
+- `backend=<recommended|poll|startup|open_tab_probe>`
+- `reason=<coarse-reason-or-trigger>`
+
 ## Alert Rules
 
 Create **Metric Alerts** in Sentry project `eskerra-desktop` using dataset **Errors**.
@@ -63,7 +77,8 @@ For the firing group (`watch_session_id`):
    - `apps/desktop/src-tauri/src/vault_watch.rs`
    - `apps/desktop/src/hooks/useMainWindowWorkspace.ts`
    - `apps/desktop/src/lib/vaultFilesChanged*`
-4. If event volume is sustained, create incident and mark as **sync-critical**.
+4. If `vault_watch_open_tab_probe_reload` appears, treat it as a missed watcher signal until proven otherwise: verify whether the native watcher or poll fallback emitted any event for the same `watch_session_id`.
+5. If event volume is sustained, create incident and mark as **sync-critical**.
 
 ## Guardrail
 
