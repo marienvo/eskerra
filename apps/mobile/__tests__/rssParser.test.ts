@@ -64,4 +64,15 @@ No markdown heading in this file`;
 
     expect(extractRssPodcastTitle('📻 De Dag.md', content)).toBe('De Dag');
   });
+
+  test('extractRssPodcastTitle reads ATX H1 with tab after hash', () => {
+    const content = `---
+rssFeedUrl: https://example.com/feed.xml
+---
+#\tTab-Separated Title`;
+
+    expect(extractRssPodcastTitle('wrong-filename.md', content)).toBe(
+      'Tab-Separated Title',
+    );
+  });
 });

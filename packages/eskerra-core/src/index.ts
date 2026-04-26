@@ -63,6 +63,7 @@ export {
   startOfLocalDayMs,
 } from './datetime/relativeCalendarLabel';
 export {extractFirstMarkdownH1} from './markdown/extractFirstMarkdownH1';
+export {stripTrailingAtxClosingHashes} from './markdown/stripTrailingAtxClosingHashes';
 export type {
   CalloutCatalogEntry,
   CalloutColor,

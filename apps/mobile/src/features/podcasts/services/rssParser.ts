@@ -1,3 +1,5 @@
+import {stripTrailingAtxClosingHashes} from '@eskerra/core';
+
 function trimWrappingQuotes(value: string): string {
   const trimmed = value.trim();
   if (
@@ -76,15 +78,15 @@ function extractFirstMarkdownH1(content: string): string | undefined {
   const lines = normalizeMarkdownNewlines(content).split('\n');
   for (const line of lines) {
     const trimmedStart = line.trimStart();
-    if (!trimmedStart.startsWith('#')) {
+    if (!trimmedStart.startsWith('#') || trimmedStart.startsWith('##')) {
       continue;
     }
-    const withoutHash = trimmedStart.slice(1);
-    if (!withoutHash.startsWith(' ')) {
+    let h1Body = trimmedStart.slice(1).trimStart();
+    if (!h1Body) {
       continue;
     }
-    const title = withoutHash.trim();
-    return title === '' ? undefined : title;
+    h1Body = stripTrailingAtxClosingHashes(h1Body);
+    return h1Body === '' ? undefined : h1Body;
   }
   return undefined;
 }

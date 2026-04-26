@@ -1,4 +1,5 @@
 import {splitYamlFrontmatter} from './splitYamlFrontmatter';
+import {stripTrailingAtxClosingHashes} from './stripTrailingAtxClosingHashes';
 
 /**
  * Returns the first ATX-style H1 heading text in markdown body content, or null.
@@ -27,7 +28,7 @@ export function extractFirstMarkdownH1(markdown: string): string | null {
     if (!h1Body) {
       continue;
     }
-    h1Body = h1Body.replace(/\s+#+\s*$/, '').trim();
+    h1Body = stripTrailingAtxClosingHashes(h1Body);
     return h1Body || null;
   }
 
