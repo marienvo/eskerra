@@ -52,6 +52,7 @@ import {openSystemBrowserUrl} from '../lib/openSystemBrowserUrl';
 import {
   createInboxAutosaveScheduler,
   INBOX_AUTOSAVE_DEBOUNCE_MS,
+  type InboxAutosaveScheduler,
 } from '../lib/inboxAutosaveScheduler';
 import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownImages';
 import {
@@ -686,6 +687,520 @@ export type UseMainWindowWorkspaceResult = {
   /** Applies a manually merged body to the editor, resolves any disk conflict, and saves. */
   applyMergedBodyFromMerge: (body: string) => void;
 };
+
+/**
+ * Open-tab inbox reconcile after vault FS events: tabs, cache, editor, autosave, disk conflicts.
+ * Split from {@link ReconcileFsTodayHubEnv} so helpers declare whether they touch Today hub state
+ * (review: avoid one undifferentiated env for all vault-watch side effects).
+ */
+type ReconcileFsOpenMarkdownEnv = {
+  cancelled: () => boolean;
+  fs: VaultFilesystem;
+  vaultRootRef: MutableRefObject<string | null>;
+  editorWorkspaceTabsRef: MutableRefObject<EditorWorkspaceTab[]>;
+  selectedUriRef: MutableRefObject<string | null>;
+  activeEditorTabIdRef: MutableRefObject<string | null>;
+  composingNewEntryRef: MutableRefObject<boolean>;
+  diskConflictRef: MutableRefObject<DiskConflictState | null>;
+  diskConflictSoftRef: MutableRefObject<DiskConflictSoftState | null>;
+  inboxContentByUriRef: MutableRefObject<Record<string, string>>;
+  lastPersistedRef: MutableRefObject<LastPersisted | null>;
+  editorBodyRef: MutableRefObject<string>;
+  inboxYamlFrontmatterInnerRef: MutableRefObject<string | null>;
+  inboxEditorYamlLeadingBeforeFrontmatterRef: MutableRefObject<string>;
+  editorShellScrollByUriRef: MutableRefObject<Map<string, {top: number; left: number}>>;
+  skipRecencyDeferForUriRef: MutableRefObject<Set<string>>;
+  diskConflictDeferTimerRef: MutableRefObject<number | null>;
+  lastInboxEditorActivityAtRef: MutableRefObject<number>;
+  inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
+  autosaveSchedulerRef: MutableRefObject<InboxAutosaveScheduler>;
+  setEditorWorkspaceTabs: Dispatch<SetStateAction<EditorWorkspaceTab[]>>;
+  setActiveEditorTabId: Dispatch<SetStateAction<string | null>>;
+  setDiskConflict: Dispatch<SetStateAction<DiskConflictState | null>>;
+  setDiskConflictSoft: Dispatch<SetStateAction<DiskConflictSoftState | null>>;
+  setInboxContentByUri: Dispatch<SetStateAction<Record<string, string>>>;
+  setSelectedUri: Dispatch<SetStateAction<string | null>>;
+  setComposingNewEntry: Dispatch<SetStateAction<boolean>>;
+  setEditorBody: Dispatch<SetStateAction<string>>;
+  setInboxEditorResetNonce: Dispatch<SetStateAction<number>>;
+  setInboxYamlFrontmatterInner: Dispatch<SetStateAction<string | null>>;
+  setInboxEditorYamlLeadingBeforeFrontmatter: Dispatch<SetStateAction<string>>;
+  openMarkdownInEditor: (
+    uri: string,
+    opts?: {skipHistory?: boolean},
+  ) => Promise<void>;
+  loadFullMarkdownIntoInboxEditor: (
+    markdown: string,
+    uri: string,
+    selection: 'preserve' | 'start',
+  ) => void;
+  scheduleBacklinksDeferOneFrameAfterLoad: () => void;
+};
+
+/** Today hub row disk/cache alignment; only used after open-tab reconcile in the same FS batch. */
+type ReconcileFsTodayHubEnv = {
+  todayHubRowLastPersistedRef: MutableRefObject<Map<string, string>>;
+  todayHubSettingsRef: MutableRefObject<TodayHubSettings | null>;
+  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
+};
+
+function normalizeVaultFsWatchRawPaths(rawPaths: string[]): string[] {
+  return rawPaths.map(p => p.trim().replace(/\\/g, '/')).filter(Boolean);
+}
+
+async function pathExistsForVaultWatch(
+  fs: VaultFilesystem,
+  normTab: string,
+): Promise<boolean | null> {
+  try {
+    return await fs.exists(normTab);
+  } catch {
+    return null;
+  }
+}
+
+async function readVaultMarkdownUtf8Normalized(
+  fs: VaultFilesystem,
+  normTab: string,
+): Promise<string | undefined> {
+  try {
+    const raw = await fs.readFile(normTab, {encoding: 'utf8'});
+    return normalizeVaultMarkdownDiskRead(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeInboxCacheWithDiskBodyForUri(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+  diskBody: string,
+): void {
+  const nextCache = mergeInboxNoteBodyIntoCache(
+    open.inboxContentByUriRef.current,
+    normTab,
+    diskBody,
+  );
+  if (!nextCache) {
+    return;
+  }
+  open.inboxContentByUriRef.current = nextCache;
+  open.setInboxContentByUri(prev =>
+    mergeInboxNoteBodyIntoCache(prev, normTab, diskBody) ?? prev,
+  );
+}
+
+function clearDiskConflictRefsForMatchingUri(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+): void {
+  if (open.diskConflictRef.current?.uri === normTab) {
+    open.setDiskConflict(null);
+    open.diskConflictRef.current = null;
+  }
+  if (open.diskConflictSoftRef.current?.uri === normTab) {
+    open.setDiskConflictSoft(null);
+    open.diskConflictSoftRef.current = null;
+  }
+}
+
+function clearSoftDiskConflictRefIfUriMatches(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+): void {
+  if (open.diskConflictSoftRef.current?.uri === normTab) {
+    open.setDiskConflictSoft(null);
+    open.diskConflictSoftRef.current = null;
+  }
+}
+
+async function applyExternalOpenNoteDeletedForFsWatch(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+): Promise<void> {
+  const wasSelected = open.selectedUriRef.current === normTab;
+  const nextTabs = removeUriFromAllTabs(
+    open.editorWorkspaceTabsRef.current,
+    u => u === normTab,
+  );
+  const nextActive = ensureActiveTabId(
+    nextTabs,
+    open.activeEditorTabIdRef.current,
+  );
+  open.editorWorkspaceTabsRef.current = nextTabs;
+  open.setEditorWorkspaceTabs(nextTabs);
+  open.activeEditorTabIdRef.current = nextActive;
+  open.setActiveEditorTabId(nextActive);
+
+  clearDiskConflictRefsForMatchingUri(open, normTab);
+
+  open.editorShellScrollByUriRef.current.delete(normTab);
+
+  const cacheNext = removeInboxNoteBodyFromCache(
+    open.inboxContentByUriRef.current,
+    normTab,
+  );
+  if (cacheNext) {
+    open.inboxContentByUriRef.current = cacheNext;
+    open.setInboxContentByUri(cacheNext);
+  }
+
+  if (!wasSelected) {
+    return;
+  }
+
+  const activeTab = nextActive
+    ? findTabById(nextTabs, nextActive)
+    : undefined;
+  const nextAfterRemove =
+    (activeTab ? tabCurrentUri(activeTab) : null)
+    ?? firstSurvivorUriFromTabs(nextTabs);
+
+  if (nextAfterRemove) {
+    await open.openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
+  } else {
+    open.selectedUriRef.current = null;
+    open.composingNewEntryRef.current = false;
+    open.lastPersistedRef.current = null;
+    open.setSelectedUri(null);
+    open.setComposingNewEntry(false);
+    clearInboxYamlFrontmatterEditorRefs({
+      inner: open.inboxYamlFrontmatterInnerRef,
+      leading: open.inboxEditorYamlLeadingBeforeFrontmatterRef,
+      setInner: open.setInboxYamlFrontmatterInner,
+      setLeading: open.setInboxEditorYamlLeadingBeforeFrontmatter,
+    });
+    open.setEditorBody('');
+    open.setInboxEditorResetNonce(n => n + 1);
+  }
+}
+
+async function mergeBackgroundTabCacheIfDiskChanged(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+  diskBody: string,
+): Promise<void> {
+  const cached = open.inboxContentByUriRef.current[normTab];
+  if (cached === diskBody) {
+    return;
+  }
+  mergeInboxCacheWithDiskBodyForUri(open, normTab, diskBody);
+}
+
+async function applyReloadFromDiskForFsWatch(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+  diskBody: string,
+): Promise<void> {
+  open.autosaveSchedulerRef.current.cancel();
+  open.loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'preserve');
+  open.scheduleBacklinksDeferOneFrameAfterLoad();
+  open.lastPersistedRef.current = {uri: normTab, markdown: diskBody};
+  mergeInboxCacheWithDiskBodyForUri(open, normTab, diskBody);
+  clearDiskConflictRefsForMatchingUri(open, normTab);
+}
+
+function tryScheduleDiskConflictRecencyDefer(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+  rerunForTab: (tab: string) => void,
+): boolean {
+  const skipRecency = open.skipRecencyDeferForUriRef.current.has(normTab);
+  if (skipRecency) {
+    open.skipRecencyDeferForUriRef.current.delete(normTab);
+    return false;
+  }
+  if (Date.now() - open.lastInboxEditorActivityAtRef.current >= DISK_CONFLICT_RECENCY_MS) {
+    return false;
+  }
+  if (open.diskConflictDeferTimerRef.current != null) {
+    window.clearTimeout(open.diskConflictDeferTimerRef.current);
+  }
+  open.diskConflictDeferTimerRef.current = window.setTimeout(() => {
+    open.diskConflictDeferTimerRef.current = null;
+    open.skipRecencyDeferForUriRef.current.add(normTab);
+    if (
+      open.cancelled() ||
+      open.selectedUriRef.current !== normTab ||
+      open.composingNewEntryRef.current
+    ) {
+      open.skipRecencyDeferForUriRef.current.delete(normTab);
+      return;
+    }
+    rerunForTab(normTab);
+  }, DISK_CONFLICT_DEFER_MS);
+  return true;
+}
+
+async function reconcileDiskConflictAfterMergeFailed(
+  open: ReconcileFsOpenMarkdownEnv,
+  normTab: string,
+  diskBody: string,
+  local: string,
+  lp: LastPersisted | null,
+  rerunForTab: (tab: string) => void,
+): Promise<void> {
+  if (tryScheduleDiskConflictRecencyDefer(open, normTab, rerunForTab)) {
+    return;
+  }
+
+  const soft: DiskConflictSoftState = {uri: normTab, diskMarkdown: diskBody};
+  console.debug('[disk-conflict-soft]', {
+    uri: normTab,
+    diskLen: diskBody.length,
+    localLen: local.length,
+    lastPersistedLen: lp?.markdown.length ?? 0,
+    diskFp: fingerprintUtf16ForDebug(diskBody),
+    localFp: fingerprintUtf16ForDebug(local),
+    persistedFp: lp ? fingerprintUtf16ForDebug(lp.markdown) : null,
+  });
+  open.setDiskConflict(null);
+  open.diskConflictRef.current = null;
+  open.setDiskConflictSoft(soft);
+  open.diskConflictSoftRef.current = soft;
+}
+
+async function reconcileDiskConflictKindForSelectedTab(
+  open: ReconcileFsOpenMarkdownEnv,
+  args: {
+    normTab: string;
+    diskBody: string;
+    local: string;
+    lp: LastPersisted | null;
+  },
+  rerunForTab: (tab: string) => void,
+): Promise<void> {
+  const {normTab, diskBody, local, lp} = args;
+  open.autosaveSchedulerRef.current.cancel();
+
+  if (lp != null && normalizeEditorDocUri(lp.uri) === normTab) {
+    const merged = tryMergeThreeWayVaultMarkdown(
+      lp.markdown,
+      local,
+      diskBody,
+    );
+    if (merged.ok) {
+      const mergedCanon = normalizeVaultMarkdownDiskRead(merged.merged);
+      open.loadFullMarkdownIntoInboxEditor(mergedCanon, normTab, 'preserve');
+      open.scheduleBacklinksDeferOneFrameAfterLoad();
+      open.lastPersistedRef.current = {uri: normTab, markdown: mergedCanon};
+      mergeInboxCacheWithDiskBodyForUri(open, normTab, mergedCanon);
+      clearDiskConflictRefsForMatchingUri(open, normTab);
+      console.debug('[disk-merge]', {
+        uri: normTab,
+        mergedLen: mergedCanon.length,
+      });
+      return;
+    }
+  }
+
+  await reconcileDiskConflictAfterMergeFailed(
+    open,
+    normTab,
+    diskBody,
+    local,
+    lp,
+    rerunForTab,
+  );
+}
+
+async function reconcileOneOpenMarkdownTabAfterDiskRead(
+  open: ReconcileFsOpenMarkdownEnv,
+  args: {normTab: string; diskBody: string},
+  rerunForTab: (tab: string) => void,
+): Promise<void> {
+  const {normTab, diskBody} = args;
+  const isSelected =
+    open.selectedUriRef.current === normTab && !open.composingNewEntryRef.current;
+  if (!isSelected) {
+    await mergeBackgroundTabCacheIfDiskChanged(open, normTab, diskBody);
+    return;
+  }
+
+  const local = inboxEditorSliceToFullMarkdown(
+    open.inboxEditorRef.current?.getMarkdown() ?? open.editorBodyRef.current,
+    normTab,
+    open.composingNewEntryRef.current,
+    open.inboxYamlFrontmatterInnerRef.current,
+    open.inboxEditorYamlLeadingBeforeFrontmatterRef.current,
+  );
+  const lp = open.lastPersistedRef.current;
+  const kind = classifyNoteDiskReconcile({
+    noteUri: normTab,
+    lastPersisted: lp,
+    diskMarkdown: diskBody,
+    localMarkdown: local,
+  });
+
+  if (kind === 'noop') {
+    clearSoftDiskConflictRefIfUriMatches(open, normTab);
+    return;
+  }
+  if (kind === 'reload_from_disk') {
+    await applyReloadFromDiskForFsWatch(open, normTab, diskBody);
+    return;
+  }
+
+  await reconcileDiskConflictKindForSelectedTab(
+    open,
+    {normTab, diskBody, local, lp},
+    rerunForTab,
+  );
+}
+
+async function syncTodayHubWeekRowFromDiskIfNeeded(
+  open: ReconcileFsOpenMarkdownEnv,
+  today: ReconcileFsTodayHubEnv,
+  rowUri: string,
+): Promise<void> {
+  const rowExists = await pathExistsForVaultWatch(open.fs, rowUri);
+  if (rowExists === null) {
+    return;
+  }
+  if (!rowExists) {
+    today.todayHubRowLastPersistedRef.current.delete(rowUri);
+    const rm = removeInboxNoteBodyFromCache(
+      open.inboxContentByUriRef.current,
+      rowUri,
+    );
+    if (rm) {
+      open.inboxContentByUriRef.current = rm;
+      open.setInboxContentByUri(rm);
+    }
+    return;
+  }
+  const hubDiskBody = await readVaultMarkdownUtf8Normalized(open.fs, rowUri);
+  if (hubDiskBody === undefined) {
+    return;
+  }
+  const liveUri = today.todayHubBridgeRef.current.getLiveRowUri();
+  if (liveUri === rowUri) {
+    return;
+  }
+  const cached = open.inboxContentByUriRef.current[rowUri];
+  if (cached === hubDiskBody) {
+    today.todayHubRowLastPersistedRef.current.set(rowUri, hubDiskBody);
+    return;
+  }
+  today.todayHubRowLastPersistedRef.current.set(rowUri, hubDiskBody);
+  const nextHubCache = mergeInboxNoteBodyIntoCache(
+    open.inboxContentByUriRef.current,
+    rowUri,
+    hubDiskBody,
+  );
+  if (nextHubCache) {
+    open.inboxContentByUriRef.current = nextHubCache;
+    open.setInboxContentByUri(prev =>
+      mergeInboxNoteBodyIntoCache(prev, rowUri, hubDiskBody) ?? prev,
+    );
+  }
+}
+
+async function reconcileTodayHubWeekRowsAfterVaultFsChange(
+  open: ReconcileFsOpenMarkdownEnv,
+  today: ReconcileFsTodayHubEnv,
+  args: {fullRefresh: boolean; normPaths: string[]; root: string},
+): Promise<void> {
+  const {fullRefresh, normPaths, root} = args;
+  const todaySel = open.selectedUriRef.current;
+  const normToday = todaySel?.replace(/\\/g, '/');
+  if (
+    !normToday
+    || !vaultUriIsTodayMarkdownFile(normToday)
+    || open.composingNewEntryRef.current
+  ) {
+    return;
+  }
+  const hubDir = vaultUriParentDirectory(normToday);
+  const hubStart = today.todayHubSettingsRef.current?.start ?? 'monday';
+  for (const m of enumerateTodayHubWeekStarts(new Date(), hubStart)) {
+    const rowUri = normalizeEditorDocUri(todayHubRowUri(hubDir, m));
+    if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, rowUri, root)) {
+      continue;
+    }
+    await syncTodayHubWeekRowFromDiskIfNeeded(open, today, rowUri);
+  }
+}
+
+async function reconcileOpenWorkspaceTabUriForVaultWatch(
+  open: ReconcileFsOpenMarkdownEnv,
+  tabUri: string,
+  root: string,
+  fullRefresh: boolean,
+  normPaths: string[],
+  rerunForTab: (tab: string) => void,
+): Promise<void> {
+  const normTab = normalizeEditorDocUri(tabUri);
+  if (!normTab.toLowerCase().endsWith('.md')) {
+    return;
+  }
+  const stillOpen = collectDistinctUrisFromTabs(
+    open.editorWorkspaceTabsRef.current,
+  ).some(u => normalizeEditorDocUri(u) === normTab);
+  if (!stillOpen) {
+    return;
+  }
+  if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, normTab, root)) {
+    return;
+  }
+
+  const existsResult = await pathExistsForVaultWatch(open.fs, normTab);
+  if (existsResult === null) {
+    return;
+  }
+  if (!existsResult) {
+    await applyExternalOpenNoteDeletedForFsWatch(open, normTab);
+    return;
+  }
+
+  const diskBody = await readVaultMarkdownUtf8Normalized(open.fs, normTab);
+  if (diskBody === undefined) {
+    return;
+  }
+
+  await reconcileOneOpenMarkdownTabAfterDiskRead(
+    open,
+    {normTab, diskBody},
+    rerunForTab,
+  );
+}
+
+async function reconcileOpenNotesAfterFsChangeFromVaultWatch(
+  open: ReconcileFsOpenMarkdownEnv,
+  today: ReconcileFsTodayHubEnv,
+  rawPaths: string[],
+  rerunForTab: (tab: string) => void,
+): Promise<void> {
+  const root = open.vaultRootRef.current;
+  if (!root || open.cancelled()) {
+    return;
+  }
+  const normPaths = normalizeVaultFsWatchRawPaths(rawPaths);
+  if (normPaths.length === 0) {
+    console.debug(
+      '[vault-files-changed] empty path batch: reconciling every open markdown tab (coarse invalidation); Rust watcher only emits non-empty batches today',
+    );
+  }
+  const fullRefresh = normPaths.length === 0;
+  const tabs = collectDistinctUrisFromTabs(open.editorWorkspaceTabsRef.current);
+
+  for (const tabUri of tabs) {
+    await reconcileOpenWorkspaceTabUriForVaultWatch(
+      open,
+      tabUri,
+      root,
+      fullRefresh,
+      normPaths,
+      rerunForTab,
+    );
+  }
+
+  await reconcileTodayHubWeekRowsAfterVaultFsChange(open, today, {
+    fullRefresh,
+    normPaths,
+    root,
+  });
+}
 
 function cloneEditorWorkspaceTabs(tabs: readonly EditorWorkspaceTab[]): EditorWorkspaceTab[] {
   return tabsFromStored(tabsToStored(tabs));
@@ -2369,333 +2884,62 @@ export function useMainWindowWorkspace(options: {
       | {signature: string; touchedAtMs: number}
       | null = null;
 
-    const applyExternalOpenNoteDeleted = async (normTab: string) => {
-      const wasSelected = selectedUriRef.current === normTab;
-      const nextTabs = removeUriFromAllTabs(
-        editorWorkspaceTabsRef.current,
-        u => u === normTab,
-      );
-      const nextActive = ensureActiveTabId(
-        nextTabs,
-        activeEditorTabIdRef.current,
-      );
-      editorWorkspaceTabsRef.current = nextTabs;
-      setEditorWorkspaceTabs(nextTabs);
-      activeEditorTabIdRef.current = nextActive;
-      setActiveEditorTabId(nextActive);
-
-      if (diskConflictRef.current?.uri === normTab) {
-        setDiskConflict(null);
-        diskConflictRef.current = null;
-      }
-      if (diskConflictSoftRef.current?.uri === normTab) {
-        setDiskConflictSoft(null);
-        diskConflictSoftRef.current = null;
-      }
-
-      editorShellScrollByUriRef.current.delete(normTab);
-
-      const cacheNext = removeInboxNoteBodyFromCache(
-        inboxContentByUriRef.current,
-        normTab,
-      );
-      if (cacheNext) {
-        inboxContentByUriRef.current = cacheNext;
-        setInboxContentByUri(cacheNext);
-      }
-
-      if (!wasSelected) {
-        return;
-      }
-
-      const activeTab = nextActive
-        ? findTabById(nextTabs, nextActive)
-        : undefined;
-      const nextAfterRemove =
-        (activeTab ? tabCurrentUri(activeTab) : null)
-        ?? firstSurvivorUriFromTabs(nextTabs);
-
-      if (nextAfterRemove) {
-        await openMarkdownInEditor(nextAfterRemove, {skipHistory: true});
-      } else {
-        selectedUriRef.current = null;
-        composingNewEntryRef.current = false;
-        lastPersistedRef.current = null;
-        setSelectedUri(null);
-        setComposingNewEntry(false);
-        clearInboxYamlFrontmatterEditorRefs({
-          inner: inboxYamlFrontmatterInnerRef,
-          leading: inboxEditorYamlLeadingBeforeFrontmatterRef,
-          setInner: setInboxYamlFrontmatterInner,
-          setLeading: setInboxEditorYamlLeadingBeforeFrontmatter,
-        });
-        setEditorBody('');
-        setInboxEditorResetNonce(n => n + 1);
-      }
+    const reconcileFsOpenEnv: ReconcileFsOpenMarkdownEnv = {
+      cancelled: () => cancelled,
+      fs,
+      vaultRootRef,
+      editorWorkspaceTabsRef,
+      selectedUriRef,
+      activeEditorTabIdRef,
+      composingNewEntryRef,
+      diskConflictRef,
+      diskConflictSoftRef,
+      inboxContentByUriRef,
+      lastPersistedRef,
+      editorBodyRef,
+      inboxYamlFrontmatterInnerRef,
+      inboxEditorYamlLeadingBeforeFrontmatterRef,
+      editorShellScrollByUriRef,
+      skipRecencyDeferForUriRef,
+      diskConflictDeferTimerRef,
+      lastInboxEditorActivityAtRef,
+      inboxEditorRef,
+      autosaveSchedulerRef,
+      setEditorWorkspaceTabs,
+      setActiveEditorTabId,
+      setDiskConflict,
+      setDiskConflictSoft,
+      setInboxContentByUri,
+      setSelectedUri,
+      setComposingNewEntry,
+      setEditorBody,
+      setInboxEditorResetNonce,
+      setInboxYamlFrontmatterInner,
+      setInboxEditorYamlLeadingBeforeFrontmatter,
+      openMarkdownInEditor,
+      loadFullMarkdownIntoInboxEditor,
+      scheduleBacklinksDeferOneFrameAfterLoad,
     };
-
-    const reconcileOpenNotesAfterFsChange = async (rawPaths: string[]) => {
-      const root = vaultRootRef.current;
-      if (!root || cancelled) {
-        return;
-      }
-      const normPaths = rawPaths.map(p => p.trim().replace(/\\/g, '/')).filter(Boolean);
-      if (normPaths.length === 0) {
-        console.debug(
-          '[vault-files-changed] empty path batch: reconciling every open markdown tab (coarse invalidation); Rust watcher only emits non-empty batches today',
-        );
-      }
-      const fullRefresh = normPaths.length === 0;
-      const tabs = collectDistinctUrisFromTabs(editorWorkspaceTabsRef.current);
-
-      for (const tabUri of tabs) {
-        const normTab = normalizeEditorDocUri(tabUri);
-        if (!normTab.toLowerCase().endsWith('.md')) {
-          continue;
-        }
-        const stillOpen = collectDistinctUrisFromTabs(
-          editorWorkspaceTabsRef.current,
-        ).some(u => normalizeEditorDocUri(u) === normTab);
-        if (!stillOpen) {
-          continue;
-        }
-        if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, normTab, root)) {
-          continue;
-        }
-
-        let exists = false;
-        try {
-          exists = await fs.exists(normTab);
-        } catch {
-          continue;
-        }
-
-        if (!exists) {
-          await applyExternalOpenNoteDeleted(normTab);
-          continue;
-        }
-
-        let diskBody: string;
-        try {
-          const raw = await fs.readFile(normTab, {encoding: 'utf8'});
-          diskBody = normalizeVaultMarkdownDiskRead(raw);
-        } catch {
-          continue;
-        }
-
-        const isSelected =
-          selectedUriRef.current === normTab && !composingNewEntryRef.current;
-        if (!isSelected) {
-          const cached = inboxContentByUriRef.current[normTab];
-          if (cached !== diskBody) {
-            const nextCache = mergeInboxNoteBodyIntoCache(
-              inboxContentByUriRef.current,
-              normTab,
-              diskBody,
-            );
-            if (nextCache) {
-              inboxContentByUriRef.current = nextCache;
-              setInboxContentByUri(prev =>
-                mergeInboxNoteBodyIntoCache(prev, normTab, diskBody) ?? prev,
-              );
-            }
-          }
-          continue;
-        }
-
-        const local = inboxEditorSliceToFullMarkdown(
-          inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
-          normTab,
-          composingNewEntryRef.current,
-          inboxYamlFrontmatterInnerRef.current,
-          inboxEditorYamlLeadingBeforeFrontmatterRef.current,
-        );
-        const lp = lastPersistedRef.current;
-        const kind = classifyNoteDiskReconcile({
-          noteUri: normTab,
-          lastPersisted: lp,
-          diskMarkdown: diskBody,
-          localMarkdown: local,
-        });
-
-        if (kind === 'noop') {
-          if (diskConflictSoftRef.current?.uri === normTab) {
-            setDiskConflictSoft(null);
-            diskConflictSoftRef.current = null;
-          }
-          continue;
-        }
-        if (kind === 'reload_from_disk') {
-          autosaveSchedulerRef.current.cancel();
-          loadFullMarkdownIntoInboxEditor(diskBody, normTab, 'preserve');
-          scheduleBacklinksDeferOneFrameAfterLoad();
-          lastPersistedRef.current = {uri: normTab, markdown: diskBody};
-          const nextCache = mergeInboxNoteBodyIntoCache(
-            inboxContentByUriRef.current,
-            normTab,
-            diskBody,
-          );
-          if (nextCache) {
-            inboxContentByUriRef.current = nextCache;
-            setInboxContentByUri(prev =>
-              mergeInboxNoteBodyIntoCache(prev, normTab, diskBody) ?? prev,
-            );
-          }
-          if (diskConflictRef.current?.uri === normTab) {
-            setDiskConflict(null);
-            diskConflictRef.current = null;
-          }
-          if (diskConflictSoftRef.current?.uri === normTab) {
-            setDiskConflictSoft(null);
-            diskConflictSoftRef.current = null;
-          }
-          continue;
-        }
-
-        autosaveSchedulerRef.current.cancel();
-
-        if (lp != null && normalizeEditorDocUri(lp.uri) === normTab) {
-          const merged = tryMergeThreeWayVaultMarkdown(
-            lp.markdown,
-            local,
-            diskBody,
-          );
-          if (merged.ok) {
-            const mergedCanon = normalizeVaultMarkdownDiskRead(merged.merged);
-            loadFullMarkdownIntoInboxEditor(mergedCanon, normTab, 'preserve');
-            scheduleBacklinksDeferOneFrameAfterLoad();
-            lastPersistedRef.current = {uri: normTab, markdown: mergedCanon};
-            const mergeCache = mergeInboxNoteBodyIntoCache(
-              inboxContentByUriRef.current,
-              normTab,
-              mergedCanon,
-            );
-            if (mergeCache) {
-              inboxContentByUriRef.current = mergeCache;
-              setInboxContentByUri(prev =>
-                mergeInboxNoteBodyIntoCache(prev, normTab, mergedCanon) ?? prev,
-              );
-            }
-            if (diskConflictRef.current?.uri === normTab) {
-              setDiskConflict(null);
-              diskConflictRef.current = null;
-            }
-            if (diskConflictSoftRef.current?.uri === normTab) {
-              setDiskConflictSoft(null);
-              diskConflictSoftRef.current = null;
-            }
-            console.debug('[disk-merge]', {
-              uri: normTab,
-              mergedLen: mergedCanon.length,
-            });
-            continue;
-          }
-        }
-
-        const skipRecency = skipRecencyDeferForUriRef.current.has(normTab);
-        if (skipRecency) {
-          skipRecencyDeferForUriRef.current.delete(normTab);
-        } else if (
-          Date.now() - lastInboxEditorActivityAtRef.current < DISK_CONFLICT_RECENCY_MS
-        ) {
-          if (diskConflictDeferTimerRef.current != null) {
-            window.clearTimeout(diskConflictDeferTimerRef.current);
-          }
-          diskConflictDeferTimerRef.current = window.setTimeout(() => {
-            diskConflictDeferTimerRef.current = null;
-            skipRecencyDeferForUriRef.current.add(normTab);
-            if (
-              cancelled ||
-              selectedUriRef.current !== normTab ||
-              composingNewEntryRef.current
-            ) {
-              skipRecencyDeferForUriRef.current.delete(normTab);
-              return;
-            }
-            void reconcileOpenNotesAfterFsChange([normTab]);
-          }, DISK_CONFLICT_DEFER_MS);
-          continue;
-        }
-
-        const soft: DiskConflictSoftState = {uri: normTab, diskMarkdown: diskBody};
-        console.debug('[disk-conflict-soft]', {
-          uri: normTab,
-          diskLen: diskBody.length,
-          localLen: local.length,
-          lastPersistedLen: lp?.markdown.length ?? 0,
-          diskFp: fingerprintUtf16ForDebug(diskBody),
-          localFp: fingerprintUtf16ForDebug(local),
-          persistedFp: lp ? fingerprintUtf16ForDebug(lp.markdown) : null,
-        });
-        setDiskConflict(null);
-        diskConflictRef.current = null;
-        setDiskConflictSoft(soft);
-        diskConflictSoftRef.current = soft;
-      }
-
-      const todaySel = selectedUriRef.current;
-      const normToday = todaySel?.replace(/\\/g, '/');
-      if (
-        normToday
-        && vaultUriIsTodayMarkdownFile(normToday)
-        && !composingNewEntryRef.current
-      ) {
-        const hubDir = vaultUriParentDirectory(normToday);
-        const hubStart = todayHubSettingsRef.current?.start ?? 'monday';
-        for (const m of enumerateTodayHubWeekStarts(new Date(), hubStart)) {
-          const rowUri = normalizeEditorDocUri(todayHubRowUri(hubDir, m));
-          if (!fullRefresh && !fsChangePathsMayAffectUri(normPaths, rowUri, root)) {
-            continue;
-          }
-          let exists = false;
-          try {
-            exists = await fs.exists(rowUri);
-          } catch {
-            continue;
-          }
-          if (!exists) {
-            todayHubRowLastPersistedRef.current.delete(rowUri);
-            const rm = removeInboxNoteBodyFromCache(
-              inboxContentByUriRef.current,
-              rowUri,
-            );
-            if (rm) {
-              inboxContentByUriRef.current = rm;
-              setInboxContentByUri(rm);
-            }
-            continue;
-          }
-          let diskBody: string;
-          try {
-            const raw = await fs.readFile(rowUri, {encoding: 'utf8'});
-            diskBody = normalizeVaultMarkdownDiskRead(raw);
-          } catch {
-            continue;
-          }
-          const liveUri = todayHubBridgeRef.current.getLiveRowUri();
-          if (liveUri === rowUri) {
-            continue;
-          }
-          const cached = inboxContentByUriRef.current[rowUri];
-          if (cached === diskBody) {
-            todayHubRowLastPersistedRef.current.set(rowUri, diskBody);
-            continue;
-          }
-          todayHubRowLastPersistedRef.current.set(rowUri, diskBody);
-          const nextHubCache = mergeInboxNoteBodyIntoCache(
-            inboxContentByUriRef.current,
-            rowUri,
-            diskBody,
-          );
-          if (nextHubCache) {
-            inboxContentByUriRef.current = nextHubCache;
-            setInboxContentByUri(prev =>
-              mergeInboxNoteBodyIntoCache(prev, rowUri, diskBody) ?? prev,
-            );
-          }
-        }
-      }
+    const reconcileFsTodayEnv: ReconcileFsTodayHubEnv = {
+      todayHubRowLastPersistedRef,
+      todayHubSettingsRef,
+      todayHubBridgeRef,
     };
+    const rerunFsReconcileForTab = (normTab: string) => {
+      void reconcileOpenNotesAfterFsChangeFromVaultWatch(
+        reconcileFsOpenEnv,
+        reconcileFsTodayEnv,
+        [normTab],
+        rerunFsReconcileForTab,
+      );
+    };
+    const reconcileOpenNotesAfterFsChange = (rawPaths: string[]) =>
+      reconcileOpenNotesAfterFsChangeFromVaultWatch(
+        reconcileFsOpenEnv,
+        reconcileFsTodayEnv,
+        rawPaths,
+        rerunFsReconcileForTab,
+      );
 
     listen<VaultFilesChangedPayload>('vault-files-changed', event => {
       const plan = planVaultFilesChangedEvent({
