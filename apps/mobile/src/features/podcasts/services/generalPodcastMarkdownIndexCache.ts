@@ -1,5 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import {mobileAsyncStorage} from '../../../core/storage/mobileAsyncStorage';
 import {RootMarkdownFile} from '../../../types';
 import {isPodcastFile} from './podcastParser';
 
@@ -89,7 +88,7 @@ export async function loadPersistedPodcastMarkdownIndex(
     return null;
   }
 
-  const raw = await AsyncStorage.getItem(getStorageKey(baseUri));
+  const raw = await mobileAsyncStorage.getItem(getStorageKey(baseUri));
   if (!raw?.trim()) {
     return null;
   }
@@ -122,7 +121,7 @@ export async function savePersistedPodcastMarkdownIndex(
     v: PAYLOAD_VERSION,
   };
 
-  await AsyncStorage.setItem(getStorageKey(baseUri), JSON.stringify(payload));
+  await mobileAsyncStorage.setItem(getStorageKey(baseUri), JSON.stringify(payload));
 }
 
 /**
@@ -131,5 +130,5 @@ export async function savePersistedPodcastMarkdownIndex(
 export async function clearPersistedPodcastMarkdownIndexForTesting(
   baseUri: string,
 ): Promise<void> {
-  await AsyncStorage.removeItem(getStorageKey(baseUri));
+  await mobileAsyncStorage.removeItem(getStorageKey(baseUri));
 }

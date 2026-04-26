@@ -57,7 +57,7 @@ function Harness({
       inboxPrefetch: ctx.consumeInboxPrefetch(uri),
     });
     // Intentionally run once. We only care about the post-mount state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- test harness: stable mock vault session deps
   }, []);
 
   return null;

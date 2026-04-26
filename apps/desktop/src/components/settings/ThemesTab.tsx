@@ -9,7 +9,7 @@ import {
   type ThemeMode,
   writeVaultTheme,
 } from '@eskerra/core';
-import {revealItemInDir} from '@tauri-apps/plugin-opener';
+import {revealPathInSystemExplorer} from '../../lib/revealPathInSystemExplorer';
 import {useCallback, useMemo, useState} from 'react';
 
 import {AppChromeBackground} from '../AppChromeBackground';
@@ -123,7 +123,7 @@ export function ThemesTab({vaultRoot, fs}: ThemesTabProps) {
       const dir = getThemesDirectoryUri(normalizeVaultBaseUri(vaultRoot));
       const path = `${dir}/${theme.fileName}`.replace(/\//g, '/');
       try {
-        await revealItemInDir(path);
+        await revealPathInSystemExplorer(path);
       } catch {
         // ignore
       }

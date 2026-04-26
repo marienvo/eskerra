@@ -37,6 +37,35 @@ module.exports = defineConfig([
     },
   },
   {
+    files: ['src/features/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@react-native-async-storage/async-storage',
+              message:
+                'Import mobileAsyncStorage from src/core/storage/mobileAsyncStorage instead.',
+            },
+            {
+              name: 'react-native-saf-x',
+              message:
+                'Import openAndroidVaultDirectoryPicker from src/core/storage/openAndroidDocumentTree instead.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['**/dev/**', '**/dev/*'],
+              message:
+                'Do not import from src/dev from feature modules; use src/core or src/native adapters.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/**/*Context.{ts,tsx}'],
     rules: {
       'react-refresh/only-export-components': 'off',

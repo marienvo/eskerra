@@ -39,6 +39,23 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/components/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@tauri-apps/*'],
+              message:
+                'Use shell-owned helpers under src/lib/ for Tauri APIs (not src/components/).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,

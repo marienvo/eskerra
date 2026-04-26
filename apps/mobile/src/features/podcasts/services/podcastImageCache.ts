@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {safUriExists} from '../../../core/storage/eskerraStorage';
+import {mobileAsyncStorage} from '../../../core/storage/mobileAsyncStorage';
 import {
   clearPodcastImageCacheEntry,
   podcastArtworkFileUriExists,
@@ -55,11 +55,11 @@ async function persistArtworkUriCache(baseUri: string): Promise<void> {
   const storageKey = getPersistentArtworkCacheStorageKey(baseUri);
   const entries = getPersistentArtworkEntries(baseUri);
   if (Object.keys(entries).length === 0) {
-    await AsyncStorage.removeItem(storageKey);
+    await mobileAsyncStorage.removeItem(storageKey);
     return;
   }
 
-  await AsyncStorage.setItem(storageKey, JSON.stringify(entries));
+  await mobileAsyncStorage.setItem(storageKey, JSON.stringify(entries));
 }
 
 function schedulePersistArtworkUriCache(baseUri: string): void {
@@ -457,7 +457,7 @@ export async function loadPersistentArtworkUriCache(baseUri: string): Promise<vo
   }
 
   const storageKey = getPersistentArtworkCacheStorageKey(baseUri);
-  const rawCache = await AsyncStorage.getItem(storageKey);
+  const rawCache = await mobileAsyncStorage.getItem(storageKey);
   if (!rawCache?.trim()) {
     return;
   }

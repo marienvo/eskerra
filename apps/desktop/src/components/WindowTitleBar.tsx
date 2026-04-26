@@ -1,7 +1,9 @@
-import {isTauri} from '@tauri-apps/api/core';
-import {getCurrentWindow} from '@tauri-apps/api/window';
-
 import type {WindowTilingState} from '../lib/windowTiling';
+import {
+  closeDesktopMainWindow,
+  isDesktopTauriHost,
+  minimizeDesktopMainWindow,
+} from '../lib/desktopTauriWindow';
 import {
   TodayHubWorkspaceSelect,
   type TodayHubWorkspaceSelectItem,
@@ -33,20 +35,14 @@ export function WindowTitleBar({
   onEditorTabsHostRef,
   todayHubSelect = null,
 }: WindowTitleBarProps) {
-  const tauri = isTauri();
+  const tauri = isDesktopTauriHost();
 
   const onMinimize = () => {
-    if (!tauri) {
-      return;
-    }
-    getCurrentWindow().minimize();
+    minimizeDesktopMainWindow();
   };
 
   const onClose = () => {
-    if (!tauri) {
-      return;
-    }
-    getCurrentWindow().close();
+    closeDesktopMainWindow();
   };
 
   return (

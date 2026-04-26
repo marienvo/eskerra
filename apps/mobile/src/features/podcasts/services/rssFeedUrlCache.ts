@@ -1,5 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import {mobileAsyncStorage} from '../../../core/storage/mobileAsyncStorage';
 import {normalizeSeriesKey} from './rssParser';
 
 const rssFeedUrlBySeriesName = new Map<string, string>();
@@ -72,7 +71,7 @@ async function persistRssFeedUrlCache(baseUri: string): Promise<void> {
   const storageKey = getPersistentRssCacheStorageKey(baseUri);
   const {byNormalized, bySeries} = collectEntriesForBaseUri(baseUri);
   if (Object.keys(bySeries).length === 0 && Object.keys(byNormalized).length === 0) {
-    await AsyncStorage.removeItem(storageKey);
+    await mobileAsyncStorage.removeItem(storageKey);
     return;
   }
 
@@ -81,7 +80,7 @@ async function persistRssFeedUrlCache(baseUri: string): Promise<void> {
     bySeries,
     v: PERSISTED_PAYLOAD_VERSION,
   };
-  await AsyncStorage.setItem(storageKey, JSON.stringify(payload));
+  await mobileAsyncStorage.setItem(storageKey, JSON.stringify(payload));
 }
 
 function schedulePersistRssFeedUrlCache(baseUri: string): void {
@@ -169,7 +168,7 @@ export async function loadPersistentRssFeedUrlCache(baseUri: string): Promise<vo
   }
 
   const storageKey = getPersistentRssCacheStorageKey(baseUri);
-  const rawCache = await AsyncStorage.getItem(storageKey);
+  const rawCache = await mobileAsyncStorage.getItem(storageKey);
   if (!rawCache?.trim()) {
     return;
   }
