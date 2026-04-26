@@ -12,6 +12,11 @@ describe('podcastParser', () => {
     expect(isPodcastFile('2027 Demo - podcasts.md', 2026)).toBe(true);
   });
 
+  test('isPodcastFile accepts flexible whitespace in the file name', () => {
+    expect(isPodcastFile('2026 My Show  - podcasts.md', 2026)).toBe(true);
+    expect(isPodcastFile('2026\tMy Show - podcasts.md', 2026)).toBe(true);
+  });
+
   test('isPodcastFile rejects unsupported year and invalid name', () => {
     expect(isPodcastFile('2025 Demo - podcasts.md', 2026)).toBe(false);
     expect(isPodcastFile('2026 Demo - podcast.md', 2026)).toBe(false);

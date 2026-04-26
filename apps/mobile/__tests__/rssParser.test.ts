@@ -33,6 +33,29 @@ rssFeedUrl:
     expect(extractRssFeedUrl(content)).toBeUndefined();
   });
 
+  test('extractRssFeedUrl ignores keys that only prefix-match rssFeedUrl', () => {
+    const content = `---
+rssFeedUrls:
+  - https://wrong.example/feed.xml
+rssFeedUrlBackup: https://backup.example/feed.xml
+---
+
+# Demo`;
+
+    expect(extractRssFeedUrl(content)).toBeUndefined();
+  });
+
+  test('extractRssFeedUrl uses exact rssFeedUrl when other rss-prefixed keys exist', () => {
+    const content = `---
+rssFeedUrls: https://wrong.example/feed.xml
+rssFeedUrl: https://canonical.example/feed.xml
+---
+
+# Demo`;
+
+    expect(extractRssFeedUrl(content)).toBe('https://canonical.example/feed.xml');
+  });
+
   test('extractRssPodcastTitle falls back to file name without emoji prefix', () => {
     const content = `---
 rssFeedUrl: https://example.com/feed.xml

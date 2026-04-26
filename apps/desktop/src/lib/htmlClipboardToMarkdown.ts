@@ -75,6 +75,26 @@ const STRUCTURAL_HTML_MARKERS = [
   '<kbd',
 ] as const;
 
+/**
+ * True when `lowerHtml` contains this tag open at a word boundary (so `<s` does not
+ * match `<span` / `<style` / `<script`, and `<th` does not match `<thead`).
+ */
+function lowerHtmlContainsTagOpen(lowerHtml: string, marker: string): boolean {
+  let from = 0;
+  while (from < lowerHtml.length) {
+    const idx = lowerHtml.indexOf(marker, from);
+    if (idx < 0) {
+      return false;
+    }
+    const after = lowerHtml[idx + marker.length];
+    if (after === undefined || !/[a-z0-9]/.test(after)) {
+      return true;
+    }
+    from = idx + 1;
+  }
+  return false;
+}
+
 function preprocessClipboardHtmlFragment(html: string): string {
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -151,7 +171,9 @@ export function isHtmlWrapperForPasteUrlAsLink(
 
 function clipboardHtmlLooksStructured(html: string): boolean {
   const lower = html.toLowerCase();
-  return STRUCTURAL_HTML_MARKERS.some(marker => lower.includes(marker));
+  return STRUCTURAL_HTML_MARKERS.some(marker =>
+    lowerHtmlContainsTagOpen(lower, marker),
+  );
 }
 
 function normalizeForPlainComparison(s: string): string {

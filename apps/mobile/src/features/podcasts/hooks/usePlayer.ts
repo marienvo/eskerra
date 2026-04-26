@@ -212,6 +212,9 @@ export function usePlayer(
     }
 
     let isMounted = true;
+    /** Abort stale restore work when the hook unmounts or `baseUri` changes mid-flight. */
+    const restoreStillValid = () =>
+      isMounted && baseUriRef.current === baseUri;
 
     const restore = async () => {
       try {
@@ -230,11 +233,14 @@ export function usePlayer(
         const setupPromise = player.ensureSetup();
 
         const saved = await savedPromise;
-        if (!isMounted) {
+        if (!restoreStillValid()) {
           return;
         }
         if (!saved) {
           await setupPromise;
+          if (!restoreStillValid()) {
+            return;
+          }
           if (snapshotRef.current.context.episode == null) {
             send({type: 'RESET'});
             hasRestoredForBaseUriRef.current = baseUri;
@@ -244,10 +250,22 @@ export function usePlayer(
         const catalogEp = episodesByIdRef.current.get(saved.episodeId);
         if (!catalogEp || catalogEp.isListened) {
           await setupPromise;
+          if (!restoreStillValid()) {
+            return;
+          }
           await player.stop().catch(() => undefined);
+          if (!restoreStillValid()) {
+            return;
+          }
           await clearPlaylist(baseUri);
+          if (!restoreStillValid()) {
+            return;
+          }
           send({type: 'RESET'});
           hasRestoredForBaseUriRef.current = baseUri;
+          return;
+        }
+        if (!restoreStillValid()) {
           return;
         }
         send({
@@ -259,12 +277,15 @@ export function usePlayer(
         hasRestoredForBaseUriRef.current = baseUri;
 
         await setupPromise;
+        if (!restoreStillValid()) {
+          return;
+        }
         const st = await player.getState();
         if (st === 'playing' || userPlaybackDepthRef.current > 0) {
           return;
         }
       } catch (restoreError) {
-        if (!isMounted) {
+        if (!restoreStillValid()) {
           return;
         }
         setError(

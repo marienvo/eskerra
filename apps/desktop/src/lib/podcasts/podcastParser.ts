@@ -26,21 +26,18 @@ type ParsePodcastLineInput = {
 
 function parsePodcastFileDetails(fileName: string): PodcastFileDetails | null {
   const trimmed = fileName.trim();
-  const suffix = ' - podcasts.md';
-  if (!trimmed.toLowerCase().endsWith(suffix)) {
+  const bodyMatch = trimmed.match(/^(.+)\s+-\s+podcasts\.md$/i);
+  if (!bodyMatch) {
     return null;
   }
-  const stem = trimmed.slice(0, -suffix.length);
-  const firstSpace = stem.indexOf(' ');
-  if (firstSpace <= 0) {
+  const stem = bodyMatch[1];
+  const yearHeading = stem.match(/^(\d{4})\s+(.+)$/);
+  if (!yearHeading) {
     return null;
   }
-  const yearToken = stem.slice(0, firstSpace);
-  if (yearToken.length !== 4 || !/^\d{4}$/.test(yearToken)) {
-    return null;
-  }
+  const yearToken = yearHeading[1];
   const year = Number(yearToken);
-  const sectionTitle = stem.slice(firstSpace + 1).trim();
+  const sectionTitle = yearHeading[2].trim();
 
   if (!sectionTitle) {
     return null;

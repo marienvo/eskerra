@@ -38,12 +38,12 @@ function extractFrontmatterRssFeedUrl(frontmatter: string): string | undefined {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? '';
     const trimmedStart = line.trimStart();
-    const lower = trimmedStart.toLowerCase();
-    if (!lower.startsWith('rssfeedurl')) {
-      continue;
-    }
     const colonIdx = trimmedStart.indexOf(':');
     if (colonIdx < 0) {
+      continue;
+    }
+    const key = trimmedStart.slice(0, colonIdx).trim();
+    if (key.toLowerCase() !== 'rssfeedurl') {
       continue;
     }
 
