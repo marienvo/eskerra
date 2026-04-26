@@ -195,7 +195,7 @@ export function remapAllTabsUriPrefix(
 }
 
 export function removeUriFromAllTabs(
-  tabs: EditorWorkspaceTab[],
+  tabs: readonly EditorWorkspaceTab[],
   shouldRemove: (normalizedUri: string) => boolean,
 ): EditorWorkspaceTab[] {
   return tabs
