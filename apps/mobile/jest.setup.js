@@ -1,6 +1,16 @@
 /** Set before any test file so app code can skip long deferred timers without relying on inlined env. */
 global.__ESKERRA_JEST__ = true;
 
+jest.mock('./src/core/scheduling/afterInteractions', () => ({
+  __esModule: true,
+  runAfterInteractions: task => {
+    if (typeof task === 'function') {
+      task();
+    }
+    return {cancel: jest.fn()};
+  },
+}));
+
 /**
  * Do not use `react-native-reanimated/mock`: it imports the real `index`, which pulls in native
  * worklets and breaks Jest. This stub covers app usage (startup splash + Podcasts header strip).

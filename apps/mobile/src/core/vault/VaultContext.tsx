@@ -13,8 +13,9 @@ import {
   useRef,
   useState,
 } from 'react';
-import {InteractionManager, Platform} from 'react-native';
+import {Platform} from 'react-native';
 
+import {runAfterInteractions} from '../scheduling/afterInteractions';
 import {tryListVaultMarkdownRefsNative} from '../storage/androidVaultListing';
 import {safVaultFilesystem} from '../storage/safVaultFilesystem';
 import {appBreadcrumb, reportUnexpectedError, syncVaultSessionContext} from '../observability';
@@ -429,7 +430,7 @@ export function VaultProvider({children, initialSession}: VaultProviderProps) {
         }
       }
 
-      const cancelable = InteractionManager.runAfterInteractions(() => {
+      const cancelable = runAfterInteractions(() => {
         if (ac.signal.aborted || settledFromRegistry) {
           return;
         }

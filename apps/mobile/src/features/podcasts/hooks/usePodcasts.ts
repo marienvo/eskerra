@@ -1,6 +1,6 @@
 import {useCallback, useEffect, useState, type Dispatch, type SetStateAction} from 'react';
-import {InteractionManager} from 'react-native';
 
+import {runAfterInteractions} from '../../../core/scheduling/afterInteractions';
 import {
   clearPlaylist,
   listGeneralMarkdownFiles,
@@ -120,7 +120,7 @@ function scheduleDeferredBackgroundReconcile(
   if (delayMs === 0) {
     setTimeout(runReconcile, 0);
   } else {
-    InteractionManager.runAfterInteractions(() => {
+    runAfterInteractions(() => {
       setTimeout(runReconcile, delayMs);
     });
   }

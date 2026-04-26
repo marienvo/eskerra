@@ -253,6 +253,29 @@ describe('usePlayer restore state', () => {
     title: 'Episode A',
   };
 
+  const playerTestRenderers: TestRenderer.ReactTestRenderer[] = [];
+
+  function mountPlayerHarness(element: React.ReactElement): TestRenderer.ReactTestRenderer {
+    const r = TestRenderer.create(element);
+    playerTestRenderers.push(r);
+    return r;
+  }
+
+  afterEach(async () => {
+    await act(async () => {
+      while (playerTestRenderers.length > 0) {
+        const r = playerTestRenderers.pop();
+        if (r) {
+          try {
+            r.unmount();
+          } catch {
+            /* already unmounted */
+          }
+        }
+      }
+    });
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     playlistSyncGenRef.current = 0;
@@ -340,7 +363,7 @@ describe('usePlayer restore state', () => {
     };
 
     await act(async () => {
-      rendererRef.current = TestRenderer.create(
+      rendererRef.current = mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -403,10 +426,9 @@ describe('usePlayer restore state', () => {
     };
 
     const episodesById = new Map([[episode.id, episode]]);
-    let renderer: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
-      renderer = TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -423,10 +445,6 @@ describe('usePlayer restore state', () => {
     await act(async () => {
       releaseSetup?.();
       await flushPromises();
-    });
-
-    await act(async () => {
-      renderer?.unmount();
     });
   });
 
@@ -448,7 +466,7 @@ describe('usePlayer restore state', () => {
     let renderer: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
-      renderer = TestRenderer.create(
+      renderer = mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -489,9 +507,6 @@ describe('usePlayer restore state', () => {
     expect(readPlaylistMock).toHaveBeenCalledTimes(2);
     expect(ensureSetupMock).toHaveBeenCalledTimes(2);
     expect(expectResult(latestResult).activeEpisode).toEqual(enrichedEpisode);
-    await act(async () => {
-      renderer?.unmount();
-    });
   });
 
   test('clears stale playlist when catalog is ready and episode is missing', async () => {
@@ -511,7 +526,7 @@ describe('usePlayer restore state', () => {
     const episodesById = new Map<string, PodcastEpisode>();
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -556,7 +571,7 @@ describe('usePlayer restore state', () => {
     let playEpisodeRef: ((e: PodcastEpisode) => Promise<void>) | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(PlayEpisodeOnlyHarness, {
           episodesById,
           onReady: fn => {
@@ -632,7 +647,7 @@ describe('usePlayer restore state', () => {
     }
 
     await act(async () => {
-      TestRenderer.create(React.createElement(PlayStateHarness));
+      mountPlayerHarness(React.createElement(PlayStateHarness));
       await flushPromises();
     });
 
@@ -698,7 +713,7 @@ describe('usePlayer restore state', () => {
     } | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(PlayToggleHarness, {
           episodesById,
           onMarkAsPlayed,
@@ -750,7 +765,7 @@ describe('usePlayer restore state', () => {
     };
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -779,7 +794,7 @@ describe('usePlayer restore state', () => {
     let seekToRef: ((ms: number) => Promise<void>) | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(SeekHarness, {
           episodesById,
           onSeekTo: fn => {
@@ -815,7 +830,7 @@ describe('usePlayer restore state', () => {
     let latestResult: PlayerHookSnapshot | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(ClearSnapshotHarness, {
           episodesById,
           onClearReady: fn => {
@@ -857,7 +872,7 @@ describe('usePlayer restore state', () => {
     let clearFn: ((episodeId: string) => Promise<void>) | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(ClearHarness, {
           episodesById,
           onClearReady: fn => {
@@ -896,7 +911,7 @@ describe('usePlayer restore state', () => {
     let resyncFn: (() => Promise<void>) | null = null;
 
     await act(async () => {
-      TestRenderer.create(
+      mountPlayerHarness(
         React.createElement(ResyncHarness, {
           episodesById,
           onResyncReady: fn => {
@@ -946,7 +961,7 @@ describe('usePlayer restore state', () => {
     let renderer: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
-      renderer = TestRenderer.create(
+      renderer = mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -976,9 +991,6 @@ describe('usePlayer restore state', () => {
 
     expect(readPlaylistMock.mock.calls.length).toBeGreaterThan(readsAfterHydrate);
     expect(expectResult(latestResult).activeEpisode).toBeNull();
-    await act(async () => {
-      renderer?.unmount();
-    });
   });
 
   test('playlistSyncGeneration bump with null playlist does not reset while in near end zone', async () => {
@@ -1058,7 +1070,7 @@ describe('usePlayer restore state', () => {
     }
 
     await act(async () => {
-      renderer = TestRenderer.create(React.createElement(NearEndSyncHarness));
+      renderer = mountPlayerHarness(React.createElement(NearEndSyncHarness));
       await flushPromises();
     });
 
@@ -1086,10 +1098,6 @@ describe('usePlayer restore state', () => {
     });
 
     expect(expectResult(latestResult).activeEpisode).toEqual(episode);
-
-    await act(async () => {
-      renderer?.unmount();
-    });
   });
 
   test('playlistSyncGeneration bump while native playing skips sync so episode stays', async () => {
@@ -1159,7 +1167,7 @@ describe('usePlayer restore state', () => {
     let renderer: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
-      renderer = TestRenderer.create(React.createElement(PlayingSyncHarness));
+      renderer = mountPlayerHarness(React.createElement(PlayingSyncHarness));
       await flushPromises();
     });
 
@@ -1180,10 +1188,6 @@ describe('usePlayer restore state', () => {
 
     expect(readPlaylistMock.mock.calls.length).toBe(readsBeforeBump);
     expect(expectResult(latestResult).activeEpisode).toEqual(episode);
-
-    await act(async () => {
-      renderer?.unmount();
-    });
   });
 
   test('playlistSyncGeneration bump with same remote entry keeps active episode and updates progress', async () => {
@@ -1204,7 +1208,7 @@ describe('usePlayer restore state', () => {
     let renderer: TestRenderer.ReactTestRenderer | null = null;
 
     await act(async () => {
-      renderer = TestRenderer.create(
+      renderer = mountPlayerHarness(
         React.createElement(HookHarness, {
           episodesById,
           onResult: handleResult,
@@ -1239,8 +1243,5 @@ describe('usePlayer restore state', () => {
 
     expect(expectResult(latestResult).activeEpisode).toEqual(episode);
     expect(expectResult(latestResult).progress.positionMs).toBe(222222);
-    await act(async () => {
-      renderer?.unmount();
-    });
   });
 });
