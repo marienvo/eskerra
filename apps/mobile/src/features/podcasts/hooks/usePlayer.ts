@@ -390,7 +390,7 @@ export function usePlayer(
           return;
         }
         const st = await player.getState();
-        if (st === 'playing' || userPlaybackDepthRef.current > 0) {
+        if (cancelled || st === 'playing' || userPlaybackDepthRef.current > 0) {
           return;
         }
 

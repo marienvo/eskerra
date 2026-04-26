@@ -75,4 +75,14 @@ rssFeedUrl: https://example.com/feed.xml
       'Tab-Separated Title',
     );
   });
+
+  test('extractRssPodcastTitle ignores hashtag lines without space after #', () => {
+    const content = `---
+rssFeedUrl: https://example.com/feed.xml
+---
+#rust
+## not used as H1`;
+
+    expect(extractRssPodcastTitle('📻 My Show.md', content)).toBe('My Show');
+  });
 });
