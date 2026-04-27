@@ -153,6 +153,55 @@ function sourceDirectoryForRelativeLink(
   return n.replace(/\/+$/, '');
 }
 
+type SafDocumentUriParts = {
+  prefix: string;
+  documentId: string;
+};
+
+function splitSafDocumentUri(uri: string): SafDocumentUriParts | null {
+  if (!uri.startsWith('content://')) {
+    return null;
+  }
+  const marker = '/document/';
+  const markerIndex = uri.indexOf(marker);
+  if (markerIndex < 0) {
+    return null;
+  }
+  const prefix = uri.slice(0, markerIndex + marker.length);
+  const documentId = uri.slice(markerIndex + marker.length);
+  if (documentId === '' || documentId.includes('/')) {
+    return null;
+  }
+  return {prefix, documentId};
+}
+
+function encodeSafDocumentId(documentId: string): string {
+  return encodeURIComponent(documentId);
+}
+
+function resolveSafDocumentRelativeMarkdownHref(
+  sourceMarkdownUriOrDir: string,
+  pathPart: string,
+): string | null {
+  const parts = splitSafDocumentUri(normSlashes(sourceMarkdownUriOrDir));
+  if (!parts) {
+    return null;
+  }
+
+  const sourceDocumentId = tryDecodeUriComponent(parts.documentId);
+  const sourceIsMarkdownFile = sourceDocumentId
+    .toLowerCase()
+    .endsWith(MARKDOWN_EXTENSION.toLowerCase());
+  const sourceDirDocumentId = sourceIsMarkdownFile
+    ? vaultPathDirname(sourceDocumentId)
+    : sourceDocumentId.replace(/\/+$/, '');
+  const targetDocumentId = pathPart.startsWith('/')
+    ? normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, '')
+    : posixResolveRelativeToDirectory(sourceDirDocumentId, pathPart).replace(/^\/+/, '');
+
+  return `${parts.prefix}${encodeSafDocumentId(targetDocumentId)}`;
+}
+
 /**
  * Resolves a relative inline-markdown `href` to a vault `.md` URI, or `null`.
  * `sourceMarkdownUriOrDir` is either the open note URI (ends with `.md`) or an absolute vault
@@ -172,18 +221,22 @@ export function resolveVaultRelativeMarkdownHref(
   if (!pathPart.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
     return null;
   }
-  // Decode for path operations so Android SAF URIs in different normalizations match
-  // consistently (denormalized `…/tree/primary:vault/Inbox/note.md` from openDocumentTree
-  // vs encoded `…/tree/primary%3Avault/document/primary%3Avault%2FInbox%2Fnote.md` from
-  // native Kotlin `DocumentFile.uri`). Desktop POSIX paths have no `%XX` so this is a no-op.
-  const base = tryDecodeUriComponent(normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, ''));
-  const sourceDecoded = tryDecodeUriComponent(normSlashes(sourceMarkdownUriOrDir));
+  const baseRaw = normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, '');
+  const base = tryDecodeUriComponent(baseRaw);
+  const sourceRaw = normSlashes(sourceMarkdownUriOrDir);
+  const sourceDecoded = tryDecodeUriComponent(sourceRaw);
   const dir = sourceDirectoryForRelativeLink(sourceDecoded);
   const decodedPart = tryDecodeUriComponent(pathPart);
-  const joined = decodedPart.startsWith('/')
+  const joinedRaw = resolveSafDocumentRelativeMarkdownHref(sourceRaw, pathPart);
+  const joined = joinedRaw ?? (decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
-    : posixResolveRelativeToDirectory(dir, pathPart);
-  const validated = tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(base, joined);
+    : posixResolveRelativeToDirectory(dir, pathPart));
+  const validated =
+    tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(baseRaw, joined)
+    ?? tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+      base,
+      tryDecodeUriComponent(joined),
+    );
   if (!validated) {
     return null;
   }
@@ -191,7 +244,7 @@ export function resolveVaultRelativeMarkdownHref(
   let canonicalHref: string | undefined;
   if (noteRefs && noteRefs.length > 0) {
     const canon = canonicalVaultNoteUriFromRefs(validated, noteRefs);
-      if (canon) {
+    if (canon) {
       uri = canon;
       const nextHref = posixRelativeVaultPath(dir, canon);
       const stripped = stripMarkdownLinkHrefToPathPart(rawHref);
