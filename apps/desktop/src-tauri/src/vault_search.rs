@@ -84,10 +84,7 @@ pub(crate) fn is_vault_tree_ignored_entry_name(name: &str) -> bool {
 }
 
 pub(crate) fn is_vault_tree_hard_excluded_directory_name(name: &str) -> bool {
-    matches!(
-        name,
-        "Assets" | "Excalidraw" | "Scripts" | "Templates"
-    )
+    matches!(name, "Assets" | "Excalidraw" | "Scripts" | "Templates")
 }
 
 fn is_sync_conflict_file_name(name: &str) -> bool {
@@ -137,9 +134,7 @@ pub(crate) fn bounded_levenshtein(a: &str, b: &str, max_dist: u32) -> Option<u32
         curr[0] = i;
         for j in 1..=m {
             let cost = if a_ch[i - 1] == b_ch[j - 1] { 0 } else { 1 };
-            curr[j] = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -227,8 +222,8 @@ pub fn vault_search_start(
     let sid = search_id.clone();
 
     thread::spawn(move || {
-        let notes =
-            crate::vault_search_index::run_indexed_search(&idx, q_owned.as_str(), 200).unwrap_or_default();
+        let notes = crate::vault_search_index::run_indexed_search(&idx, q_owned.as_str(), 200)
+            .unwrap_or_default();
         let ready = crate::vault_search_index::index_is_ready(&idx);
         let st = crate::vault_search_index::index_status_string(&idx);
         let n = notes.len() as u32;
@@ -268,10 +263,7 @@ pub fn vault_search_start(
 
 #[tauri::command]
 pub fn vault_search_cancel(session: State<'_, VaultSearchSessionState>) -> Result<(), String> {
-    let mut g = session
-        .cancel
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut g = session.cancel.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(tok) = g.take() {
         tok.store(true, Ordering::Release);
     }
@@ -365,7 +357,8 @@ mod tests {
 
     #[test]
     fn fuzzy_word_match_lisane_rejects_lijstje_prose_line() {
-        let line = "[[lijstje tech tickets waar be ook aan kan werken]] (be maakt tickets later aan)";
+        let line =
+            "[[lijstje tech tickets waar be ook aan kan werken]] (be maakt tickets later aan)";
         assert_eq!(fuzzy_word_match(&line.to_lowercase(), "lisane"), None);
     }
 

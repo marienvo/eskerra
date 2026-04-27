@@ -1,10 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
+
+#[cfg(test)]
+use std::io;
 
 use notify::{Config, Event, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
@@ -39,7 +41,8 @@ enum VaultWatchSignal {
 
 struct VaultWatchers {
     _recommended: RecommendedWatcher,
-    _poll: PollWatcher,
+    _poll: Arc<Mutex<Option<PollWatcher>>>,
+    _poll_watched_dirs: Arc<Mutex<HashSet<PathBuf>>>,
 }
 
 pub struct VaultWatchState {
@@ -93,6 +96,32 @@ fn send_notify_event(
             });
         }
     }
+}
+
+fn handle_notify_event(
+    tx: &std::sync::mpsc::Sender<VaultWatchSignal>,
+    session_id: u64,
+    backend: &'static str,
+    poll: &Arc<Mutex<Option<PollWatcher>>>,
+    watched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
+    res: Result<Event, notify::Error>,
+) {
+    match res {
+        Ok(ev) => {
+            let paths = ev.paths.clone();
+            send_notify_event(tx, session_id, backend, Ok(ev));
+            let roots = candidate_poll_watch_roots(&paths);
+            register_poll_watch_roots_lossy(poll, watched_dirs, &roots, tx, session_id);
+        }
+        Err(err) => {
+            send_notify_event(tx, session_id, backend, Err(err));
+        }
+    }
+}
+
+fn notify_coarse(tx: &std::sync::mpsc::Sender<VaultWatchSignal>, session_id: u64, reason: String) {
+    eprintln!("[vault-watch] {reason}");
+    let _ = tx.send(VaultWatchSignal::Coarse { session_id, reason });
 }
 
 fn signal_session_id(signal: &VaultWatchSignal) -> u64 {
@@ -289,12 +318,14 @@ fn dedupe_recent_precise_payload(
     }
 }
 
+#[cfg(test)]
 fn collect_poll_watch_directories(root: &Path) -> io::Result<Vec<PathBuf>> {
     let mut dirs = Vec::new();
     collect_poll_watch_directories_inner(root, &mut dirs)?;
     Ok(dirs)
 }
 
+#[cfg(test)]
 fn collect_poll_watch_directories_inner(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     out.push(dir.to_path_buf());
     for entry in fs::read_dir(dir)? {
@@ -315,6 +346,145 @@ fn collect_poll_watch_directories_inner(dir: &Path, out: &mut Vec<PathBuf>) -> i
     Ok(())
 }
 
+fn collect_poll_watch_directories_lossy(
+    root: &Path,
+    on_error: &mut impl FnMut(String),
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    collect_poll_watch_directories_lossy_inner(root, &mut dirs, on_error);
+    dirs
+}
+
+fn collect_poll_watch_directories_lossy_inner(
+    dir: &Path,
+    out: &mut Vec<PathBuf>,
+    on_error: &mut impl FnMut(String),
+) {
+    out.push(dir.to_path_buf());
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(err) => {
+            on_error(format!("poll_watch_directory_scan:{}:{err}", dir.display()));
+            return;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                on_error(format!(
+                    "poll_watch_directory_entry:{}:{err}",
+                    dir.display()
+                ));
+                continue;
+            }
+        };
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if is_vault_tree_ignored_entry_name(&name_str)
+            || is_vault_tree_hard_excluded_directory_name(&name_str)
+        {
+            continue;
+        }
+
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(file_type) if file_type.is_dir() => {
+                collect_poll_watch_directories_lossy_inner(&path, out, on_error);
+            }
+            Ok(_) => {}
+            Err(err) => {
+                on_error(format!("poll_watch_file_type:{}:{err}", path.display()));
+            }
+        }
+    }
+}
+
+fn candidate_poll_watch_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .filter_map(|path| {
+            if let Some(name) = path.file_name().map(|name| name.to_string_lossy()) {
+                if is_vault_tree_ignored_entry_name(&name)
+                    || is_vault_tree_hard_excluded_directory_name(&name)
+                {
+                    return None;
+                }
+            }
+
+            match fs::metadata(path) {
+                Ok(meta) if meta.is_dir() => Some(path.clone()),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn register_poll_watch_directories(
+    poll: &Arc<Mutex<Option<PollWatcher>>>,
+    watched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
+    dirs: Vec<PathBuf>,
+    tx: &std::sync::mpsc::Sender<VaultWatchSignal>,
+    session_id: u64,
+) {
+    for dir in dirs {
+        let should_watch = match watched_dirs.lock() {
+            Ok(mut watched) => watched.insert(dir.clone()),
+            Err(err) => {
+                notify_coarse(tx, session_id, format!("poll_watched_dirs_lock:{err}"));
+                return;
+            }
+        };
+        if !should_watch {
+            continue;
+        }
+
+        let watch_result = match poll.lock() {
+            Ok(mut poll) => match poll.as_mut() {
+                Some(poll) => poll.watch(&dir, RecursiveMode::NonRecursive),
+                None => return,
+            },
+            Err(err) => {
+                notify_coarse(tx, session_id, format!("poll_watcher_lock:{err}"));
+                return;
+            }
+        };
+
+        if let Err(err) = watch_result {
+            if let Ok(mut watched) = watched_dirs.lock() {
+                watched.remove(&dir);
+            }
+            notify_coarse(
+                tx,
+                session_id,
+                format!("poll_watch:{}:{err}", dir.display()),
+            );
+        }
+    }
+}
+
+fn register_poll_watch_roots_lossy(
+    poll: &Arc<Mutex<Option<PollWatcher>>>,
+    watched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
+    roots: &[PathBuf],
+    tx: &std::sync::mpsc::Sender<VaultWatchSignal>,
+    session_id: u64,
+) {
+    let mut scan_errors = Vec::new();
+    let mut dirs = Vec::new();
+    for root in roots {
+        dirs.extend(collect_poll_watch_directories_lossy(root, &mut |reason| {
+            scan_errors.push(reason);
+        }));
+    }
+    register_poll_watch_directories(poll, watched_dirs, dirs, tx, session_id);
+
+    for reason in scan_errors {
+        notify_coarse(tx, session_id, reason);
+    }
+}
+
 #[tauri::command]
 pub fn vault_start_watch(
     vault_state: State<'_, VaultRootState>,
@@ -333,39 +503,66 @@ pub fn vault_start_watch(
     }
     let session_id = watch_state.active_session_id.fetch_add(1, Ordering::AcqRel) + 1;
 
-    let tx_recommended = watch_state.notify_tx.clone();
-    let mut recommended = RecommendedWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            send_notify_event(&tx_recommended, session_id, "recommended", res);
-        },
-        Config::default(),
-    )
-    .map_err(|e| format!("recommended watcher: {e}"))?;
-
     let tx_poll = watch_state.notify_tx.clone();
+    let poll = Arc::new(Mutex::new(None));
+    let poll_watched_dirs = Arc::new(Mutex::new(HashSet::new()));
     // Keep the poll fallback stat-based. `compare_contents=true` would recursively
     // read and hash every file in the vault on every poll, including attachments.
     let poll_config = Config::default()
         .with_poll_interval(Duration::from_millis(WATCH_POLL_INTERVAL_MS))
         .with_compare_contents(WATCH_POLL_COMPARE_CONTENTS);
-    let mut poll = PollWatcher::new(
-        move |res: Result<Event, notify::Error>| {
-            send_notify_event(&tx_poll, session_id, "poll", res);
+    match PollWatcher::new(
+        {
+            let poll = Arc::clone(&poll);
+            let poll_watched_dirs = Arc::clone(&poll_watched_dirs);
+            move |res: Result<Event, notify::Error>| {
+                handle_notify_event(&tx_poll, session_id, "poll", &poll, &poll_watched_dirs, res);
+            }
         },
         poll_config,
+    ) {
+        Ok(created_poll) => {
+            let mut poll_guard = poll.lock().map_err(|e| e.to_string())?;
+            *poll_guard = Some(created_poll);
+        }
+        Err(err) => {
+            notify_coarse(
+                &watch_state.notify_tx,
+                session_id,
+                format!("poll_watcher:{err}"),
+            );
+        }
+    };
+
+    let tx_recommended = watch_state.notify_tx.clone();
+    let recommended_poll = Arc::clone(&poll);
+    let recommended_poll_watched_dirs = Arc::clone(&poll_watched_dirs);
+    let mut recommended = RecommendedWatcher::new(
+        move |res: Result<Event, notify::Error>| {
+            handle_notify_event(
+                &tx_recommended,
+                session_id,
+                "recommended",
+                &recommended_poll,
+                &recommended_poll_watched_dirs,
+                res,
+            );
+        },
+        Config::default(),
     )
-    .map_err(|e| format!("poll watcher: {e}"))?;
+    .map_err(|e| format!("recommended watcher: {e}"))?;
 
     if root.exists() {
         recommended
             .watch(&root, RecursiveMode::Recursive)
             .map_err(|e| format!("recommended watch {}: {e}", root.display()))?;
-        for dir in collect_poll_watch_directories(&root)
-            .map_err(|e| format!("poll watch directory scan {}: {e}", root.display()))?
-        {
-            poll.watch(&dir, RecursiveMode::NonRecursive)
-                .map_err(|e| format!("poll watch {}: {e}", dir.display()))?;
-        }
+        register_poll_watch_roots_lossy(
+            &poll,
+            &poll_watched_dirs,
+            &[root.clone()],
+            &watch_state.notify_tx,
+            session_id,
+        );
     } else {
         let _ = watch_state.notify_tx.send(VaultWatchSignal::Coarse {
             session_id,
@@ -377,6 +574,7 @@ pub fn vault_start_watch(
     *guard = Some(VaultWatchers {
         _recommended: recommended,
         _poll: poll,
+        _poll_watched_dirs: poll_watched_dirs,
     });
     Ok(())
 }

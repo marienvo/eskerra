@@ -50,9 +50,5 @@ pub async fn r2_signed_fetch(
         .map(str::to_string);
     let body = res.text().await.map_err(|e| e.to_string())?;
 
-    Ok(R2SignedFetchResult {
-        status,
-        body,
-        etag,
-    })
+    Ok(R2SignedFetchResult { status, body, etag })
 }
