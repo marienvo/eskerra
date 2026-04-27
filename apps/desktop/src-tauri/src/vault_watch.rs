@@ -459,7 +459,7 @@ fn candidate_poll_watch_roots(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
                 return None;
             }
 
-            match fs::metadata(path) {
+            match fs::symlink_metadata(path) {
                 Ok(meta) if meta.is_dir() => Some(path.clone()),
                 _ => None,
             }
@@ -887,6 +887,23 @@ mod tests {
         assert!(roots.contains(&inbox));
         assert!(!roots.contains(&attachment_album));
         assert!(!roots.contains(&ignored_child));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn candidate_poll_watch_roots_skips_symlinked_directories() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let external = tempfile::tempdir().unwrap();
+        let inbox = tmp.path().join("Inbox");
+        let symlinked_dir = inbox.join("ext");
+        fs::create_dir_all(&inbox).unwrap();
+        symlink(external.path(), &symlinked_dir).unwrap();
+
+        let roots = candidate_poll_watch_roots(tmp.path(), &[symlinked_dir.clone()]);
+
+        assert!(!roots.contains(&symlinked_dir));
     }
 
     #[test]
