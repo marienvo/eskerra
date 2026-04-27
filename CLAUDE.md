@@ -226,3 +226,35 @@ Full detail: `specs/design/desktop-shell-patterns.md`.
 **Resizable columns:** Main workspace (`MainWorkspaceSplit`) always uses `DesktopHorizontalSplit` with the center workspace (markdown editor) as `centerWorkspace` (CSS `desktop-hsplit-center-workspace`). When both side panes are hidden, `leftCollapsed` keeps a 0px left column with no separator and `left: null` so CodeMirror is not reparented. When both Vault and Episodes are open, `DesktopVerticalSplit` stacks them in the left column (`vaultEpisodesStack.topHeightPx` in `layoutPanelsV4`). One main left column width persisted as `inbox.leftWidthPx` / `podcastsMain.leftWidthPx`; editor is `flex: 1`. Do not reintroduce `react-resizable-panels` for this main split without a spec update (caused visible 1px jitter on window resize). Persist widths and stack heights via `layoutStore` (`layoutPanelsV4`), including `notificationsInboxStack.topHeightPx`.
 
 **Cursors:** Treat the desktop UI as a desktop app. Use `cursor: default` on buttons, rail tabs, list rows, and similar chrome. Do not use `cursor: pointer` for those. No `cursor: not-allowed` on disabled elements — keep `cursor: default` with existing opacity/color disabled styling. Exceptions: panel separators keep `col-resize`/`row-resize`; Today Hub read-only cell preview uses `cursor: text` (links inside use pointer from markdown token CSS).
+
+## Mobile: Android SAF URI format
+
+Android note URIs follow the convention `<treeUri>/<relative-path>` — the vault root tree URI with the file's relative path appended directly using `/`. Example:
+- Vault root (tree URI): `content://com.android.externalstorage.documents/tree/primary%3Avault`
+- Note URI: `content://com.android.externalstorage.documents/tree/primary%3Avault/Inbox/note.md`
+
+This is **not** the standard Android SAF document URI format (`…/document/<encoded-docId>`). `react-native-saf-x` and the Kotlin `VaultListingModule` both use the direct-suffix convention. All POSIX path operations in `@eskerra/core` (`posixResolveRelativeToDirectory`, `tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink`, etc.) rely on this structure, which is why `content://` scheme preservation matters there.
+
+## Mobile: Markdown read mode
+
+Three components render vault markdown on mobile (all use `react-native-markdown-display`):
+
+| Component | Location | Rules used |
+|---|---|---|
+| `NoteContentView` | `apps/mobile/src/features/vault/components/` | `vaultRules` + `calloutRules` |
+| `VaultReadonlyMarkdownBlock` | same directory | `vaultRules` + `calloutRules` |
+| `NoteDetailScreen` | `apps/mobile/src/features/vault/screens/` | `calloutRules` only |
+
+Custom rule factories:
+- `createVaultReadonlyMarkdownRules` (`apps/mobile/src/features/vault/markdown/vaultReadonlyMarkdownRules.tsx`) — overrides `link`, `blocklink`, `table`, `th`, `td` with vault-aware handlers (internal note navigation, wiki link resolution, relative `.md` link resolution).
+- `createCalloutMarkdownRules` (`…/markdown/calloutRule.tsx`) — renders Obsidian-style `> [!type]` callouts with per-color-mode surface colors.
+- `preprocessVaultReadonlyMarkdownBody` (`…/markdown/vaultWikiLinkPreprocess.ts`) — converts `[[wiki]]` syntax to synthetic `eskerra-wiki:` links before the renderer sees the markdown.
+
+**Color architecture:** Mobile is dark mode only. Markdown styling colors are computed inline in each render component — not from design tokens. The pattern is three local variables:
+```ts
+const markdownTextColor  = colorMode === 'dark' ? '#f5f5f5' : '#212121';
+const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+const markdownCodeBg     = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f0f0f0';
+const markdownCodeBorder = colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : '#cccccc';
+```
+When adding new markdown style overrides, follow this pattern and apply them to all three render sites. The library (`react-native-markdown-display`) has light-background defaults for `code_block`, `code_inline`, and `fence` — always override `backgroundColor` and `borderColor` for those.

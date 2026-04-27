@@ -67,13 +67,21 @@ function tryDecodeUriComponent(segment: string): string {
 
 /**
  * Joins `rel` onto `baseDirUri` (POSIX, forward slashes). `rel` must not be external.
+ * Preserves URI schemes such as `content://` (Android SAF) so the double-slash is not
+ * discarded by `filter(Boolean)` on the split.
  */
 export function posixResolveRelativeToDirectory(
   baseDirUri: string,
   rel: string,
 ): string {
   const relDecoded = tryDecodeUriComponent(rel.trim());
-  const baseParts = normSlashes(baseDirUri).replace(/\/+$/, '').split('/').filter(Boolean);
+  const normalized = normSlashes(baseDirUri).replace(/\/+$/, '');
+
+  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/.exec(normalized);
+  const scheme = schemeMatch?.[1] ?? '';
+  const pathAfterScheme = scheme ? normalized.slice(scheme.length) : normalized;
+
+  const baseParts = pathAfterScheme.split('/').filter(Boolean);
   const relParts = relDecoded.split('/').filter(p => p !== '' && p !== '.');
   const stack = [...baseParts];
   for (const p of relParts) {
@@ -83,7 +91,8 @@ export function posixResolveRelativeToDirectory(
       stack.push(p);
     }
   }
-  return `/${stack.join('/')}`;
+  const resolvedPath = `/${stack.join('/')}`;
+  return scheme ? `${scheme}${resolvedPath.slice(1)}` : resolvedPath;
 }
 
 /**
@@ -114,11 +123,11 @@ function canonicalVaultNoteUriFromRefs(
   resolvedUri: string,
   noteRefs: ReadonlyArray<InboxWikiLinkNoteRef>,
 ): string | undefined {
-  const norm = normSlashes(resolvedUri);
-  const folded = norm.toLowerCase();
+  const folded = tryDecodeUriComponent(normSlashes(resolvedUri)).toLowerCase();
   let match: string | undefined;
   for (const ref of noteRefs) {
-    if (normSlashes(ref.uri).toLowerCase() === folded) {
+    const refDecoded = tryDecodeUriComponent(normSlashes(ref.uri)).toLowerCase();
+    if (refDecoded === folded) {
       if (match !== undefined && match !== ref.uri) {
         return undefined;
       }
@@ -163,8 +172,13 @@ export function resolveVaultRelativeMarkdownHref(
   if (!pathPart.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
     return null;
   }
-  const base = normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, '');
-  const dir = sourceDirectoryForRelativeLink(sourceMarkdownUriOrDir);
+  // Decode for path operations so Android SAF URIs in different normalizations match
+  // consistently (denormalized `…/tree/primary:vault/Inbox/note.md` from openDocumentTree
+  // vs encoded `…/tree/primary%3Avault/document/primary%3Avault%2FInbox%2Fnote.md` from
+  // native Kotlin `DocumentFile.uri`). Desktop POSIX paths have no `%XX` so this is a no-op.
+  const base = tryDecodeUriComponent(normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, ''));
+  const sourceDecoded = tryDecodeUriComponent(normSlashes(sourceMarkdownUriOrDir));
+  const dir = sourceDirectoryForRelativeLink(sourceDecoded);
   const decodedPart = tryDecodeUriComponent(pathPart);
   const joined = decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
