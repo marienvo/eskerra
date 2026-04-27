@@ -158,6 +158,11 @@ type SafDocumentUriParts = {
   documentId: string;
 };
 
+type SafDocumentResolvedHref = {
+  uri: string;
+  validationUri: string;
+};
+
 function splitSafDocumentUri(uri: string): SafDocumentUriParts | null {
   if (!uri.startsWith('content://')) {
     return null;
@@ -197,7 +202,7 @@ function resolveSafDocumentRelativeMarkdownHref(
   vaultRoot: string,
   sourceMarkdownUriOrDir: string,
   pathPart: string,
-): string | null | undefined {
+): SafDocumentResolvedHref | null | undefined {
   const parts = splitSafDocumentUri(normSlashes(sourceMarkdownUriOrDir));
   if (!parts) {
     return undefined;
@@ -233,7 +238,16 @@ function resolveSafDocumentRelativeMarkdownHref(
     return null;
   }
 
-  return `${parts.prefix}${encodeSafDocumentId(targetDocumentId)}`;
+  const decodedRoot = tryDecodeUriComponent(normSlashes(vaultRoot).replace(/\/+$/, ''));
+  const targetRelativeToRoot = targetDocumentId === rootDocumentId
+    ? ''
+    : targetDocumentId.slice(rootDocumentId.length + 1);
+  return {
+    uri: `${parts.prefix}${encodeSafDocumentId(targetDocumentId)}`,
+    validationUri: targetRelativeToRoot
+      ? `${decodedRoot}/${targetRelativeToRoot}`
+      : decodedRoot,
+  };
 }
 
 /**
@@ -261,19 +275,27 @@ export function resolveVaultRelativeMarkdownHref(
   const sourceDecoded = tryDecodeUriComponent(sourceRaw);
   const dir = sourceDirectoryForRelativeLink(sourceDecoded);
   const decodedPart = tryDecodeUriComponent(pathPart);
-  const joinedRaw = resolveSafDocumentRelativeMarkdownHref(baseRaw, sourceRaw, pathPart);
-  if (joinedRaw === null) {
+  const safJoined = resolveSafDocumentRelativeMarkdownHref(baseRaw, sourceRaw, pathPart);
+  if (safJoined === null) {
     return null;
   }
-  const joined = joinedRaw ?? (decodedPart.startsWith('/')
+  const joined = safJoined?.uri ?? (decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
     : posixResolveRelativeToDirectory(dir, pathPart));
-  const validated =
-    tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(baseRaw, joined)
-    ?? tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+  let validated: string | null;
+  if (safJoined) {
+    validated = tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
       base,
-      tryDecodeUriComponent(joined),
-    );
+      safJoined.validationUri,
+    ) ? joined : null;
+  } else {
+    validated =
+      tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(baseRaw, joined)
+      ?? tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+        base,
+        tryDecodeUriComponent(joined),
+      );
+  }
   if (!validated) {
     return null;
   }
