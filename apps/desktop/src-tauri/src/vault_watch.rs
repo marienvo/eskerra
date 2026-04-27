@@ -1,4 +1,7 @@
 use std::collections::HashSet;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -8,6 +11,9 @@ use serde::Serialize;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 
 use crate::vault::VaultRootState;
+use crate::vault_search::{
+    is_vault_tree_hard_excluded_directory_name, is_vault_tree_ignored_entry_name,
+};
 
 const WATCH_DEBOUNCE_MS: u64 = 200;
 const WATCH_MAX_BATCH_MS: u64 = 900;
@@ -196,6 +202,32 @@ fn spawn_vault_debouncer(
     });
 }
 
+fn collect_poll_watch_directories(root: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut dirs = Vec::new();
+    collect_poll_watch_directories_inner(root, &mut dirs)?;
+    Ok(dirs)
+}
+
+fn collect_poll_watch_directories_inner(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+    out.push(dir.to_path_buf());
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if is_vault_tree_ignored_entry_name(&name_str)
+            || is_vault_tree_hard_excluded_directory_name(&name_str)
+        {
+            continue;
+        }
+
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            collect_poll_watch_directories_inner(&path, out)?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn vault_start_watch(
     vault_state: State<'_, VaultRootState>,
@@ -241,8 +273,12 @@ pub fn vault_start_watch(
         recommended
             .watch(&root, RecursiveMode::Recursive)
             .map_err(|e| format!("recommended watch {}: {e}", root.display()))?;
-        poll.watch(&root, RecursiveMode::Recursive)
-            .map_err(|e| format!("poll watch {}: {e}", root.display()))?;
+        for dir in collect_poll_watch_directories(&root)
+            .map_err(|e| format!("poll watch directory scan {}: {e}", root.display()))?
+        {
+            poll.watch(&dir, RecursiveMode::NonRecursive)
+                .map_err(|e| format!("poll watch {}: {e}", dir.display()))?;
+        }
     } else {
         let _ = watch_state.notify_tx.send(VaultWatchSignal::Coarse {
             session_id,
@@ -261,6 +297,7 @@ pub fn vault_start_watch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn active_session(id: u64) -> AtomicU64 {
         AtomicU64::new(id)
@@ -286,6 +323,26 @@ mod tests {
             DebouncedPayloadResult::DropStale => panic!("payload was stale"),
             DebouncedPayloadResult::Disconnected => panic!("channel disconnected"),
         }
+    }
+
+    #[test]
+    fn collect_poll_watch_directories_skips_ignored_subtrees() {
+        let tmp = tempfile::tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("Inbox/Nested")).unwrap();
+        fs::create_dir_all(tmp.path().join(".venv/bin")).unwrap();
+        fs::create_dir_all(tmp.path().join("Assets/Attachments")).unwrap();
+        fs::create_dir_all(tmp.path().join("_autosync-backup-1")).unwrap();
+
+        let dirs = collect_poll_watch_directories(tmp.path()).unwrap();
+
+        assert!(dirs.iter().any(|p| p == tmp.path()));
+        assert!(dirs.iter().any(|p| p.ends_with("Inbox")));
+        assert!(dirs.iter().any(|p| p.ends_with("Nested")));
+        assert!(dirs.iter().any(|p| p.ends_with("_autosync-backup-1")));
+        assert!(!dirs.iter().any(|p| p.ends_with(".venv")));
+        assert!(!dirs.iter().any(|p| p.ends_with("bin")));
+        assert!(!dirs.iter().any(|p| p.ends_with("Assets")));
+        assert!(!dirs.iter().any(|p| p.ends_with("Attachments")));
     }
 
     #[test]
