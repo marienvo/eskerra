@@ -1,10 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use notify::{Config, Event, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
@@ -19,6 +19,7 @@ const WATCH_DEBOUNCE_MS: u64 = 200;
 const WATCH_MAX_BATCH_MS: u64 = 900;
 const WATCH_POLL_INTERVAL_MS: u64 = 750;
 const WATCH_POLL_COMPARE_CONTENTS: bool = false;
+const WATCH_CROSS_BACKEND_DEDUP_MS: u64 = WATCH_POLL_INTERVAL_MS + WATCH_DEBOUNCE_MS + 300;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,6 +125,35 @@ enum DebouncedPayloadResult {
     Disconnected,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PathFingerprint {
+    Exists {
+        is_dir: bool,
+        len: u64,
+        modified: Option<SystemTime>,
+    },
+    Missing,
+}
+
+#[derive(Clone, Debug)]
+struct RecentPathEmission {
+    emitted_at: Instant,
+    fingerprint: PathFingerprint,
+}
+
+type RecentPathEmissionCache = HashMap<String, RecentPathEmission>;
+
+fn path_fingerprint(path: &str) -> PathFingerprint {
+    match fs::metadata(path) {
+        Ok(meta) => PathFingerprint::Exists {
+            is_dir: meta.is_dir(),
+            len: meta.len(),
+            modified: meta.modified().ok(),
+        },
+        Err(_) => PathFingerprint::Missing,
+    }
+}
+
 fn collect_debounced_payload(
     rx: &std::sync::mpsc::Receiver<VaultWatchSignal>,
     first_signal: VaultWatchSignal,
@@ -184,6 +214,7 @@ fn spawn_vault_debouncer(
     active_session_id: Arc<AtomicU64>,
 ) {
     std::thread::spawn(move || {
+        let mut recent_emissions = RecentPathEmissionCache::new();
         while let Ok(first_signal) = rx.recv() {
             match collect_debounced_payload(
                 &rx,
@@ -193,13 +224,69 @@ fn spawn_vault_debouncer(
                 WATCH_MAX_BATCH_MS,
             ) {
                 DebouncedPayloadResult::Payload(payload) => {
-                    let _ = app_handle.emit("vault-files-changed", payload);
+                    if let Some(payload) = dedupe_recent_precise_payload(
+                        payload,
+                        &mut recent_emissions,
+                        Instant::now(),
+                        Duration::from_millis(WATCH_CROSS_BACKEND_DEDUP_MS),
+                        path_fingerprint,
+                    ) {
+                        let _ = app_handle.emit("vault-files-changed", payload);
+                    }
                 }
                 DebouncedPayloadResult::DropStale => {}
                 DebouncedPayloadResult::Disconnected => return,
             }
         }
     });
+}
+
+fn dedupe_recent_precise_payload(
+    mut payload: VaultFilesChangedPayload,
+    recent: &mut RecentPathEmissionCache,
+    now: Instant,
+    dedup_window: Duration,
+    fingerprint: impl Fn(&str) -> PathFingerprint,
+) -> Option<VaultFilesChangedPayload> {
+    recent.retain(|_, entry| now.saturating_duration_since(entry.emitted_at) <= dedup_window);
+
+    if payload.coarse {
+        for path in &payload.paths {
+            recent.insert(
+                path.clone(),
+                RecentPathEmission {
+                    emitted_at: now,
+                    fingerprint: fingerprint(path),
+                },
+            );
+        }
+        return Some(payload);
+    }
+
+    let mut filtered_paths = Vec::with_capacity(payload.paths.len());
+    for path in payload.paths {
+        let current_fingerprint = fingerprint(&path);
+        let is_recent_duplicate = recent
+            .get(&path)
+            .is_some_and(|entry| entry.fingerprint == current_fingerprint);
+        if !is_recent_duplicate {
+            filtered_paths.push(path.clone());
+        }
+        recent.insert(
+            path,
+            RecentPathEmission {
+                emitted_at: now,
+                fingerprint: current_fingerprint,
+            },
+        );
+    }
+
+    if filtered_paths.is_empty() {
+        None
+    } else {
+        payload.paths = filtered_paths;
+        Some(payload)
+    }
 }
 
 fn collect_poll_watch_directories(root: &Path) -> io::Result<Vec<PathBuf>> {
@@ -323,6 +410,100 @@ mod tests {
             DebouncedPayloadResult::DropStale => panic!("payload was stale"),
             DebouncedPayloadResult::Disconnected => panic!("channel disconnected"),
         }
+    }
+
+    fn precise_payload(paths: Vec<&str>) -> VaultFilesChangedPayload {
+        VaultFilesChangedPayload {
+            paths: paths.into_iter().map(str::to_string).collect(),
+            coarse: false,
+            coarse_reason: None,
+        }
+    }
+
+    fn test_fingerprint(version: u64) -> PathFingerprint {
+        PathFingerprint::Exists {
+            is_dir: false,
+            len: version,
+            modified: None,
+        }
+    }
+
+    #[test]
+    fn dedupe_recent_precise_payload_drops_same_fingerprint_across_batches() {
+        let mut recent = RecentPathEmissionCache::new();
+        let started = Instant::now();
+        let window = Duration::from_millis(WATCH_CROSS_BACKEND_DEDUP_MS);
+
+        let first = dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started,
+            window,
+            |_| test_fingerprint(1),
+        )
+        .expect("first payload should emit");
+        assert_eq!(first.paths, vec!["/vault/Inbox/A.md".to_string()]);
+
+        let duplicate = dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started + Duration::from_millis(WATCH_POLL_INTERVAL_MS),
+            window,
+            |_| test_fingerprint(1),
+        );
+        assert!(duplicate.is_none());
+    }
+
+    #[test]
+    fn dedupe_recent_precise_payload_keeps_same_path_when_fingerprint_changes() {
+        let mut recent = RecentPathEmissionCache::new();
+        let started = Instant::now();
+        let window = Duration::from_millis(WATCH_CROSS_BACKEND_DEDUP_MS);
+
+        dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started,
+            window,
+            |_| test_fingerprint(1),
+        )
+        .expect("first payload should emit");
+
+        let changed = dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started + Duration::from_millis(WATCH_POLL_INTERVAL_MS),
+            window,
+            |_| test_fingerprint(2),
+        )
+        .expect("changed same-path payload should emit");
+        assert_eq!(changed.paths, vec!["/vault/Inbox/A.md".to_string()]);
+    }
+
+    #[test]
+    fn dedupe_recent_precise_payload_keeps_duplicates_after_window_expires() {
+        let mut recent = RecentPathEmissionCache::new();
+        let started = Instant::now();
+        let window = Duration::from_millis(WATCH_CROSS_BACKEND_DEDUP_MS);
+
+        dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started,
+            window,
+            |_| test_fingerprint(1),
+        )
+        .expect("first payload should emit");
+
+        let later = dedupe_recent_precise_payload(
+            precise_payload(vec!["/vault/Inbox/A.md"]),
+            &mut recent,
+            started + window + Duration::from_millis(1),
+            window,
+            |_| test_fingerprint(1),
+        )
+        .expect("same fingerprint outside dedup window should emit");
+        assert_eq!(later.paths, vec!["/vault/Inbox/A.md".to_string()]);
     }
 
     #[test]
