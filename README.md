@@ -1,4 +1,5 @@
-> [!warning] Still in early development
+> [!WARNING]
+> Still in early development
 
 <p align="center">
   <img src="./eskerra-logo.png" alt="Eskerra logo" width="120"><br>
