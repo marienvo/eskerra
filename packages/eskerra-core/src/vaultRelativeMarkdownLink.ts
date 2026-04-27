@@ -221,7 +221,10 @@ function resolveSafDocumentRelativeMarkdownHref(
     ? vaultPathDirname(sourceDocumentId)
     : sourceDocumentId.replace(/\/+$/, '');
   const targetDocumentId = pathPart.startsWith('/')
-    ? `${rootDocumentId}/${normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, '')}`
+    ? posixResolveRelativeToDirectory(
+      rootDocumentId,
+      normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, ''),
+    ).replace(/^\/+/, '')
     : posixResolveRelativeToDirectory(sourceDirDocumentId, pathPart).replace(/^\/+/, '');
   if (
     targetDocumentId !== rootDocumentId

@@ -245,13 +245,21 @@ describe('resolveVaultRelativeMarkdownHref', () => {
     const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
     const noteEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2Falpha.md`;
 
-    const r = resolveVaultRelativeMarkdownHref(
+    const relative = resolveVaultRelativeMarkdownHref(
       safRoot,
       noteEncoded,
       '../../escape.md',
       [],
     );
-    expect(r).toBeNull();
+    expect(relative).toBeNull();
+
+    const absolute = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      '/../../escape.md',
+      [],
+    );
+    expect(absolute).toBeNull();
   });
 
   it('handles encoded base with denormalized note URI (reverse mismatch)', () => {
