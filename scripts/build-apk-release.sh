@@ -43,6 +43,22 @@ fi
 unset _ENV_FILE
 
 cd "$ROOT/apps/mobile/android"
+
+# Clear Gradle's cached JS bundle so a version bump always triggers a fresh Hermes compile.
+# Without this, `assembleRelease` can reuse a stale bundle from a previous build and the
+# app reports the old version number even after `bump-release-version.mjs` increments it.
+_BUNDLE_CACHE=(
+  "app/build/generated/assets/react/release"
+  "app/build/tmp/createBundleReleaseJsAndAssets"
+  "app/build/intermediates/assets/release"
+)
+for _dir in "${_BUNDLE_CACHE[@]}"; do
+  if [[ -d "$_dir" ]]; then
+    rm -rf "$_dir"
+  fi
+done
+unset _BUNDLE_CACHE _dir
+
 ./gradlew assembleRelease
 
 APK="$ROOT/apps/mobile/android/app/build/outputs/apk/release/app-release.apk"

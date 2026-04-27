@@ -63,6 +63,15 @@ describe('posixResolveRelativeToDirectory', () => {
       posixResolveRelativeToDirectory('/vault/Inbox', 'my%20note.md'),
     ).toBe('/vault/Inbox/my note.md');
   });
+
+  it('preserves content:// scheme for Android SAF URIs', () => {
+    expect(
+      posixResolveRelativeToDirectory('content://tree/vault/Inbox', './Beta.md'),
+    ).toBe('content://tree/vault/Inbox/Beta.md');
+    expect(
+      posixResolveRelativeToDirectory('content://tree/vault/Inbox/sub', '../Beta.md'),
+    ).toBe('content://tree/vault/Inbox/Beta.md');
+  });
 });
 
 describe('posixRelativeVaultPath', () => {
@@ -161,6 +170,127 @@ describe('resolveVaultRelativeMarkdownHref', () => {
         notes,
       ),
     ).toBeNull();
+  });
+
+  it('resolves relative links against Android SAF content:// note URIs', () => {
+    const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const safNotes: InboxWikiLinkNoteRef[] = [
+      {name: 'alpha', uri: `${safRoot}/Inbox/alpha.md`},
+      {name: 'Beta',  uri: `${safRoot}/Inbox/Beta.md`},
+      {name: 'gamma', uri: `${safRoot}/Inbox/sub/gamma.md`},
+    ];
+
+    const same = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      `${safRoot}/Inbox/alpha.md`,
+      './Beta.md',
+      safNotes,
+    );
+    expect(same?.uri).toBe(`${safRoot}/Inbox/Beta.md`);
+
+    const parent = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      `${safRoot}/Inbox/sub/gamma.md`,
+      '../Beta.md',
+      safNotes,
+    );
+    expect(parent?.uri).toBe(`${safRoot}/Inbox/Beta.md`);
+
+    const outside = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      `${safRoot}/Inbox/alpha.md`,
+      '../../escape.md',
+      safNotes,
+    );
+    expect(outside).toBeNull();
+  });
+
+  it('handles Android SAF URI normalization mismatch (denormalized base, encoded note refs)', () => {
+    // openDocumentTree returns a denormalized vault URI (`primary:vault`), while
+    // native Kotlin DocumentFile.uri.toString() returns the standard SAF document URI
+    // (`primary%3Avault/document/primary%3Avault%2FInbox%2Fnote.md`). Both formats
+    // must resolve relative links to the same canonical note ref.
+    const baseDenormalized = 'content://com.android.externalstorage.documents/tree/primary:vault';
+    const noteEncoded = 'content://com.android.externalstorage.documents/tree/primary%3Avault/document/primary%3Avault%2FInbox%2Falpha.md';
+    const targetEncoded = 'content://com.android.externalstorage.documents/tree/primary%3Avault/document/primary%3Avault%2FInbox%2FBeta.md';
+    const refs: InboxWikiLinkNoteRef[] = [
+      {name: 'alpha', uri: noteEncoded},
+      {name: 'Beta', uri: targetEncoded},
+    ];
+
+    const r = resolveVaultRelativeMarkdownHref(
+      baseDenormalized,
+      noteEncoded,
+      './Beta.md',
+      refs,
+    );
+    expect(r?.uri).toBe(targetEncoded);
+  });
+
+  it('preserves encoded Android SAF document URIs without indexed note refs', () => {
+    const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const noteEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2Falpha.md`;
+    const targetEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2FBeta.md`;
+
+    const r = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      './Beta.md',
+      [],
+    );
+    expect(r?.uri).toBe(targetEncoded);
+  });
+
+  it('rejects encoded Android SAF document URI links outside the vault root', () => {
+    const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const noteEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2Falpha.md`;
+
+    const relative = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      '../../escape.md',
+      [],
+    );
+    expect(relative).toBeNull();
+
+    const absolute = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      '/../../escape.md',
+      [],
+    );
+    expect(absolute).toBeNull();
+  });
+
+  it('rejects encoded Android SAF document URI links into hard-excluded directories', () => {
+    const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const noteEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2Falpha.md`;
+
+    const r = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      '../Assets/hidden.md',
+      [],
+    );
+    expect(r).toBeNull();
+  });
+
+  it('handles encoded base with denormalized note URI (reverse mismatch)', () => {
+    const baseEncoded = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const noteDenormalized = 'content://com.android.externalstorage.documents/tree/primary:vault/Inbox/alpha.md';
+    const targetDenormalized = 'content://com.android.externalstorage.documents/tree/primary:vault/Inbox/Beta.md';
+    const refs: InboxWikiLinkNoteRef[] = [
+      {name: 'alpha', uri: noteDenormalized},
+      {name: 'Beta', uri: targetDenormalized},
+    ];
+
+    const r = resolveVaultRelativeMarkdownHref(
+      baseEncoded,
+      noteDenormalized,
+      './Beta.md',
+      refs,
+    );
+    expect(r?.uri).toBe(targetDenormalized);
   });
 });
 

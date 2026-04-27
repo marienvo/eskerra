@@ -77,6 +77,8 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
   );
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const markdownCodeBg = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f0f0f0';
+  const markdownCodeBorder = colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : '#cccccc';
   const calloutRules = useMemo(() => createCalloutMarkdownRules(colorMode), [colorMode]);
 
   const noteText = content || '';
@@ -246,8 +248,9 @@ export function NoteDetailScreen({navigation, route}: NoteDetailScreenProps) {
             rules={calloutRules}
             style={{
               body: {color: markdownTextColor},
-              code_block: {color: markdownTextColor},
-              code_inline: {color: markdownTextColor},
+              code_block: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
+              code_inline: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
+              fence: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
               hr: {backgroundColor: markdownMutedColor},
               link: {color: '#4f9dff'},
               paragraph: {color: markdownTextColor},

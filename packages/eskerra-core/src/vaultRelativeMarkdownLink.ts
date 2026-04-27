@@ -67,13 +67,21 @@ function tryDecodeUriComponent(segment: string): string {
 
 /**
  * Joins `rel` onto `baseDirUri` (POSIX, forward slashes). `rel` must not be external.
+ * Preserves URI schemes such as `content://` (Android SAF) so the double-slash is not
+ * discarded by `filter(Boolean)` on the split.
  */
 export function posixResolveRelativeToDirectory(
   baseDirUri: string,
   rel: string,
 ): string {
   const relDecoded = tryDecodeUriComponent(rel.trim());
-  const baseParts = normSlashes(baseDirUri).replace(/\/+$/, '').split('/').filter(Boolean);
+  const normalized = normSlashes(baseDirUri).replace(/\/+$/, '');
+
+  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/.exec(normalized);
+  const scheme = schemeMatch?.[1] ?? '';
+  const pathAfterScheme = scheme ? normalized.slice(scheme.length) : normalized;
+
+  const baseParts = pathAfterScheme.split('/').filter(Boolean);
   const relParts = relDecoded.split('/').filter(p => p !== '' && p !== '.');
   const stack = [...baseParts];
   for (const p of relParts) {
@@ -83,7 +91,8 @@ export function posixResolveRelativeToDirectory(
       stack.push(p);
     }
   }
-  return `/${stack.join('/')}`;
+  const resolvedPath = `/${stack.join('/')}`;
+  return scheme ? `${scheme}${resolvedPath.slice(1)}` : resolvedPath;
 }
 
 /**
@@ -114,11 +123,11 @@ function canonicalVaultNoteUriFromRefs(
   resolvedUri: string,
   noteRefs: ReadonlyArray<InboxWikiLinkNoteRef>,
 ): string | undefined {
-  const norm = normSlashes(resolvedUri);
-  const folded = norm.toLowerCase();
+  const folded = tryDecodeUriComponent(normSlashes(resolvedUri)).toLowerCase();
   let match: string | undefined;
   for (const ref of noteRefs) {
-    if (normSlashes(ref.uri).toLowerCase() === folded) {
+    const refDecoded = tryDecodeUriComponent(normSlashes(ref.uri)).toLowerCase();
+    if (refDecoded === folded) {
       if (match !== undefined && match !== ref.uri) {
         return undefined;
       }
@@ -144,6 +153,103 @@ function sourceDirectoryForRelativeLink(
   return n.replace(/\/+$/, '');
 }
 
+type SafDocumentUriParts = {
+  prefix: string;
+  documentId: string;
+};
+
+type SafDocumentResolvedHref = {
+  uri: string;
+  validationUri: string;
+};
+
+function splitSafDocumentUri(uri: string): SafDocumentUriParts | null {
+  if (!uri.startsWith('content://')) {
+    return null;
+  }
+  const marker = '/document/';
+  const markerIndex = uri.indexOf(marker);
+  if (markerIndex < 0) {
+    return null;
+  }
+  const prefix = uri.slice(0, markerIndex + marker.length);
+  const documentId = uri.slice(markerIndex + marker.length);
+  if (documentId === '' || documentId.includes('/')) {
+    return null;
+  }
+  return {prefix, documentId};
+}
+
+function safTreeDocumentIdFromRootUri(vaultRoot: string): string | null {
+  const root = normSlashes(vaultRoot).replace(/\/+$/, '');
+  if (!root.startsWith('content://')) {
+    return null;
+  }
+  const marker = '/tree/';
+  const markerIndex = root.indexOf(marker);
+  if (markerIndex < 0) {
+    return null;
+  }
+  const treeId = root.slice(markerIndex + marker.length).split('/')[0] ?? '';
+  return treeId === '' ? null : tryDecodeUriComponent(treeId);
+}
+
+function encodeSafDocumentId(documentId: string): string {
+  return encodeURIComponent(documentId);
+}
+
+function resolveSafDocumentRelativeMarkdownHref(
+  vaultRoot: string,
+  sourceMarkdownUriOrDir: string,
+  pathPart: string,
+): SafDocumentResolvedHref | null | undefined {
+  const parts = splitSafDocumentUri(normSlashes(sourceMarkdownUriOrDir));
+  if (!parts) {
+    return undefined;
+  }
+  const rootDocumentId = safTreeDocumentIdFromRootUri(vaultRoot);
+  if (!rootDocumentId) {
+    return null;
+  }
+
+  const sourceDocumentId = tryDecodeUriComponent(parts.documentId);
+  if (
+    sourceDocumentId !== rootDocumentId
+    && !sourceDocumentId.startsWith(`${rootDocumentId}/`)
+  ) {
+    return null;
+  }
+  const sourceIsMarkdownFile = sourceDocumentId
+    .toLowerCase()
+    .endsWith(MARKDOWN_EXTENSION.toLowerCase());
+  const sourceDirDocumentId = sourceIsMarkdownFile
+    ? vaultPathDirname(sourceDocumentId)
+    : sourceDocumentId.replace(/\/+$/, '');
+  const targetDocumentId = pathPart.startsWith('/')
+    ? posixResolveRelativeToDirectory(
+      rootDocumentId,
+      normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, ''),
+    ).replace(/^\/+/, '')
+    : posixResolveRelativeToDirectory(sourceDirDocumentId, pathPart).replace(/^\/+/, '');
+  if (
+    targetDocumentId !== rootDocumentId
+    && !targetDocumentId.startsWith(`${rootDocumentId}/`)
+  ) {
+    return null;
+  }
+
+  const decodedRoot = tryDecodeUriComponent(normSlashes(vaultRoot).replace(/\/+$/, ''));
+  const targetRelativeToRoot = targetDocumentId === rootDocumentId
+    ? ''
+    : targetDocumentId.slice(rootDocumentId.length + 1);
+  return {
+    uri: `${parts.prefix}${encodeSafDocumentId(targetDocumentId)}`,
+    validationUri: targetRelativeToRoot
+      ? `${decodedRoot}/${targetRelativeToRoot}`
+      : decodedRoot,
+  };
+}
+
 /**
  * Resolves a relative inline-markdown `href` to a vault `.md` URI, or `null`.
  * `sourceMarkdownUriOrDir` is either the open note URI (ends with `.md`) or an absolute vault
@@ -163,13 +269,33 @@ export function resolveVaultRelativeMarkdownHref(
   if (!pathPart.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
     return null;
   }
-  const base = normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, '');
-  const dir = sourceDirectoryForRelativeLink(sourceMarkdownUriOrDir);
+  const baseRaw = normSlashes(normalizeVaultBaseUri(vaultRoot)).replace(/\/+$/, '');
+  const base = tryDecodeUriComponent(baseRaw);
+  const sourceRaw = normSlashes(sourceMarkdownUriOrDir);
+  const sourceDecoded = tryDecodeUriComponent(sourceRaw);
+  const dir = sourceDirectoryForRelativeLink(sourceDecoded);
   const decodedPart = tryDecodeUriComponent(pathPart);
-  const joined = decodedPart.startsWith('/')
+  const safJoined = resolveSafDocumentRelativeMarkdownHref(baseRaw, sourceRaw, pathPart);
+  if (safJoined === null) {
+    return null;
+  }
+  const joined = safJoined?.uri ?? (decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
-    : posixResolveRelativeToDirectory(dir, pathPart);
-  const validated = tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(base, joined);
+    : posixResolveRelativeToDirectory(dir, pathPart));
+  let validated: string | null;
+  if (safJoined) {
+    validated = tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+      base,
+      safJoined.validationUri,
+    ) ? joined : null;
+  } else {
+    validated =
+      tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(baseRaw, joined)
+      ?? tryAssertVaultMarkdownNoteUriForRelativeMarkdownLink(
+        base,
+        tryDecodeUriComponent(joined),
+      );
+  }
   if (!validated) {
     return null;
   }
@@ -177,7 +303,7 @@ export function resolveVaultRelativeMarkdownHref(
   let canonicalHref: string | undefined;
   if (noteRefs && noteRefs.length > 0) {
     const canon = canonicalVaultNoteUriFromRefs(validated, noteRefs);
-      if (canon) {
+    if (canon) {
       uri = canon;
       const nextHref = posixRelativeVaultPath(dir, canon);
       const stripped = stripMarkdownLinkHrefToPathPart(rawHref);

@@ -68,6 +68,8 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
   );
   const markdownTextColor = colorMode === 'dark' ? '#f5f5f5' : '#212121';
   const markdownMutedColor = colorMode === 'dark' ? '#cfcfcf' : '#616161';
+  const markdownCodeBg = colorMode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f0f0f0';
+  const markdownCodeBorder = colorMode === 'dark' ? 'rgba(255,255,255,0.12)' : '#cccccc';
   const vaultLinkColors = useMemo(
     () => vaultReadonlyMarkdownLinkColors(vaultReadonlyLinkSchemeFromColorMode(colorMode)),
     [colorMode],
@@ -194,8 +196,9 @@ export function NoteContentView({noteUri, onNavigateToVaultNote}: NoteContentVie
             rules={markdownRules}
             style={{
               body: {color: markdownTextColor},
-              code_block: {color: markdownTextColor},
-              code_inline: {color: markdownTextColor},
+              code_block: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
+              code_inline: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
+              fence: {color: markdownTextColor, backgroundColor: markdownCodeBg, borderColor: markdownCodeBorder},
               hr: {backgroundColor: markdownMutedColor},
               link: {textDecorationLine: 'underline'},
               paragraph: {color: markdownTextColor},
