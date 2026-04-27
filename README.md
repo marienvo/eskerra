@@ -20,7 +20,7 @@ Both apps use the same **vault layout** on disk: user-chosen root folder, then `
 
 ## Prerequisites (all developers)
 
-- **Node.js** `>= 22.11.0` and **npm**
+- **Node.js** `>= 24.0.0` and **npm**
 - From the **repository root**, run **`npm install`** once (workspaces hoist dependencies).
 
 ---
