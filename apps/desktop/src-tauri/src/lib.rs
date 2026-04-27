@@ -3,9 +3,9 @@ mod link_rich_metadata;
 mod media;
 mod r2_http;
 mod tiling;
-mod tiling_score;
 #[cfg(target_os = "linux")]
 mod tiling_gdk;
+mod tiling_score;
 mod vault;
 mod vault_frontmatter_index;
 mod vault_search;
@@ -14,8 +14,8 @@ mod vault_watch;
 mod window_state_disk;
 
 use vault::VaultRootState;
-use vault_search::VaultSearchSessionState;
 use vault_frontmatter_index::VaultFrontmatterIndexState;
+use vault_search::VaultSearchSessionState;
 use vault_search_index::VaultSearchIndexState;
 
 #[cfg(all(not(mobile), debug_assertions))]
@@ -57,10 +57,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(
-            tauri_plugin_store::Builder::default()
-                .build(),
-        )
+        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
                 .skip_initial_state("main")

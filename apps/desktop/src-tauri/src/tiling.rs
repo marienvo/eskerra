@@ -51,7 +51,9 @@ fn linux_is_wayland_session() -> bool {
     std::env::var("XDG_SESSION_TYPE")
         .map(|v| v.eq_ignore_ascii_case("wayland"))
         .unwrap_or(false)
-        || std::env::var("WAYLAND_DISPLAY").map(|v| !v.is_empty()).unwrap_or(false)
+        || std::env::var("WAYLAND_DISPLAY")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false)
 }
 
 /// When true, horizontal placement from `outer_position` should not be trusted for tiling heuristics.
@@ -113,7 +115,9 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     #[cfg(target_os = "linux")]
     if let Some(state) = gdk_edge_tiling_state(&window) {
         if debug_components {
-            eprintln!("[eskerra tiling] gdk edge state -> {state:?} conf={GDK_TILING_CONFIDENCE:.3}");
+            eprintln!(
+                "[eskerra tiling] gdk edge state -> {state:?} conf={GDK_TILING_CONFIDENCE:.3}"
+            );
         }
         return TilingDetection {
             state,
@@ -185,12 +189,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     let work_area = phys_to_logical_rect(wa.position, wa.size, scale_mon);
 
     let session_wayland = linux_is_wayland_session();
-    if wayland_outer_position_unreliable(
-        session_wayland,
-        outer_pos,
-        &window_outer,
-        &work_area,
-    ) {
+    if wayland_outer_position_unreliable(session_wayland, outer_pos, &window_outer, &work_area) {
         if debug_components {
             eprintln!(
                 "[eskerra tiling] wayland unreliable outer position (physical=({},{})) -> none",
@@ -217,13 +216,7 @@ pub fn get_window_tiling_detection(window: WebviewWindow) -> TilingDetection {
     };
 
     let cfg = linux_tiling_config(session_wayland);
-    let detection = score_tiling(
-        &audit,
-        &cfg,
-        debug_components,
-        debug_components,
-        gate_geom,
-    );
+    let detection = score_tiling(&audit, &cfg, debug_components, debug_components, gate_geom);
 
     if debug_components {
         eprintln!(

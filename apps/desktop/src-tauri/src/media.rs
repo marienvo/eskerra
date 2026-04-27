@@ -1,10 +1,10 @@
 //! OS media integration (MPRIS on Linux via souvlaki).
 
+use sha2::{Digest, Sha256};
 use std::io;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::Duration;
-use sha2::{Digest, Sha256};
 use tauri::{App, AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "linux")]
@@ -46,9 +46,7 @@ impl Default for MediaSessionState {
 fn make_controls(app_handle: &AppHandle) -> io::Result<MediaControls> {
     static DBUS_NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
     let dbus_name = DBUS_NAME.get_or_init(|| {
-        Box::leak(
-            format!("eskerra.instance{}", std::process::id()).into_boxed_str(),
-        )
+        Box::leak(format!("eskerra.instance{}", std::process::id()).into_boxed_str())
     });
     let config = PlatformConfig {
         dbus_name,
@@ -126,7 +124,9 @@ pub fn media_set_metadata(
             duration: Some(Duration::from_millis(duration_ms)),
             ..Default::default()
         };
-        controls.set_metadata(meta).map_err(|e| format!("{:?}", e))?;
+        controls
+            .set_metadata(meta)
+            .map_err(|e| format!("{:?}", e))?;
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -153,7 +153,9 @@ pub fn media_set_playback(
         } else {
             MediaPlayback::Paused { progress }
         };
-        controls.set_playback(playback).map_err(|e| format!("{:?}", e))?;
+        controls
+            .set_playback(playback)
+            .map_err(|e| format!("{:?}", e))?;
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -302,7 +304,13 @@ mod tests {
     #[test]
     fn extension_from_mime() {
         assert_eq!(extension_from_content_type("image/jpeg"), ".jpg");
-        assert_eq!(extension_from_content_type("image/png; charset=utf-8"), ".png");
-        assert_eq!(extension_from_content_type("application/octet-stream"), ".img");
+        assert_eq!(
+            extension_from_content_type("image/png; charset=utf-8"),
+            ".png"
+        );
+        assert_eq!(
+            extension_from_content_type("application/octet-stream"),
+            ".img"
+        );
     }
 }

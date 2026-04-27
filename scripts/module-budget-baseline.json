@@ -11,7 +11,7 @@
     "apps/desktop/src/editor/noteEditor/markdownSelectionSurround.ts": 1357,
     "apps/desktop/src/editor/noteEditor/markdownSmartExpandSelection.ts": 1499,
     "apps/desktop/src/hooks/useDesktopPodcastPlayback.ts": 1063,
-    "apps/desktop/src/hooks/useMainWindowWorkspace.ts": 4490,
+    "apps/desktop/src/hooks/useMainWindowWorkspace.ts": 4719,
     "apps/desktop/src/hooks/workspaceFsWatchReconcile.ts": 590,
     "apps/desktop/src/lib/cleanNoteMarkdown.ts": 1006,
     "apps/mobile/__tests__/usePlayer.test.ts": 1248,

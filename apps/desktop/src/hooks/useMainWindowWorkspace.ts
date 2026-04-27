@@ -214,6 +214,9 @@ function isPodcastRelevantPath(p: string): boolean {
 }
 
 const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
+const VAULT_OPEN_TAB_PROBE_INTERVAL_MS = 10000;
+const VAULT_OPEN_TAB_PROBE_MIN_GAP_MS = 2500;
+const VAULT_COARSE_REFRESH_DEDUP_MS = 30000;
 
 export type InboxEditorShellScrollDirective =
   | {kind: 'snapTop'}
@@ -221,6 +224,38 @@ export type InboxEditorShellScrollDirective =
 
 function vaultChangedPathsSignature(paths: readonly string[]): string {
   return [...new Set(paths.map(p => p.trim()).filter(Boolean))].sort().join('\n');
+}
+
+function vaultWatchBackendFromReason(reason: string | null): string {
+  if (!reason) {
+    return 'unknown';
+  }
+  const parts = reason.split(':');
+  return parts.length >= 2 && parts[1] ? parts[1] : 'unknown';
+}
+
+function normalizeVaultWatchErrorReason(message: string): string {
+  const lower = message.toLowerCase();
+  const osMatch = lower.match(/\(os error (\d+)\)/);
+  if (osMatch?.[1]) {
+    return `os_error_${osMatch[1]}`;
+  }
+  if (lower.includes('permission denied') || lower.includes('operation not permitted')) {
+    return 'permission_denied';
+  }
+  if (lower.includes('no such file') || lower.includes('not found')) {
+    return 'not_found';
+  }
+  if (lower.includes('too many open files')) {
+    return 'too_many_open_files';
+  }
+  if (lower.includes('recommended watcher')) {
+    return 'recommended_watcher_error';
+  }
+  if (lower.includes('poll watcher')) {
+    return 'poll_watcher_error';
+  }
+  return 'unknown';
 }
 
 function snapshotEditorShellScrollForOpenNote(
@@ -700,6 +735,7 @@ export function useMainWindowWorkspace(options: {
   const showTodayHubCanvasRef = useRef(false);
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
+  const lastPersistedExternalMutationSeqRef = useRef(0);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const saveActiveRef = useRef(false);
   const eagerEditorLoadUriRef = useRef<string | null>(null);
@@ -1164,6 +1200,7 @@ export function useMainWindowWorkspace(options: {
         const activeSel = selectedUriRef.current;
         if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
           lastPersistedRef.current = {uri: norm, markdown: md};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
         const memAfter = inboxContentByUriRef.current[norm];
         if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
@@ -1239,6 +1276,7 @@ export function useMainWindowWorkspace(options: {
           return;
         }
         lastPersistedRef.current = {uri, markdown: md};
+        lastPersistedExternalMutationSeqRef.current += 1;
         const nextCache = mergeInboxNoteBodyIntoCache(
           inboxContentByUriRef.current,
           uri,
@@ -1390,6 +1428,7 @@ export function useMainWindowWorkspace(options: {
     loadFullMarkdownIntoInboxEditor(md, uri, 'start');
     scheduleBacklinksDeferOneFrameAfterLoad();
     lastPersistedRef.current = {uri: c.uri, markdown: md};
+    lastPersistedExternalMutationSeqRef.current += 1;
     const nextCache = mergeInboxNoteBodyIntoCache(
       inboxContentByUriRef.current,
       c.uri,
@@ -1416,6 +1455,7 @@ export function useMainWindowWorkspace(options: {
     }
     autosaveSchedulerRef.current.cancel();
     lastPersistedRef.current = {uri: c.uri, markdown: c.diskMarkdown};
+    lastPersistedExternalMutationSeqRef.current += 1;
     setDiskConflict(null);
     diskConflictRef.current = null;
     setDiskConflictSoft(null);
@@ -1551,6 +1591,7 @@ export function useMainWindowWorkspace(options: {
     (targetNorm: string, prefetchBody: string | undefined) => {
       if (prefetchBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: prefetchBody};
+        lastPersistedExternalMutationSeqRef.current += 1;
         inboxContentByUriRef.current = {
           ...inboxContentByUriRef.current,
           [targetNorm]: prefetchBody,
@@ -1562,6 +1603,7 @@ export function useMainWindowWorkspace(options: {
           : inboxContentByUriRef.current[targetNorm];
       if (resolvedEditorBody !== undefined) {
         lastPersistedRef.current = {uri: targetNorm, markdown: resolvedEditorBody};
+        lastPersistedExternalMutationSeqRef.current += 1;
         eagerEditorLoadUriRef.current = targetNorm;
         backlinksActiveBodyRef.current = resolvedEditorBody;
         loadFullMarkdownIntoInboxEditor(resolvedEditorBody, targetNorm, 'start');
@@ -1880,6 +1922,7 @@ export function useMainWindowWorkspace(options: {
         const dc = diskConflictRef.current;
         if (dc) {
           lastPersistedRef.current = {uri: dc.uri, markdown: dc.diskMarkdown};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
         setDiskConflict(null);
         diskConflictRef.current = null;
@@ -1984,6 +2027,7 @@ export function useMainWindowWorkspace(options: {
     selectedUriRef.current = null;
     composingNewEntryRef.current = false;
     lastPersistedRef.current = null;
+    lastPersistedExternalMutationSeqRef.current += 1;
     setSelectedUri(null);
     setComposingNewEntry(false);
     resetInboxEditorComposeState();
@@ -2133,6 +2177,7 @@ export function useMainWindowWorkspace(options: {
       selectedUriRef.current = null;
       composingNewEntryRef.current = false;
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
       setSelectedUri(null);
       setComposingNewEntry(false);
       clearInboxYamlFrontmatterEditorRefs({
@@ -2220,12 +2265,41 @@ export function useMainWindowWorkspace(options: {
         });
         setEditorBody('');
         lastPersistedRef.current = null;
+        lastPersistedExternalMutationSeqRef.current += 1;
         setInboxEditorResetNonce(n => n + 1);
         setVaultRoot(root);
         const store = await load(STORE_PATH);
         await store.set(STORE_KEY_VAULT, root);
         await store.save();
-        await startVaultWatch();
+        try {
+          await startVaultWatch();
+        } catch (watchError) {
+          const reason =
+            watchError instanceof Error ? watchError.message : String(watchError);
+          const normalizedReason = normalizeVaultWatchErrorReason(reason);
+          captureObservabilityMessage({
+            message: 'eskerra.desktop.vault_watch_start_failed',
+            level: 'warning',
+            extra: {
+              reason,
+              normalizedReason,
+              vaultRootHash: fingerprintUtf16ForDebug(root),
+            },
+            tags: {
+              obs_surface: 'vault_watch',
+              watch_session_id: 'start',
+              vault_root_hash: fingerprintUtf16ForDebug(root),
+              backend: 'startup',
+              reason: normalizedReason,
+            },
+            fingerprint: [
+              'eskerra.desktop',
+              'vault_watch_start_failed',
+              normalizedReason,
+            ],
+          });
+          throw watchError;
+        }
         queueMicrotask(() => {
           vaultSearchIndexSchedule().catch(() => undefined);
           vaultFrontmatterIndexSchedule().catch(() => undefined);
@@ -2276,6 +2350,13 @@ export function useMainWindowWorkspace(options: {
     let lastIncrementalIndexTouch:
       | {signature: string; touchedAtMs: number}
       | null = null;
+    let lastOpenTabProbeAtMs = 0;
+    let lastCoarseRefreshAtMs = 0;
+    let vaultFilesChangedEventSeq = 0;
+    const markExternalLastPersistedMutation = () => {
+      lastPersistedExternalMutationSeqRef.current += 1;
+    };
+    const markProbeLastPersistedMutation = () => undefined;
 
     const reconcileFsOpenEnv: ReconcileFsOpenMarkdownEnv = {
       cancelled: () => cancelled,
@@ -2298,6 +2379,7 @@ export function useMainWindowWorkspace(options: {
       lastInboxEditorActivityAtRef,
       inboxEditorRef,
       autosaveSchedulerRef,
+      markLastPersistedMutation: markExternalLastPersistedMutation,
       setEditorWorkspaceTabs,
       setActiveEditorTabId,
       setDiskConflict,
@@ -2318,23 +2400,128 @@ export function useMainWindowWorkspace(options: {
       todayHubSettingsRef,
       todayHubBridgeRef,
     };
+    let vaultFsReconcileQueue: Promise<void> = Promise.resolve();
+    const enqueueVaultFsReconcileJob = (
+      label: string,
+      job: () => Promise<void>,
+    ): Promise<void> => {
+      const run = async () => {
+        if (cancelled) {
+          return;
+        }
+        try {
+          await job();
+        } catch (e) {
+          console.warn(`[vault-files-changed] reconcile failed: ${label}`, e);
+        }
+      };
+      const queued = vaultFsReconcileQueue.then(run, run);
+      vaultFsReconcileQueue = queued.catch(() => undefined);
+      return queued;
+    };
     const rerunFsReconcileForTab = (normTab: string) => {
-      void reconcileOpenNotesAfterFsChangeFromVaultWatch(
-        reconcileFsOpenEnv,
-        reconcileFsTodayEnv,
-        [normTab],
-        rerunFsReconcileForTab,
+      void enqueueVaultFsReconcileJob(
+        'deferred-tab',
+        () =>
+          reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            reconcileFsOpenEnv,
+            reconcileFsTodayEnv,
+            [normTab],
+            rerunFsReconcileForTab,
+          ),
       );
     };
     const reconcileOpenNotesAfterFsChange = (rawPaths: string[]) =>
-      reconcileOpenNotesAfterFsChangeFromVaultWatch(
-        reconcileFsOpenEnv,
-        reconcileFsTodayEnv,
-        rawPaths,
-        rerunFsReconcileForTab,
+      enqueueVaultFsReconcileJob(
+        'watch-event',
+        () =>
+          reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            reconcileFsOpenEnv,
+            reconcileFsTodayEnv,
+            rawPaths,
+            rerunFsReconcileForTab,
+          ),
       );
 
+    const runOpenTabProbe = (trigger: 'focus' | 'interval') => {
+      const now = Date.now();
+      if (now - lastOpenTabProbeAtMs < VAULT_OPEN_TAB_PROBE_MIN_GAP_MS) {
+        return;
+      }
+      lastOpenTabProbeAtMs = now;
+      void enqueueVaultFsReconcileJob(
+        `open-tab-probe:${trigger}`,
+        async () => {
+          const before = lastPersistedRef.current;
+          const externalMutationSeqBefore =
+            lastPersistedExternalMutationSeqRef.current;
+          const vaultFilesChangedEventSeqBefore = vaultFilesChangedEventSeq;
+          await reconcileOpenNotesAfterFsChangeFromVaultWatch(
+            {
+              ...reconcileFsOpenEnv,
+              markLastPersistedMutation: markProbeLastPersistedMutation,
+            },
+            reconcileFsTodayEnv,
+            [],
+            rerunFsReconcileForTab,
+          );
+          if (cancelled) {
+            return;
+          }
+          if (
+            lastPersistedExternalMutationSeqRef.current
+            !== externalMutationSeqBefore
+          ) {
+            return;
+          }
+          if (vaultFilesChangedEventSeq !== vaultFilesChangedEventSeqBefore) {
+            return;
+          }
+          const after = lastPersistedRef.current;
+          const selected = selectedUriRef.current;
+          if (
+            selected
+            && before?.uri === selected
+            && after?.uri === selected
+            && before.markdown !== after.markdown
+          ) {
+            captureObservabilityMessage({
+              message: 'eskerra.desktop.vault_watch_open_tab_probe_reload',
+              level: 'warning',
+              extra: {
+                trigger,
+                watchSessionId,
+                vaultRootHash,
+                markdownBeforeHash: fingerprintUtf16ForDebug(before.markdown),
+                markdownAfterHash: fingerprintUtf16ForDebug(after.markdown),
+              },
+              tags: {
+                obs_surface: 'vault_watch',
+                watch_session_id: watchSessionId,
+                vault_root_hash: vaultRootHash,
+                backend: 'open_tab_probe',
+                reason: trigger,
+              },
+              fingerprint: [
+                'eskerra.desktop',
+                'vault_watch_open_tab_probe_reload',
+                trigger,
+              ],
+            });
+          }
+        },
+      );
+    };
+
+    const onWindowFocus = () => runOpenTabProbe('focus');
+    window.addEventListener('focus', onWindowFocus);
+    const openTabProbeInterval = window.setInterval(
+      () => runOpenTabProbe('interval'),
+      VAULT_OPEN_TAB_PROBE_INTERVAL_MS,
+    );
+
     listen<VaultFilesChangedPayload>('vault-files-changed', event => {
+      vaultFilesChangedEventSeq += 1;
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
         isPodcastRelevantPath,
@@ -2342,9 +2529,11 @@ export function useMainWindowWorkspace(options: {
       });
       const {paths, coarse} = plan;
       const coarseReason = event.payload?.coarseReason ?? null;
+      const now = Date.now();
+      const shouldRunRefreshWork =
+        !coarse || now - lastCoarseRefreshAtMs >= VAULT_COARSE_REFRESH_DEDUP_MS;
       if (plan.shouldTouchPathsIncrementally) {
         const signature = vaultChangedPathsSignature(paths);
-        const now = Date.now();
         const duplicate =
           lastIncrementalIndexTouch?.signature === signature
           && now - lastIncrementalIndexTouch.touchedAtMs < VAULT_INDEX_TOUCH_DEDUP_MS;
@@ -2362,6 +2551,7 @@ export function useMainWindowWorkspace(options: {
         vaultFrontmatterIndexSchedule().catch(() => undefined);
       }
       if (coarse) {
+        const backend = vaultWatchBackendFromReason(coarseReason);
         console.warn('[vault-files-changed] coarse invalidation', {
           reason: coarseReason,
           pathCount: paths.length,
@@ -2389,6 +2579,37 @@ export function useMainWindowWorkspace(options: {
             coarseReason ?? 'unknown',
           ],
         });
+        if (coarseReason?.startsWith('notify_error:')) {
+          captureObservabilityMessage({
+            message: 'eskerra.desktop.vault_watch_backend_error',
+            level: 'warning',
+            extra: {
+              reason: coarseReason,
+              backend,
+              pathCount: paths.length,
+              watchSessionId,
+              vaultRootHash,
+            },
+            tags: {
+              obs_surface: 'vault_watch',
+              watch_session_id: watchSessionId,
+              vault_root_hash: vaultRootHash,
+              backend,
+              reason: coarseReason,
+            },
+            fingerprint: [
+              'eskerra.desktop',
+              'vault_watch_backend_error',
+              backend,
+            ],
+          });
+        }
+      }
+      if (!shouldRunRefreshWork) {
+        return;
+      }
+      if (coarse) {
+        lastCoarseRefreshAtMs = now;
       }
       subtreeMarkdownCache.invalidateAll();
       vaultBacklinkDiskBodyCacheRef.current = {};
@@ -2418,6 +2639,8 @@ export function useMainWindowWorkspace(options: {
       .catch(() => undefined);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', onWindowFocus);
+      window.clearInterval(openTabProbeInterval);
       unlisten?.();
       if (diskConflictDeferTimerRef.current != null) {
         window.clearTimeout(diskConflictDeferTimerRef.current);
@@ -2493,6 +2716,7 @@ export function useMainWindowWorkspace(options: {
         }
       }
       lastPersistedRef.current = {uri: selectedUri, markdown: body};
+      lastPersistedExternalMutationSeqRef.current += 1;
       loadFullMarkdownIntoInboxEditor(body, selectedUri, 'start');
       scheduleBacklinksDeferOneFrameAfterLoad();
     } else {
@@ -2505,6 +2729,7 @@ export function useMainWindowWorkspace(options: {
       });
       setEditorBody('');
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
     }
   }, [
     vaultRoot,
@@ -2589,6 +2814,7 @@ export function useMainWindowWorkspace(options: {
         if (!cancelled) {
           const normalized = normalizeVaultMarkdownDiskRead(raw);
           lastPersistedRef.current = {uri: selectedUri, markdown: normalized};
+          lastPersistedExternalMutationSeqRef.current += 1;
           setInboxContentByUri(prev => {
             if (prev[selectedUri] === normalized) {
               return prev;
@@ -2707,6 +2933,7 @@ export function useMainWindowWorkspace(options: {
       setComposingNewEntry(true);
       setSelectedUri(null);
       lastPersistedRef.current = null;
+      lastPersistedExternalMutationSeqRef.current += 1;
       resetInboxEditorComposeState();
     })();
   }, [resetInboxEditorComposeState]);
@@ -3073,6 +3300,7 @@ export function useMainWindowWorkspace(options: {
         const previousPersisted = lastPersistedRef.current;
         if (previousPersisted && previousPersisted.uri === uri) {
           lastPersistedRef.current = {uri: nextUri, markdown: previousPersisted.markdown};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
       }
       if (nextUri !== uri) {
@@ -3621,6 +3849,7 @@ export function useMainWindowWorkspace(options: {
         selectedUriRef.current = null;
         composingNewEntryRef.current = false;
         lastPersistedRef.current = null;
+        lastPersistedExternalMutationSeqRef.current += 1;
         setSelectedUri(null);
         setComposingNewEntry(false);
         clearInboxYamlFrontmatterEditorRefs({
@@ -3754,6 +3983,7 @@ export function useMainWindowWorkspace(options: {
           const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, normalizedNext);
           if (mappedLp) {
             lastPersistedRef.current = {...lp, uri: mappedLp};
+            lastPersistedExternalMutationSeqRef.current += 1;
           }
         }
         const remappedTabs = remapAllTabsUriPrefix(
@@ -3798,6 +4028,7 @@ export function useMainWindowWorkspace(options: {
       const lp = lastPersistedRef.current;
       if (lp && lp.uri === previousUri) {
         lastPersistedRef.current = {...lp, uri: nextUri};
+        lastPersistedExternalMutationSeqRef.current += 1;
       }
     },
     [],
@@ -3837,6 +4068,7 @@ export function useMainWindowWorkspace(options: {
         const mappedLp = remapVaultUriPrefix(lp.uri, oldUri, newUri);
         if (mappedLp) {
           lastPersistedRef.current = {...lp, uri: mappedLp};
+          lastPersistedExternalMutationSeqRef.current += 1;
         }
       }
     },
