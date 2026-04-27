@@ -102,6 +102,7 @@ fn handle_notify_event(
     tx: &std::sync::mpsc::Sender<VaultWatchSignal>,
     session_id: u64,
     backend: &'static str,
+    root: &Path,
     poll: &Arc<Mutex<Option<PollWatcher>>>,
     watched_dirs: &Arc<Mutex<HashSet<PathBuf>>>,
     res: Result<Event, notify::Error>,
@@ -110,7 +111,7 @@ fn handle_notify_event(
         Ok(ev) => {
             let paths = ev.paths.clone();
             send_notify_event(tx, session_id, backend, Ok(ev));
-            let roots = candidate_poll_watch_roots(&paths);
+            let roots = candidate_poll_watch_roots(root, &paths);
             register_poll_watch_roots_lossy(poll, watched_dirs, &roots, tx, session_id);
         }
         Err(err) => {
@@ -401,16 +402,20 @@ fn collect_poll_watch_directories_lossy_inner(
     }
 }
 
-fn candidate_poll_watch_roots(paths: &[PathBuf]) -> Vec<PathBuf> {
+fn path_has_excluded_poll_component(root: &Path, path: &Path) -> bool {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    relative.components().any(|component| {
+        let name = component.as_os_str().to_string_lossy();
+        is_vault_tree_ignored_entry_name(&name) || is_vault_tree_hard_excluded_directory_name(&name)
+    })
+}
+
+fn candidate_poll_watch_roots(root: &Path, paths: &[PathBuf]) -> Vec<PathBuf> {
     paths
         .iter()
         .filter_map(|path| {
-            if let Some(name) = path.file_name().map(|name| name.to_string_lossy()) {
-                if is_vault_tree_ignored_entry_name(&name)
-                    || is_vault_tree_hard_excluded_directory_name(&name)
-                {
-                    return None;
-                }
+            if path_has_excluded_poll_component(root, path) {
+                return None;
             }
 
             match fs::metadata(path) {
@@ -514,9 +519,18 @@ pub fn vault_start_watch(
     match PollWatcher::new(
         {
             let poll = Arc::clone(&poll);
+            let root = root.clone();
             let poll_watched_dirs = Arc::clone(&poll_watched_dirs);
             move |res: Result<Event, notify::Error>| {
-                handle_notify_event(&tx_poll, session_id, "poll", &poll, &poll_watched_dirs, res);
+                handle_notify_event(
+                    &tx_poll,
+                    session_id,
+                    "poll",
+                    &root,
+                    &poll,
+                    &poll_watched_dirs,
+                    res,
+                );
             }
         },
         poll_config,
@@ -536,6 +550,7 @@ pub fn vault_start_watch(
 
     let tx_recommended = watch_state.notify_tx.clone();
     let recommended_poll = Arc::clone(&poll);
+    let recommended_root = root.clone();
     let recommended_poll_watched_dirs = Arc::clone(&poll_watched_dirs);
     let mut recommended = RecommendedWatcher::new(
         move |res: Result<Event, notify::Error>| {
@@ -543,6 +558,7 @@ pub fn vault_start_watch(
                 &tx_recommended,
                 session_id,
                 "recommended",
+                &recommended_root,
                 &recommended_poll,
                 &recommended_poll_watched_dirs,
                 res,
@@ -722,6 +738,30 @@ mod tests {
         assert!(!dirs.iter().any(|p| p.ends_with("bin")));
         assert!(!dirs.iter().any(|p| p.ends_with("Assets")));
         assert!(!dirs.iter().any(|p| p.ends_with("Attachments")));
+    }
+
+    #[test]
+    fn candidate_poll_watch_roots_skips_paths_under_excluded_subtrees() {
+        let tmp = tempfile::tempdir().unwrap();
+        let inbox = tmp.path().join("Inbox/NewProject");
+        let attachment_album = tmp.path().join("Assets/NewAlbum");
+        let ignored_child = tmp.path().join(".venv/src");
+        fs::create_dir_all(&inbox).unwrap();
+        fs::create_dir_all(&attachment_album).unwrap();
+        fs::create_dir_all(&ignored_child).unwrap();
+
+        let roots = candidate_poll_watch_roots(
+            tmp.path(),
+            &[
+                inbox.clone(),
+                attachment_album.clone(),
+                ignored_child.clone(),
+            ],
+        );
+
+        assert!(roots.contains(&inbox));
+        assert!(!roots.contains(&attachment_album));
+        assert!(!roots.contains(&ignored_child));
     }
 
     #[test]
