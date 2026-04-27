@@ -110,15 +110,13 @@ static RE_TOP_DQ: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"^"([^"\\]*(?:\\.[^"\\]*)*)"\s*:"#).unwrap());
 static RE_TOP_SQ: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^'([^'\\]*(?:\\.[^'\\]*)*)'\s*:").unwrap());
-static RE_DATE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap());
+static RE_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap());
 static RE_DATETIME: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$").unwrap());
 static RE_TS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$").unwrap()
 });
-static RE_HTTP_URL: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)^https?://").unwrap());
+static RE_HTTP_URL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^https?://").unwrap());
 
 fn split_frontmatter_inner(markdown: &str) -> Option<String> {
     let normalized = markdown.replace("\r\n", "\n");
@@ -147,11 +145,7 @@ fn extract_top_level_key(line: &str) -> Option<String> {
         return Some(c[1].to_string());
     }
     if let Some(c) = RE_TOP_DQ.captures(line) {
-        return Some(
-            c[1]
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\"),
-        );
+        return Some(c[1].replace("\\\"", "\"").replace("\\\\", "\\"));
     }
     if let Some(c) = RE_TOP_SQ.captures(line) {
         return Some(c[1].replace("\\'", "'").replace("\\\\", "\\"));
@@ -194,7 +188,8 @@ fn yaml_to_json_scalar(y: &YamlVal) -> Option<serde_json::Value> {
             if let Some(u) = n.as_u64() {
                 return Some(serde_json::Number::from(u).into());
             }
-            n.as_f64().and_then(|f| serde_json::Number::from_f64(f).map(Into::into))
+            n.as_f64()
+                .and_then(|f| serde_json::Number::from_f64(f).map(Into::into))
         }
         YamlVal::String(s) => Some(serde_json::Value::String(s.clone())),
         YamlVal::Sequence(_) | YamlVal::Mapping(_) => None,
@@ -433,9 +428,7 @@ fn infer_property_type(key_name: &str, agg: &KeyAgg) -> &'static str {
 
     for (js, cnt) in &agg.scalars {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(js) {
-            *tally
-                .entry(classify_scalar_json(&v))
-                .or_insert(0) += cnt;
+            *tally.entry(classify_scalar_json(&v)).or_insert(0) += cnt;
         }
     }
     for (_, cnt) in &agg.list_items {
@@ -481,7 +474,10 @@ fn snapshot_key_row(key_name: &str, agg: &KeyAgg) -> VaultFrontmatterKeyRowDto {
     for (s, cnt) in &agg.list_items {
         top.push((serde_json::Value::String(s.clone()), *cnt));
     }
-    top.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| format!("{}", a.0).cmp(&format!("{}", b.0))));
+    top.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| format!("{}", a.0).cmp(&format!("{}", b.0)))
+    });
     top.truncate(100);
 
     VaultFrontmatterKeyRowDto {
@@ -490,10 +486,7 @@ fn snapshot_key_row(key_name: &str, agg: &KeyAgg) -> VaultFrontmatterKeyRowDto {
         total_notes: agg.note_count,
         top_values: top
             .into_iter()
-            .map(|(value_json, count)| VaultFrontmatterValueCountDto {
-                value_json,
-                count,
-            })
+            .map(|(value_json, count)| VaultFrontmatterValueCountDto { value_json, count })
             .collect(),
     }
 }
@@ -670,10 +663,7 @@ pub fn vault_frontmatter_index_values_for_key(
     Ok(VaultFrontmatterValuesForKeyDto {
         entries: pairs
             .into_iter()
-            .map(|(value_json, count)| VaultFrontmatterValueCountDto {
-                value_json,
-                count,
-            })
+            .map(|(value_json, count)| VaultFrontmatterValueCountDto { value_json, count })
             .collect(),
     })
 }
@@ -690,7 +680,8 @@ fn json_prefix_ok(v: &serde_json::Value, pref_lower: &str) -> bool {
             if pref_lower.is_empty() {
                 return true;
             }
-            n.to_string().starts_with(pref_lower.trim_start_matches('-'))
+            n.to_string()
+                .starts_with(pref_lower.trim_start_matches('-'))
         }
         serde_json::Value::Bool(_) | serde_json::Value::Null => pref_lower.is_empty(),
         _ => false,

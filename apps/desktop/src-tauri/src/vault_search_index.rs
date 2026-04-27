@@ -10,21 +10,19 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager};
 use tantivy::collector::TopDocs;
 use tantivy::directory::MmapDirectory;
 use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, QueryParser};
-use tantivy::schema::{
-    IndexRecordOption, Schema, TextFieldIndexing, TextOptions, Term,
-};
+use tantivy::schema::{IndexRecordOption, Schema, Term, TextFieldIndexing, TextOptions};
 use tantivy::{doc, Index, IndexReader};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::vault::VaultRootState;
 use crate::vault_search::{
-    bounded_levenshtein, max_edit_distance_for_query, path_to_note_uri, trim_non_alphanumeric_edges,
-    MAX_FILE_BYTES, FUZZY_MAX_LINE_CHARS, FUZZY_MIN_QUERY_CHARS, SNIPPET_MAX_CHARS,
-    is_eligible_vault_markdown_file_name, is_vault_tree_hard_excluded_directory_name,
-    is_vault_tree_ignored_entry_name,
+    bounded_levenshtein, is_eligible_vault_markdown_file_name,
+    is_vault_tree_hard_excluded_directory_name, is_vault_tree_ignored_entry_name,
+    max_edit_distance_for_query, path_to_note_uri, trim_non_alphanumeric_edges,
+    FUZZY_MAX_LINE_CHARS, FUZZY_MIN_QUERY_CHARS, MAX_FILE_BYTES, SNIPPET_MAX_CHARS,
 };
 
 const INDEX_WRITER_HEAP_MB: usize = 50;
@@ -108,7 +106,14 @@ fn vault_index_dir(app: &AppHandle, vault_root: &Path) -> Result<PathBuf, String
     Ok(base.join("vault-search-index").join(bucket))
 }
 
-fn build_schema() -> (Schema, tantivy::schema::Field, tantivy::schema::Field, tantivy::schema::Field, tantivy::schema::Field, tantivy::schema::Field) {
+fn build_schema() -> (
+    Schema,
+    tantivy::schema::Field,
+    tantivy::schema::Field,
+    tantivy::schema::Field,
+    tantivy::schema::Field,
+    tantivy::schema::Field,
+) {
     let mut b = Schema::builder();
 
     let uri_indexing = TextFieldIndexing::default()
@@ -235,7 +240,11 @@ fn line_matches_query(line_lower: &str, tokens: &[String], full_query_lower: &st
     false
 }
 
-fn collect_snippets(body: &str, tokens: &[String], full_query_lower: &str) -> (Vec<VaultSearchNoteSnippetDto>, u32) {
+fn collect_snippets(
+    body: &str,
+    tokens: &[String],
+    full_query_lower: &str,
+) -> (Vec<VaultSearchNoteSnippetDto>, u32) {
     let mut snippets = Vec::new();
     let mut match_lines = 0u32;
     let mut line_number = 0u32;
@@ -252,11 +261,7 @@ fn collect_snippets(body: &str, tokens: &[String], full_query_lower: &str) -> (V
             }
         }
     }
-    let mc = if match_lines > 0 {
-        match_lines
-    } else {
-        1
-    };
+    let mc = if match_lines > 0 { match_lines } else { 1 };
     (snippets, mc)
 }
 
@@ -304,7 +309,8 @@ fn classify_best_field(
                 return false;
             }
             let cap = max_fuzzy_distance_title_path_classify(t.chars().count());
-            fuzzy_token_in_text_max(filename_lower, t, cap) || fuzzy_token_in_text_max(rel_lower, t, cap)
+            fuzzy_token_in_text_max(filename_lower, t, cap)
+                || fuzzy_token_in_text_max(rel_lower, t, cap)
         });
     if path_hit {
         return VaultSearchBestFieldDto::Path;
@@ -350,7 +356,7 @@ fn build_index_query(
     let main_q = parser.parse_query(query_trim)?;
     let mut clauses: Vec<(Occur, Box<dyn Query>)> = vec![(Occur::Should, main_q)];
 
-       for token in query_tokens(query_trim) {
+    for token in query_tokens(query_trim) {
         if token.len() < FUZZY_MIN_QUERY_CHARS {
             continue;
         }
@@ -404,7 +410,11 @@ fn min_edit_distance_to_query_tokens(hay_lower: &str, tokens: &[String]) -> Opti
     best
 }
 
-fn min_edit_distance_to_query_tokens_prefix(hay_lower: &str, tokens: &[String], max_hay_chars: usize) -> Option<u32> {
+fn min_edit_distance_to_query_tokens_prefix(
+    hay_lower: &str,
+    tokens: &[String],
+    max_hay_chars: usize,
+) -> Option<u32> {
     let prefix: String = hay_lower.chars().take(max_hay_chars).collect();
     min_edit_distance_to_query_tokens(&prefix, tokens)
 }
@@ -504,7 +514,11 @@ fn path_requires_index_write(vault_root: &Path, path: &Path) -> bool {
 }
 
 /// Full rebuild in a background thread. Emits `vault-search:index-status` for UI.
-pub fn schedule_full_rebuild(app: AppHandle, vault_root: PathBuf, index_state: VaultSearchIndexState) {
+pub fn schedule_full_rebuild(
+    app: AppHandle,
+    vault_root: PathBuf,
+    index_state: VaultSearchIndexState,
+) {
     let index_dir = match vault_index_dir(&app, &vault_root) {
         Ok(p) => p,
         Err(e) => {
@@ -770,13 +784,7 @@ pub fn run_indexed_search(
     let f_body = schema.get_field("body").map_err(|e| e.to_string())?;
 
     let q = build_index_query(
-        index,
-        &schema,
-        f_title,
-        f_filename,
-        f_rel_path,
-        f_body,
-        query_trim,
+        index, &schema, f_title, f_filename, f_rel_path, f_body, query_trim,
     )
     .map_err(|e| e.to_string())?;
 
@@ -848,8 +856,7 @@ pub fn run_indexed_search(
             &body_lower,
             &tokens,
         );
-        let combined_score =
-            tier_boost + rank_quality_boost(min_d) + tantivy_score * 0.02;
+        let combined_score = tier_boost + rank_quality_boost(min_d) + tantivy_score * 0.02;
 
         out.push(VaultSearchNoteResultDto {
             uri,
@@ -952,7 +959,10 @@ mod ranking_tests {
 
         assert!(!path_requires_index_write(root, &dir));
         assert!(!path_requires_index_write(root, &txt));
-        assert!(!path_requires_index_write(root, &root.join("missing-folder")));
+        assert!(!path_requires_index_write(
+            root,
+            &root.join("missing-folder")
+        ));
     }
 
     #[test]

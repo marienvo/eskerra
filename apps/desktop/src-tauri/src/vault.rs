@@ -42,8 +42,7 @@ fn is_subpath(vault: &Path, candidate: &Path) -> bool {
     let Ok(candidate_canon) = candidate.canonicalize() else {
         let v = vault_canon.to_string_lossy();
         let c = candidate.to_string_lossy();
-        return c.starts_with(v.as_ref())
-            && (c.len() == v.len() || c[v.len()..].starts_with('/'));
+        return c.starts_with(v.as_ref()) && (c.len() == v.len() || c[v.len()..].starts_with('/'));
     };
     candidate_canon.starts_with(&vault_canon)
 }
@@ -107,7 +106,9 @@ fn sniff_image_matches_extension(buf: &[u8], ext: &str) -> bool {
         "png" => buf.starts_with(b"\x89PNG\r\n\x1a\n"),
         "jpg" => buf.len() >= 3 && buf[0] == 0xff && buf[1] == 0xd8 && buf[2] == 0xff,
         "gif" => buf.starts_with(b"GIF87a") || buf.starts_with(b"GIF89a"),
-        "webp" => buf.len() >= 12 && buf.starts_with(b"RIFF") && buf[8..12].eq_ignore_ascii_case(b"WEBP"),
+        "webp" => {
+            buf.len() >= 12 && buf.starts_with(b"RIFF") && buf[8..12].eq_ignore_ascii_case(b"WEBP")
+        }
         "svg" => {
             let prefix = String::from_utf8_lossy(trimmed);
             let p = prefix.trim_start();
@@ -145,16 +146,11 @@ pub fn vault_set_session(
 #[tauri::command]
 pub fn vault_get_session(state: State<'_, VaultRootState>) -> Result<Option<String>, String> {
     let guard = state.0.lock().map_err(|e| e.to_string())?;
-    Ok(guard
-        .as_ref()
-        .map(|p| p.to_string_lossy().to_string()))
+    Ok(guard.as_ref().map(|p| p.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
-pub fn vault_exists(
-    state: State<'_, VaultRootState>,
-    path: String,
-) -> Result<bool, String> {
+pub fn vault_exists(state: State<'_, VaultRootState>, path: String) -> Result<bool, String> {
     let target = PathBuf::from(path);
     let vault = state.0.lock().map_err(|e| e.to_string())?;
     assert_in_vault(vault.as_ref(), &target)?;
@@ -170,10 +166,7 @@ pub fn vault_mkdir(state: State<'_, VaultRootState>, path: String) -> Result<(),
 }
 
 #[tauri::command]
-pub fn vault_read_file(
-    state: State<'_, VaultRootState>,
-    path: String,
-) -> Result<String, String> {
+pub fn vault_read_file(state: State<'_, VaultRootState>, path: String) -> Result<String, String> {
     let target = PathBuf::from(path);
     let vault = state.0.lock().map_err(|e| e.to_string())?;
     assert_in_vault(vault.as_ref(), &target)?;
@@ -251,11 +244,8 @@ pub fn vault_import_files_into_attachments(
             ));
         };
         validate_source_image_file(&src, &ext)?;
-        let stem = sanitize_attachment_stem(
-            src.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("image"),
-        );
+        let stem =
+            sanitize_attachment_stem(src.file_name().and_then(|n| n.to_str()).unwrap_or("image"));
         let mut n: u32 = 0;
         loop {
             let dest_name = if n == 0 {

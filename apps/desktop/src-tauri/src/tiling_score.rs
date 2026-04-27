@@ -287,7 +287,12 @@ fn evaluate_hard_gates_logical(audit: &GeometryAudit, cfg: &TilingConfig) -> Har
 }
 
 /// Hard gates in **physical** px; tolerance formulas use work size in logical px = phys / scale_ref.
-fn evaluate_hard_gates_physical(window: Rect, work: Rect, cfg: &TilingConfig, scale_ref: f64) -> HardGateEval {
+fn evaluate_hard_gates_physical(
+    window: Rect,
+    work: Rect,
+    cfg: &TilingConfig,
+    scale_ref: f64,
+) -> HardGateEval {
     let scale = scale_ref.max(f64::EPSILON);
     let Rect {
         x: wx,
@@ -309,7 +314,11 @@ fn evaluate_hard_gates_physical(window: Rect, work: Rect, cfg: &TilingConfig, sc
     evaluate_hard_gates_inner(wx, wy, ww, wh, ax, ay, aw, ah, tol_v, tol_w, tol_e)
 }
 
-fn evaluate_hard_gates_dispatch(audit: &GeometryAudit, cfg: &TilingConfig, gate_geom: HardGateGeometry) -> HardGateEval {
+fn evaluate_hard_gates_dispatch(
+    audit: &GeometryAudit,
+    cfg: &TilingConfig,
+    gate_geom: HardGateGeometry,
+) -> HardGateEval {
     match gate_geom {
         HardGateGeometry::FromAuditLogical => evaluate_hard_gates_logical(audit, cfg),
         HardGateGeometry::Physical {

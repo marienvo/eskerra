@@ -2,8 +2,7 @@ use regex::Regex;
 use serde::Serialize;
 use std::time::Duration;
 
-const USER_AGENT: &str =
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
+const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
      Chrome/122.0.0.0 Safari/537.36 Eskerra/0.1 (+https://github.com/marienvo/notebox)";
 const BODY_CAP_BYTES: usize = 1_500_000;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
@@ -65,7 +64,8 @@ fn parse_html_metadata(html: &str, base_url: &str) -> LinkRichMetadata {
     let twitter_images = collect_twitter_images(head);
     let document_title = extract_document_title(head);
     let description = og_description.or_else(|| extract_meta_name(head, "description"));
-    let apple_touch_icons = extract_link_icons(head, &["apple-touch-icon", "apple-touch-icon-precomposed"]);
+    let apple_touch_icons =
+        extract_link_icons(head, &["apple-touch-icon", "apple-touch-icon-precomposed"]);
     let link_icons = extract_link_icons(head, &["icon", "shortcut icon"]);
 
     let mut candidates: Vec<String> = Vec::new();
@@ -162,9 +162,7 @@ fn extract_meta_name(head: &str, name_wanted: &str) -> Option<String> {
 }
 
 fn extract_link_icons(head: &str, rels: &[&str]) -> Vec<String> {
-    let rx = match Regex::new(
-        r#"(?is)<link\b([^>]*?)\s*/?>"#,
-    ) {
+    let rx = match Regex::new(r#"(?is)<link\b([^>]*?)\s*/?>"#) {
         Ok(v) => v,
         Err(_) => return Vec::new(),
     };
@@ -360,7 +358,10 @@ mod tests {
             .image_candidates
             .iter()
             .any(|u| u.contains("cdn.example.com/t.png")));
-        assert!(md.image_candidates.iter().any(|u| u.ends_with("/apple.png")));
+        assert!(md
+            .image_candidates
+            .iter()
+            .any(|u| u.ends_with("/apple.png")));
         assert!(md
             .image_candidates
             .last()
