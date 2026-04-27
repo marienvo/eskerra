@@ -175,20 +175,45 @@ function splitSafDocumentUri(uri: string): SafDocumentUriParts | null {
   return {prefix, documentId};
 }
 
+function safTreeDocumentIdFromRootUri(vaultRoot: string): string | null {
+  const root = normSlashes(vaultRoot).replace(/\/+$/, '');
+  if (!root.startsWith('content://')) {
+    return null;
+  }
+  const marker = '/tree/';
+  const markerIndex = root.indexOf(marker);
+  if (markerIndex < 0) {
+    return null;
+  }
+  const treeId = root.slice(markerIndex + marker.length).split('/')[0] ?? '';
+  return treeId === '' ? null : tryDecodeUriComponent(treeId);
+}
+
 function encodeSafDocumentId(documentId: string): string {
   return encodeURIComponent(documentId);
 }
 
 function resolveSafDocumentRelativeMarkdownHref(
+  vaultRoot: string,
   sourceMarkdownUriOrDir: string,
   pathPart: string,
-): string | null {
+): string | null | undefined {
   const parts = splitSafDocumentUri(normSlashes(sourceMarkdownUriOrDir));
   if (!parts) {
+    return undefined;
+  }
+  const rootDocumentId = safTreeDocumentIdFromRootUri(vaultRoot);
+  if (!rootDocumentId) {
     return null;
   }
 
   const sourceDocumentId = tryDecodeUriComponent(parts.documentId);
+  if (
+    sourceDocumentId !== rootDocumentId
+    && !sourceDocumentId.startsWith(`${rootDocumentId}/`)
+  ) {
+    return null;
+  }
   const sourceIsMarkdownFile = sourceDocumentId
     .toLowerCase()
     .endsWith(MARKDOWN_EXTENSION.toLowerCase());
@@ -196,8 +221,14 @@ function resolveSafDocumentRelativeMarkdownHref(
     ? vaultPathDirname(sourceDocumentId)
     : sourceDocumentId.replace(/\/+$/, '');
   const targetDocumentId = pathPart.startsWith('/')
-    ? normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, '')
+    ? `${rootDocumentId}/${normSlashes(tryDecodeUriComponent(pathPart)).replace(/^\/+/, '')}`
     : posixResolveRelativeToDirectory(sourceDirDocumentId, pathPart).replace(/^\/+/, '');
+  if (
+    targetDocumentId !== rootDocumentId
+    && !targetDocumentId.startsWith(`${rootDocumentId}/`)
+  ) {
+    return null;
+  }
 
   return `${parts.prefix}${encodeSafDocumentId(targetDocumentId)}`;
 }
@@ -227,7 +258,10 @@ export function resolveVaultRelativeMarkdownHref(
   const sourceDecoded = tryDecodeUriComponent(sourceRaw);
   const dir = sourceDirectoryForRelativeLink(sourceDecoded);
   const decodedPart = tryDecodeUriComponent(pathPart);
-  const joinedRaw = resolveSafDocumentRelativeMarkdownHref(sourceRaw, pathPart);
+  const joinedRaw = resolveSafDocumentRelativeMarkdownHref(baseRaw, sourceRaw, pathPart);
+  if (joinedRaw === null) {
+    return null;
+  }
   const joined = joinedRaw ?? (decodedPart.startsWith('/')
     ? normSlashes(decodedPart)
     : posixResolveRelativeToDirectory(dir, pathPart));

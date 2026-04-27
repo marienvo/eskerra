@@ -241,6 +241,19 @@ describe('resolveVaultRelativeMarkdownHref', () => {
     expect(r?.uri).toBe(targetEncoded);
   });
 
+  it('rejects encoded Android SAF document URI links outside the vault root', () => {
+    const safRoot = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
+    const noteEncoded = `${safRoot}/document/primary%3Avault%2FInbox%2Falpha.md`;
+
+    const r = resolveVaultRelativeMarkdownHref(
+      safRoot,
+      noteEncoded,
+      '../../escape.md',
+      [],
+    );
+    expect(r).toBeNull();
+  });
+
   it('handles encoded base with denormalized note URI (reverse mismatch)', () => {
     const baseEncoded = 'content://com.android.externalstorage.documents/tree/primary%3Avault';
     const noteDenormalized = 'content://com.android.externalstorage.documents/tree/primary:vault/Inbox/alpha.md';
