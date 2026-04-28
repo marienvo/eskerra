@@ -783,7 +783,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     rowHandleGeometryValidRef.current = false;
     rowHandleGeomRef.current = [];
     setRowHandleGeom(prev => (prev.length === 0 ? prev : []));
-  }, [cells.length, notice, colCount]);
+  }, [cells, notice, colCount]);
 
   useEffect(() => {
     if (!isDraggingTable) {
@@ -1320,6 +1320,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       <div
         ref={shellRef}
         onPointerEnter={measureRowHandleGeometryIfInvalid}
+        onPointerMove={measureRowHandleGeometryIfInvalid}
         className={
           isDraggingTable
             ? 'cm-eskerra-table-shell cm-eskerra-table-shell--dragging'

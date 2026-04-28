@@ -29,10 +29,10 @@ This note records **why** Eskerra v1 pipe tables felt slow and **what** we chang
 
 ## Scroll Stability Mitigations
 
-- Row-handle geometry is no longer measured by a `ResizeObserver` during passive table mount. It is invalidated on shape changes and measured lazily on table pointer entry or row-drag start, keeping the left drag handles available without paying the layout cost while simply scrolling through many tables.
+- Row-handle geometry is no longer measured by a `ResizeObserver` during passive table mount. It is invalidated on content, notice, and shape changes, then measured lazily on table pointer entry/move or row-drag start, keeping the left drag handles available without paying the layout cost while simply scrolling through many tables.
 - Table shell replace widgets now provide a conservative row/column/content based `estimatedHeight`, so CodeMirror can reserve space for lazily mounted tables above the viewport and avoid large upward scroll corrections.
 - The replace-widget wrapper gets a `min-height` from the best available estimate during React mount, preventing a transient 0px DOM height from collapsing the scrollbar while the shell tree is filling in.
-- Once a shell has had a real non-zero rendered child height, that height is cached in memory and reused by `estimatedHeight` and wrapper reservation for the same table while scrolling back through the note. The cache is cleared on document edits to avoid stale heights after table content or line positions change.
+- Once a shell has had a real non-zero rendered child height, that height is cached in the editor state's table field and reused by `estimatedHeight` and wrapper reservation for the same table while scrolling back through the note. The per-editor cache is cleared on document edits to avoid stale heights after table content or line positions change.
 
 ## Not done (future)
 

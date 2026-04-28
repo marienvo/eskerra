@@ -32,6 +32,7 @@ import {
 
 type BuildResult = {
   decorations: DecorationSet;
+  measuredHeights: Map<number, number>;
 };
 
 function mapSuppressedLinesAfterDocChange(
@@ -238,27 +239,27 @@ class TableRawMarkdownExitWidget extends WidgetType {
 }
 
 const shellWidgetRoots = new WeakMap<HTMLElement, Root>();
-const measuredTableShellHeightsByHeader = new Map<number, number>();
 
 function roundTableShellHeight(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
 function rememberMeasuredTableShellHeight(
+  measuredHeights: Map<number, number>,
   headerLineFrom: number,
   height: number,
 ): void {
   if (!Number.isFinite(height) || height < 24) {
     return;
   }
-  measuredTableShellHeightsByHeader.set(
+  measuredHeights.set(
     headerLineFrom,
     roundTableShellHeight(height),
   );
-  if (measuredTableShellHeightsByHeader.size > 500) {
-    const first = measuredTableShellHeightsByHeader.keys().next().value;
+  if (measuredHeights.size > 500) {
+    const first = measuredHeights.keys().next().value;
     if (typeof first === 'number') {
-      measuredTableShellHeightsByHeader.delete(first);
+      measuredHeights.delete(first);
     }
   }
 }
@@ -322,16 +323,19 @@ class EskerraTableShellWidget extends WidgetType {
   private readonly headerLineFrom: number;
   private readonly baselineText: string;
   private readonly estimatedHeightPx: number;
+  private readonly measuredHeights: Map<number, number>;
 
   constructor(
     headerLineFrom: number,
     baselineText: string,
     estimatedHeightPx: number,
+    measuredHeights: Map<number, number>,
   ) {
     super();
     this.headerLineFrom = headerLineFrom;
     this.baselineText = baselineText;
     this.estimatedHeightPx = estimatedHeightPx;
+    this.measuredHeights = measuredHeights;
   }
 
   eq(other: WidgetType): boolean {
@@ -342,7 +346,7 @@ class EskerraTableShellWidget extends WidgetType {
   }
 
   get estimatedHeight(): number {
-    return measuredTableShellHeightsByHeader.get(this.headerLineFrom)
+    return this.measuredHeights.get(this.headerLineFrom)
       ?? this.estimatedHeightPx;
   }
 
@@ -401,7 +405,11 @@ class EskerraTableShellWidget extends WidgetType {
           return;
         }
         const height = renderedTableShellContentHeight(wrap);
-        rememberMeasuredTableShellHeight(this.headerLineFrom, height);
+        rememberMeasuredTableShellHeight(
+          this.measuredHeights,
+          this.headerLineFrom,
+          height,
+        );
         const stableHeight = this.estimatedHeight;
         wrap.style.minHeight = `${stableHeight}px`;
       });
@@ -411,7 +419,11 @@ class EskerraTableShellWidget extends WidgetType {
 
   destroy(dom: HTMLElement): void {
     const height = renderedTableShellContentHeight(dom);
-    rememberMeasuredTableShellHeight(this.headerLineFrom, height);
+    rememberMeasuredTableShellHeight(
+      this.measuredHeights,
+      this.headerLineFrom,
+      height,
+    );
     shellWidgetRoots.get(dom)?.unmount();
     shellWidgetRoots.delete(dom);
   }
@@ -464,7 +476,10 @@ const eskerraTableShellFocusCellPlugin = ViewPlugin.define(view => {
   };
 });
 
-function buildDecorations(state: EditorState): BuildResult {
+function buildDecorations(
+  state: EditorState,
+  measuredHeights: Map<number, number>,
+): BuildResult {
   const suppressed = state.field(suppressedTableLines);
   const blocks = state.field(eskerraTableDocBlocksField);
   const decoBuilder = new RangeSetBuilder<Decoration>();
@@ -500,12 +515,16 @@ function buildDecorations(state: EditorState): BuildResult {
           block.lineFrom,
           baseline,
           estimatedHeightPx,
+          measuredHeights,
         ),
       }),
     );
   }
 
-  return {decorations: decoBuilder.finish()};
+  return {
+    decorations: decoBuilder.finish(),
+    measuredHeights,
+  };
 }
 
 function transactionAffectsTableDecorations(tr: Transaction): boolean {
@@ -523,16 +542,16 @@ function transactionAffectsTableDecorations(tr: Transaction): boolean {
 
 const tableBuilt = StateField.define<BuildResult>({
   create(state) {
-    return buildDecorations(state);
+    return buildDecorations(state, new Map());
   },
   update(value, tr) {
     if (!transactionAffectsTableDecorations(tr)) {
       return value;
     }
     if (tr.docChanged) {
-      measuredTableShellHeightsByHeader.clear();
+      value.measuredHeights.clear();
     }
-    return buildDecorations(tr.state);
+    return buildDecorations(tr.state, value.measuredHeights);
   },
   provide: self => [EditorView.decorations.from(self, built => built.decorations)],
 });
