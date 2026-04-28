@@ -459,6 +459,26 @@ describe('openOrCreateVaultRelativeMarkdownLink', () => {
     expect(result).toEqual({kind: 'open', uri: backup});
   });
 
+  it('opens vault-root wiki path without an explicit .md extension', async () => {
+    const readme = `${vaultRoot}/folder/README.md`;
+    const {fs} = createMemoryVaultFs([
+      [vaultRoot, 'dir'],
+      [`${vaultRoot}/General`, 'dir'],
+      [`${vaultRoot}/General/here.md`, '# H'],
+      [`${vaultRoot}/folder`, 'dir'],
+      [readme, '# Readme'],
+    ]);
+    const notes = [{name: 'here.md', uri: `${vaultRoot}/General/here.md`}];
+    const result = await openOrCreateVaultWikiPathMarkdownLink({
+      inner: 'folder/README',
+      notes,
+      vaultRoot,
+      fs,
+      fallbackSourceMarkdownUriOrDir: `${vaultRoot}/General/here.md`,
+    });
+    expect(result).toEqual({kind: 'open', uri: readme});
+  });
+
   it('opens General-nested backup when the file exists only under General (fallback resolution)', async () => {
     const nested = `${vaultRoot}/General/_autosync-backup-nuc/General/b.md`;
     const {fs} = createMemoryVaultFs([
