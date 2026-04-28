@@ -493,12 +493,11 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, []);
 
   const moveTabFrom = useCallback(
-    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Tab
     (fromRow: number, fromCol: number, shift: boolean) => {
       const rowCount = draftRef.current.cells.length;
       const nCols = draftRef.current.cells[0]?.length ?? 0;
       if (rowCount === 0 || nCols === 0) {
-        return true;
+        return;
       }
       let row = fromRow;
       let col = fromCol;
@@ -512,11 +511,10 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         row -= 1;
       }
       if (row < 0 || row >= rowCount) {
-        return true;
+        return;
       }
       navigateToCell(row, col);
       requestParentMeasure();
-      return true;
     },
     [navigateToCell, requestParentMeasure],
   );
@@ -534,16 +532,14 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, [colCount, parentView, snapshotAllCellDocs]);
 
   const runEnterFrom = useCallback(
-    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Enter
     (fromRow: number, fromCol: number) => {
       const rowCount = draftRef.current.cells.length;
       if (fromRow < rowCount - 1) {
         navigateToCell(fromRow + 1, fromCol);
         requestParentMeasure();
-        return true;
+        return;
       }
       exitToMarkdownSource();
-      return true;
     },
     [exitToMarkdownSource, navigateToCell, requestParentMeasure],
   );
@@ -1507,8 +1503,8 @@ type ShellCellProps = {
     clientX?: number,
     clientY?: number,
   ) => void;
-  moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
-  runEnterFrom: (row: number, col: number) => boolean;
+  moveTabFrom: (row: number, col: number, shift: boolean) => void;
+  runEnterFrom: (row: number, col: number) => void;
   revertBaselineRef: MutableRefObject<string | null>;
   lineFromRef: MutableRefObject<number>;
   onCellDocChange: (row: number, col: number, text: string) => void;
@@ -1563,8 +1559,8 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
 
   useLayoutEffect(() => {
     const tc = tableCallbacksRef.current;
-    tc.onTabFromCell = shift => moveTabFrom(row, col, shift);
-    tc.onEnterFromCell = () => runEnterFrom(row, col);
+    tc.onTabFromCell = shift => { moveTabFrom(row, col, shift); return true; };
+    tc.onEnterFromCell = () => { runEnterFrom(row, col); return true; };
     tc.onEscapeFromCell = () => {
       const baseline = revertBaselineRef.current ?? '';
       restoreTableBaseline(parentView, lineFromRef.current, baseline);
