@@ -42,8 +42,23 @@ export function dispatchEskerraTableNestedCellEditors(
   spec: TransactionSpec,
 ): void {
   const set = parentToCellViews.get(parentView);
-  if (set) {
-    for (const v of [...set]) {
+  if (!set) {
+    bumpTableShellStaticPreview();
+    return;
+  }
+  const targets: EditorView[] = [];
+  for (const v of [...set]) {
+    if (!v.dom.isConnected) {
+      set.delete(v);
+      continue;
+    }
+    targets.push(v);
+  }
+  if (set.size === 0) {
+    parentToCellViews.delete(parentView);
+  }
+  setTimeout(() => {
+    for (const v of targets) {
       if (!v.dom.isConnected) {
         set.delete(v);
         continue;
@@ -53,6 +68,6 @@ export function dispatchEskerraTableNestedCellEditors(
     if (set.size === 0) {
       parentToCellViews.delete(parentView);
     }
-  }
-  bumpTableShellStaticPreview();
+    bumpTableShellStaticPreview();
+  }, 0);
 }

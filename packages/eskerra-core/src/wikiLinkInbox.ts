@@ -68,10 +68,26 @@ export function wikiLinkInnerVaultRelativeMarkdownHref(inner: string): string | 
   if (!pathless.includes('/') && !pathless.includes('\\')) {
     return null;
   }
-  if (!pathless.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
+  const pathPart = stripMarkdownLinkHrefToPathPart(pathless);
+  if (pathPart === '') {
     return null;
   }
-  return pathless;
+  if (pathPart.toLowerCase().endsWith(MARKDOWN_EXTENSION.toLowerCase())) {
+    return pathless;
+  }
+  return appendMarkdownExtensionBeforeHrefSuffix(pathless);
+}
+
+function appendMarkdownExtensionBeforeHrefSuffix(href: string): string {
+  const queryAt = href.indexOf('?');
+  const fragmentAt = href.indexOf('#');
+  const suffixAt = [queryAt, fragmentAt]
+    .filter(i => i >= 0)
+    .reduce<number | null>((min, i) => (min == null || i < min ? i : min), null);
+  if (suffixAt == null) {
+    return `${href}${MARKDOWN_EXTENSION}`;
+  }
+  return `${href.slice(0, suffixAt)}${MARKDOWN_EXTENSION}${href.slice(suffixAt)}`;
 }
 
 /**

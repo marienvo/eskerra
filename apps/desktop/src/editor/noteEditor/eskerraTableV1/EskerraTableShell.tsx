@@ -342,7 +342,18 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   const [rowHandleGeom, setRowHandleGeom] = useState<
     readonly {readonly top: number; readonly height: number}[]
   >([]);
+  const rowHandleGeomRef = useRef<
+    readonly {readonly top: number; readonly height: number}[]
+  >([]);
+  const rowHandleGeometryValidRef = useRef(false);
   const [hoveredBodyRow, setHoveredBodyRow] = useState<number | null>(null);
+
+  const requestParentMeasure = useCallback(
+    () => {
+      parentView.requestMeasure();
+    },
+    [parentView],
+  );
 
   const leaveRowHover = useCallback((bodyIndex: number, e: MouseEvent) => {
     const rt = e.relatedTarget;
@@ -482,12 +493,11 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, []);
 
   const moveTabFrom = useCallback(
-    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Tab
     (fromRow: number, fromCol: number, shift: boolean) => {
       const rowCount = draftRef.current.cells.length;
       const nCols = draftRef.current.cells[0]?.length ?? 0;
       if (rowCount === 0 || nCols === 0) {
-        return true;
+        return;
       }
       let row = fromRow;
       let col = fromCol;
@@ -501,13 +511,12 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         row -= 1;
       }
       if (row < 0 || row >= rowCount) {
-        return true;
+        return;
       }
       navigateToCell(row, col);
-      parentView.requestMeasure();
-      return true;
+      requestParentMeasure();
     },
-    [navigateToCell, parentView],
+    [navigateToCell, requestParentMeasure],
   );
 
   const exitToMarkdownSource = useCallback(() => {
@@ -523,18 +532,16 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
   }, [colCount, parentView, snapshotAllCellDocs]);
 
   const runEnterFrom = useCallback(
-    // eslint-disable-next-line sonarjs/no-invariant-returns -- CodeMirror keymap: all branches return true to consume Enter
     (fromRow: number, fromCol: number) => {
       const rowCount = draftRef.current.cells.length;
       if (fromRow < rowCount - 1) {
         navigateToCell(fromRow + 1, fromCol);
-        parentView.requestMeasure();
-        return true;
+        requestParentMeasure();
+        return;
       }
       exitToMarkdownSource();
-      return true;
     },
-    [exitToMarkdownSource, navigateToCell, parentView],
+    [exitToMarkdownSource, navigateToCell, requestParentMeasure],
   );
 
   const flushDraft = useCallback(() => {
@@ -602,10 +609,15 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     return registerEskerraTableDraftFlusher(lineFromRef, flushDraft);
   }, [flushDraft]);
 
+  const didSyncCellsAlignRef = useRef(false);
   useEffect(() => {
     draftRef.current = {cells, align};
-    parentView.requestMeasure();
-  }, [cells, align, parentView]);
+    if (!didSyncCellsAlignRef.current) {
+      didSyncCellsAlignRef.current = true;
+      return;
+    }
+    requestParentMeasure();
+  }, [cells, align, requestParentMeasure]);
 
   const onEditMarkdown = exitToMarkdownSource;
 
@@ -650,10 +662,10 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
             });
           }
         }
-        parentView.requestMeasure();
+        requestParentMeasure();
       });
     },
-    [parentView, snapshotAllCellDocs],
+    [requestParentMeasure, snapshotAllCellDocs],
   );
 
   useEffect(() => {
@@ -714,44 +726,60 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     return measureBodyRowElements().map(el => el.getBoundingClientRect());
   }, [measureBodyRowElements]);
 
-  useLayoutEffect(() => {
+  const setMeasuredRowHandleGeom = useCallback(
+    (next: readonly {readonly top: number; readonly height: number}[]) => {
+      const prev = rowHandleGeomRef.current;
+      const same =
+        prev.length === next.length &&
+        prev.every((p, i) => {
+          const n = next[i];
+          return n != null && p.top === n.top && p.height === n.height;
+        });
+      rowHandleGeomRef.current = next;
+      rowHandleGeometryValidRef.current = true;
+      if (!same) {
+        setRowHandleGeom(next);
+      }
+    },
+    [],
+  );
+
+  const measureRowHandleGeometry = useCallback(() => {
     const sheet = sheetRef.current;
     if (!sheet) {
       return;
     }
-    const measure = () => {
-      const rows = Array.from(
-        sheet.querySelectorAll<HTMLElement>('[data-eskerra-body-row]'),
-      ).sort(
-        (a, b) =>
-          Number(a.getAttribute('data-eskerra-body-row')) -
-          Number(b.getAttribute('data-eskerra-body-row')),
-      );
-      const sr = sheet.getBoundingClientRect();
-      setRowHandleGeom(
-        rows.map(tr => {
-          const br = tr.getBoundingClientRect();
-          return {
-            top: br.top - sr.top,
-            height: br.height,
-          };
-        }),
-      );
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(sheet);
-    const tbl = sheet.querySelector('table');
-    if (tbl) {
-      ro.observe(tbl);
+    const rows = Array.from(
+      sheet.querySelectorAll<HTMLElement>('[data-eskerra-body-row]'),
+    ).sort(
+      (a, b) =>
+        Number(a.getAttribute('data-eskerra-body-row')) -
+        Number(b.getAttribute('data-eskerra-body-row')),
+    );
+    const sr = sheet.getBoundingClientRect();
+    setMeasuredRowHandleGeom(
+      rows.map(tr => {
+        const br = tr.getBoundingClientRect();
+        return {
+          top: br.top - sr.top,
+          height: br.height,
+        };
+      }),
+    );
+  }, [setMeasuredRowHandleGeom]);
+
+  const measureRowHandleGeometryIfInvalid = useCallback(() => {
+    if (rowHandleGeometryValidRef.current) {
+      return;
     }
-    for (const el of sheet.querySelectorAll<HTMLElement>(
-      '[data-eskerra-body-row]',
-    )) {
-      ro.observe(el);
-    }
-    return () => ro.disconnect();
-  }, [cells.length, notice, colCount]);
+    measureRowHandleGeometry();
+  }, [measureRowHandleGeometry]);
+
+  useEffect(() => {
+    rowHandleGeometryValidRef.current = false;
+    rowHandleGeomRef.current = [];
+    setRowHandleGeom(prev => (prev.length === 0 ? prev : []));
+  }, [cells, notice, colCount]);
 
   useEffect(() => {
     if (!isDraggingTable) {
@@ -868,7 +896,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
       } else {
         applyRowDragResult(sess, merged);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
       requestAnimationFrame(() => {
         activeCellEditorRef.current?.focus();
       });
@@ -893,6 +921,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     measureBodyRowRects,
     measureColumnRects,
     parentView,
+    requestParentMeasure,
     snapshotAllCellDocs,
     syncActiveCellCoords,
   ]);
@@ -914,7 +943,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         draftRef.current.cells = sorted.map(r => [...r]);
         setCells(sorted.map(r => [...r]));
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onSortBodyDesc = () => {
       const merged = snapshotAllCellDocs();
@@ -923,7 +952,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         draftRef.current.cells = sorted.map(r => [...r]);
         setCells(sorted.map(r => [...r]));
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onInsertColLeft = () => {
       const merged = snapshotAllCellDocs();
@@ -934,7 +963,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         setCells(out.cells.map(r => [...r]));
         setAlign(out.align);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onInsertColRight = () => {
       const merged = snapshotAllCellDocs();
@@ -945,7 +974,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         setCells(out.cells.map(r => [...r]));
         setAlign(out.align);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onMoveColLeft = () => {
       const merged = snapshotAllCellDocs();
@@ -960,7 +989,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           syncActiveCellCoords(row, col - 1);
         }
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onMoveColRight = () => {
       const merged = snapshotAllCellDocs();
@@ -975,7 +1004,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
           syncActiveCellCoords(row, col + 1);
         }
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onAlign = (side: 'left' | 'center' | 'right') => {
       const na = setColumnAlignment(align, ci, side);
@@ -983,7 +1012,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         draftRef.current.align = na;
         setAlign(na);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onDuplicateCol = () => {
       const merged = snapshotAllCellDocs();
@@ -994,7 +1023,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         setCells(out.cells.map(r => [...r]));
         setAlign(out.align);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     const onDeleteCol = () => {
       const merged = snapshotAllCellDocs();
@@ -1011,7 +1040,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
         );
         syncActiveCellCoords(row, nextCol);
       }
-      parentView.requestMeasure();
+      requestParentMeasure();
     };
     return (
       <ContextMenu.Root>
@@ -1148,6 +1177,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
               }
               e.preventDefault();
               e.stopPropagation();
+              measureRowHandleGeometry();
               lastPointerRef.current = {x: e.clientX, y: e.clientY};
               dragSessionRef.current = {kind: 'row', source: bodyIndex};
               setIsDraggingTable(true);
@@ -1176,7 +1206,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   draftRef.current.cells = next.map(r => [...r]);
                   setCells(next.map(r => [...r]));
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('keyboard_arrow_up')}
@@ -1191,7 +1221,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   draftRef.current.cells = next.map(r => [...r]);
                   setCells(next.map(r => [...r]));
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('keyboard_arrow_down')}
@@ -1212,7 +1242,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     syncActiveCellCoords(row - 1, col);
                   }
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('arrow_upward')}
@@ -1232,7 +1262,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     syncActiveCellCoords(row + 1, col);
                   }
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('arrow_downward')}
@@ -1248,7 +1278,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                   draftRef.current.cells = next.map(r => [...r]);
                   setCells(next.map(r => [...r]));
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('content_copy')}
@@ -1269,7 +1299,7 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
                     syncActiveCellCoords(row - 1, col);
                   }
                 }
-                parentView.requestMeasure();
+                requestParentMeasure();
               }}
             >
               {menuIcon('delete')}
@@ -1285,6 +1315,8 @@ export function EskerraTableShell(props: EskerraTableShellProps): ReactElement {
     <EskerraCellStaticCacheContext.Provider value={cellStaticCache}>
       <div
         ref={shellRef}
+        onPointerEnter={measureRowHandleGeometryIfInvalid}
+        onPointerMove={measureRowHandleGeometryIfInvalid}
         className={
           isDraggingTable
             ? 'cm-eskerra-table-shell cm-eskerra-table-shell--dragging'
@@ -1471,8 +1503,8 @@ type ShellCellProps = {
     clientX?: number,
     clientY?: number,
   ) => void;
-  moveTabFrom: (row: number, col: number, shift: boolean) => boolean;
-  runEnterFrom: (row: number, col: number) => boolean;
+  moveTabFrom: (row: number, col: number, shift: boolean) => void;
+  runEnterFrom: (row: number, col: number) => void;
   revertBaselineRef: MutableRefObject<string | null>;
   lineFromRef: MutableRefObject<number>;
   onCellDocChange: (row: number, col: number, text: string) => void;
@@ -1527,8 +1559,8 @@ function EskerraShellCellView(props: ShellCellProps): ReactElement {
 
   useLayoutEffect(() => {
     const tc = tableCallbacksRef.current;
-    tc.onTabFromCell = shift => moveTabFrom(row, col, shift);
-    tc.onEnterFromCell = () => runEnterFrom(row, col);
+    tc.onTabFromCell = shift => { moveTabFrom(row, col, shift); return true; };
+    tc.onEnterFromCell = () => { runEnterFrom(row, col); return true; };
     tc.onEscapeFromCell = () => {
       const baseline = revertBaselineRef.current ?? '';
       restoreTableBaseline(parentView, lineFromRef.current, baseline);

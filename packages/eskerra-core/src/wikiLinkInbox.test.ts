@@ -183,9 +183,20 @@ describe('wikiLinkInnerVaultRelativeMarkdownHref', () => {
     ).toBe('sub/Note.md');
   });
 
-  it('returns null without slashes, without .md, or when empty', () => {
+  it('adds .md for path-shaped targets without an extension', () => {
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('folder/README')).toBe(
+      'folder/README.md',
+    );
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('Inbox/sub/Note|Label')).toBe(
+      'sub/Note.md',
+    );
+    expect(wikiLinkInnerVaultRelativeMarkdownHref('folder/README#intro')).toBe(
+      'folder/README.md#intro',
+    );
+  });
+
+  it('returns null without slashes or when empty', () => {
     expect(wikiLinkInnerVaultRelativeMarkdownHref('Note.md')).toBeNull();
-    expect(wikiLinkInnerVaultRelativeMarkdownHref('a/b')).toBeNull();
     expect(wikiLinkInnerVaultRelativeMarkdownHref('  ')).toBeNull();
   });
 });

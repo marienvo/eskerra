@@ -32,6 +32,7 @@ import {
 
 type BuildResult = {
   decorations: DecorationSet;
+  measuredHeights: Map<number, number>;
 };
 
 function mapSuppressedLinesAfterDocChange(
@@ -239,6 +240,62 @@ class TableRawMarkdownExitWidget extends WidgetType {
 
 const shellWidgetRoots = new WeakMap<HTMLElement, Root>();
 
+function roundTableShellHeight(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function rememberMeasuredTableShellHeight(
+  measuredHeights: Map<number, number>,
+  headerLineFrom: number,
+  height: number,
+): void {
+  if (!Number.isFinite(height) || height < 24) {
+    return;
+  }
+  measuredHeights.set(
+    headerLineFrom,
+    roundTableShellHeight(height),
+  );
+  if (measuredHeights.size > 500) {
+    const first = measuredHeights.keys().next().value;
+    if (typeof first === 'number') {
+      measuredHeights.delete(first);
+    }
+  }
+}
+
+function renderedTableShellContentHeight(wrap: HTMLElement): number {
+  const shell = wrap.firstElementChild;
+  if (shell instanceof HTMLElement) {
+    return shell.getBoundingClientRect().height;
+  }
+  return 0;
+}
+
+function estimateTableShellHeightPx(cells: readonly string[][]): number {
+  const rowCount = Math.max(1, cells.length);
+  const colCount = Math.max(1, cells[0]?.length ?? 1);
+  let longestCell = 0;
+  let totalChars = 0;
+
+  for (const row of cells) {
+    for (const cell of row) {
+      const length = cell.trim().length;
+      longestCell = Math.max(longestCell, length);
+      totalChars += length;
+    }
+  }
+
+  const averageCellChars = totalChars / Math.max(1, rowCount * colCount);
+  const wrapBonus = Math.min(
+    120,
+    Math.max(0, Math.ceil((longestCell - 64) / 48)) * 22
+      + Math.max(0, Math.ceil((averageCellChars - 36) / 24)) * 14,
+  );
+
+  return Math.round(120 + rowCount * 48 + colCount * 8 + wrapBonus);
+}
+
 /**
  * Focus the nested cell CodeMirror after the shell React tree mounts (double rAF).
  */
@@ -265,11 +322,20 @@ export function scheduleFocusTableCellEditor(hostView: EditorView): void {
 class EskerraTableShellWidget extends WidgetType {
   private readonly headerLineFrom: number;
   private readonly baselineText: string;
+  private readonly estimatedHeightPx: number;
+  private readonly measuredHeights: Map<number, number>;
 
-  constructor(headerLineFrom: number, baselineText: string) {
+  constructor(
+    headerLineFrom: number,
+    baselineText: string,
+    estimatedHeightPx: number,
+    measuredHeights: Map<number, number>,
+  ) {
     super();
     this.headerLineFrom = headerLineFrom;
     this.baselineText = baselineText;
+    this.estimatedHeightPx = estimatedHeightPx;
+    this.measuredHeights = measuredHeights;
   }
 
   eq(other: WidgetType): boolean {
@@ -279,9 +345,15 @@ class EskerraTableShellWidget extends WidgetType {
     );
   }
 
+  get estimatedHeight(): number {
+    return this.measuredHeights.get(this.headerLineFrom)
+      ?? this.estimatedHeightPx;
+  }
+
   toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement('div');
     wrap.className = 'cm-eskerra-table-shell-root';
+    wrap.style.minHeight = `${this.estimatedHeight}px`;
     const headerLineFrom = this.headerLineFrom;
     const promoteIfNeeded = (): void => {
       const st = view.state;
@@ -327,10 +399,31 @@ class EskerraTableShellWidget extends WidgetType {
         initialAlign={model.align}
       />,
     );
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!wrap.isConnected) {
+          return;
+        }
+        const height = renderedTableShellContentHeight(wrap);
+        rememberMeasuredTableShellHeight(
+          this.measuredHeights,
+          this.headerLineFrom,
+          height,
+        );
+        const stableHeight = this.estimatedHeight;
+        wrap.style.minHeight = `${stableHeight}px`;
+      });
+    });
     return wrap;
   }
 
   destroy(dom: HTMLElement): void {
+    const height = renderedTableShellContentHeight(dom);
+    rememberMeasuredTableShellHeight(
+      this.measuredHeights,
+      this.headerLineFrom,
+      height,
+    );
     shellWidgetRoots.get(dom)?.unmount();
     shellWidgetRoots.delete(dom);
   }
@@ -383,7 +476,10 @@ const eskerraTableShellFocusCellPlugin = ViewPlugin.define(view => {
   };
 });
 
-function buildDecorations(state: EditorState): BuildResult {
+function buildDecorations(
+  state: EditorState,
+  measuredHeights: Map<number, number>,
+): BuildResult {
   const suppressed = state.field(suppressedTableLines);
   const blocks = state.field(eskerraTableDocBlocksField);
   const decoBuilder = new RangeSetBuilder<Decoration>();
@@ -409,17 +505,26 @@ function buildDecorations(state: EditorState): BuildResult {
     }
 
     const baseline = state.doc.sliceString(block.from, block.to);
+    const estimatedHeightPx = estimateTableShellHeightPx(parsed.model.cells);
     decoBuilder.add(
       block.from,
       block.to,
       Decoration.replace({
         block: true,
-        widget: new EskerraTableShellWidget(block.lineFrom, baseline),
+        widget: new EskerraTableShellWidget(
+          block.lineFrom,
+          baseline,
+          estimatedHeightPx,
+          measuredHeights,
+        ),
       }),
     );
   }
 
-  return {decorations: decoBuilder.finish()};
+  return {
+    decorations: decoBuilder.finish(),
+    measuredHeights,
+  };
 }
 
 function transactionAffectsTableDecorations(tr: Transaction): boolean {
@@ -437,13 +542,16 @@ function transactionAffectsTableDecorations(tr: Transaction): boolean {
 
 const tableBuilt = StateField.define<BuildResult>({
   create(state) {
-    return buildDecorations(state);
+    return buildDecorations(state, new Map());
   },
   update(value, tr) {
     if (!transactionAffectsTableDecorations(tr)) {
       return value;
     }
-    return buildDecorations(tr.state);
+    if (tr.docChanged) {
+      value.measuredHeights.clear();
+    }
+    return buildDecorations(tr.state, value.measuredHeights);
   },
   provide: self => [EditorView.decorations.from(self, built => built.decorations)],
 });
