@@ -70,7 +70,6 @@ import type {
   VaultRelativeMarkdownLinkActivatePayload,
   VaultWikiLinkActivatePayload,
 } from '../editor/noteEditor/vaultLinkActivatePayload';
-import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
 
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
@@ -92,6 +91,7 @@ import {
   buildVaultTabLinkDerivedData,
   type VaultTabWikiLinkCompletionCandidates,
 } from './vaultTabLinkDerived';
+import type {VaultTabTabsController} from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
 
@@ -192,18 +192,9 @@ type VaultTabProps = {
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
-  editorHistoryCanGoBack: boolean;
-  editorHistoryCanGoForward: boolean;
-  onEditorHistoryGoBack: () => void;
-  onEditorHistoryGoForward: () => void;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
-  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
-  activeEditorTabId: string | null;
-  onActivateOpenTab: (tabId: string) => void;
-  onCloseEditorTab: (tabId: string) => void;
-  onReorderEditorWorkspaceTabs?: (fromIndex: number, insertBeforeIndex: number) => void;
-  onCloseOtherEditorTabs: (keepTabId: string) => void;
+  tabsController: VaultTabTabsController;
   notificationsPanelVisible: boolean;
   onToggleNotificationsPanel: () => void;
   notificationsWidthPx: number;
@@ -975,17 +966,8 @@ export function VaultTab({
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
-  editorHistoryCanGoBack,
-  editorHistoryCanGoForward,
-  onEditorHistoryGoBack,
-  onEditorHistoryGoForward,
   inboxBacklinksDeferNonce,
-  editorWorkspaceTabs,
-  activeEditorTabId,
-  onActivateOpenTab,
-  onCloseEditorTab,
-  onReorderEditorWorkspaceTabs,
-  onCloseOtherEditorTabs,
+  tabsController,
   notificationsPanelVisible,
   onToggleNotificationsPanel,
   notificationsWidthPx,
@@ -1011,6 +993,18 @@ export function VaultTab({
   onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
 }: VaultTabProps) {
+  const {
+    editorHistoryCanGoBack,
+    editorHistoryCanGoForward,
+    onEditorHistoryGoBack,
+    onEditorHistoryGoForward,
+    editorWorkspaceTabs,
+    activeEditorTabId,
+    onActivateOpenTab,
+    onCloseEditorTab,
+    onReorderEditorWorkspaceTabs,
+    onCloseOtherEditorTabs,
+  } = tabsController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),

@@ -1731,17 +1731,19 @@ export default function App() {
                       onCancelWikiLinkAmbiguityRename={
                         cancelPendingWikiLinkAmbiguityRename
                       }
-                      editorHistoryCanGoBack={editorHistoryCanGoBack}
-                      editorHistoryCanGoForward={editorHistoryCanGoForward}
-                      onEditorHistoryGoBack={editorHistoryGoBack}
-                      onEditorHistoryGoForward={editorHistoryGoForward}
                       inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                      editorWorkspaceTabs={editorWorkspaceTabs}
-                      activeEditorTabId={activeEditorTabId}
-                      onActivateOpenTab={activateOpenTab}
-                      onCloseEditorTab={closeEditorTab}
-                      onReorderEditorWorkspaceTabs={reorderEditorWorkspaceTabs}
-                      onCloseOtherEditorTabs={closeOtherEditorTabs}
+                      tabsController={{
+                        editorHistoryCanGoBack,
+                        editorHistoryCanGoForward,
+                        onEditorHistoryGoBack: editorHistoryGoBack,
+                        onEditorHistoryGoForward: editorHistoryGoForward,
+                        editorWorkspaceTabs,
+                        activeEditorTabId,
+                        onActivateOpenTab: activateOpenTab,
+                        onCloseEditorTab: closeEditorTab,
+                        onReorderEditorWorkspaceTabs: reorderEditorWorkspaceTabs,
+                        onCloseOtherEditorTabs: closeOtherEditorTabs,
+                      }}
                       notificationsPanelVisible={notificationsPanelVisible}
                       onToggleNotificationsPanel={() =>
                         setNotificationsPanelVisible(v => !v)
