@@ -53,7 +53,6 @@ import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
-import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {ThemeProvider} from './theme/ThemeProvider';
 import {ThemedChromeBackground} from './theme/ThemedChromeBackground';
 import {
@@ -87,11 +86,11 @@ import {
 } from './lib/mainWindowUiStore';
 import {
   resolveAppStatusBarCenter,
-  type AppStatusBarCenter,
 } from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
 import {useAppMainWindowKeyboardEffects} from './shell/useAppMainWindowKeyboardEffects';
+import {useAppNotificationSession} from './shell/useAppNotificationSession';
 import {useAppRootClassName} from './shell/useAppRootClassName';
 import {useAppTitleBarTodayHubSelect} from './shell/useAppTitleBarTodayHubSelect';
 
@@ -816,53 +815,6 @@ function AppThemeShell({
       {children}
     </ThemeProvider>
   );
-}
-
-type UseAppNotificationSessionArgs = {
-  err: string | null;
-  diskConflict: unknown;
-  diskConflictSoft: {uri: string} | null;
-  selectedUri: string | null;
-  statusBarCenter: AppStatusBarCenter;
-  renameLinkProgress: {done: number; total: number} | null;
-  setNotificationsPanelVisible: Dispatch<SetStateAction<boolean>>;
-};
-
-function useAppNotificationSession({
-  err,
-  diskConflict,
-  diskConflictSoft,
-  selectedUri,
-  statusBarCenter,
-  renameLinkProgress,
-  setNotificationsPanelVisible,
-}: UseAppNotificationSessionArgs) {
-  const diskConflictSoftVisible = useMemo(
-    () =>
-      !err &&
-      diskConflict == null &&
-      diskConflictSoft != null &&
-      selectedUri != null &&
-      normalizeEditorDocUri(diskConflictSoft.uri) ===
-        normalizeEditorDocUri(selectedUri),
-    [err, diskConflict, diskConflictSoft, selectedUri],
-  );
-
-  const openNotificationsPanel = useCallback(() => {
-    setNotificationsPanelVisible(true);
-  }, [setNotificationsPanelVisible]);
-
-  const session = useSessionNotifications(
-    {
-      statusBarCenter,
-      renameLinkProgress,
-      diskConflictBlocking: diskConflict != null,
-      diskConflictSoftVisible,
-    },
-    {onOpenPanel: openNotificationsPanel},
-  );
-
-  return session;
 }
 
 type AppDiskConflictBannersProps = {
