@@ -150,8 +150,8 @@ import {
 import {
   type VaultFilesChangedPayload,
 } from '../lib/vaultFilesChangedPayload';
-import {isPodcastFile} from '../lib/podcasts/podcastParser';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
+import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
 import {
   buildRestoredEditorWorkspace,
   isUriValidVaultMarkdown,
@@ -198,19 +198,6 @@ function trimTrailingSlashes(value: string): string {
     end -= 1;
   }
   return value.slice(0, end);
-}
-
-function looksLikeRssEpisodeMarkdownName(name: string): boolean {
-  if (!name.endsWith('.md') || !name.startsWith('📻')) {
-    return false;
-  }
-  const middle = name.slice('📻'.length, -'.md'.length);
-  return middle.trim().length > 0;
-}
-
-function isPodcastRelevantPath(p: string): boolean {
-  const name = p.replace(/\\/g, '/').split('/').pop() ?? '';
-  return isPodcastFile(name) || looksLikeRssEpisodeMarkdownName(name);
 }
 
 const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
@@ -2524,7 +2511,7 @@ export function useMainWindowWorkspace(options: {
       vaultFilesChangedEventSeq += 1;
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
-        isPodcastRelevantPath,
+        isPodcastRelevantPath: isPodcastRelevantVaultPath,
         allowCoarseFullReindex: !coarseFullReindexScheduled,
       });
       const {paths, coarse} = plan;
