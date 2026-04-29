@@ -16,7 +16,7 @@ describe('buildVaultTabBacklinkRows', () => {
         ...baseArgs,
         backlinkUris: ['/vault/Notes/source.md'],
         vaultMarkdownRefs: [
-          {lastModified: null, name: 'Source Note.md', uri: '/vault/Notes/source.md'},
+          {name: 'Source Note.md', uri: '/vault/Notes/source.md'},
         ],
       }),
     ).toEqual([
@@ -45,9 +45,9 @@ describe('buildVaultTabBacklinkRows', () => {
       ...baseArgs,
       backlinkUris: ['/vault/c.md', '/vault/a.md', '/vault/b.md'],
       vaultMarkdownRefs: [
-        {lastModified: null, name: 'A.md', uri: '/vault/a.md'},
-        {lastModified: null, name: 'B.md', uri: '/vault/b.md'},
-        {lastModified: null, name: 'C.md', uri: '/vault/c.md'},
+        {name: 'A.md', uri: '/vault/a.md'},
+        {name: 'B.md', uri: '/vault/b.md'},
+        {name: 'C.md', uri: '/vault/c.md'},
       ],
     });
 
@@ -64,7 +64,7 @@ describe('buildVaultTabBacklinkRows', () => {
         ...baseArgs,
         backlinkUris: ['/vault/Notes/source.md'],
         vaultMarkdownRefs: [
-          {lastModified: null, name: 'Source Note.md', uri: '/vault/Notes/source.md'},
+          {name: 'Source Note.md', uri: '/vault/Notes/source.md'},
         ],
         inboxContentByUri: {
           '/vault/Notes/source.md': '# Cached Title\n\nBody',
@@ -81,7 +81,7 @@ describe('buildVaultTabBacklinkRows', () => {
         ...baseArgs,
         backlinkUris: ['/vault/Notes/source.md'],
         vaultMarkdownRefs: [
-          {lastModified: null, name: 'Source Note.md', uri: '/vault/Notes/source.md'},
+          {name: 'Source Note.md', uri: '/vault/Notes/source.md'},
         ],
         selectedUri: '/vault/Notes/source.md',
         editorBody: '# Live Editor Title\n\nUnsaved body',
@@ -104,7 +104,7 @@ describe('buildVaultTabBacklinkRows', () => {
         ...baseArgs,
         backlinkUris: ['/vault/Notes/source.md'],
         vaultMarkdownRefs: [
-          {lastModified: null, name: 'Source Note.md', uri: '/vault/Notes/source.md'},
+          {name: 'Source Note.md', uri: '/vault/Notes/source.md'},
         ],
         composingNewEntry: true,
         selectedUri: '/vault/Notes/source.md',
@@ -124,7 +124,7 @@ describe('buildVaultTabBacklinkRows', () => {
         ...baseArgs,
         backlinkUris: ['C:\\vault\\Notes\\source.md'],
         vaultMarkdownRefs: [
-          {lastModified: null, name: 'Source Note.md', uri: 'C:/vault/Notes/source.md'},
+          {name: 'Source Note.md', uri: 'C:/vault/Notes/source.md'},
         ],
       }),
     ).toEqual([
