@@ -86,16 +86,12 @@ import {
   type TodayHubWorkspaceSnapshot,
 } from './lib/mainWindowUiStore';
 import {
-  initialDoubleShiftState,
-  reduceDoubleShiftKeyDown,
-  reduceDoubleShiftKeyUp,
-} from './lib/doubleShiftKeySequence';
-import {
   resolveAppStatusBarCenter,
   type AppStatusBarCenter,
 } from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
+import {useAppMainWindowKeyboardEffects} from './shell/useAppMainWindowKeyboardEffects';
 import {useAppRootClassName} from './shell/useAppRootClassName';
 import {useAppTitleBarTodayHubSelect} from './shell/useAppTitleBarTodayHubSelect';
 
@@ -116,177 +112,6 @@ const MAIN_WINDOW_LABEL = 'main';
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
-
-type AppMainWindowKeyboardEffectsArgs = {
-  vaultRoot: string | null;
-  busy: boolean;
-  canReopenClosedEditorTab: boolean;
-  reopenLastClosedEditorTab: () => void;
-  composingNewEntry: boolean;
-  selectedUri: string | null;
-  onCleanNoteInbox: () => void;
-  quickOpenOpen: boolean;
-  setQuickOpenOpen: (open: boolean) => void;
-  vaultSearchOpen: boolean;
-  setVaultSearchOpen: (open: boolean) => void;
-};
-
-function useAppMainWindowKeyboardEffects({
-  vaultRoot,
-  busy,
-  canReopenClosedEditorTab,
-  reopenLastClosedEditorTab,
-  composingNewEntry,
-  selectedUri,
-  onCleanNoteInbox,
-  quickOpenOpen,
-  setQuickOpenOpen,
-  vaultSearchOpen,
-  setVaultSearchOpen,
-}: AppMainWindowKeyboardEffectsArgs) {
-  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
-  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
-  useLayoutEffect(() => {
-    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
-    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
-  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
-
-  const onCleanNoteInboxRef = useRef(onCleanNoteInbox);
-  useLayoutEffect(() => {
-    onCleanNoteInboxRef.current = onCleanNoteInbox;
-  }, [onCleanNoteInbox]);
-
-  const quickOpenOpenRef = useRef(quickOpenOpen);
-  const vaultSearchOpenRef = useRef(vaultSearchOpen);
-  useLayoutEffect(() => {
-    quickOpenOpenRef.current = quickOpenOpen;
-  }, [quickOpenOpen]);
-  useLayoutEffect(() => {
-    vaultSearchOpenRef.current = vaultSearchOpen;
-  }, [vaultSearchOpen]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 't' && e.key !== 'T') {
-        return;
-      }
-      if (busy || !canReopenClosedEditorTabRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      reopenLastClosedEditorTabRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'e' && e.key !== 'E') {
-        return;
-      }
-      const focusEl =
-        (document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null) ?? (e.target as HTMLElement | null);
-      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
-      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
-      if (!inInboxCm && !inTodayHubCm) {
-        return;
-      }
-      if (composingNewEntry || !selectedUri) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      onCleanNoteInboxRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy, composingNewEntry, selectedUri]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'f' && e.key !== 'F') {
-        return;
-      }
-      if (quickOpenOpenRef.current || vaultSearchOpenRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      setVaultSearchOpen(true);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy, setVaultSearchOpen]);
-
-  useEffect(() => {
-    let state = initialDoubleShiftState;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      if (e.repeat) {
-        return;
-      }
-      const next = reduceDoubleShiftKeyUp(
-        state,
-        performance.now(),
-        e.key,
-        e.ctrlKey,
-        e.metaKey,
-        e.altKey,
-      );
-      state = next.state;
-      if (next.shouldOpen) {
-        e.preventDefault();
-        e.stopPropagation();
-        setQuickOpenOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('keyup', onKeyUp, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('keyup', onKeyUp, true);
-    };
-  }, [vaultRoot, busy, setQuickOpenOpen]);
-}
 
 function logDevWindowRestoreError(message: string, e: unknown): void {
   if (import.meta.env.DEV) {
