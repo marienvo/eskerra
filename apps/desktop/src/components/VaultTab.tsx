@@ -22,20 +22,12 @@ import {
 import {createPortal} from 'react-dom';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
-import {
-  inboxRelativeMarkdownLinkHrefIsResolved,
-  inboxWikiLinkTargetIsResolved,
-} from '../lib/inboxWikiLinkNavigation';
 import {countInboxVaultMarkdownRefs} from '../lib/countInboxVaultMarkdownRefs';
 import {fireInboxClearedConfetti} from '../lib/fireInboxClearedConfetti';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
-  buildInboxWikiLinkCompletionCandidates,
-  extractFirstMarkdownH1,
-  getGeneralDirectoryUri,
   getInboxDirectoryUri,
-  getNoteTitle,
   normalizeVaultBaseUri,
   type EskerraSettings,
   type VaultFilesystem,
@@ -47,7 +39,6 @@ import {
   NOTIFICATIONS_INBOX_STACK_TOP,
   NOTIFICATIONS_PANEL,
 } from '../lib/layoutStore';
-import type {SessionNotification} from '../lib/sessionNotifications';
 
 import {
   FrontmatterEditor,
@@ -74,12 +65,6 @@ import {
   type TodayHubWorkspaceBridge,
 } from '../lib/todayHub';
 
-import type {
-  VaultRelativeMarkdownLinkActivatePayload,
-  VaultWikiLinkActivatePayload,
-} from '../editor/noteEditor/vaultLinkActivatePayload';
-import type {EditorWorkspaceTab} from '../lib/editorWorkspaceTabs';
-
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
@@ -95,6 +80,16 @@ import {TodayHubCanvas} from './TodayHubCanvas';
 import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
+import {buildVaultTabBacklinkRows} from './vaultTabBacklinkRows';
+import {
+  buildVaultTabLinkDerivedData,
+  type VaultTabWikiLinkCompletionCandidates,
+} from './vaultTabLinkDerived';
+import type {
+  VaultTabLinkController,
+  VaultTabNotificationsController,
+  VaultTabTabsController,
+} from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
 
@@ -168,11 +163,7 @@ type VaultTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
-  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
-  onMarkdownRelativeLinkActivate: (
-    payload: VaultRelativeMarkdownLinkActivatePayload,
-  ) => void;
-  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
+  linkController: VaultTabLinkController;
   onSaveShortcut: () => void;
   /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
   onCleanNote?: () => void;
@@ -195,26 +186,12 @@ type VaultTabProps = {
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
-  editorHistoryCanGoBack: boolean;
-  editorHistoryCanGoForward: boolean;
-  onEditorHistoryGoBack: () => void;
-  onEditorHistoryGoForward: () => void;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
-  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
-  activeEditorTabId: string | null;
-  onActivateOpenTab: (tabId: string) => void;
-  onCloseEditorTab: (tabId: string) => void;
-  onReorderEditorWorkspaceTabs?: (fromIndex: number, insertBeforeIndex: number) => void;
-  onCloseOtherEditorTabs: (keepTabId: string) => void;
-  notificationsPanelVisible: boolean;
-  onToggleNotificationsPanel: () => void;
+  tabsController: VaultTabTabsController;
+  notificationsController: VaultTabNotificationsController;
   notificationsWidthPx: number;
   onNotificationsWidthPxChanged: (px: number) => void;
-  notificationItems: readonly SessionNotification[];
-  notificationHighlightId: string | null;
-  onDismissNotification: (id: string) => void;
-  onClearAllNotifications: () => void;
   showTodayHubCanvas: boolean;
   todayHubSettings: TodayHubSettings | null;
   todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
@@ -230,8 +207,6 @@ type VaultTabProps = {
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
-  linkSnippetBlockedDomains?: ReadonlyArray<string>;
-  onMuteLinkSnippetDomain?: (domain: string) => void;
   mergeView:
     | null
     | {kind: 'backup'; baseUri: string; backupUri: string}
@@ -276,12 +251,12 @@ type EditorPaneBodyProps = {
   inboxEditorResetNonce: number;
   onEditorChange: VaultTabProps['onEditorChange'];
   onEditorError: VaultTabProps['onEditorError'];
-  onWikiLinkActivate: VaultTabProps['onWikiLinkActivate'];
-  onMarkdownRelativeLinkActivate: VaultTabProps['onMarkdownRelativeLinkActivate'];
-  onMarkdownExternalLinkOpen: VaultTabProps['onMarkdownExternalLinkOpen'];
+  onWikiLinkActivate: VaultTabLinkController['onWikiLinkActivate'];
+  onMarkdownRelativeLinkActivate: VaultTabLinkController['onMarkdownRelativeLinkActivate'];
+  onMarkdownExternalLinkOpen: VaultTabLinkController['onMarkdownExternalLinkOpen'];
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   wikiLinkTargetIsResolved: (inner: string) => boolean;
-  wikiLinkCompletionCandidates: ReturnType<typeof buildInboxWikiLinkCompletionCandidates>;
+  wikiLinkCompletionCandidates: VaultTabWikiLinkCompletionCandidates;
   onSaveShortcut: VaultTabProps['onSaveShortcut'];
   onCleanNote?: VaultTabProps['onCleanNote'];
   onDeleteNoteShortcut: () => void;
@@ -301,8 +276,8 @@ type EditorPaneBodyProps = {
     columnCount: number,
   ) => Promise<void>;
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
-  linkSnippetBlockedDomains?: ReadonlyArray<string>;
-  onMuteLinkSnippetDomain?: (domain: string) => void;
+  linkSnippetBlockedDomains?: VaultTabLinkController['linkSnippetBlockedDomains'];
+  onMuteLinkSnippetDomain?: VaultTabLinkController['onMuteLinkSnippetDomain'];
 };
 
 function useEditorPaneBodyDerived(
@@ -961,9 +936,7 @@ export function VaultTab({
   onEditorChange,
   inboxEditorResetNonce,
   onEditorError,
-  onWikiLinkActivate,
-  onMarkdownRelativeLinkActivate,
-  onMarkdownExternalLinkOpen,
+  linkController,
   onSaveShortcut,
   onCleanNote,
   busy,
@@ -978,25 +951,11 @@ export function VaultTab({
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
-  editorHistoryCanGoBack,
-  editorHistoryCanGoForward,
-  onEditorHistoryGoBack,
-  onEditorHistoryGoForward,
   inboxBacklinksDeferNonce,
-  editorWorkspaceTabs,
-  activeEditorTabId,
-  onActivateOpenTab,
-  onCloseEditorTab,
-  onReorderEditorWorkspaceTabs,
-  onCloseOtherEditorTabs,
-  notificationsPanelVisible,
-  onToggleNotificationsPanel,
+  tabsController,
+  notificationsController,
   notificationsWidthPx,
   onNotificationsWidthPxChanged,
-  notificationItems,
-  notificationHighlightId,
-  onDismissNotification,
-  onClearAllNotifications,
   showTodayHubCanvas,
   todayHubSettings,
   todayHubBridgeRef,
@@ -1006,14 +965,39 @@ export function VaultTab({
   persistTodayHubRow,
   todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
-  linkSnippetBlockedDomains,
-  onMuteLinkSnippetDomain,
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
   onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
 }: VaultTabProps) {
+  const {
+    onWikiLinkActivate,
+    onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
+    linkSnippetBlockedDomains,
+    onMuteLinkSnippetDomain,
+  } = linkController;
+  const {
+    editorHistoryCanGoBack,
+    editorHistoryCanGoForward,
+    onEditorHistoryGoBack,
+    onEditorHistoryGoForward,
+    editorWorkspaceTabs,
+    activeEditorTabId,
+    onActivateOpenTab,
+    onCloseEditorTab,
+    onReorderEditorWorkspaceTabs,
+    onCloseOtherEditorTabs,
+  } = tabsController;
+  const {
+    notificationsPanelVisible,
+    onToggleNotificationsPanel,
+    notificationItems,
+    notificationHighlightId,
+    onDismissNotification,
+    onClearAllNotifications,
+  } = notificationsController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
@@ -1226,44 +1210,26 @@ export function VaultTab({
     return () => window.clearTimeout(id);
   }, [renameFolderUri]);
 
-  const relativeMarkdownSourceUriOrDir = useMemo(() => {
-    const base = normalizeVaultBaseUri(vaultRoot);
-    if (composingNewEntry) {
-      return getInboxDirectoryUri(base);
-    }
-    if (showTodayHubCanvas) {
-      return getGeneralDirectoryUri(base);
-    }
-    return selectedUri ?? getInboxDirectoryUri(base);
-  }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
-
-  const wikiLinkTargetIsResolved = useMemo(
-    () => (inner: string) =>
-      inboxWikiLinkTargetIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        inner,
-        {vaultRoot, sourceMarkdownUriOrDir: relativeMarkdownSourceUriOrDir},
-      ),
-    [vaultMarkdownRefs, vaultRoot, relativeMarkdownSourceUriOrDir],
-  );
-
-  const relativeMarkdownLinkHrefIsResolved = useMemo(
-    () => (href: string) =>
-      inboxRelativeMarkdownLinkHrefIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        relativeMarkdownSourceUriOrDir,
-        vaultRoot,
-        href,
-      ),
-    [vaultMarkdownRefs, relativeMarkdownSourceUriOrDir, vaultRoot],
-  );
-
-  const wikiLinkCompletionCandidates = useMemo(
+  const {
+    wikiLinkTargetIsResolved,
+    relativeMarkdownLinkHrefIsResolved,
+    wikiLinkCompletionCandidates,
+  } = useMemo(
     () =>
-      buildInboxWikiLinkCompletionCandidates(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-      ),
-    [vaultMarkdownRefs],
+      buildVaultTabLinkDerivedData({
+        vaultRoot,
+        vaultMarkdownRefs,
+        composingNewEntry,
+        selectedUri,
+        showTodayHubCanvas,
+      }),
+    [
+      vaultRoot,
+      vaultMarkdownRefs,
+      composingNewEntry,
+      selectedUri,
+      showTodayHubCanvas,
+    ],
   );
 
   const editorPaneTitle = useMemo(() => {
@@ -1281,34 +1247,25 @@ export function VaultTab({
     return tail || 'Editor';
   }, [composingNewEntry, notes, selectedUri]);
 
-  const backlinkRows = useMemo(() => {
-    const norm = (u: string) => u.trim().replace(/\\/g, '/');
-    return backlinkUris
-      .map(uri => {
-        const ref = vaultMarkdownRefs.find(r => norm(r.uri) === norm(uri));
-        const fileName = (ref?.name ?? uri.split(/[/\\]/).pop() ?? '').trim();
-        if (!fileName) {
-          return null;
-        }
-        const markdownSource =
-          !composingNewEntry && uri === selectedUri
-            ? editorBody
-            : inboxContentByUri[uri];
-        const title =
-          markdownSource !== undefined
-            ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(fileName)
-            : getNoteTitle(fileName);
-        return {uri, fileName, title};
-      })
-      .filter((row): row is {uri: string; fileName: string; title: string} => row != null);
-  }, [
-    backlinkUris,
-    vaultMarkdownRefs,
-    composingNewEntry,
-    selectedUri,
-    editorBody,
-    inboxContentByUri,
-  ]);
+  const backlinkRows = useMemo(
+    () =>
+      buildVaultTabBacklinkRows({
+        backlinkUris,
+        vaultMarkdownRefs,
+        composingNewEntry,
+        selectedUri,
+        editorBody,
+        inboxContentByUri,
+      }),
+    [
+      backlinkUris,
+      vaultMarkdownRefs,
+      composingNewEntry,
+      selectedUri,
+      editorBody,
+      inboxContentByUri,
+    ],
+  );
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
 

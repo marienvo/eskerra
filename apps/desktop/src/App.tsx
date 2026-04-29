@@ -42,7 +42,7 @@ import {
 } from './components/AppStatusBar';
 import {ToastStack} from './components/ToastStack';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
-import {WindowTitleBar, type WindowTitleBarTodayHubSelect} from './components/WindowTitleBar';
+import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
@@ -53,7 +53,6 @@ import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
-import {useSessionNotifications} from './hooks/useSessionNotifications';
 import {ThemeProvider} from './theme/ThemeProvider';
 import {ThemedChromeBackground} from './theme/ThemedChromeBackground';
 import {
@@ -86,16 +85,14 @@ import {
   type TodayHubWorkspaceSnapshot,
 } from './lib/mainWindowUiStore';
 import {
-  initialDoubleShiftState,
-  reduceDoubleShiftKeyDown,
-  reduceDoubleShiftKeyUp,
-} from './lib/doubleShiftKeySequence';
-import {
   resolveAppStatusBarCenter,
-  type AppStatusBarCenter,
 } from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
+import {useAppMainWindowKeyboardEffects} from './shell/useAppMainWindowKeyboardEffects';
+import {useAppNotificationSession} from './shell/useAppNotificationSession';
+import {useAppRootClassName} from './shell/useAppRootClassName';
+import {useAppTitleBarTodayHubSelect} from './shell/useAppTitleBarTodayHubSelect';
 
 import './App.css';
 
@@ -114,253 +111,6 @@ const MAIN_WINDOW_LABEL = 'main';
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
-
-function useAppRootClassName(
-  vaultRoot: string | null,
-  layoutsReady: boolean,
-  maximized: boolean,
-  tiling: 'none' | 'left' | 'right',
-  tilingDebug: boolean,
-): string {
-  return useMemo(() => {
-    const parts = ['app-root'];
-    if (isTauri()) {
-      parts.push('app-root--tauri');
-    }
-    if (!vaultRoot || !layoutsReady) {
-      parts.push('app-root--setup');
-    }
-    if (maximized) {
-      parts.push('app-root--maximized');
-    }
-    if (tiling === 'left') {
-      parts.push('app-root--tiled-left');
-    }
-    if (tiling === 'right') {
-      parts.push('app-root--tiled-right');
-    }
-    if (tilingDebug) {
-      parts.push('app-root--tiling-debug');
-    }
-    return parts.join(' ');
-  }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
-}
-
-function useAppTitleBarTodayHubSelect(
-  vaultRoot: string | null,
-  todayHubSelectorItems: ReadonlyArray<{
-    todayNoteUri: string;
-    label: string;
-  }>,
-  activeTodayHubUri: string | null,
-  workspaceSelectShowsActiveTabPill: boolean,
-  focusActiveTodayHubNote: () => void,
-  switchTodayHubWorkspace: (uri: string) => void | Promise<void>,
-  openTodayHubInNewTabAfterActive: (uri: string) => void,
-): WindowTitleBarTodayHubSelect {
-  return useMemo((): WindowTitleBarTodayHubSelect => {
-    if (
-      !vaultRoot
-      || todayHubSelectorItems.length === 0
-      || activeTodayHubUri == null
-    ) {
-      return null;
-    }
-    const activeLabel =
-      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
-        ?.label ?? 'Today';
-    return {
-      items: todayHubSelectorItems,
-      activeTodayNoteUri: activeTodayHubUri,
-      activeLabel,
-      mainShowsActiveTabPill: workspaceSelectShowsActiveTabPill,
-      onMainActivate: focusActiveTodayHubNote,
-      onPickHub: (uri: string) => {
-        void switchTodayHubWorkspace(uri);
-      },
-      onOpenHubInNewTab: openTodayHubInNewTabAfterActive,
-    };
-  }, [
-    vaultRoot,
-    todayHubSelectorItems,
-    activeTodayHubUri,
-    workspaceSelectShowsActiveTabPill,
-    focusActiveTodayHubNote,
-    switchTodayHubWorkspace,
-    openTodayHubInNewTabAfterActive,
-  ]);
-}
-
-type AppMainWindowKeyboardEffectsArgs = {
-  vaultRoot: string | null;
-  busy: boolean;
-  canReopenClosedEditorTab: boolean;
-  reopenLastClosedEditorTab: () => void;
-  composingNewEntry: boolean;
-  selectedUri: string | null;
-  onCleanNoteInbox: () => void;
-  quickOpenOpen: boolean;
-  setQuickOpenOpen: (open: boolean) => void;
-  vaultSearchOpen: boolean;
-  setVaultSearchOpen: (open: boolean) => void;
-};
-
-function useAppMainWindowKeyboardEffects({
-  vaultRoot,
-  busy,
-  canReopenClosedEditorTab,
-  reopenLastClosedEditorTab,
-  composingNewEntry,
-  selectedUri,
-  onCleanNoteInbox,
-  quickOpenOpen,
-  setQuickOpenOpen,
-  vaultSearchOpen,
-  setVaultSearchOpen,
-}: AppMainWindowKeyboardEffectsArgs) {
-  const canReopenClosedEditorTabRef = useRef(canReopenClosedEditorTab);
-  const reopenLastClosedEditorTabRef = useRef(reopenLastClosedEditorTab);
-  useLayoutEffect(() => {
-    canReopenClosedEditorTabRef.current = canReopenClosedEditorTab;
-    reopenLastClosedEditorTabRef.current = reopenLastClosedEditorTab;
-  }, [canReopenClosedEditorTab, reopenLastClosedEditorTab]);
-
-  const onCleanNoteInboxRef = useRef(onCleanNoteInbox);
-  useLayoutEffect(() => {
-    onCleanNoteInboxRef.current = onCleanNoteInbox;
-  }, [onCleanNoteInbox]);
-
-  const quickOpenOpenRef = useRef(quickOpenOpen);
-  const vaultSearchOpenRef = useRef(vaultSearchOpen);
-  useLayoutEffect(() => {
-    quickOpenOpenRef.current = quickOpenOpen;
-  }, [quickOpenOpen]);
-  useLayoutEffect(() => {
-    vaultSearchOpenRef.current = vaultSearchOpen;
-  }, [vaultSearchOpen]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 't' && e.key !== 'T') {
-        return;
-      }
-      if (busy || !canReopenClosedEditorTabRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      reopenLastClosedEditorTabRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'e' && e.key !== 'E') {
-        return;
-      }
-      const focusEl =
-        (document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null) ?? (e.target as HTMLElement | null);
-      const inInboxCm = focusEl?.closest('.inbox-root .cm-editor');
-      const inTodayHubCm = focusEl?.closest('.today-hub-canvas .cm-editor');
-      if (!inInboxCm && !inTodayHubCm) {
-        return;
-      }
-      if (composingNewEntry || !selectedUri) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      onCleanNoteInboxRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy, composingNewEntry, selectedUri]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || busy) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod || !e.shiftKey || e.altKey) {
-        return;
-      }
-      if (e.key !== 'f' && e.key !== 'F') {
-        return;
-      }
-      if (quickOpenOpenRef.current || vaultSearchOpenRef.current) {
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      setVaultSearchOpen(true);
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-    };
-  }, [vaultRoot, busy, setVaultSearchOpen]);
-
-  useEffect(() => {
-    let state = initialDoubleShiftState;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      state = reduceDoubleShiftKeyDown(state, e.key, e.ctrlKey, e.metaKey, e.altKey);
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (!vaultRoot || quickOpenOpenRef.current || vaultSearchOpenRef.current || busy) {
-        return;
-      }
-      if (e.repeat) {
-        return;
-      }
-      const next = reduceDoubleShiftKeyUp(
-        state,
-        performance.now(),
-        e.key,
-        e.ctrlKey,
-        e.metaKey,
-        e.altKey,
-      );
-      state = next.state;
-      if (next.shouldOpen) {
-        e.preventDefault();
-        e.stopPropagation();
-        setQuickOpenOpen(true);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    window.addEventListener('keyup', onKeyUp, true);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown, true);
-      window.removeEventListener('keyup', onKeyUp, true);
-    };
-  }, [vaultRoot, busy, setQuickOpenOpen]);
-}
 
 function logDevWindowRestoreError(message: string, e: unknown): void {
   if (import.meta.env.DEV) {
@@ -1067,53 +817,6 @@ function AppThemeShell({
   );
 }
 
-type UseAppNotificationSessionArgs = {
-  err: string | null;
-  diskConflict: unknown;
-  diskConflictSoft: {uri: string} | null;
-  selectedUri: string | null;
-  statusBarCenter: AppStatusBarCenter;
-  renameLinkProgress: {done: number; total: number} | null;
-  setNotificationsPanelVisible: Dispatch<SetStateAction<boolean>>;
-};
-
-function useAppNotificationSession({
-  err,
-  diskConflict,
-  diskConflictSoft,
-  selectedUri,
-  statusBarCenter,
-  renameLinkProgress,
-  setNotificationsPanelVisible,
-}: UseAppNotificationSessionArgs) {
-  const diskConflictSoftVisible = useMemo(
-    () =>
-      !err &&
-      diskConflict == null &&
-      diskConflictSoft != null &&
-      selectedUri != null &&
-      normalizeEditorDocUri(diskConflictSoft.uri) ===
-        normalizeEditorDocUri(selectedUri),
-    [err, diskConflict, diskConflictSoft, selectedUri],
-  );
-
-  const openNotificationsPanel = useCallback(() => {
-    setNotificationsPanelVisible(true);
-  }, [setNotificationsPanelVisible]);
-
-  const session = useSessionNotifications(
-    {
-      statusBarCenter,
-      renameLinkProgress,
-      diskConflictBlocking: diskConflict != null,
-      diskConflictSoftVisible,
-    },
-    {onOpenPanel: openNotificationsPanel},
-  );
-
-  return session;
-}
-
 type AppDiskConflictBannersProps = {
   err: string | null;
   diskConflict: unknown;
@@ -1278,20 +981,9 @@ export default function App() {
     vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
-    editorHistoryCanGoBack,
-    editorHistoryCanGoForward,
-    editorHistoryGoBack,
-    editorHistoryGoForward,
+    tabsController: workspaceTabsController,
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorWorkspaceTabs,
-    activeEditorTabId,
-    activateOpenTab,
-    closeEditorTab,
-    reorderEditorWorkspaceTabs,
-    closeOtherEditorTabs,
-    reopenLastClosedEditorTab,
-    canReopenClosedEditorTab,
     showTodayHubCanvas,
     todayHubSettings,
     todayHubBridgeRef,
@@ -1373,10 +1065,10 @@ export default function App() {
   useEditorHistoryMouseButtons({
     vaultRoot,
     busy,
-    editorHistoryCanGoBack,
-    editorHistoryCanGoForward,
-    editorHistoryGoBack,
-    editorHistoryGoForward,
+    editorHistoryCanGoBack: workspaceTabsController.editorHistoryCanGoBack,
+    editorHistoryCanGoForward: workspaceTabsController.editorHistoryCanGoForward,
+    editorHistoryGoBack: workspaceTabsController.editorHistoryGoBack,
+    editorHistoryGoForward: workspaceTabsController.editorHistoryGoForward,
   });
   usePreventMiddleClickPaste();
 
@@ -1386,8 +1078,8 @@ export default function App() {
   useAppMainWindowKeyboardEffects({
     vaultRoot,
     busy,
-    canReopenClosedEditorTab,
-    reopenLastClosedEditorTab,
+    canReopenClosedEditorTab: workspaceTabsController.canReopenClosedEditorTab,
+    reopenLastClosedEditorTab: workspaceTabsController.reopenLastClosedEditorTab,
     composingNewEntry,
     selectedUri,
     onCleanNoteInbox,
@@ -1481,8 +1173,8 @@ export default function App() {
     notificationsPanelVisible,
     composingNewEntry,
     selectedUri,
-    editorWorkspaceTabs,
-    activeEditorTabId,
+    editorWorkspaceTabs: workspaceTabsController.editorWorkspaceTabs,
+    activeEditorTabId: workspaceTabsController.activeEditorTabId,
     activeTodayHubUri,
     todayHubWorkspacesForSave,
   });
@@ -1690,9 +1382,13 @@ export default function App() {
                       onEditorChange={setEditorBody}
                       inboxEditorResetNonce={inboxEditorResetNonce}
                       onEditorError={setErr}
-                      onWikiLinkActivate={onWikiLinkActivate}
-                      onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                      linkController={{
+                        onWikiLinkActivate,
+                        onMarkdownRelativeLinkActivate,
+                        onMarkdownExternalLinkOpen,
+                        linkSnippetBlockedDomains: vaultSettings?.linkSnippetBlockedDomains,
+                        onMuteLinkSnippetDomain: handleMuteLinkSnippetDomain,
+                      }}
                       onSaveShortcut={onInboxSaveShortcut}
                       onCleanNote={
                         !composingNewEntry && selectedUri
@@ -1731,27 +1427,29 @@ export default function App() {
                       onCancelWikiLinkAmbiguityRename={
                         cancelPendingWikiLinkAmbiguityRename
                       }
-                      editorHistoryCanGoBack={editorHistoryCanGoBack}
-                      editorHistoryCanGoForward={editorHistoryCanGoForward}
-                      onEditorHistoryGoBack={editorHistoryGoBack}
-                      onEditorHistoryGoForward={editorHistoryGoForward}
                       inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
-                      editorWorkspaceTabs={editorWorkspaceTabs}
-                      activeEditorTabId={activeEditorTabId}
-                      onActivateOpenTab={activateOpenTab}
-                      onCloseEditorTab={closeEditorTab}
-                      onReorderEditorWorkspaceTabs={reorderEditorWorkspaceTabs}
-                      onCloseOtherEditorTabs={closeOtherEditorTabs}
-                      notificationsPanelVisible={notificationsPanelVisible}
-                      onToggleNotificationsPanel={() =>
-                        setNotificationsPanelVisible(v => !v)
-                      }
+                      tabsController={{
+                        editorHistoryCanGoBack: workspaceTabsController.editorHistoryCanGoBack,
+                        editorHistoryCanGoForward: workspaceTabsController.editorHistoryCanGoForward,
+                        onEditorHistoryGoBack: workspaceTabsController.editorHistoryGoBack,
+                        onEditorHistoryGoForward: workspaceTabsController.editorHistoryGoForward,
+                        editorWorkspaceTabs: workspaceTabsController.editorWorkspaceTabs,
+                        activeEditorTabId: workspaceTabsController.activeEditorTabId,
+                        onActivateOpenTab: workspaceTabsController.activateOpenTab,
+                        onCloseEditorTab: workspaceTabsController.closeEditorTab,
+                        onReorderEditorWorkspaceTabs: workspaceTabsController.reorderEditorWorkspaceTabs,
+                        onCloseOtherEditorTabs: workspaceTabsController.closeOtherEditorTabs,
+                      }}
+                      notificationsController={{
+                        notificationsPanelVisible,
+                        onToggleNotificationsPanel: () => setNotificationsPanelVisible(v => !v),
+                        notificationItems,
+                        notificationHighlightId,
+                        onDismissNotification: dismissNotification,
+                        onClearAllNotifications: clearAllNotifications,
+                      }}
                       notificationsWidthPx={layouts.notifications.widthPx}
                       onNotificationsWidthPxChanged={persistNotificationsWidthPx}
-                      notificationItems={notificationItems}
-                      notificationHighlightId={notificationHighlightId}
-                      onDismissNotification={dismissNotification}
-                      onClearAllNotifications={clearAllNotifications}
                       showTodayHubCanvas={showTodayHubCanvas}
                       todayHubSettings={todayHubSettings}
                       todayHubBridgeRef={todayHubBridgeRef}
@@ -1761,8 +1459,6 @@ export default function App() {
                       persistTodayHubRow={persistTodayHubRow}
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
-                      linkSnippetBlockedDomains={vaultSettings?.linkSnippetBlockedDomains}
-                      onMuteLinkSnippetDomain={handleMuteLinkSnippetDomain}
                       mergeView={mergeView}
                       onCloseMergeView={closeMergeView}
                       onApplyFullBackupFromMerge={applyFullBackupFromMerge}

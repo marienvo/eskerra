@@ -150,8 +150,9 @@ import {
 import {
   type VaultFilesChangedPayload,
 } from '../lib/vaultFilesChangedPayload';
-import {isPodcastFile} from '../lib/podcasts/podcastParser';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
+import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
+import type {WorkspaceTabsController} from './workspaceReturnShape';
 import {
   buildRestoredEditorWorkspace,
   isUriValidVaultMarkdown,
@@ -198,19 +199,6 @@ function trimTrailingSlashes(value: string): string {
     end -= 1;
   }
   return value.slice(0, end);
-}
-
-function looksLikeRssEpisodeMarkdownName(name: string): boolean {
-  if (!name.endsWith('.md') || !name.startsWith('📻')) {
-    return false;
-  }
-  const middle = name.slice('📻'.length, -'.md'.length);
-  return middle.trim().length > 0;
-}
-
-function isPodcastRelevantPath(p: string): boolean {
-  const name = p.replace(/\\/g, '/').split('/').pop() ?? '';
-  return isPodcastFile(name) || looksLikeRssEpisodeMarkdownName(name);
 }
 
 const VAULT_INDEX_TOUCH_DEDUP_MS = 1000;
@@ -550,10 +538,7 @@ export type UseMainWindowWorkspaceResult = {
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
-  editorHistoryCanGoBack: boolean;
-  editorHistoryCanGoForward: boolean;
-  editorHistoryGoBack: () => void;
-  editorHistoryGoForward: () => void;
+  tabsController: WorkspaceTabsController;
   /**
    * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
    * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
@@ -564,17 +549,6 @@ export type UseMainWindowWorkspaceResult = {
    * late rAF clear does not re-render the whole workspace.
    */
   inboxBacklinksDeferNonce: number;
-  /** Open editor tabs with per-tab navigation history. */
-  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
-  activeEditorTabId: string | null;
-  activateOpenTab: (tabId: string) => void;
-  closeEditorTab: (tabId: string) => void;
-  /** Reorder open tabs in the title bar (`fromIndex` / `insertBeforeIndex` refer to order before the move). */
-  reorderEditorWorkspaceTabs: (fromIndex: number, insertBeforeIndex: number) => void;
-  closeOtherEditorTabs: (keepTabId: string) => void;
-  closeAllEditorTabs: () => void;
-  reopenLastClosedEditorTab: () => void;
-  canReopenClosedEditorTab: boolean;
   /** Weekly hub grid under the main editor when `Today.md` is open. */
   showTodayHubCanvas: boolean;
   /** Parsed hub settings from merged `Today.md` markdown (body + shell-held YAML). */
@@ -2524,7 +2498,7 @@ export function useMainWindowWorkspace(options: {
       vaultFilesChangedEventSeq += 1;
       const plan = planVaultFilesChangedEvent({
         payload: event.payload,
-        isPodcastRelevantPath,
+        isPodcastRelevantPath: isPodcastRelevantVaultPath,
         allowCoarseFullReindex: !coarseFullReindexScheduled,
       });
       const {paths, coarse} = plan;
@@ -4676,21 +4650,13 @@ export function useMainWindowWorkspace(options: {
     vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
-    editorHistoryCanGoBack,
-    editorHistoryCanGoForward,
-    editorHistoryGoBack,
-    editorHistoryGoForward,
+    tabsController: {
+      editorHistoryCanGoBack, editorHistoryCanGoForward, editorHistoryGoBack, editorHistoryGoForward,
+      editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
+      closeOtherEditorTabs, closeAllEditorTabs, reopenLastClosedEditorTab, canReopenClosedEditorTab,
+    },
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorWorkspaceTabs,
-    activeEditorTabId,
-    activateOpenTab,
-    closeEditorTab,
-    reorderEditorWorkspaceTabs,
-    closeOtherEditorTabs,
-    closeAllEditorTabs,
-    reopenLastClosedEditorTab,
-    canReopenClosedEditorTab,
     showTodayHubCanvas,
     todayHubSettings,
     todayHubBridgeRef,
