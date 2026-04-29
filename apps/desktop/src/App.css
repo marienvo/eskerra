@@ -4398,6 +4398,9 @@ button.primary.destructive {
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__table th {
   color: var(--color-text-primary);
   font-weight: 620;
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
 }
 
 [data-app-surface='capture'] .note-markdown-editor-host .cm-eskerra-table__input {
@@ -4729,6 +4732,15 @@ button.primary.destructive {
   padding: 0;
   cursor: text;
   white-space: pre-wrap;
+}
+
+[data-app-surface='capture']
+  .note-markdown-editor-host
+  .cm-eskerra-table-shell__th
+  .cm-eskerra-table-shell__cell-static-rich {
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
 }
 
 [data-app-surface='capture']
