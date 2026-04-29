@@ -1748,16 +1748,16 @@ export default function App() {
                         onReorderEditorWorkspaceTabs: reorderEditorWorkspaceTabs,
                         onCloseOtherEditorTabs: closeOtherEditorTabs,
                       }}
-                      notificationsPanelVisible={notificationsPanelVisible}
-                      onToggleNotificationsPanel={() =>
-                        setNotificationsPanelVisible(v => !v)
-                      }
+                      notificationsController={{
+                        notificationsPanelVisible,
+                        onToggleNotificationsPanel: () => setNotificationsPanelVisible(v => !v),
+                        notificationItems,
+                        notificationHighlightId,
+                        onDismissNotification: dismissNotification,
+                        onClearAllNotifications: clearAllNotifications,
+                      }}
                       notificationsWidthPx={layouts.notifications.widthPx}
                       onNotificationsWidthPxChanged={persistNotificationsWidthPx}
-                      notificationItems={notificationItems}
-                      notificationHighlightId={notificationHighlightId}
-                      onDismissNotification={dismissNotification}
-                      onClearAllNotifications={clearAllNotifications}
                       showTodayHubCanvas={showTodayHubCanvas}
                       todayHubSettings={todayHubSettings}
                       todayHubBridgeRef={todayHubBridgeRef}

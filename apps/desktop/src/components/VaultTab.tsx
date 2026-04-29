@@ -39,7 +39,6 @@ import {
   NOTIFICATIONS_INBOX_STACK_TOP,
   NOTIFICATIONS_PANEL,
 } from '../lib/layoutStore';
-import type {SessionNotification} from '../lib/sessionNotifications';
 
 import {
   FrontmatterEditor,
@@ -88,6 +87,7 @@ import {
 } from './vaultTabLinkDerived';
 import type {
   VaultTabLinkController,
+  VaultTabNotificationsController,
   VaultTabTabsController,
 } from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
@@ -189,14 +189,9 @@ type VaultTabProps = {
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
   tabsController: VaultTabTabsController;
-  notificationsPanelVisible: boolean;
-  onToggleNotificationsPanel: () => void;
+  notificationsController: VaultTabNotificationsController;
   notificationsWidthPx: number;
   onNotificationsWidthPxChanged: (px: number) => void;
-  notificationItems: readonly SessionNotification[];
-  notificationHighlightId: string | null;
-  onDismissNotification: (id: string) => void;
-  onClearAllNotifications: () => void;
   showTodayHubCanvas: boolean;
   todayHubSettings: TodayHubSettings | null;
   todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
@@ -958,14 +953,9 @@ export function VaultTab({
   onCancelWikiLinkAmbiguityRename,
   inboxBacklinksDeferNonce,
   tabsController,
-  notificationsPanelVisible,
-  onToggleNotificationsPanel,
+  notificationsController,
   notificationsWidthPx,
   onNotificationsWidthPxChanged,
-  notificationItems,
-  notificationHighlightId,
-  onDismissNotification,
-  onClearAllNotifications,
   showTodayHubCanvas,
   todayHubSettings,
   todayHubBridgeRef,
@@ -1000,6 +990,14 @@ export function VaultTab({
     onReorderEditorWorkspaceTabs,
     onCloseOtherEditorTabs,
   } = tabsController;
+  const {
+    notificationsPanelVisible,
+    onToggleNotificationsPanel,
+    notificationItems,
+    notificationHighlightId,
+    onDismissNotification,
+    onClearAllNotifications,
+  } = notificationsController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
