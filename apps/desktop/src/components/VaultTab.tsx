@@ -22,17 +22,11 @@ import {
 import {createPortal} from 'react-dom';
 
 import {createNoteInboxAttachmentHost} from '../lib/noteInboxAttachmentHost';
-import {
-  inboxRelativeMarkdownLinkHrefIsResolved,
-  inboxWikiLinkTargetIsResolved,
-} from '../lib/inboxWikiLinkNavigation';
 import {countInboxVaultMarkdownRefs} from '../lib/countInboxVaultMarkdownRefs';
 import {fireInboxClearedConfetti} from '../lib/fireInboxClearedConfetti';
 import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
-  buildInboxWikiLinkCompletionCandidates,
-  getGeneralDirectoryUri,
   getInboxDirectoryUri,
   normalizeVaultBaseUri,
   type EskerraSettings,
@@ -94,6 +88,10 @@ import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
 import {buildVaultTabBacklinkRows} from './vaultTabBacklinkRows';
+import {
+  buildVaultTabLinkDerivedData,
+  type VaultTabWikiLinkCompletionCandidates,
+} from './vaultTabLinkDerived';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
 
@@ -280,7 +278,7 @@ type EditorPaneBodyProps = {
   onMarkdownExternalLinkOpen: VaultTabProps['onMarkdownExternalLinkOpen'];
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   wikiLinkTargetIsResolved: (inner: string) => boolean;
-  wikiLinkCompletionCandidates: ReturnType<typeof buildInboxWikiLinkCompletionCandidates>;
+  wikiLinkCompletionCandidates: VaultTabWikiLinkCompletionCandidates;
   onSaveShortcut: VaultTabProps['onSaveShortcut'];
   onCleanNote?: VaultTabProps['onCleanNote'];
   onDeleteNoteShortcut: () => void;
@@ -1225,44 +1223,26 @@ export function VaultTab({
     return () => window.clearTimeout(id);
   }, [renameFolderUri]);
 
-  const relativeMarkdownSourceUriOrDir = useMemo(() => {
-    const base = normalizeVaultBaseUri(vaultRoot);
-    if (composingNewEntry) {
-      return getInboxDirectoryUri(base);
-    }
-    if (showTodayHubCanvas) {
-      return getGeneralDirectoryUri(base);
-    }
-    return selectedUri ?? getInboxDirectoryUri(base);
-  }, [composingNewEntry, selectedUri, showTodayHubCanvas, vaultRoot]);
-
-  const wikiLinkTargetIsResolved = useMemo(
-    () => (inner: string) =>
-      inboxWikiLinkTargetIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        inner,
-        {vaultRoot, sourceMarkdownUriOrDir: relativeMarkdownSourceUriOrDir},
-      ),
-    [vaultMarkdownRefs, vaultRoot, relativeMarkdownSourceUriOrDir],
-  );
-
-  const relativeMarkdownLinkHrefIsResolved = useMemo(
-    () => (href: string) =>
-      inboxRelativeMarkdownLinkHrefIsResolved(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-        relativeMarkdownSourceUriOrDir,
-        vaultRoot,
-        href,
-      ),
-    [vaultMarkdownRefs, relativeMarkdownSourceUriOrDir, vaultRoot],
-  );
-
-  const wikiLinkCompletionCandidates = useMemo(
+  const {
+    wikiLinkTargetIsResolved,
+    relativeMarkdownLinkHrefIsResolved,
+    wikiLinkCompletionCandidates,
+  } = useMemo(
     () =>
-      buildInboxWikiLinkCompletionCandidates(
-        vaultMarkdownRefs.map(r => ({name: r.name, uri: r.uri})),
-      ),
-    [vaultMarkdownRefs],
+      buildVaultTabLinkDerivedData({
+        vaultRoot,
+        vaultMarkdownRefs,
+        composingNewEntry,
+        selectedUri,
+        showTodayHubCanvas,
+      }),
+    [
+      vaultRoot,
+      vaultMarkdownRefs,
+      composingNewEntry,
+      selectedUri,
+      showTodayHubCanvas,
+    ],
   );
 
   const editorPaneTitle = useMemo(() => {
