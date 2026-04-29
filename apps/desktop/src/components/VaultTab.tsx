@@ -32,10 +32,8 @@ import {resolveVaultImagePreviewUrl} from '../lib/resolveVaultImagePreviewUrl';
 
 import {
   buildInboxWikiLinkCompletionCandidates,
-  extractFirstMarkdownH1,
   getGeneralDirectoryUri,
   getInboxDirectoryUri,
-  getNoteTitle,
   normalizeVaultBaseUri,
   type EskerraSettings,
   type VaultFilesystem,
@@ -95,6 +93,7 @@ import {TodayHubCanvas} from './TodayHubCanvas';
 import {InboxTreePane} from './InboxTreePane';
 import {VaultTreePane} from './VaultTreePane';
 import {shouldHandleDeleteNoteGlobalShortcut} from './vaultTabDeleteNoteShortcut';
+import {buildVaultTabBacklinkRows} from './vaultTabBacklinkRows';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
 
@@ -1281,34 +1280,25 @@ export function VaultTab({
     return tail || 'Editor';
   }, [composingNewEntry, notes, selectedUri]);
 
-  const backlinkRows = useMemo(() => {
-    const norm = (u: string) => u.trim().replace(/\\/g, '/');
-    return backlinkUris
-      .map(uri => {
-        const ref = vaultMarkdownRefs.find(r => norm(r.uri) === norm(uri));
-        const fileName = (ref?.name ?? uri.split(/[/\\]/).pop() ?? '').trim();
-        if (!fileName) {
-          return null;
-        }
-        const markdownSource =
-          !composingNewEntry && uri === selectedUri
-            ? editorBody
-            : inboxContentByUri[uri];
-        const title =
-          markdownSource !== undefined
-            ? extractFirstMarkdownH1(markdownSource) ?? getNoteTitle(fileName)
-            : getNoteTitle(fileName);
-        return {uri, fileName, title};
-      })
-      .filter((row): row is {uri: string; fileName: string; title: string} => row != null);
-  }, [
-    backlinkUris,
-    vaultMarkdownRefs,
-    composingNewEntry,
-    selectedUri,
-    editorBody,
-    inboxContentByUri,
-  ]);
+  const backlinkRows = useMemo(
+    () =>
+      buildVaultTabBacklinkRows({
+        backlinkUris,
+        vaultMarkdownRefs,
+        composingNewEntry,
+        selectedUri,
+        editorBody,
+        inboxContentByUri,
+      }),
+    [
+      backlinkUris,
+      vaultMarkdownRefs,
+      composingNewEntry,
+      selectedUri,
+      editorBody,
+      inboxContentByUri,
+    ],
+  );
 
   const editorOpen = composingNewEntry || Boolean(selectedUri);
 
