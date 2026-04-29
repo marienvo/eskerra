@@ -66,11 +66,6 @@ import {
   type TodayHubWorkspaceBridge,
 } from '../lib/todayHub';
 
-import type {
-  VaultRelativeMarkdownLinkActivatePayload,
-  VaultWikiLinkActivatePayload,
-} from '../editor/noteEditor/vaultLinkActivatePayload';
-
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
@@ -91,7 +86,10 @@ import {
   buildVaultTabLinkDerivedData,
   type VaultTabWikiLinkCompletionCandidates,
 } from './vaultTabLinkDerived';
-import type {VaultTabTabsController} from './vaultTabTypes';
+import type {
+  VaultTabLinkController,
+  VaultTabTabsController,
+} from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
 
@@ -165,11 +163,7 @@ type VaultTabProps = {
   onEditorChange: (body: string) => void;
   inboxEditorResetNonce: number;
   onEditorError: (message: string) => void;
-  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
-  onMarkdownRelativeLinkActivate: (
-    payload: VaultRelativeMarkdownLinkActivatePayload,
-  ) => void;
-  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
+  linkController: VaultTabLinkController;
   onSaveShortcut: () => void;
   /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
   onCleanNote?: () => void;
@@ -218,8 +212,6 @@ type VaultTabProps = {
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
-  linkSnippetBlockedDomains?: ReadonlyArray<string>;
-  onMuteLinkSnippetDomain?: (domain: string) => void;
   mergeView:
     | null
     | {kind: 'backup'; baseUri: string; backupUri: string}
@@ -264,9 +256,9 @@ type EditorPaneBodyProps = {
   inboxEditorResetNonce: number;
   onEditorChange: VaultTabProps['onEditorChange'];
   onEditorError: VaultTabProps['onEditorError'];
-  onWikiLinkActivate: VaultTabProps['onWikiLinkActivate'];
-  onMarkdownRelativeLinkActivate: VaultTabProps['onMarkdownRelativeLinkActivate'];
-  onMarkdownExternalLinkOpen: VaultTabProps['onMarkdownExternalLinkOpen'];
+  onWikiLinkActivate: VaultTabLinkController['onWikiLinkActivate'];
+  onMarkdownRelativeLinkActivate: VaultTabLinkController['onMarkdownRelativeLinkActivate'];
+  onMarkdownExternalLinkOpen: VaultTabLinkController['onMarkdownExternalLinkOpen'];
   relativeMarkdownLinkHrefIsResolved: (href: string) => boolean;
   wikiLinkTargetIsResolved: (inner: string) => boolean;
   wikiLinkCompletionCandidates: VaultTabWikiLinkCompletionCandidates;
@@ -289,8 +281,8 @@ type EditorPaneBodyProps = {
     columnCount: number,
   ) => Promise<void>;
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
-  linkSnippetBlockedDomains?: ReadonlyArray<string>;
-  onMuteLinkSnippetDomain?: (domain: string) => void;
+  linkSnippetBlockedDomains?: VaultTabLinkController['linkSnippetBlockedDomains'];
+  onMuteLinkSnippetDomain?: VaultTabLinkController['onMuteLinkSnippetDomain'];
 };
 
 function useEditorPaneBodyDerived(
@@ -949,9 +941,7 @@ export function VaultTab({
   onEditorChange,
   inboxEditorResetNonce,
   onEditorError,
-  onWikiLinkActivate,
-  onMarkdownRelativeLinkActivate,
-  onMarkdownExternalLinkOpen,
+  linkController,
   onSaveShortcut,
   onCleanNote,
   busy,
@@ -985,14 +975,19 @@ export function VaultTab({
   persistTodayHubRow,
   todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
-  linkSnippetBlockedDomains,
-  onMuteLinkSnippetDomain,
   mergeView,
   onCloseMergeView,
   onApplyFullBackupFromMerge,
   onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
 }: VaultTabProps) {
+  const {
+    onWikiLinkActivate,
+    onMarkdownRelativeLinkActivate,
+    onMarkdownExternalLinkOpen,
+    linkSnippetBlockedDomains,
+    onMuteLinkSnippetDomain,
+  } = linkController;
   const {
     editorHistoryCanGoBack,
     editorHistoryCanGoForward,

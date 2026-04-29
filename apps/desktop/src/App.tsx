@@ -1690,9 +1690,13 @@ export default function App() {
                       onEditorChange={setEditorBody}
                       inboxEditorResetNonce={inboxEditorResetNonce}
                       onEditorError={setErr}
-                      onWikiLinkActivate={onWikiLinkActivate}
-                      onMarkdownRelativeLinkActivate={onMarkdownRelativeLinkActivate}
-                      onMarkdownExternalLinkOpen={onMarkdownExternalLinkOpen}
+                      linkController={{
+                        onWikiLinkActivate,
+                        onMarkdownRelativeLinkActivate,
+                        onMarkdownExternalLinkOpen,
+                        linkSnippetBlockedDomains: vaultSettings?.linkSnippetBlockedDomains,
+                        onMuteLinkSnippetDomain: handleMuteLinkSnippetDomain,
+                      }}
                       onSaveShortcut={onInboxSaveShortcut}
                       onCleanNote={
                         !composingNewEntry && selectedUri
@@ -1763,8 +1767,6 @@ export default function App() {
                       persistTodayHubRow={persistTodayHubRow}
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
-                      linkSnippetBlockedDomains={vaultSettings?.linkSnippetBlockedDomains}
-                      onMuteLinkSnippetDomain={handleMuteLinkSnippetDomain}
                       mergeView={mergeView}
                       onCloseMergeView={closeMergeView}
                       onApplyFullBackupFromMerge={applyFullBackupFromMerge}
