@@ -42,7 +42,7 @@ import {
 } from './components/AppStatusBar';
 import {ToastStack} from './components/ToastStack';
 import type {PlaybackTransportProps} from './components/PlaybackTransport';
-import {WindowTitleBar, type WindowTitleBarTodayHubSelect} from './components/WindowTitleBar';
+import {WindowTitleBar} from './components/WindowTitleBar';
 import {useDesktopPlaylistR2EtagPollingForMainWindow} from './hooks/useDesktopPlaylistR2EtagPolling';
 import {useDesktopPodcastCatalog} from './hooks/useDesktopPodcastCatalog';
 import {useDesktopPodcastPlayback} from './hooks/useDesktopPodcastPlayback';
@@ -97,6 +97,7 @@ import {
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
 import {useAppRootClassName} from './shell/useAppRootClassName';
+import {useAppTitleBarTodayHubSelect} from './shell/useAppTitleBarTodayHubSelect';
 
 import './App.css';
 
@@ -115,51 +116,6 @@ const MAIN_WINDOW_LABEL = 'main';
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
-
-function useAppTitleBarTodayHubSelect(
-  vaultRoot: string | null,
-  todayHubSelectorItems: ReadonlyArray<{
-    todayNoteUri: string;
-    label: string;
-  }>,
-  activeTodayHubUri: string | null,
-  workspaceSelectShowsActiveTabPill: boolean,
-  focusActiveTodayHubNote: () => void,
-  switchTodayHubWorkspace: (uri: string) => void | Promise<void>,
-  openTodayHubInNewTabAfterActive: (uri: string) => void,
-): WindowTitleBarTodayHubSelect {
-  return useMemo((): WindowTitleBarTodayHubSelect => {
-    if (
-      !vaultRoot
-      || todayHubSelectorItems.length === 0
-      || activeTodayHubUri == null
-    ) {
-      return null;
-    }
-    const activeLabel =
-      todayHubSelectorItems.find(i => i.todayNoteUri === activeTodayHubUri)
-        ?.label ?? 'Today';
-    return {
-      items: todayHubSelectorItems,
-      activeTodayNoteUri: activeTodayHubUri,
-      activeLabel,
-      mainShowsActiveTabPill: workspaceSelectShowsActiveTabPill,
-      onMainActivate: focusActiveTodayHubNote,
-      onPickHub: (uri: string) => {
-        void switchTodayHubWorkspace(uri);
-      },
-      onOpenHubInNewTab: openTodayHubInNewTabAfterActive,
-    };
-  }, [
-    vaultRoot,
-    todayHubSelectorItems,
-    activeTodayHubUri,
-    workspaceSelectShowsActiveTabPill,
-    focusActiveTodayHubNote,
-    switchTodayHubWorkspace,
-    openTodayHubInNewTabAfterActive,
-  ]);
-}
 
 type AppMainWindowKeyboardEffectsArgs = {
   vaultRoot: string | null;
