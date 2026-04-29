@@ -152,6 +152,7 @@ import {
 } from '../lib/vaultFilesChangedPayload';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
+import type {WorkspaceTabsController} from './workspaceReturnShape';
 import {
   buildRestoredEditorWorkspace,
   isUriValidVaultMarkdown,
@@ -541,6 +542,7 @@ export type UseMainWindowWorkspaceResult = {
   editorHistoryCanGoForward: boolean;
   editorHistoryGoBack: () => void;
   editorHistoryGoForward: () => void;
+  tabsController: WorkspaceTabsController;
   /**
    * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
    * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
@@ -4667,6 +4669,11 @@ export function useMainWindowWorkspace(options: {
     editorHistoryCanGoForward,
     editorHistoryGoBack,
     editorHistoryGoForward,
+    tabsController: {
+      editorHistoryCanGoBack, editorHistoryCanGoForward, editorHistoryGoBack, editorHistoryGoForward,
+      editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
+      closeOtherEditorTabs, closeAllEditorTabs, reopenLastClosedEditorTab, canReopenClosedEditorTab,
+    },
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
     editorWorkspaceTabs,
