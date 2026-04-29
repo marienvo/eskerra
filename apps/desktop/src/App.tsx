@@ -96,6 +96,7 @@ import {
 } from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
+import {useAppRootClassName} from './shell/useAppRootClassName';
 
 import './App.css';
 
@@ -114,37 +115,6 @@ const MAIN_WINDOW_LABEL = 'main';
  */
 const WINDOW_RESTORE_FLAGS_NO_POSITION =
   StateFlags.ALL & ~StateFlags.POSITION & ~StateFlags.DECORATIONS;
-
-function useAppRootClassName(
-  vaultRoot: string | null,
-  layoutsReady: boolean,
-  maximized: boolean,
-  tiling: 'none' | 'left' | 'right',
-  tilingDebug: boolean,
-): string {
-  return useMemo(() => {
-    const parts = ['app-root'];
-    if (isTauri()) {
-      parts.push('app-root--tauri');
-    }
-    if (!vaultRoot || !layoutsReady) {
-      parts.push('app-root--setup');
-    }
-    if (maximized) {
-      parts.push('app-root--maximized');
-    }
-    if (tiling === 'left') {
-      parts.push('app-root--tiled-left');
-    }
-    if (tiling === 'right') {
-      parts.push('app-root--tiled-right');
-    }
-    if (tilingDebug) {
-      parts.push('app-root--tiling-debug');
-    }
-    return parts.join(' ');
-  }, [vaultRoot, layoutsReady, maximized, tiling, tilingDebug]);
-}
 
 function useAppTitleBarTodayHubSelect(
   vaultRoot: string | null,
