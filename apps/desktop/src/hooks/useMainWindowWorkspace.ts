@@ -538,10 +538,6 @@ export type UseMainWindowWorkspaceResult = {
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
-  editorHistoryCanGoBack: boolean;
-  editorHistoryCanGoForward: boolean;
-  editorHistoryGoBack: () => void;
-  editorHistoryGoForward: () => void;
   tabsController: WorkspaceTabsController;
   /**
    * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
@@ -553,17 +549,6 @@ export type UseMainWindowWorkspaceResult = {
    * late rAF clear does not re-render the whole workspace.
    */
   inboxBacklinksDeferNonce: number;
-  /** Open editor tabs with per-tab navigation history. */
-  editorWorkspaceTabs: readonly EditorWorkspaceTab[];
-  activeEditorTabId: string | null;
-  activateOpenTab: (tabId: string) => void;
-  closeEditorTab: (tabId: string) => void;
-  /** Reorder open tabs in the title bar (`fromIndex` / `insertBeforeIndex` refer to order before the move). */
-  reorderEditorWorkspaceTabs: (fromIndex: number, insertBeforeIndex: number) => void;
-  closeOtherEditorTabs: (keepTabId: string) => void;
-  closeAllEditorTabs: () => void;
-  reopenLastClosedEditorTab: () => void;
-  canReopenClosedEditorTab: boolean;
   /** Weekly hub grid under the main editor when `Today.md` is open. */
   showTodayHubCanvas: boolean;
   /** Parsed hub settings from merged `Today.md` markdown (body + shell-held YAML). */
@@ -4665,10 +4650,6 @@ export function useMainWindowWorkspace(options: {
     vaultTreeSelectionClearNonce,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
-    editorHistoryCanGoBack,
-    editorHistoryCanGoForward,
-    editorHistoryGoBack,
-    editorHistoryGoForward,
     tabsController: {
       editorHistoryCanGoBack, editorHistoryCanGoForward, editorHistoryGoBack, editorHistoryGoForward,
       editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
@@ -4676,15 +4657,6 @@ export function useMainWindowWorkspace(options: {
     },
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
-    editorWorkspaceTabs,
-    activeEditorTabId,
-    activateOpenTab,
-    closeEditorTab,
-    reorderEditorWorkspaceTabs,
-    closeOtherEditorTabs,
-    closeAllEditorTabs,
-    reopenLastClosedEditorTab,
-    canReopenClosedEditorTab,
     showTodayHubCanvas,
     todayHubSettings,
     todayHubBridgeRef,
