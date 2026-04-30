@@ -7,7 +7,6 @@ import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import type {
   MutableRefObject,
-  ReactNode,
   RefObject,
 } from 'react';
 import {
@@ -67,11 +66,7 @@ import {
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
-import {
-  EditorWorkspaceToolbar,
-  type EditorWorkspaceToolbarNowPlaying,
-} from './EditorWorkspaceToolbar';
-import type {PlaybackTransportProps} from './PlaybackTransport';
+import {EditorWorkspaceToolbar} from './EditorWorkspaceToolbar';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {NotificationsPanel} from './NotificationsPanel';
 import {MaterialIcon} from './MaterialIcon';
