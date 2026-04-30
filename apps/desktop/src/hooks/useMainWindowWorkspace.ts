@@ -154,6 +154,7 @@ import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
 import type {
   WorkspaceLinkController,
+  WorkspaceNotificationsState,
   WorkspaceTabsController,
 } from './workspaceReturnShape';
 import {
@@ -463,7 +464,6 @@ export type UseMainWindowWorkspaceResult = {
   editorBody: string;
   inboxEditorResetNonce: number;
   busy: boolean;
-  err: string | null;
   composingNewEntry: boolean;
   inboxContentByUri: Record<string, string>;
   /** Vault-wide markdown index for wiki resolve, autocomplete, and link styling (async; may lag the tree). */
@@ -473,12 +473,7 @@ export type UseMainWindowWorkspaceResult = {
   /** Increments only when files in `General/` change — used to scope podcast catalog rescans. */
   podcastFsNonce: number;
   deviceInstanceId: string;
-  wikiRenameNotice: string | null;
-  renameLinkProgress: RenameLinkProgress | null;
-  pendingWikiLinkAmbiguityRename: PendingWikiLinkAmbiguityRename | null;
-  confirmPendingWikiLinkAmbiguityRename: () => Promise<void>;
-  cancelPendingWikiLinkAmbiguityRename: () => void;
-  setErr: (value: string | null) => void;
+  notificationsState: WorkspaceNotificationsState;
   /**
    * Disk diverged from last persisted content while the editor has local edits.
    * Autosave is blocked until the user reloads or chooses to keep local edits (overwrite disk on next save).
@@ -4602,7 +4597,6 @@ export function useMainWindowWorkspace(options: {
     editorBody,
     inboxEditorResetNonce,
     busy,
-    err,
     composingNewEntry,
     inboxContentByUri,
     vaultMarkdownRefs,
@@ -4610,12 +4604,10 @@ export function useMainWindowWorkspace(options: {
     fsRefreshNonce,
     podcastFsNonce,
     deviceInstanceId,
-    wikiRenameNotice,
-    renameLinkProgress,
-    pendingWikiLinkAmbiguityRename,
-    confirmPendingWikiLinkAmbiguityRename,
-    cancelPendingWikiLinkAmbiguityRename,
-    setErr,
+    notificationsState: {
+      err, setErr, wikiRenameNotice, renameLinkProgress, pendingWikiLinkAmbiguityRename,
+      confirmPendingWikiLinkAmbiguityRename, cancelPendingWikiLinkAmbiguityRename,
+    },
     diskConflict,
     resolveDiskConflictReloadFromDisk,
     resolveDiskConflictKeepLocal,

@@ -938,7 +938,7 @@ export default function App() {
     editorBody,
     inboxEditorResetNonce,
     busy,
-    err,
+    notificationsState: workspaceNotificationsState,
     diskConflict,
     resolveDiskConflictReloadFromDisk,
     resolveDiskConflictKeepLocal,
@@ -952,12 +952,6 @@ export default function App() {
     fsRefreshNonce,
     podcastFsNonce,
     deviceInstanceId,
-    wikiRenameNotice,
-    renameLinkProgress,
-    pendingWikiLinkAmbiguityRename,
-    confirmPendingWikiLinkAmbiguityRename,
-    cancelPendingWikiLinkAmbiguityRename,
-    setErr,
     setEditorBody,
     hydrateVault,
     startNewEntry,
@@ -1009,6 +1003,15 @@ export default function App() {
     restoredInboxState,
     inboxRestoreEnabled: layoutsReady,
   });
+  const {
+    err,
+    setErr,
+    wikiRenameNotice,
+    renameLinkProgress,
+    pendingWikiLinkAmbiguityRename,
+    confirmPendingWikiLinkAmbiguityRename,
+    cancelPendingWikiLinkAmbiguityRename,
+  } = workspaceNotificationsState;
 
   const openTodayHubInNewTabAfterActive = useCallback(
     (uri: string) => {
