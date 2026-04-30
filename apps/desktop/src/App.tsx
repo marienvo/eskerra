@@ -1264,16 +1264,10 @@ export default function App() {
                       onNotificationsInboxStackTopHeightPxChanged={
                         persistNotificationsInboxStackTopHeightPx
                       }
-                      playbackTransport={playbackTransport}
-                      toolbarNowPlaying={toolbarNowPlaying}
-                      vaultWidthPx={layouts.inbox.leftWidthPx}
-                      episodesWidthPx={layouts.inbox.leftWidthPx}
-                      onVaultWidthPxChanged={persistMainLeftWidthPx}
-                      onEpisodesWidthPxChanged={persistMainLeftWidthPx}
-                      stackTopHeightPx={layouts.vaultEpisodesStack.topHeightPx}
-                      onStackTopHeightPxChanged={persistVaultEpisodesStackTopHeightPx}
-                      episodesPane={
-                        episodesPaneVisible ? (
+                      playbackController={{
+                        playbackTransport,
+                        toolbarNowPlaying,
+                        episodesPane: episodesPaneVisible ? (
                           <EpisodesPane
                             sections={podcastCatalog.sections}
                             catalogLoading={podcastCatalog.catalogLoading}
@@ -1291,8 +1285,14 @@ export default function App() {
                             rssSyncing={rssSyncing}
                             rssSyncPercent={rssSyncPercent}
                           />
-                        ) : null
-                      }
+                        ) : null,
+                      }}
+                      vaultWidthPx={layouts.inbox.leftWidthPx}
+                      episodesWidthPx={layouts.inbox.leftWidthPx}
+                      onVaultWidthPxChanged={persistMainLeftWidthPx}
+                      onEpisodesWidthPxChanged={persistMainLeftWidthPx}
+                      stackTopHeightPx={layouts.vaultEpisodesStack.topHeightPx}
+                      onStackTopHeightPxChanged={persistVaultEpisodesStackTopHeightPx}
                       vaultMarkdownRefs={vaultMarkdownRefs}
                       inboxContentByUri={inboxContentByUri}
                       backlinkUris={selectedNoteBacklinkUris}

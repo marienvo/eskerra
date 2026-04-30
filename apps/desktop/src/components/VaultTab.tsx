@@ -90,6 +90,7 @@ import type {
   VaultTabLinkController,
   VaultTabMergeController,
   VaultTabNotificationsController,
+  VaultTabPlaybackController,
   VaultTabTabsController,
   VaultTabTreeController,
 } from './vaultTabTypes';
@@ -126,17 +127,13 @@ type VaultTabProps = {
   onCloseInboxPane: () => void;
   notificationsInboxStackTopHeightPx: number;
   onNotificationsInboxStackTopHeightPxChanged: (px: number) => void;
-  /** Shown in {@link EditorWorkspaceToolbar} when an episode is active. */
-  playbackTransport?: PlaybackTransportProps;
-  toolbarNowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
+  playbackController: VaultTabPlaybackController;
   vaultWidthPx: number;
   episodesWidthPx: number;
   onVaultWidthPxChanged: (px: number) => void;
   onEpisodesWidthPxChanged: (px: number) => void;
   stackTopHeightPx: number;
   onStackTopHeightPxChanged: (px: number) => void;
-  /** Episodes list column; omitted when {@link episodesPaneVisible} is false (pass `null`). */
-  episodesPane: ReactNode;
   /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
   vaultMarkdownRefs: VaultMarkdownRef[];
   inboxContentByUri: Record<string, string>;
@@ -868,15 +865,13 @@ export function VaultTab({
   onCloseInboxPane,
   notificationsInboxStackTopHeightPx,
   onNotificationsInboxStackTopHeightPxChanged,
-  playbackTransport,
-  toolbarNowPlaying,
+  playbackController,
   vaultWidthPx,
   episodesWidthPx,
   onVaultWidthPxChanged,
   onEpisodesWidthPxChanged,
   stackTopHeightPx,
   onStackTopHeightPxChanged,
-  episodesPane,
   vaultMarkdownRefs,
   inboxContentByUri,
   backlinkUris,
@@ -965,6 +960,11 @@ export function VaultTab({
     onApplyMergedBodyFromMerge,
     onKeepMyEditsFromMerge,
   } = mergeController;
+  const {
+    playbackTransport,
+    toolbarNowPlaying,
+    episodesPane,
+  } = playbackController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
