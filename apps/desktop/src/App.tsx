@@ -1236,15 +1236,18 @@ export default function App() {
                   ) : (
                     <VaultTab
                       key={vaultRoot}
-                      vaultRoot={vaultRoot}
-                      vaultSettings={vaultSettings}
+                      environment={{
+                        vaultRoot,
+                        vaultSettings,
+                        fs,
+                        fsRefreshNonce,
+                        vaultMarkdownRefs,
+                      }}
                       frontmatterController={{
                         inboxYamlFrontmatterInner,
                         applyFrontmatterInnerChange,
                         diskConflict,
                       }}
-                      fs={fs}
-                      fsRefreshNonce={fsRefreshNonce}
                       inboxEditorRef={inboxEditorRef}
                       inboxEditorShellScrollRef={inboxEditorShellScrollRef}
                       inboxEditorShellScrollDirectiveRef={
@@ -1293,7 +1296,6 @@ export default function App() {
                       onEpisodesWidthPxChanged={persistMainLeftWidthPx}
                       stackTopHeightPx={layouts.vaultEpisodesStack.topHeightPx}
                       onStackTopHeightPxChanged={persistVaultEpisodesStackTopHeightPx}
-                      vaultMarkdownRefs={vaultMarkdownRefs}
                       inboxContentByUri={inboxContentByUri}
                       backlinkUris={selectedNoteBacklinkUris}
                       selectedUri={selectedUri}

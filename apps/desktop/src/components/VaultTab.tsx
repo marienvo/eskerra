@@ -86,6 +86,7 @@ import {
 } from './vaultTabLinkDerived';
 import {buildVaultTabEditorPaneDerived} from './vaultTabEditorPaneDerived';
 import type {
+  VaultTabEnvironment,
   VaultTabFrontmatterController,
   VaultTabLinkController,
   VaultTabMergeController,
@@ -108,11 +109,8 @@ function trimTrailingSlashes(value: string): string {
 }
 
 type VaultTabProps = {
-  vaultRoot: string;
-  vaultSettings: EskerraSettings | null;
+  environment: VaultTabEnvironment;
   frontmatterController: VaultTabFrontmatterController;
-  fs: VaultFilesystem;
-  fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
@@ -134,8 +132,6 @@ type VaultTabProps = {
   onEpisodesWidthPxChanged: (px: number) => void;
   stackTopHeightPx: number;
   onStackTopHeightPxChanged: (px: number) => void;
-  /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
-  vaultMarkdownRefs: VaultMarkdownRef[];
   inboxContentByUri: Record<string, string>;
   backlinkUris: readonly string[];
   selectedUri: string | null;
@@ -847,11 +843,8 @@ function EditorPaneBody({
 }
 
 export function VaultTab({
-  vaultRoot,
-  vaultSettings,
+  environment,
   frontmatterController,
-  fs,
-  fsRefreshNonce,
   inboxEditorRef,
   inboxEditorShellScrollRef,
   inboxEditorShellScrollDirectiveRef,
@@ -872,7 +865,6 @@ export function VaultTab({
   onEpisodesWidthPxChanged,
   stackTopHeightPx,
   onStackTopHeightPxChanged,
-  vaultMarkdownRefs,
   inboxContentByUri,
   backlinkUris,
   selectedUri,
@@ -907,6 +899,13 @@ export function VaultTab({
   todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
 }: VaultTabProps) {
+  const {
+    vaultRoot,
+    vaultSettings,
+    fs,
+    fsRefreshNonce,
+    vaultMarkdownRefs,
+  } = environment;
   const {
     inboxYamlFrontmatterInner,
     applyFrontmatterInnerChange,
