@@ -152,7 +152,10 @@ import {
 } from '../lib/vaultFilesChangedPayload';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
-import type {WorkspaceTabsController} from './workspaceReturnShape';
+import type {
+  WorkspaceLinkController,
+  WorkspaceTabsController,
+} from './workspaceReturnShape';
 import {
   buildRestoredEditorWorkspace,
   isUriValidVaultMarkdown,
@@ -508,14 +511,7 @@ export type UseMainWindowWorkspaceResult = {
   onCleanNoteInbox: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
-  /** Editor intent entrypoint for wiki link open/create. */
-  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
-  /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
-  onMarkdownRelativeLinkActivate: (
-    payload: VaultRelativeMarkdownLinkActivatePayload,
-  ) => void;
-  /** Editor intent entrypoint for `http` / `https` / `mailto` inline links. */
-  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
+  linkController: WorkspaceLinkController;
   deleteNote: (uri: string) => Promise<void>;
   renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
   subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
@@ -4636,9 +4632,7 @@ export function useMainWindowWorkspace(options: {
     onInboxSaveShortcut,
     onCleanNoteInbox,
     flushInboxSave,
-    onWikiLinkActivate,
-    onMarkdownRelativeLinkActivate,
-    onMarkdownExternalLinkOpen,
+    linkController: {onWikiLinkActivate, onMarkdownRelativeLinkActivate, onMarkdownExternalLinkOpen},
     deleteNote,
     renameNote,
     subtreeMarkdownCache: subtreeMarkdownCache,

@@ -968,9 +968,7 @@ export default function App() {
     onInboxSaveShortcut,
     onCleanNoteInbox,
     flushInboxSave,
-    onWikiLinkActivate,
-    onMarkdownRelativeLinkActivate,
-    onMarkdownExternalLinkOpen,
+    linkController: workspaceLinkController,
     deleteNote,
     renameNote,
     deleteFolder,
@@ -1383,9 +1381,9 @@ export default function App() {
                       inboxEditorResetNonce={inboxEditorResetNonce}
                       onEditorError={setErr}
                       linkController={{
-                        onWikiLinkActivate,
-                        onMarkdownRelativeLinkActivate,
-                        onMarkdownExternalLinkOpen,
+                        onWikiLinkActivate: workspaceLinkController.onWikiLinkActivate,
+                        onMarkdownRelativeLinkActivate: workspaceLinkController.onMarkdownRelativeLinkActivate,
+                        onMarkdownExternalLinkOpen: workspaceLinkController.onMarkdownExternalLinkOpen,
                         linkSnippetBlockedDomains: vaultSettings?.linkSnippetBlockedDomains,
                         onMuteLinkSnippetDomain: handleMuteLinkSnippetDomain,
                       }}
