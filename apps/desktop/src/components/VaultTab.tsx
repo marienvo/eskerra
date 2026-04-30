@@ -7,7 +7,6 @@ import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import type {
   MutableRefObject,
-  ReactNode,
   RefObject,
 } from 'react';
 import {
@@ -44,7 +43,6 @@ import {
   FrontmatterEditor,
   type VaultFrontmatterIndexApi,
 } from '../editor/frontmatterEditor/FrontmatterEditor';
-import {normalizeEditorDocUri} from '../lib/editorDocumentHistory';
 import {useVaultFrontmatterIndex} from '../hooks/useVaultFrontmatterIndex';
 
 import {
@@ -68,11 +66,7 @@ import {
 import {DesktopHorizontalSplitEnd} from './DesktopHorizontalSplitEnd';
 import {DesktopVerticalSplit} from './DesktopVerticalSplit';
 import {EditorPaneOpenNoteTabs} from './EditorPaneOpenNoteTabs';
-import {
-  EditorWorkspaceToolbar,
-  type EditorWorkspaceToolbarNowPlaying,
-} from './EditorWorkspaceToolbar';
-import type {PlaybackTransportProps} from './PlaybackTransport';
+import {EditorWorkspaceToolbar} from './EditorWorkspaceToolbar';
 import {MainWorkspaceSplit} from './MainWorkspaceSplit';
 import {NotificationsPanel} from './NotificationsPanel';
 import {MaterialIcon} from './MaterialIcon';
@@ -85,23 +79,20 @@ import {
   buildVaultTabLinkDerivedData,
   type VaultTabWikiLinkCompletionCandidates,
 } from './vaultTabLinkDerived';
+import {buildVaultTabEditorPaneDerived} from './vaultTabEditorPaneDerived';
 import type {
+  VaultTabEnvironment,
+  VaultTabFrontmatterController,
   VaultTabLinkController,
+  VaultTabMergeController,
   VaultTabNotificationsController,
+  VaultTabPlaybackController,
   VaultTabTabsController,
+  VaultTabTodayHubController,
+  VaultTabTreeController,
 } from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
-
-type NoteRow = {lastModified: number | null; name: string; uri: string};
-
-type WikiLinkAmbiguityRenamePrompt = {
-  scannedFileCount: number;
-  touchedFileCount: number;
-  touchedBytes: number;
-  updatedLinkCount: number;
-  skippedAmbiguousLinkCount: number;
-};
 
 type DiskConflictPayload = {uri: string};
 
@@ -114,14 +105,8 @@ function trimTrailingSlashes(value: string): string {
 }
 
 type VaultTabProps = {
-  vaultRoot: string;
-  vaultSettings: EskerraSettings | null;
-  inboxYamlFrontmatterInner: string | null;
-  applyFrontmatterInnerChange: (nextInner: string | null) => void;
-  /** Blocks structured frontmatter edits while a hard conflict is open on the selected note. */
-  diskConflict: DiskConflictPayload | null;
-  fs: VaultFilesystem;
-  fsRefreshNonce: number;
+  environment: VaultTabEnvironment;
+  frontmatterController: VaultTabFrontmatterController;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
   inboxEditorShellScrollRef: RefObject<HTMLDivElement | null>;
   inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
@@ -136,20 +121,13 @@ type VaultTabProps = {
   onCloseInboxPane: () => void;
   notificationsInboxStackTopHeightPx: number;
   onNotificationsInboxStackTopHeightPxChanged: (px: number) => void;
-  /** Shown in {@link EditorWorkspaceToolbar} when an episode is active. */
-  playbackTransport?: PlaybackTransportProps;
-  toolbarNowPlaying?: EditorWorkspaceToolbarNowPlaying | null;
+  playbackController: VaultTabPlaybackController;
   vaultWidthPx: number;
   episodesWidthPx: number;
   onVaultWidthPxChanged: (px: number) => void;
   onEpisodesWidthPxChanged: (px: number) => void;
   stackTopHeightPx: number;
   onStackTopHeightPxChanged: (px: number) => void;
-  /** Episodes list column; omitted when {@link episodesPaneVisible} is false (pass `null`). */
-  episodesPane: ReactNode;
-  notes: NoteRow[];
-  /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
-  vaultMarkdownRefs: VaultMarkdownRef[];
   inboxContentByUri: Record<string, string>;
   backlinkUris: readonly string[];
   selectedUri: string | null;
@@ -168,53 +146,17 @@ type VaultTabProps = {
   /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
   onCleanNote?: () => void;
   busy: boolean;
-  onDeleteNote: (uri: string) => void | Promise<void>;
-  onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
-  onDeleteFolder: (directoryUri: string) => void | Promise<void>;
-  onRenameFolder: (directoryUri: string, nextDisplayName: string) => void | Promise<void>;
-  onMoveVaultTreeItem: (
-    sourceUri: string,
-    sourceKind: 'folder' | 'article',
-    targetDirectoryUri: string,
-  ) => void | Promise<void>;
-  onBulkMoveVaultTreeItems: (
-    items: VaultTreeBulkItem[],
-    targetDirectoryUri: string,
-  ) => void | Promise<void>;
-  onBulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => void | Promise<void>;
-  vaultTreeSelectionClearNonce: number;
-  wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
-  onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
-  onCancelWikiLinkAmbiguityRename: () => void;
+  treeController: VaultTabTreeController;
+  mergeController: VaultTabMergeController;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
   tabsController: VaultTabTabsController;
   notificationsController: VaultTabNotificationsController;
   notificationsWidthPx: number;
   onNotificationsWidthPxChanged: (px: number) => void;
-  showTodayHubCanvas: boolean;
-  todayHubSettings: TodayHubSettings | null;
-  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
-  todayHubWikiNavParentRef: MutableRefObject<string | null>;
-  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
-  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
-  persistTodayHubRow: (
-    rowUri: string,
-    mergedMarkdown: string,
-    columnCount: number,
-  ) => Promise<void>;
-  /** Skip hub row clean when this returns true (e.g. disk conflict on that week file). */
-  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
+  todayHubController: VaultTabTodayHubController;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
-  mergeView:
-    | null
-    | {kind: 'backup'; baseUri: string; backupUri: string}
-    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
-  onCloseMergeView: () => void;
-  onApplyFullBackupFromMerge: () => void | Promise<void>;
-  onApplyMergedBodyFromMerge: (body: string) => void;
-  onKeepMyEditsFromMerge?: () => void;
 };
 
 type InboxBacklinksSectionProps = {
@@ -291,38 +233,31 @@ function useEditorPaneBodyDerived(
   busy: boolean,
   diskConflict: EditorPaneBodyProps['diskConflict'],
 ) {
-  const mergeCurrentBody = useMemo(() => {
-    if (mergeView == null) {
-      return '';
-    }
-    const k = mergeView.baseUri;
-    const fromCache = inboxContentByUri[k];
-    if (fromCache !== undefined) {
-      return fromCache;
-    }
-    if (selectedUri != null && normalizeEditorDocUri(selectedUri) === k) {
-      return editorBody;
-    }
-    return '';
-  }, [mergeView, inboxContentByUri, selectedUri, editorBody]);
-
-  const scrollTodayHubLayout =
-    showTodayHubCanvas
-    && Boolean(selectedUri)
-    && todayHubSettings != null
-    && !composingNewEntry
-    && mergeView == null;
-
-  const frontmatterReadOnly =
-    busy
-    || Boolean(
-      diskConflict
-        && selectedUri
-        && normalizeEditorDocUri(diskConflict.uri) ===
-          normalizeEditorDocUri(selectedUri),
-    );
-
-  return {mergeCurrentBody, scrollTodayHubLayout, frontmatterReadOnly};
+  return useMemo(
+    () =>
+      buildVaultTabEditorPaneDerived({
+        mergeView,
+        inboxContentByUri,
+        selectedUri,
+        editorBody,
+        showTodayHubCanvas,
+        todayHubSettings,
+        composingNewEntry,
+        busy,
+        diskConflict,
+      }),
+    [
+      mergeView,
+      inboxContentByUri,
+      selectedUri,
+      editorBody,
+      showTodayHubCanvas,
+      todayHubSettings,
+      composingNewEntry,
+      busy,
+      diskConflict,
+    ],
+  );
 }
 
 type EditorPaneTodayHubBlockProps = {
@@ -892,13 +827,8 @@ function EditorPaneBody({
 }
 
 export function VaultTab({
-  vaultRoot,
-  vaultSettings,
-  inboxYamlFrontmatterInner,
-  applyFrontmatterInnerChange,
-  diskConflict,
-  fs,
-  fsRefreshNonce,
+  environment,
+  frontmatterController,
   inboxEditorRef,
   inboxEditorShellScrollRef,
   inboxEditorShellScrollDirectiveRef,
@@ -912,17 +842,13 @@ export function VaultTab({
   onCloseInboxPane,
   notificationsInboxStackTopHeightPx,
   onNotificationsInboxStackTopHeightPxChanged,
-  playbackTransport,
-  toolbarNowPlaying,
+  playbackController,
   vaultWidthPx,
   episodesWidthPx,
   onVaultWidthPxChanged,
   onEpisodesWidthPxChanged,
   stackTopHeightPx,
   onStackTopHeightPxChanged,
-  episodesPane,
-  notes,
-  vaultMarkdownRefs,
   inboxContentByUri,
   backlinkUris,
   selectedUri,
@@ -940,37 +866,28 @@ export function VaultTab({
   onSaveShortcut,
   onCleanNote,
   busy,
-  onDeleteNote,
-  onRenameNote,
-  onDeleteFolder,
-  onRenameFolder,
-  onMoveVaultTreeItem,
-  onBulkMoveVaultTreeItems,
-  onBulkDeleteVaultTreeItems,
-  vaultTreeSelectionClearNonce,
-  wikiLinkAmbiguityRenamePrompt,
-  onConfirmWikiLinkAmbiguityRename,
-  onCancelWikiLinkAmbiguityRename,
+  treeController,
+  mergeController,
   inboxBacklinksDeferNonce,
   tabsController,
   notificationsController,
   notificationsWidthPx,
   onNotificationsWidthPxChanged,
-  showTodayHubCanvas,
-  todayHubSettings,
-  todayHubBridgeRef,
-  todayHubWikiNavParentRef,
-  todayHubCellEditorRef,
-  prehydrateTodayHubRows,
-  persistTodayHubRow,
-  todayHubCleanRowBlocked,
+  todayHubController,
   titleBarEditorTabsHost = null,
-  mergeView,
-  onCloseMergeView,
-  onApplyFullBackupFromMerge,
-  onApplyMergedBodyFromMerge,
-  onKeepMyEditsFromMerge,
 }: VaultTabProps) {
+  const {
+    vaultRoot,
+    vaultSettings,
+    fs,
+    fsRefreshNonce,
+    vaultMarkdownRefs,
+  } = environment;
+  const {
+    inboxYamlFrontmatterInner,
+    applyFrontmatterInnerChange,
+    diskConflict,
+  } = frontmatterController;
   const {
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,
@@ -998,6 +915,42 @@ export function VaultTab({
     onDismissNotification,
     onClearAllNotifications,
   } = notificationsController;
+  const {
+    notes,
+    onDeleteNote,
+    onRenameNote,
+    onDeleteFolder,
+    onRenameFolder,
+    onMoveVaultTreeItem,
+    onBulkMoveVaultTreeItems,
+    onBulkDeleteVaultTreeItems,
+    vaultTreeSelectionClearNonce,
+  } = treeController;
+  const {
+    wikiLinkAmbiguityRenamePrompt,
+    onConfirmWikiLinkAmbiguityRename,
+    onCancelWikiLinkAmbiguityRename,
+    mergeView,
+    onCloseMergeView,
+    onApplyFullBackupFromMerge,
+    onApplyMergedBodyFromMerge,
+    onKeepMyEditsFromMerge,
+  } = mergeController;
+  const {
+    playbackTransport,
+    toolbarNowPlaying,
+    episodesPane,
+  } = playbackController;
+  const {
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
+    todayHubCleanRowBlocked,
+  } = todayHubController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),

@@ -152,7 +152,14 @@ import {
 } from '../lib/vaultFilesChangedPayload';
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
-import type {WorkspaceTabsController} from './workspaceReturnShape';
+import type {
+  WorkspaceFrontmatterController,
+  WorkspaceLinkController,
+  WorkspaceNotificationsState,
+  WorkspaceSelectionController,
+  WorkspaceTabsController,
+  WorkspaceTreeController,
+} from './workspaceReturnShape';
 import {
   buildRestoredEditorWorkspace,
   isUriValidVaultMarkdown,
@@ -455,27 +462,13 @@ export type UseMainWindowWorkspaceResult = {
   vaultSettings: EskerraSettings | null;
   setVaultSettings: Dispatch<SetStateAction<EskerraSettings | null>>;
   settingsName: string;
-  notes: NoteRow[];
-  selectedUri: string | null;
-  editorBody: string;
-  inboxEditorResetNonce: number;
   busy: boolean;
-  err: string | null;
-  composingNewEntry: boolean;
-  inboxContentByUri: Record<string, string>;
-  /** Vault-wide markdown index for wiki resolve, autocomplete, and link styling (async; may lag the tree). */
-  vaultMarkdownRefs: VaultMarkdownRef[];
-  selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   /** Increments only when files in `General/` change — used to scope podcast catalog rescans. */
   podcastFsNonce: number;
   deviceInstanceId: string;
-  wikiRenameNotice: string | null;
-  renameLinkProgress: RenameLinkProgress | null;
-  pendingWikiLinkAmbiguityRename: PendingWikiLinkAmbiguityRename | null;
-  confirmPendingWikiLinkAmbiguityRename: () => Promise<void>;
-  cancelPendingWikiLinkAmbiguityRename: () => void;
-  setErr: (value: string | null) => void;
+  selectionController: WorkspaceSelectionController;
+  notificationsState: WorkspaceNotificationsState;
   /**
    * Disk diverged from last persisted content while the editor has local edits.
    * Autosave is blocked until the user reloads or chooses to keep local edits (overwrite disk on next save).
@@ -487,68 +480,20 @@ export type UseMainWindowWorkspaceResult = {
   diskConflictSoft: DiskConflictSoftState | null;
   elevateDiskConflictSoftToBlocking: () => void;
   dismissDiskConflictSoft: () => void;
-  setEditorBody: (value: string) => void;
   hydrateVault: (root: string) => Promise<void>;
-  startNewEntry: () => void;
-  cancelNewEntry: () => void;
-  /** Open or focus: if a tab already shows `uri`, activate it; else navigate the active tab. */
-  selectNote: (uri: string) => void;
-  /**
-   * Prefer activating an existing tab that already shows `uri`; otherwise open a new tab and focus it
-   * (e.g. file tree middle-click). Use `insertAfterActive` for hub-dropdown opens.
-   */
-  selectNoteInNewActiveTab: (
-    uri: string,
-    opts?: {insertAfterActive?: boolean},
-  ) => void;
-  submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
   /** Normalize markdown layout for the open vault note (body only; YAML unchanged). */
   onCleanNoteInbox: () => void;
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
-  /** Editor intent entrypoint for wiki link open/create. */
-  onWikiLinkActivate: (payload: VaultWikiLinkActivatePayload) => void;
-  /** Editor intent entrypoint for relative `[](*.md)` link open/create. */
-  onMarkdownRelativeLinkActivate: (
-    payload: VaultRelativeMarkdownLinkActivatePayload,
-  ) => void;
-  /** Editor intent entrypoint for `http` / `https` / `mailto` inline links. */
-  onMarkdownExternalLinkOpen: (payload: {href: string; at: number}) => void;
-  deleteNote: (uri: string) => Promise<void>;
-  renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
-  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
-  deleteFolder: (directoryUri: string) => Promise<void>;
-  renameFolder: (directoryUri: string, nextDisplayName: string) => Promise<void>;
-  /** Single-item tree move (DnD): `renameFile` into target folder; stem unchanged (no wiki rewrites). */
-  moveVaultTreeItem: (
-    sourceUri: string,
-    sourceKind: 'folder' | 'article',
-    targetDirectoryUri: string,
-  ) => Promise<void>;
-  bulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => Promise<void>;
-  bulkMoveVaultTreeItems: (
-    items: VaultTreeBulkItem[],
-    targetDirectoryUri: string,
-  ) => Promise<void>;
-  /** Bumped after bulk tree mutations so the vault pane can clear stale multi-selection. */
-  vaultTreeSelectionClearNonce: number;
+  linkController: WorkspaceLinkController;
+  treeController: WorkspaceTreeController;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
   tabsController: WorkspaceTabsController;
-  /**
-   * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
-   * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
-   */
-  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
-  /**
-   * Bumped after each `loadMarkdown`; `VaultTab` handles the one-frame backlinks defer locally so the
-   * late rAF clear does not re-render the whole workspace.
-   */
-  inboxBacklinksDeferNonce: number;
   /** Weekly hub grid under the main editor when `Today.md` is open. */
   showTodayHubCanvas: boolean;
   /** Parsed hub settings from merged `Today.md` markdown (body + shell-held YAML). */
@@ -579,15 +524,7 @@ export type UseMainWindowWorkspaceResult = {
    * (active-hub Today visible without a tab row entry for that URI).
    */
   workspaceSelectShowsActiveTabPill: boolean;
-  /** YAML between `---` fences (or `null` if the note has no block). */
-  inboxYamlFrontmatterInner: string | null;
-  /** User / UI frontmatter edits: updates state, ref, and the normal debounced autosave path. */
-  applyFrontmatterInnerChange: (nextInner: string | null) => void;
-  /**
-   * Sync from disk / load / merge (not a direct user edit). Keeps `inboxYamlFrontmatterInner` aligned
-   * with the ref and leading text.
-   */
-  syncFrontmatterStateFromDisk: (nextInner: string | null, leading: string) => void;
+  frontmatterController: WorkspaceFrontmatterController;
   /**
    * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`),
    * or comparing editor draft with a disk version from a disk conflict.
@@ -4601,53 +4538,54 @@ export function useMainWindowWorkspace(options: {
     vaultSettings,
     setVaultSettings,
     settingsName,
-    notes,
-    selectedUri,
-    editorBody,
-    inboxEditorResetNonce,
     busy,
-    err,
-    composingNewEntry,
-    inboxContentByUri,
-    vaultMarkdownRefs,
-    selectedNoteBacklinkUris,
     fsRefreshNonce,
     podcastFsNonce,
     deviceInstanceId,
-    wikiRenameNotice,
-    renameLinkProgress,
-    pendingWikiLinkAmbiguityRename,
-    confirmPendingWikiLinkAmbiguityRename,
-    cancelPendingWikiLinkAmbiguityRename,
-    setErr,
+    selectionController: {
+      notes,
+      selectedUri,
+      editorBody,
+      setEditorBody: guardedSetEditorBody,
+      inboxEditorResetNonce,
+      composingNewEntry,
+      startNewEntry,
+      cancelNewEntry,
+      selectNote,
+      selectNoteInNewActiveTab,
+      submitNewEntry,
+      inboxContentByUri,
+      vaultMarkdownRefs,
+      selectedNoteBacklinkUris,
+      inboxEditorShellScrollDirectiveRef,
+      inboxBacklinksDeferNonce,
+    },
+    notificationsState: {
+      err, setErr, wikiRenameNotice, renameLinkProgress, pendingWikiLinkAmbiguityRename,
+      confirmPendingWikiLinkAmbiguityRename, cancelPendingWikiLinkAmbiguityRename,
+    },
     diskConflict,
     resolveDiskConflictReloadFromDisk,
     resolveDiskConflictKeepLocal,
     diskConflictSoft,
     elevateDiskConflictSoftToBlocking,
     dismissDiskConflictSoft,
-    setEditorBody: guardedSetEditorBody,
     hydrateVault,
-    startNewEntry,
-    cancelNewEntry,
-    selectNote,
-    selectNoteInNewActiveTab,
-    submitNewEntry,
     onInboxSaveShortcut,
     onCleanNoteInbox,
     flushInboxSave,
-    onWikiLinkActivate,
-    onMarkdownRelativeLinkActivate,
-    onMarkdownExternalLinkOpen,
-    deleteNote,
-    renameNote,
-    subtreeMarkdownCache: subtreeMarkdownCache,
-    deleteFolder,
-    renameFolder,
-    moveVaultTreeItem,
-    bulkDeleteVaultTreeItems,
-    bulkMoveVaultTreeItems,
-    vaultTreeSelectionClearNonce,
+    linkController: {onWikiLinkActivate, onMarkdownRelativeLinkActivate, onMarkdownExternalLinkOpen},
+    treeController: {
+      deleteNote,
+      renameNote,
+      subtreeMarkdownCache,
+      deleteFolder,
+      renameFolder,
+      moveVaultTreeItem,
+      bulkDeleteVaultTreeItems,
+      bulkMoveVaultTreeItems,
+      vaultTreeSelectionClearNonce,
+    },
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
     tabsController: {
@@ -4655,8 +4593,6 @@ export function useMainWindowWorkspace(options: {
       editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
       closeOtherEditorTabs, closeAllEditorTabs, reopenLastClosedEditorTab, canReopenClosedEditorTab,
     },
-    inboxEditorShellScrollDirectiveRef,
-    inboxBacklinksDeferNonce,
     showTodayHubCanvas,
     todayHubSettings,
     todayHubBridgeRef,
@@ -4671,9 +4607,11 @@ export function useMainWindowWorkspace(options: {
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
     workspaceSelectShowsActiveTabPill,
-    inboxYamlFrontmatterInner,
-    applyFrontmatterInnerChange,
-    syncFrontmatterStateFromDisk,
+    frontmatterController: {
+      inboxYamlFrontmatterInner,
+      applyFrontmatterInnerChange,
+      syncFrontmatterStateFromDisk,
+    },
     mergeView,
     closeMergeView,
     applyFullBackupFromMerge,
