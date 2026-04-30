@@ -86,6 +86,7 @@ import {
 } from './vaultTabLinkDerived';
 import {buildVaultTabEditorPaneDerived} from './vaultTabEditorPaneDerived';
 import type {
+  VaultTabFrontmatterController,
   VaultTabLinkController,
   VaultTabNotificationsController,
   VaultTabTabsController,
@@ -116,10 +117,7 @@ function trimTrailingSlashes(value: string): string {
 type VaultTabProps = {
   vaultRoot: string;
   vaultSettings: EskerraSettings | null;
-  inboxYamlFrontmatterInner: string | null;
-  applyFrontmatterInnerChange: (nextInner: string | null) => void;
-  /** Blocks structured frontmatter edits while a hard conflict is open on the selected note. */
-  diskConflict: DiskConflictPayload | null;
+  frontmatterController: VaultTabFrontmatterController;
   fs: VaultFilesystem;
   fsRefreshNonce: number;
   inboxEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
@@ -887,9 +885,7 @@ function EditorPaneBody({
 export function VaultTab({
   vaultRoot,
   vaultSettings,
-  inboxYamlFrontmatterInner,
-  applyFrontmatterInnerChange,
-  diskConflict,
+  frontmatterController,
   fs,
   fsRefreshNonce,
   inboxEditorRef,
@@ -964,6 +960,11 @@ export function VaultTab({
   onApplyMergedBodyFromMerge,
   onKeepMyEditsFromMerge,
 }: VaultTabProps) {
+  const {
+    inboxYamlFrontmatterInner,
+    applyFrontmatterInnerChange,
+    diskConflict,
+  } = frontmatterController;
   const {
     onWikiLinkActivate,
     onMarkdownRelativeLinkActivate,

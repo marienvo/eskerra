@@ -1229,9 +1229,11 @@ export default function App() {
                       key={vaultRoot}
                       vaultRoot={vaultRoot}
                       vaultSettings={vaultSettings}
-                      inboxYamlFrontmatterInner={inboxYamlFrontmatterInner}
-                      applyFrontmatterInnerChange={applyFrontmatterInnerChange}
-                      diskConflict={diskConflict}
+                      frontmatterController={{
+                        inboxYamlFrontmatterInner,
+                        applyFrontmatterInnerChange,
+                        diskConflict,
+                      }}
                       fs={fs}
                       fsRefreshNonce={fsRefreshNonce}
                       inboxEditorRef={inboxEditorRef}
