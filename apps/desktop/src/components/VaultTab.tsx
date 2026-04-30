@@ -44,7 +44,6 @@ import {
   FrontmatterEditor,
   type VaultFrontmatterIndexApi,
 } from '../editor/frontmatterEditor/FrontmatterEditor';
-import {normalizeEditorDocUri} from '../lib/editorDocumentHistory';
 import {useVaultFrontmatterIndex} from '../hooks/useVaultFrontmatterIndex';
 
 import {
@@ -85,6 +84,7 @@ import {
   buildVaultTabLinkDerivedData,
   type VaultTabWikiLinkCompletionCandidates,
 } from './vaultTabLinkDerived';
+import {buildVaultTabEditorPaneDerived} from './vaultTabEditorPaneDerived';
 import type {
   VaultTabLinkController,
   VaultTabNotificationsController,
@@ -291,38 +291,31 @@ function useEditorPaneBodyDerived(
   busy: boolean,
   diskConflict: EditorPaneBodyProps['diskConflict'],
 ) {
-  const mergeCurrentBody = useMemo(() => {
-    if (mergeView == null) {
-      return '';
-    }
-    const k = mergeView.baseUri;
-    const fromCache = inboxContentByUri[k];
-    if (fromCache !== undefined) {
-      return fromCache;
-    }
-    if (selectedUri != null && normalizeEditorDocUri(selectedUri) === k) {
-      return editorBody;
-    }
-    return '';
-  }, [mergeView, inboxContentByUri, selectedUri, editorBody]);
-
-  const scrollTodayHubLayout =
-    showTodayHubCanvas
-    && Boolean(selectedUri)
-    && todayHubSettings != null
-    && !composingNewEntry
-    && mergeView == null;
-
-  const frontmatterReadOnly =
-    busy
-    || Boolean(
-      diskConflict
-        && selectedUri
-        && normalizeEditorDocUri(diskConflict.uri) ===
-          normalizeEditorDocUri(selectedUri),
-    );
-
-  return {mergeCurrentBody, scrollTodayHubLayout, frontmatterReadOnly};
+  return useMemo(
+    () =>
+      buildVaultTabEditorPaneDerived({
+        mergeView,
+        inboxContentByUri,
+        selectedUri,
+        editorBody,
+        showTodayHubCanvas,
+        todayHubSettings,
+        composingNewEntry,
+        busy,
+        diskConflict,
+      }),
+    [
+      mergeView,
+      inboxContentByUri,
+      selectedUri,
+      editorBody,
+      showTodayHubCanvas,
+      todayHubSettings,
+      composingNewEntry,
+      busy,
+      diskConflict,
+    ],
+  );
 }
 
 type EditorPaneTodayHubBlockProps = {
