@@ -88,20 +88,13 @@ import {buildVaultTabEditorPaneDerived} from './vaultTabEditorPaneDerived';
 import type {
   VaultTabFrontmatterController,
   VaultTabLinkController,
+  VaultTabMergeController,
   VaultTabNotificationsController,
   VaultTabTabsController,
   VaultTabTreeController,
 } from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
-
-type WikiLinkAmbiguityRenamePrompt = {
-  scannedFileCount: number;
-  touchedFileCount: number;
-  touchedBytes: number;
-  updatedLinkCount: number;
-  skippedAmbiguousLinkCount: number;
-};
 
 type DiskConflictPayload = {uri: string};
 
@@ -165,9 +158,7 @@ type VaultTabProps = {
   onCleanNote?: () => void;
   busy: boolean;
   treeController: VaultTabTreeController;
-  wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
-  onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
-  onCancelWikiLinkAmbiguityRename: () => void;
+  mergeController: VaultTabMergeController;
   /** Workspace: bumped after `loadMarkdown`; backlinks defer is handled locally. */
   inboxBacklinksDeferNonce: number;
   tabsController: VaultTabTabsController;
@@ -189,14 +180,6 @@ type VaultTabProps = {
   todayHubCleanRowBlocked?: (rowUri: string) => boolean;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
-  mergeView:
-    | null
-    | {kind: 'backup'; baseUri: string; backupUri: string}
-    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
-  onCloseMergeView: () => void;
-  onApplyFullBackupFromMerge: () => void | Promise<void>;
-  onApplyMergedBodyFromMerge: (body: string) => void;
-  onKeepMyEditsFromMerge?: () => void;
 };
 
 type InboxBacklinksSectionProps = {
@@ -913,9 +896,7 @@ export function VaultTab({
   onCleanNote,
   busy,
   treeController,
-  wikiLinkAmbiguityRenamePrompt,
-  onConfirmWikiLinkAmbiguityRename,
-  onCancelWikiLinkAmbiguityRename,
+  mergeController,
   inboxBacklinksDeferNonce,
   tabsController,
   notificationsController,
@@ -930,11 +911,6 @@ export function VaultTab({
   persistTodayHubRow,
   todayHubCleanRowBlocked,
   titleBarEditorTabsHost = null,
-  mergeView,
-  onCloseMergeView,
-  onApplyFullBackupFromMerge,
-  onApplyMergedBodyFromMerge,
-  onKeepMyEditsFromMerge,
 }: VaultTabProps) {
   const {
     inboxYamlFrontmatterInner,
@@ -979,6 +955,16 @@ export function VaultTab({
     onBulkDeleteVaultTreeItems,
     vaultTreeSelectionClearNonce,
   } = treeController;
+  const {
+    wikiLinkAmbiguityRenamePrompt,
+    onConfirmWikiLinkAmbiguityRename,
+    onCancelWikiLinkAmbiguityRename,
+    mergeView,
+    onCloseMergeView,
+    onApplyFullBackupFromMerge,
+    onApplyMergedBodyFromMerge,
+    onKeepMyEditsFromMerge,
+  } = mergeController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),

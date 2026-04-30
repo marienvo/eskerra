@@ -1332,15 +1332,16 @@ export default function App() {
                         onBulkDeleteVaultTreeItems: items => { void bulkDeleteVaultTreeItems(items); },
                         vaultTreeSelectionClearNonce,
                       }}
-                      wikiLinkAmbiguityRenamePrompt={
-                        pendingWikiLinkAmbiguityRename?.summary ?? null
-                      }
-                      onConfirmWikiLinkAmbiguityRename={() => {
-                        void confirmPendingWikiLinkAmbiguityRename();
+                      mergeController={{
+                        wikiLinkAmbiguityRenamePrompt: pendingWikiLinkAmbiguityRename?.summary ?? null,
+                        onConfirmWikiLinkAmbiguityRename: () => { void confirmPendingWikiLinkAmbiguityRename(); },
+                        onCancelWikiLinkAmbiguityRename: cancelPendingWikiLinkAmbiguityRename,
+                        mergeView,
+                        onCloseMergeView: closeMergeView,
+                        onApplyFullBackupFromMerge: applyFullBackupFromMerge,
+                        onApplyMergedBodyFromMerge: applyMergedBodyFromMerge,
+                        onKeepMyEditsFromMerge: keepMyEditsFromMerge,
                       }}
-                      onCancelWikiLinkAmbiguityRename={
-                        cancelPendingWikiLinkAmbiguityRename
-                      }
                       inboxBacklinksDeferNonce={inboxBacklinksDeferNonce}
                       tabsController={{
                         editorHistoryCanGoBack: workspaceTabsController.editorHistoryCanGoBack,
@@ -1373,11 +1374,6 @@ export default function App() {
                       persistTodayHubRow={persistTodayHubRow}
                       todayHubCleanRowBlocked={todayHubCleanRowBlocked}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
-                      mergeView={mergeView}
-                      onCloseMergeView={closeMergeView}
-                      onApplyFullBackupFromMerge={applyFullBackupFromMerge}
-                      onApplyMergedBodyFromMerge={applyMergedBodyFromMerge}
-                      onKeepMyEditsFromMerge={keepMyEditsFromMerge}
                     />
                   )}
                 </main>
