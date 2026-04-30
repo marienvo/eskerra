@@ -155,6 +155,7 @@ import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
 import type {
   WorkspaceLinkController,
   WorkspaceNotificationsState,
+  WorkspaceSelectionController,
   WorkspaceTabsController,
 } from './workspaceReturnShape';
 import {
@@ -459,20 +460,12 @@ export type UseMainWindowWorkspaceResult = {
   vaultSettings: EskerraSettings | null;
   setVaultSettings: Dispatch<SetStateAction<EskerraSettings | null>>;
   settingsName: string;
-  notes: NoteRow[];
-  selectedUri: string | null;
-  editorBody: string;
-  inboxEditorResetNonce: number;
   busy: boolean;
-  composingNewEntry: boolean;
-  inboxContentByUri: Record<string, string>;
-  /** Vault-wide markdown index for wiki resolve, autocomplete, and link styling (async; may lag the tree). */
-  vaultMarkdownRefs: VaultMarkdownRef[];
-  selectedNoteBacklinkUris: readonly string[];
   fsRefreshNonce: number;
   /** Increments only when files in `General/` change — used to scope podcast catalog rescans. */
   podcastFsNonce: number;
   deviceInstanceId: string;
+  selectionController: WorkspaceSelectionController;
   notificationsState: WorkspaceNotificationsState;
   /**
    * Disk diverged from last persisted content while the editor has local edits.
@@ -485,21 +478,7 @@ export type UseMainWindowWorkspaceResult = {
   diskConflictSoft: DiskConflictSoftState | null;
   elevateDiskConflictSoftToBlocking: () => void;
   dismissDiskConflictSoft: () => void;
-  setEditorBody: (value: string) => void;
   hydrateVault: (root: string) => Promise<void>;
-  startNewEntry: () => void;
-  cancelNewEntry: () => void;
-  /** Open or focus: if a tab already shows `uri`, activate it; else navigate the active tab. */
-  selectNote: (uri: string) => void;
-  /**
-   * Prefer activating an existing tab that already shows `uri`; otherwise open a new tab and focus it
-   * (e.g. file tree middle-click). Use `insertAfterActive` for hub-dropdown opens.
-   */
-  selectNoteInNewActiveTab: (
-    uri: string,
-    opts?: {insertAfterActive?: boolean},
-  ) => void;
-  submitNewEntry: () => Promise<void>;
   /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
   onInboxSaveShortcut: () => void;
   /** Normalize markdown layout for the open vault note (body only; YAML unchanged). */
@@ -530,16 +509,6 @@ export type UseMainWindowWorkspaceResult = {
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
   tabsController: WorkspaceTabsController;
-  /**
-   * Set by the workspace immediately before inbox `selectedUri` / compose changes when scroll should
-   * jump to top or restore a stored offset (back/forward). `VaultTab` reads and clears this ref in layout.
-   */
-  inboxEditorShellScrollDirectiveRef: MutableRefObject<InboxEditorShellScrollDirective | null>;
-  /**
-   * Bumped after each `loadMarkdown`; `VaultTab` handles the one-frame backlinks defer locally so the
-   * late rAF clear does not re-render the whole workspace.
-   */
-  inboxBacklinksDeferNonce: number;
   /** Weekly hub grid under the main editor when `Today.md` is open. */
   showTodayHubCanvas: boolean;
   /** Parsed hub settings from merged `Today.md` markdown (body + shell-held YAML). */
@@ -4592,18 +4561,28 @@ export function useMainWindowWorkspace(options: {
     vaultSettings,
     setVaultSettings,
     settingsName,
-    notes,
-    selectedUri,
-    editorBody,
-    inboxEditorResetNonce,
     busy,
-    composingNewEntry,
-    inboxContentByUri,
-    vaultMarkdownRefs,
-    selectedNoteBacklinkUris,
     fsRefreshNonce,
     podcastFsNonce,
     deviceInstanceId,
+    selectionController: {
+      notes,
+      selectedUri,
+      editorBody,
+      setEditorBody: guardedSetEditorBody,
+      inboxEditorResetNonce,
+      composingNewEntry,
+      startNewEntry,
+      cancelNewEntry,
+      selectNote,
+      selectNoteInNewActiveTab,
+      submitNewEntry,
+      inboxContentByUri,
+      vaultMarkdownRefs,
+      selectedNoteBacklinkUris,
+      inboxEditorShellScrollDirectiveRef,
+      inboxBacklinksDeferNonce,
+    },
     notificationsState: {
       err, setErr, wikiRenameNotice, renameLinkProgress, pendingWikiLinkAmbiguityRename,
       confirmPendingWikiLinkAmbiguityRename, cancelPendingWikiLinkAmbiguityRename,
@@ -4614,13 +4593,7 @@ export function useMainWindowWorkspace(options: {
     diskConflictSoft,
     elevateDiskConflictSoftToBlocking,
     dismissDiskConflictSoft,
-    setEditorBody: guardedSetEditorBody,
     hydrateVault,
-    startNewEntry,
-    cancelNewEntry,
-    selectNote,
-    selectNoteInNewActiveTab,
-    submitNewEntry,
     onInboxSaveShortcut,
     onCleanNoteInbox,
     flushInboxSave,
@@ -4641,8 +4614,6 @@ export function useMainWindowWorkspace(options: {
       editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
       closeOtherEditorTabs, closeAllEditorTabs, reopenLastClosedEditorTab, canReopenClosedEditorTab,
     },
-    inboxEditorShellScrollDirectiveRef,
-    inboxBacklinksDeferNonce,
     showTodayHubCanvas,
     todayHubSettings,
     todayHubBridgeRef,
