@@ -863,14 +863,7 @@ export default function App() {
     onCleanNoteInbox,
     flushInboxSave,
     linkController: workspaceLinkController,
-    deleteNote,
-    renameNote,
-    deleteFolder,
-    renameFolder,
-    moveVaultTreeItem,
-    bulkDeleteVaultTreeItems,
-    bulkMoveVaultTreeItems,
-    vaultTreeSelectionClearNonce,
+    treeController: workspaceTreeController,
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
     tabsController: workspaceTabsController,
@@ -923,6 +916,16 @@ export default function App() {
     inboxYamlFrontmatterInner,
     applyFrontmatterInnerChange,
   } = workspaceFrontmatterController;
+  const {
+    deleteNote,
+    renameNote,
+    deleteFolder,
+    renameFolder,
+    moveVaultTreeItem,
+    bulkDeleteVaultTreeItems,
+    bulkMoveVaultTreeItems,
+    vaultTreeSelectionClearNonce,
+  } = workspaceTreeController;
   const {
     err,
     setErr,

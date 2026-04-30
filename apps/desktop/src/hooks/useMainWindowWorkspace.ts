@@ -158,6 +158,7 @@ import type {
   WorkspaceNotificationsState,
   WorkspaceSelectionController,
   WorkspaceTabsController,
+  WorkspaceTreeController,
 } from './workspaceReturnShape';
 import {
   buildRestoredEditorWorkspace,
@@ -487,24 +488,7 @@ export type UseMainWindowWorkspaceResult = {
   /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
   flushInboxSave: () => Promise<void>;
   linkController: WorkspaceLinkController;
-  deleteNote: (uri: string) => Promise<void>;
-  renameNote: (uri: string, nextDisplayName: string) => Promise<void>;
-  subtreeMarkdownCache: SubtreeMarkdownPresenceCache;
-  deleteFolder: (directoryUri: string) => Promise<void>;
-  renameFolder: (directoryUri: string, nextDisplayName: string) => Promise<void>;
-  /** Single-item tree move (DnD): `renameFile` into target folder; stem unchanged (no wiki rewrites). */
-  moveVaultTreeItem: (
-    sourceUri: string,
-    sourceKind: 'folder' | 'article',
-    targetDirectoryUri: string,
-  ) => Promise<void>;
-  bulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => Promise<void>;
-  bulkMoveVaultTreeItems: (
-    items: VaultTreeBulkItem[],
-    targetDirectoryUri: string,
-  ) => Promise<void>;
-  /** Bumped after bulk tree mutations so the vault pane can clear stale multi-selection. */
-  vaultTreeSelectionClearNonce: number;
+  treeController: WorkspaceTreeController;
   /** True once persisted inbox shell state has been considered for the current vault. */
   inboxShellRestored: boolean;
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
@@ -4591,15 +4575,17 @@ export function useMainWindowWorkspace(options: {
     onCleanNoteInbox,
     flushInboxSave,
     linkController: {onWikiLinkActivate, onMarkdownRelativeLinkActivate, onMarkdownExternalLinkOpen},
-    deleteNote,
-    renameNote,
-    subtreeMarkdownCache: subtreeMarkdownCache,
-    deleteFolder,
-    renameFolder,
-    moveVaultTreeItem,
-    bulkDeleteVaultTreeItems,
-    bulkMoveVaultTreeItems,
-    vaultTreeSelectionClearNonce,
+    treeController: {
+      deleteNote,
+      renameNote,
+      subtreeMarkdownCache,
+      deleteFolder,
+      renameFolder,
+      moveVaultTreeItem,
+      bulkDeleteVaultTreeItems,
+      bulkMoveVaultTreeItems,
+      vaultTreeSelectionClearNonce,
+    },
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
     tabsController: {
