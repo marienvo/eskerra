@@ -1293,7 +1293,6 @@ export default function App() {
                           />
                         ) : null
                       }
-                      notes={notes}
                       vaultMarkdownRefs={vaultMarkdownRefs}
                       inboxContentByUri={inboxContentByUri}
                       backlinkUris={selectedNoteBacklinkUris}
@@ -1322,28 +1321,17 @@ export default function App() {
                           : undefined
                       }
                       busy={busy}
-                      onDeleteNote={uri => {
-                        void deleteNote(uri);
+                      treeController={{
+                        notes,
+                        onDeleteNote: uri => { void deleteNote(uri); },
+                        onRenameNote: (uri, nextDisplayName) => { void renameNote(uri, nextDisplayName); },
+                        onDeleteFolder: uri => { void deleteFolder(uri); },
+                        onRenameFolder: (uri, nextDisplayName) => { void renameFolder(uri, nextDisplayName); },
+                        onMoveVaultTreeItem: (src, kind, destDir) => { void moveVaultTreeItem(src, kind, destDir); },
+                        onBulkMoveVaultTreeItems: (items, destDir) => { void bulkMoveVaultTreeItems(items, destDir); },
+                        onBulkDeleteVaultTreeItems: items => { void bulkDeleteVaultTreeItems(items); },
+                        vaultTreeSelectionClearNonce,
                       }}
-                      onRenameNote={(uri, nextDisplayName) => {
-                        void renameNote(uri, nextDisplayName);
-                      }}
-                      onDeleteFolder={uri => {
-                        void deleteFolder(uri);
-                      }}
-                      onRenameFolder={(uri, nextDisplayName) => {
-                        void renameFolder(uri, nextDisplayName);
-                      }}
-                      onMoveVaultTreeItem={(src, kind, destDir) => {
-                        void moveVaultTreeItem(src, kind, destDir);
-                      }}
-                      onBulkMoveVaultTreeItems={(items, destDir) => {
-                        void bulkMoveVaultTreeItems(items, destDir);
-                      }}
-                      onBulkDeleteVaultTreeItems={items => {
-                        void bulkDeleteVaultTreeItems(items);
-                      }}
-                      vaultTreeSelectionClearNonce={vaultTreeSelectionClearNonce}
                       wikiLinkAmbiguityRenamePrompt={
                         pendingWikiLinkAmbiguityRename?.summary ?? null
                       }

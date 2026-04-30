@@ -90,11 +90,10 @@ import type {
   VaultTabLinkController,
   VaultTabNotificationsController,
   VaultTabTabsController,
+  VaultTabTreeController,
 } from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
 import type {MergePanelSource} from './BackupMergePanel';
-
-type NoteRow = {lastModified: number | null; name: string; uri: string};
 
 type WikiLinkAmbiguityRenamePrompt = {
   scannedFileCount: number;
@@ -145,7 +144,6 @@ type VaultTabProps = {
   onStackTopHeightPxChanged: (px: number) => void;
   /** Episodes list column; omitted when {@link episodesPaneVisible} is false (pass `null`). */
   episodesPane: ReactNode;
-  notes: NoteRow[];
   /** Vault-wide markdown index for wiki resolve / autocomplete / highlighting. */
   vaultMarkdownRefs: VaultMarkdownRef[];
   inboxContentByUri: Record<string, string>;
@@ -166,21 +164,7 @@ type VaultTabProps = {
   /** Normalize markdown for the open note (body only); omitted while composing or no selection. */
   onCleanNote?: () => void;
   busy: boolean;
-  onDeleteNote: (uri: string) => void | Promise<void>;
-  onRenameNote: (uri: string, nextDisplayName: string) => void | Promise<void>;
-  onDeleteFolder: (directoryUri: string) => void | Promise<void>;
-  onRenameFolder: (directoryUri: string, nextDisplayName: string) => void | Promise<void>;
-  onMoveVaultTreeItem: (
-    sourceUri: string,
-    sourceKind: 'folder' | 'article',
-    targetDirectoryUri: string,
-  ) => void | Promise<void>;
-  onBulkMoveVaultTreeItems: (
-    items: VaultTreeBulkItem[],
-    targetDirectoryUri: string,
-  ) => void | Promise<void>;
-  onBulkDeleteVaultTreeItems: (items: VaultTreeBulkItem[]) => void | Promise<void>;
-  vaultTreeSelectionClearNonce: number;
+  treeController: VaultTabTreeController;
   wikiLinkAmbiguityRenamePrompt: WikiLinkAmbiguityRenamePrompt | null;
   onConfirmWikiLinkAmbiguityRename: () => void | Promise<void>;
   onCancelWikiLinkAmbiguityRename: () => void;
@@ -910,7 +894,6 @@ export function VaultTab({
   stackTopHeightPx,
   onStackTopHeightPxChanged,
   episodesPane,
-  notes,
   vaultMarkdownRefs,
   inboxContentByUri,
   backlinkUris,
@@ -929,14 +912,7 @@ export function VaultTab({
   onSaveShortcut,
   onCleanNote,
   busy,
-  onDeleteNote,
-  onRenameNote,
-  onDeleteFolder,
-  onRenameFolder,
-  onMoveVaultTreeItem,
-  onBulkMoveVaultTreeItems,
-  onBulkDeleteVaultTreeItems,
-  vaultTreeSelectionClearNonce,
+  treeController,
   wikiLinkAmbiguityRenamePrompt,
   onConfirmWikiLinkAmbiguityRename,
   onCancelWikiLinkAmbiguityRename,
@@ -992,6 +968,17 @@ export function VaultTab({
     onDismissNotification,
     onClearAllNotifications,
   } = notificationsController;
+  const {
+    notes,
+    onDeleteNote,
+    onRenameNote,
+    onDeleteFolder,
+    onRenameFolder,
+    onMoveVaultTreeItem,
+    onBulkMoveVaultTreeItems,
+    onBulkDeleteVaultTreeItems,
+    vaultTreeSelectionClearNonce,
+  } = treeController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),
