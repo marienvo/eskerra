@@ -93,6 +93,7 @@ import type {
   VaultTabNotificationsController,
   VaultTabPlaybackController,
   VaultTabTabsController,
+  VaultTabTodayHubController,
   VaultTabTreeController,
 } from './vaultTabTypes';
 import {BackupMergePanel} from './BackupMergePanel';
@@ -158,19 +159,7 @@ type VaultTabProps = {
   notificationsController: VaultTabNotificationsController;
   notificationsWidthPx: number;
   onNotificationsWidthPxChanged: (px: number) => void;
-  showTodayHubCanvas: boolean;
-  todayHubSettings: TodayHubSettings | null;
-  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
-  todayHubWikiNavParentRef: MutableRefObject<string | null>;
-  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
-  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
-  persistTodayHubRow: (
-    rowUri: string,
-    mergedMarkdown: string,
-    columnCount: number,
-  ) => Promise<void>;
-  /** Skip hub row clean when this returns true (e.g. disk conflict on that week file). */
-  todayHubCleanRowBlocked?: (rowUri: string) => boolean;
+  todayHubController: VaultTabTodayHubController;
   /** Mount node in `WindowTitleBar` for editor open-note tabs (portal). */
   titleBarEditorTabsHost?: HTMLElement | null;
 };
@@ -889,14 +878,7 @@ export function VaultTab({
   notificationsController,
   notificationsWidthPx,
   onNotificationsWidthPxChanged,
-  showTodayHubCanvas,
-  todayHubSettings,
-  todayHubBridgeRef,
-  todayHubWikiNavParentRef,
-  todayHubCellEditorRef,
-  prehydrateTodayHubRows,
-  persistTodayHubRow,
-  todayHubCleanRowBlocked,
+  todayHubController,
   titleBarEditorTabsHost = null,
 }: VaultTabProps) {
   const {
@@ -964,6 +946,16 @@ export function VaultTab({
     toolbarNowPlaying,
     episodesPane,
   } = playbackController;
+  const {
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
+    todayHubCleanRowBlocked,
+  } = todayHubController;
   const [revealTreeNonce, setRevealTreeNonce] = useState(0);
   const normalizedVaultRootForTree = useMemo(
     () => trimTrailingSlashes(normalizeVaultBaseUri(vaultRoot).replace(/\\/g, '/')),

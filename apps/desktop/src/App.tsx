@@ -1367,14 +1367,16 @@ export default function App() {
                       }}
                       notificationsWidthPx={layouts.notifications.widthPx}
                       onNotificationsWidthPxChanged={persistNotificationsWidthPx}
-                      showTodayHubCanvas={showTodayHubCanvas}
-                      todayHubSettings={todayHubSettings}
-                      todayHubBridgeRef={todayHubBridgeRef}
-                      todayHubWikiNavParentRef={todayHubWikiNavParentRef}
-                      todayHubCellEditorRef={todayHubCellEditorRef}
-                      prehydrateTodayHubRows={prehydrateTodayHubRows}
-                      persistTodayHubRow={persistTodayHubRow}
-                      todayHubCleanRowBlocked={todayHubCleanRowBlocked}
+                      todayHubController={{
+                        showTodayHubCanvas,
+                        todayHubSettings,
+                        todayHubBridgeRef,
+                        todayHubWikiNavParentRef,
+                        todayHubCellEditorRef,
+                        prehydrateTodayHubRows,
+                        persistTodayHubRow,
+                        todayHubCleanRowBlocked,
+                      }}
                       titleBarEditorTabsHost={titleBarEditorTabsHost}
                     />
                   )}
