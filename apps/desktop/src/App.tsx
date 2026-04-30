@@ -21,7 +21,6 @@ import {
   useState,
   type Dispatch,
   type MutableRefObject,
-  type ReactNode,
   type SetStateAction,
 } from 'react';
 
@@ -53,7 +52,6 @@ import {useTauriWindowTiling} from './hooks/useTauriWindowTiling';
 import {useEditorHistoryMouseButtons} from './hooks/useEditorHistoryMouseButtons';
 import {useMainWindowWorkspace} from './hooks/useMainWindowWorkspace';
 import {usePreventMiddleClickPaste} from './hooks/usePreventMiddleClickPaste';
-import {ThemeProvider} from './theme/ThemeProvider';
 import {ThemedChromeBackground} from './theme/ThemedChromeBackground';
 import {
   defaultEskerraSettings,
@@ -88,6 +86,7 @@ import {
 } from './lib/resolveAppStatusBarCenter';
 import {createTauriVaultFilesystem} from './lib/tauriVault';
 import {writeVaultSettings} from './lib/vaultBootstrap';
+import {AppThemeShell} from './shell/AppThemeShell';
 import {useAppLayoutWidthPersisters} from './shell/useAppLayoutWidthPersisters';
 import {useAppMainWindowKeyboardEffects} from './shell/useAppMainWindowKeyboardEffects';
 import {useAppNotificationSession} from './shell/useAppNotificationSession';
@@ -730,35 +729,6 @@ function useAppTauriCloseAndFocusSave(
       unlistenFocus?.();
     };
   }, [desktopPlaybackRef, flushInboxSave]);
-}
-
-type AppThemeShellProps = {
-  vaultRoot: string | null;
-  vaultSettings: EskerraSettings | null;
-  setVaultSettings: (s: SetStateAction<EskerraSettings | null>) => void;
-  fs: ReturnType<typeof createTauriVaultFilesystem>;
-  onThemeReady: () => void;
-  children: ReactNode;
-};
-
-function AppThemeShell({
-  vaultRoot,
-  vaultSettings,
-  setVaultSettings,
-  fs,
-  onThemeReady,
-  children,
-}: AppThemeShellProps) {
-  return (
-    <ThemeProvider
-      vaultRoot={vaultRoot}
-      vaultSettings={vaultSettings}
-      setVaultSettings={setVaultSettings}
-      fs={fs}
-      onThemeReady={onThemeReady}>
-      {children}
-    </ThemeProvider>
-  );
 }
 
 type AppDiskConflictBannersProps = {
