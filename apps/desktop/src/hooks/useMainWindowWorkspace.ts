@@ -153,6 +153,7 @@ import {
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
 import type {
+  WorkspaceFrontmatterController,
   WorkspaceLinkController,
   WorkspaceNotificationsState,
   WorkspaceSelectionController,
@@ -539,15 +540,7 @@ export type UseMainWindowWorkspaceResult = {
    * (active-hub Today visible without a tab row entry for that URI).
    */
   workspaceSelectShowsActiveTabPill: boolean;
-  /** YAML between `---` fences (or `null` if the note has no block). */
-  inboxYamlFrontmatterInner: string | null;
-  /** User / UI frontmatter edits: updates state, ref, and the normal debounced autosave path. */
-  applyFrontmatterInnerChange: (nextInner: string | null) => void;
-  /**
-   * Sync from disk / load / merge (not a direct user edit). Keeps `inboxYamlFrontmatterInner` aligned
-   * with the ref and leading text.
-   */
-  syncFrontmatterStateFromDisk: (nextInner: string | null, leading: string) => void;
+  frontmatterController: WorkspaceFrontmatterController;
   /**
    * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`),
    * or comparing editor draft with a disk version from a disk conflict.
@@ -4628,9 +4621,11 @@ export function useMainWindowWorkspace(options: {
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
     workspaceSelectShowsActiveTabPill,
-    inboxYamlFrontmatterInner,
-    applyFrontmatterInnerChange,
-    syncFrontmatterStateFromDisk,
+    frontmatterController: {
+      inboxYamlFrontmatterInner,
+      applyFrontmatterInnerChange,
+      syncFrontmatterStateFromDisk,
+    },
     mergeView,
     closeMergeView,
     applyFullBackupFromMerge,

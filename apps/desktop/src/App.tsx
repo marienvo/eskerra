@@ -843,12 +843,11 @@ export default function App() {
   const {
     vaultRoot,
     vaultSettings,
-    inboxYamlFrontmatterInner,
-    applyFrontmatterInnerChange,
     setVaultSettings,
     settingsName,
     busy,
     selectionController: workspaceSelectionController,
+    frontmatterController: workspaceFrontmatterController,
     notificationsState: workspaceNotificationsState,
     diskConflict,
     resolveDiskConflictReloadFromDisk,
@@ -920,6 +919,10 @@ export default function App() {
     inboxEditorShellScrollDirectiveRef,
     inboxBacklinksDeferNonce,
   } = workspaceSelectionController;
+  const {
+    inboxYamlFrontmatterInner,
+    applyFrontmatterInnerChange,
+  } = workspaceFrontmatterController;
   const {
     err,
     setErr,
