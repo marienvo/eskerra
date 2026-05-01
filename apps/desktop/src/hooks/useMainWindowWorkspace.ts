@@ -39,10 +39,6 @@ import {
 } from '@eskerra/core';
 
 import type {NoteMarkdownEditorHandle} from '../editor/noteEditor/NoteMarkdownEditor';
-import {
-  createInboxAutosaveScheduler,
-  INBOX_AUTOSAVE_DEBOUNCE_MS,
-} from '../lib/inboxAutosaveScheduler';
 import {persistTransientMarkdownImages} from '../lib/persistTransientMarkdownImages';
 import {
   bootstrapVaultLayout,
@@ -151,6 +147,7 @@ import {
 import {pruneEditorTabsAfterBulkTreeDelete} from './workspaceVaultTreeMutations';
 import {useWorkspaceBacklinks} from './workspaceBacklinks';
 import {useWorkspaceLinkRouting} from './workspaceLinkRouting';
+import {useWorkspacePersistence} from './workspacePersistence';
 import {
   normalizeVaultWatchErrorReason,
   useWorkspaceVaultWatchEffects,
@@ -171,9 +168,6 @@ import {
   resolveInboxCachedBodyForEditor,
   normalizeVaultMarkdownDiskRead,
   removeInboxNoteBodyFromCache,
-  shouldMergeCacheAfterOutgoingPersist,
-  shouldSkipOutgoingPersistAfterNoteLeave,
-  shouldSkipOutgoingPersistBeforeWrite,
 } from './inboxNoteBodyCache';
 import {resolveVaultLinkBaseMarkdownUri} from '../lib/resolveVaultLinkBaseMarkdownUri';
 
@@ -402,8 +396,6 @@ export function useMainWindowWorkspace(options: {
   const editorBodyRef = useRef('');
   const lastPersistedRef = useRef<LastPersisted | null>(null);
   const lastPersistedExternalMutationSeqRef = useRef(0);
-  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
-  const saveActiveRef = useRef(false);
   const eagerEditorLoadUriRef = useRef<string | null>(null);
   const suppressEditorOnChangeRef = useRef(false);
   /** YAML inner (between `---` fences); paired ref for autosave hot path. */
@@ -415,9 +407,6 @@ export function useMainWindowWorkspace(options: {
   const [inboxEditorYamlLeadingBeforeFrontmatter, setInboxEditorYamlLeadingBeforeFrontmatter] =
     useState('');
   const inboxEditorYamlLeadingBeforeFrontmatterRef = useRef('');
-  const autosaveSchedulerRef = useRef(
-    createInboxAutosaveScheduler(INBOX_AUTOSAVE_DEBOUNCE_MS),
-  );
   const todayHubBridgeRef = useRef<TodayHubWorkspaceBridge>(
     createIdleTodayHubWorkspaceBridge(),
   );
@@ -425,7 +414,7 @@ export function useMainWindowWorkspace(options: {
   const todayHubCellEditorRef = useRef<NoteMarkdownEditorHandle | null>(null);
   const todayHubRowLastPersistedRef = useRef<Map<string, string>>(new Map());
   const todayHubSettingsRef = useRef<TodayHubSettings | null>(null);
-  const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
+  const submitNewEntryRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
   const editorWorkspaceTabsRef = useRef<EditorWorkspaceTab[]>([]);
   const activeEditorTabIdRef = useRef<string | null>(null);
@@ -694,6 +683,43 @@ export function useMainWindowWorkspace(options: {
     [fs],
   );
 
+  const {
+    saveChainRef,
+    saveActiveRef,
+    autosaveSchedulerRef,
+    flushInboxSaveRef,
+    mergeInboxNoteBodyCacheRefAndState,
+    enqueuePersistOutgoingNoteMarkdown,
+    flushInboxSave,
+    onInboxSaveShortcut,
+  } = useWorkspacePersistence({
+    fs,
+    vaultRoot,
+    selectedUri,
+    composingNewEntry,
+    editorBody,
+    inboxYamlFrontmatterInner,
+    diskConflict,
+    vaultRootRef,
+    selectedUriRef,
+    composingNewEntryRef,
+    diskConflictRef,
+    inboxContentByUriRef,
+    editorBodyRef,
+    lastPersistedRef,
+    lastPersistedExternalMutationSeqRef,
+    inboxYamlFrontmatterInnerRef,
+    inboxEditorYamlLeadingBeforeFrontmatterRef,
+    inboxEditorRef,
+    todayHubBridgeRef,
+    submitNewEntryRef,
+    setErr,
+    setInboxContentByUri,
+    refreshNotes,
+    loadFullMarkdownIntoInboxEditor,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+  });
+
   const getRenameMaintenanceSnapshot =
     useCallback(async (): Promise<WorkspaceRenameMaintenanceSnapshot> => {
       const wikiRefs = refToNameAndUriList(vaultMarkdownRefsRef.current);
@@ -789,176 +815,6 @@ export function useMainWindowWorkspace(options: {
     setErr,
     setFsRefreshNonce,
   });
-
-  /** Merge a known-good body for `norm` into the inbox content cache (state + ref). No-op if no change. */
-  const mergeInboxNoteBodyCacheRefAndState = useCallback(
-    (norm: string, body: string) => {
-      const nextCache = mergeInboxNoteBodyIntoCache(
-        inboxContentByUriRef.current,
-        norm,
-        body,
-      );
-      if (!nextCache) {
-        return;
-      }
-      inboxContentByUriRef.current = nextCache;
-      setInboxContentByUri(prev =>
-        mergeInboxNoteBodyIntoCache(prev, norm, body) ?? prev,
-      );
-    },
-    [],
-  );
-
-  /**
-   * Persists a fixed URI + markdown captured when leaving a dirty note, chained like
-   * `enqueueInboxPersist` but **not** awaited by `openMarkdownInEditor`. Uses stale-cache guards so
-   * a slow save cannot overwrite newer in-memory edits if the user re-opened the note before the
-   * write ran.
-   */
-  const enqueuePersistOutgoingNoteMarkdown = useCallback(
-    (uri: string, leaveSnapshotMarkdown: string): void => {
-      const norm = normalizeEditorDocUri(uri);
-
-      const persistOutgoingNoteSnapshot = async (): Promise<void> => {
-        const root = vaultRootRef.current;
-        if (!root) return;
-        const dc = diskConflictRef.current;
-        if (dc && normalizeEditorDocUri(dc.uri) === norm) return;
-        const memStart = inboxContentByUriRef.current[norm];
-        if (shouldSkipOutgoingPersistAfterNoteLeave(memStart, leaveSnapshotMarkdown)) return;
-
-        setErr(null);
-        const md = await persistTransientMarkdownImages(leaveSnapshotMarkdown, root);
-        if (markdownContainsTransientImageUrls(md)) {
-          setErr(
-            'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
-          );
-          return;
-        }
-        if (md !== leaveSnapshotMarkdown) {
-          mergeInboxNoteBodyCacheRefAndState(norm, md);
-          const active = selectedUriRef.current;
-          if (active && normalizeEditorDocUri(active) === norm) {
-            loadFullMarkdownIntoInboxEditor(md, norm, 'preserve');
-            scheduleBacklinksDeferOneFrameAfterLoad();
-          }
-        }
-        const memBeforeSave = inboxContentByUriRef.current[norm];
-        if (shouldSkipOutgoingPersistBeforeWrite(memBeforeSave, leaveSnapshotMarkdown, md)) {
-          return;
-        }
-        await saveNoteMarkdown(norm, fs, md);
-        refreshNotes(root).catch(() => undefined);
-
-        const activeSel = selectedUriRef.current;
-        if (activeSel && normalizeEditorDocUri(activeSel) === norm) {
-          lastPersistedRef.current = {uri: norm, markdown: md};
-          lastPersistedExternalMutationSeqRef.current += 1;
-        }
-        const memAfter = inboxContentByUriRef.current[norm];
-        if (shouldMergeCacheAfterOutgoingPersist(memAfter, md, leaveSnapshotMarkdown)) {
-          mergeInboxNoteBodyCacheRefAndState(norm, md);
-        }
-      };
-
-      const run = async (): Promise<void> => {
-        try {
-          await persistOutgoingNoteSnapshot();
-        } catch (e) {
-          setErr(e instanceof Error ? e.message : String(e));
-        }
-      };
-
-      saveActiveRef.current = true;
-      const next = saveChainRef.current.then(run).finally(() => {
-        saveActiveRef.current = false;
-      });
-      saveChainRef.current = next.catch(() => undefined);
-    },
-    [
-      fs,
-      refreshNotes,
-      loadFullMarkdownIntoInboxEditor,
-      scheduleBacklinksDeferOneFrameAfterLoad,
-      mergeInboxNoteBodyCacheRefAndState,
-    ],
-  );
-
-  const enqueueInboxPersist = useCallback(async (): Promise<void> => {
-    const run = async (): Promise<void> => {
-      const root = vaultRootRef.current;
-      const uri = selectedUriRef.current;
-      if (!root || !uri || composingNewEntryRef.current) {
-        return;
-      }
-      const dc = diskConflictRef.current;
-      if (dc && normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(uri)) {
-        return;
-      }
-      const raw = inboxEditorSliceToFullMarkdown(
-        inboxEditorRef.current?.getMarkdown() ?? editorBodyRef.current,
-        selectedUriRef.current,
-        composingNewEntryRef.current,
-        inboxYamlFrontmatterInnerRef.current,
-        inboxEditorYamlLeadingBeforeFrontmatterRef.current,
-      );
-      const prev = lastPersistedRef.current;
-      if (prev && prev.uri === uri && prev.markdown === raw) {
-        return;
-      }
-      try {
-        setErr(null);
-        const md = await persistTransientMarkdownImages(raw, root);
-        if (markdownContainsTransientImageUrls(md)) {
-          setErr(
-            'Cannot save: some images are still temporary (blob or data URLs). Paste images again so they are stored under Assets/Attachments, or remove those image references.',
-          );
-          return;
-        }
-        if (md !== raw) {
-          loadFullMarkdownIntoInboxEditor(
-            md,
-            selectedUriRef.current,
-            'preserve',
-          );
-          scheduleBacklinksDeferOneFrameAfterLoad();
-        }
-        await saveNoteMarkdown(uri, fs, md);
-        await refreshNotes(root);
-        if (selectedUriRef.current !== uri || composingNewEntryRef.current) {
-          return;
-        }
-        lastPersistedRef.current = {uri, markdown: md};
-        lastPersistedExternalMutationSeqRef.current += 1;
-        const nextCache = mergeInboxNoteBodyIntoCache(
-          inboxContentByUriRef.current,
-          uri,
-          md,
-        );
-        if (nextCache) {
-          inboxContentByUriRef.current = nextCache;
-          setInboxContentByUri(prev =>
-            mergeInboxNoteBodyIntoCache(prev, uri, md) ?? prev,
-          );
-        }
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : String(e));
-      }
-    };
-
-    saveActiveRef.current = true;
-    const next = saveChainRef.current.then(run).finally(() => {
-      saveActiveRef.current = false;
-    });
-    saveChainRef.current = next.catch(() => undefined);
-    await next;
-  }, [
-    fs,
-    refreshNotes,
-    inboxEditorRef,
-    scheduleBacklinksDeferOneFrameAfterLoad,
-    loadFullMarkdownIntoInboxEditor,
-  ]);
 
   const prehydrateTodayHubRows = useCallback(
     async (uris: readonly string[]) => {
@@ -1135,28 +991,6 @@ export function useMainWindowWorkspace(options: {
     diskConflictSoftRef.current = null;
     skipRecencyDeferForUriRef.current.clear();
   }, []);
-
-  const flushInboxSave = useCallback(async () => {
-    autosaveSchedulerRef.current.cancel();
-    await todayHubBridgeRef.current.flushPendingEdits().catch(() => undefined);
-    const uri = selectedUriRef.current;
-    const dc = diskConflictRef.current;
-    if (
-      dc &&
-      uri &&
-      normalizeEditorDocUri(dc.uri) === normalizeEditorDocUri(uri)
-    ) {
-      setErr(
-        'This note changed on disk while you were editing. Choose Reload from disk or Keep my edits before saving.',
-      );
-      return;
-    }
-    await enqueueInboxPersist();
-  }, [enqueueInboxPersist]);
-
-  useLayoutEffect(() => {
-    flushInboxSaveRef.current = flushInboxSave;
-  }, [flushInboxSave]);
 
   const clearStaleDiskConflictsForOpen = useCallback((targetNorm: string) => {
     const prevConflict = diskConflictRef.current;
@@ -2236,50 +2070,6 @@ export function useMainWindowWorkspace(options: {
     scheduleBacklinksDeferOneFrameAfterLoad,
   ]);
 
-  useEffect(() => {
-    if (!vaultRoot || !selectedUri || composingNewEntry) {
-      autosaveSchedulerRef.current.cancel();
-      return;
-    }
-    if (
-      diskConflict &&
-      normalizeEditorDocUri(diskConflict.uri) === normalizeEditorDocUri(selectedUri)
-    ) {
-      autosaveSchedulerRef.current.cancel();
-      return;
-    }
-    if (lastPersistedRef.current?.uri !== selectedUri) {
-      autosaveSchedulerRef.current.cancel();
-      return;
-    }
-    const prev = lastPersistedRef.current;
-    const liveFull = inboxEditorSliceToFullMarkdown(
-      editorBody,
-      selectedUri,
-      composingNewEntry,
-      inboxYamlFrontmatterInnerRef.current,
-      inboxEditorYamlLeadingBeforeFrontmatterRef.current,
-    );
-    if (prev && prev.uri === selectedUri && prev.markdown === liveFull) {
-      return;
-    }
-    const scheduler = autosaveSchedulerRef.current;
-    scheduler.schedule(() => {
-      void enqueueInboxPersist();
-    });
-    return () => {
-      scheduler.cancel();
-    };
-  }, [
-    vaultRoot,
-    selectedUri,
-    composingNewEntry,
-    editorBody,
-    inboxYamlFrontmatterInner,
-    enqueueInboxPersist,
-    diskConflict,
-  ]);
-
   const addNote = useCallback(
     async (title: string, body: string) => {
       if (!vaultRoot) {
@@ -2521,13 +2311,9 @@ export function useMainWindowWorkspace(options: {
     scheduleBacklinksDeferOneFrameAfterLoad,
   ]);
 
-  const onInboxSaveShortcut = useCallback(() => {
-    if (composingNewEntryRef.current) {
-      void submitNewEntry();
-    } else {
-      void flushInboxSave();
-    }
-  }, [submitNewEntry, flushInboxSave]);
+  useLayoutEffect(() => {
+    submitNewEntryRef.current = submitNewEntry;
+  }, [submitNewEntry]);
 
   const todayHubCleanRowBlocked = useCallback((rowUri: string) => {
     const dc = diskConflictRef.current;
