@@ -153,10 +153,18 @@ import {
   useWorkspaceVaultWatchEffects,
 } from './workspaceVaultWatchEffects';
 import {
+  loadMarkdownBodiesForWikiMaintenance,
   useWorkspaceRenameMaintenance,
   type WorkspaceRenameMaintenanceCommitArgs,
   type WorkspaceRenameMaintenanceSnapshot,
 } from './workspaceRenameMaintenance';
+import {
+  type InboxEditorShellScrollDirective,
+  trimTrailingSlashes,
+  snapshotEditorShellScrollForOpenNote,
+  remapEditorShellScrollMapExact,
+  remapEditorShellScrollMapTreePrefix,
+} from './workspaceEditorScrollMap';
 import {cleanNoteMarkdownBody} from '../lib/cleanNoteMarkdown';
 import {captureObservabilityMessage} from '../observability/captureObservabilityMessage';
 import {
@@ -171,72 +179,6 @@ import {
 } from './inboxNoteBodyCache';
 import {resolveVaultLinkBaseMarkdownUri} from '../lib/resolveVaultLinkBaseMarkdownUri';
 
-function trimTrailingSlashes(value: string): string {
-  let end = value.length;
-  while (end > 0 && value.charCodeAt(end - 1) === 47) {
-    end -= 1;
-  }
-  return value.slice(0, end);
-}
-
-export type InboxEditorShellScrollDirective =
-  | {kind: 'snapTop'}
-  | {kind: 'restore'; top: number; left: number};
-
-function snapshotEditorShellScrollForOpenNote(
-  scrollEl: HTMLDivElement | null,
-  selectedUri: string | null,
-  composingNewEntry: boolean,
-  into: Map<string, {top: number; left: number}>,
-) {
-  if (!scrollEl || !selectedUri || composingNewEntry) {
-    return;
-  }
-  into.set(normalizeEditorDocUri(selectedUri), {
-    top: scrollEl.scrollTop,
-    left: scrollEl.scrollLeft,
-  });
-}
-
-function remapEditorShellScrollMapExact(
-  map: Map<string, {top: number; left: number}>,
-  fromUri: string,
-  toUri: string,
-) {
-  const from = normalizeEditorDocUri(fromUri);
-  const to = normalizeEditorDocUri(toUri);
-  if (from === to) {
-    return;
-  }
-  const v = map.get(from);
-  if (v === undefined) {
-    return;
-  }
-  map.delete(from);
-  map.set(to, v);
-}
-
-function remapEditorShellScrollMapTreePrefix(
-  map: Map<string, {top: number; left: number}>,
-  oldPrefix: string,
-  newPrefix: string,
-) {
-  const oldP = trimTrailingSlashes(oldPrefix.replace(/\\/g, '/'));
-  const newP = trimTrailingSlashes(newPrefix.replace(/\\/g, '/'));
-  if (oldP === newP) {
-    return;
-  }
-  const next = new Map<string, {top: number; left: number}>();
-  for (const [k, v] of map) {
-    const mapped = remapVaultUriPrefix(k, oldP, newP);
-    next.set(mapped ?? k, v);
-  }
-  map.clear();
-  for (const [k, v] of next) {
-    map.set(k, v);
-  }
-}
-
 const STORE_PATH = 'eskerra-desktop.json';
 const STORE_KEY_VAULT = 'vaultRoot';
 
@@ -244,42 +186,6 @@ const STORE_KEY_VAULT = 'vaultRoot';
 const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
 
 type NoteRow = {lastModified: number | null; name: string; uri: string};
-
-async function loadMarkdownBodiesForWikiMaintenance(
-  fs: VaultFilesystem,
-  refs: ReadonlyArray<{uri: string}>,
-  seed: Readonly<Record<string, string>>,
-  activeUri: string | null,
-  activeBody: string,
-): Promise<Record<string, string>> {
-  const out: Record<string, string> = {...seed};
-  for (const {uri} of refs) {
-    if (activeUri != null && uri === activeUri) {
-      out[uri] = activeBody;
-      continue;
-    }
-    if (Object.prototype.hasOwnProperty.call(out, uri)) {
-      continue;
-    }
-    try {
-      const raw = await fs.readFile(uri, {encoding: 'utf8'});
-      out[uri] = normalizeVaultMarkdownDiskRead(raw);
-    } catch {
-      out[uri] = '';
-    }
-  }
-  return out;
-}
-
-function refToNameAndUri(ref: {name: string; uri: string}): {name: string; uri: string} {
-  return {name: ref.name, uri: ref.uri};
-}
-
-function refToNameAndUriList(
-  refs: ReadonlyArray<{name: string; uri: string}>,
-): {name: string; uri: string}[] {
-  return refs.map(refToNameAndUri);
-}
 
 export type UseMainWindowWorkspaceResult = {
   vaultRoot: string | null;
@@ -722,7 +628,7 @@ export function useMainWindowWorkspace(options: {
 
   const getRenameMaintenanceSnapshot =
     useCallback(async (): Promise<WorkspaceRenameMaintenanceSnapshot> => {
-      const wikiRefs = refToNameAndUriList(vaultMarkdownRefsRef.current);
+      const wikiRefs = vaultMarkdownRefsRef.current.map(r => ({name: r.name, uri: r.uri}));
       const activeUri = selectedUriRef.current;
       const activeBody =
         activeUri != null

@@ -51,7 +51,7 @@ import {
 import {renameDraftStemForMarkdownUri} from '../lib/renameDialogDraft';
 import type {VaultTreeBulkItem} from '../lib/vaultTreeBulkPlan';
 
-import type {InboxEditorShellScrollDirective} from '../hooks/useMainWindowWorkspace';
+import type {InboxEditorShellScrollDirective} from '../hooks/workspaceEditorScrollMap';
 import {
   todayHubColumnCount,
   type TodayHubSettings,
