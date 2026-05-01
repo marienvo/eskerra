@@ -99,8 +99,6 @@ import {
   vaultFrontmatterIndexTouchPaths,
 } from '../lib/tauriVaultFrontmatter';
 import {vaultSearchIndexSchedule, vaultSearchIndexTouchPaths} from '../lib/tauriVaultSearch';
-import {listInboxAllBacklinkReferrersForTarget} from '../lib/inboxAllBacklinkIndex';
-import {mergeVaultBacklinkBodySeed} from '../lib/vaultBacklinkBodySeed';
 import {
   normalizeEditorDocUri,
   remapVaultUriPrefix,
@@ -177,6 +175,7 @@ import {
   decideWorkspaceShellMode,
 } from './workspaceEditorTabs';
 import {pruneEditorTabsAfterBulkTreeDelete} from './workspaceVaultTreeMutations';
+import {useWorkspaceBacklinks} from './workspaceBacklinks';
 import {
   useWorkspaceRenameMaintenance,
   type WorkspaceRenameMaintenanceCommitArgs,
@@ -312,28 +311,7 @@ const STORE_KEY_VAULT = 'vaultRoot';
 /** Debounce scan of the active note body for backlinks (full vault scan is too heavy per keystroke). */
 const INBOX_BACKLINK_BODY_DEBOUNCE_MS = 200;
 
-/** Debounce vault-wide backlink computation after selection / ref list changes (reads note bodies from disk). */
-const VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS = 320;
-
 type NoteRow = {lastModified: number | null; name: string; uri: string};
-
-function equalReadonlyStringArrays(
-  a: readonly string[],
-  b: readonly string[],
-): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (a.length !== b.length) {
-    return false;
-  }
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
-  }
-  return true;
-}
 
 function pickVaultLinkFallbackSource(args: {
   base: string;
@@ -392,49 +370,6 @@ function refToNameAndUriList(
   refs: ReadonlyArray<{name: string; uri: string}>,
 ): {name: string; uri: string}[] {
   return refs.map(refToNameAndUri);
-}
-
-async function computeSelectedNoteBacklinkUris(args: {
-  fs: VaultFilesystem;
-  vaultRoot: string;
-  targetUri: string;
-  refs: VaultMarkdownRef[];
-  diskBodyCache: Record<string, string>;
-  inboxContentByUri: Readonly<Record<string, string>>;
-  activeUri: string | null;
-  activeBody: string;
-}): Promise<{uris: readonly string[]; pruned: Record<string, string>}> {
-  const {
-    fs,
-    vaultRoot,
-    targetUri,
-    refs,
-    diskBodyCache,
-    inboxContentByUri,
-    activeUri,
-    activeBody,
-  } = args;
-  const seed = mergeVaultBacklinkBodySeed(diskBodyCache, inboxContentByUri);
-  const expanded = await loadMarkdownBodiesForWikiMaintenance(
-    fs,
-    refs,
-    seed,
-    activeUri,
-    activeBody,
-  );
-  const pruned: Record<string, string> = {};
-  for (const {uri} of refs) {
-    pruned[uri] = expanded[uri] ?? '';
-  }
-  const uris = listInboxAllBacklinkReferrersForTarget({
-    vaultRoot,
-    targetUri,
-    notes: refToNameAndUriList(refs),
-    contentByUri: expanded,
-    activeUri,
-    activeBody,
-  });
-  return {uris, pruned};
 }
 
 export type UseMainWindowWorkspaceResult = {
@@ -519,11 +454,6 @@ export function useMainWindowWorkspace(options: {
   const [initialVaultHydrateAttemptDone, setInitialVaultHydrateAttemptDone] =
     useState(false);
   const [inboxShellRestored, setInboxShellRestored] = useState(true);
-  const [backlinksActiveBody, setBacklinksActiveBody] = useState('');
-  const [selectedNoteBacklinkUris, setSelectedNoteBacklinkUris] = useState<
-    readonly string[]
-  >([]);
-  const [inboxBacklinksDeferNonce, setInboxBacklinksDeferNonce] = useState(0);
   const [editorWorkspaceTabs, setEditorWorkspaceTabs] = useState<
     EditorWorkspaceTab[]
   >([]);
@@ -547,12 +477,9 @@ export function useMainWindowWorkspace(options: {
   >(null);
 
   const subtreeMarkdownCache = useMemo(() => new SubtreeMarkdownPresenceCache(), []);
-  /** Bodies read from disk for vault-wide backlink scan; avoids re-reading every note on each selection change. */
-  const vaultBacklinkDiskBodyCacheRef = useRef<Record<string, string>>({});
   const inboxBodyPrefetchGenRef = useRef(0);
   const vaultRefsBuildGenRef = useRef(0);
   const vaultMarkdownRefsRef = useRef<VaultMarkdownRef[]>([]);
-  const selectedNoteBacklinkUrisRef = useRef<readonly string[]>([]);
   const vaultRootRef = useRef<string | null>(null);
   const selectedUriRef = useRef<string | null>(null);
   const composingNewEntryRef = useRef(false);
@@ -585,7 +512,6 @@ export function useMainWindowWorkspace(options: {
   const todayHubSettingsRef = useRef<TodayHubSettings | null>(null);
   const flushInboxSaveRef = useRef<() => Promise<void>>(async () => {});
   const inboxContentByUriRef = useRef<Record<string, string>>({});
-  const backlinksActiveBodyRef = useRef('');
   const editorWorkspaceTabsRef = useRef<EditorWorkspaceTab[]>([]);
   const activeEditorTabIdRef = useRef<string | null>(null);
   const activeTodayHubUriRef = useRef<string | null>(null);
@@ -599,7 +525,6 @@ export function useMainWindowWorkspace(options: {
     useRef<InboxEditorShellScrollDirective | null>(null);
   /** Invalidates in-flight `openMarkdownInEditor` work when a newer open supersedes it. */
   const openMarkdownGenerationRef = useRef(0);
-  const inboxBacklinksDeferAfterLoadRafRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     inboxYamlFrontmatterInnerRef.current = inboxYamlFrontmatterInner;
@@ -659,10 +584,6 @@ export function useMainWindowWorkspace(options: {
     inboxContentByUriRef.current = inboxContentByUri;
   }, [inboxContentByUri]);
 
-  useLayoutEffect(() => {
-    backlinksActiveBodyRef.current = backlinksActiveBody;
-  }, [backlinksActiveBody]);
-
   const guardedSetEditorBody: typeof setEditorBody = useCallback(
     value => {
       if (suppressEditorOnChangeRef.current) return;
@@ -708,10 +629,6 @@ export function useMainWindowWorkspace(options: {
   );
 
   useLayoutEffect(() => {
-    selectedNoteBacklinkUrisRef.current = selectedNoteBacklinkUris;
-  }, [selectedNoteBacklinkUris]);
-
-  useLayoutEffect(() => {
     editorWorkspaceTabsRef.current = editorWorkspaceTabs;
   }, [editorWorkspaceTabs]);
 
@@ -722,6 +639,26 @@ export function useMainWindowWorkspace(options: {
   useLayoutEffect(() => {
     activeTodayHubUriRef.current = activeTodayHubUri;
   }, [activeTodayHubUri]);
+
+  const {
+    selectedNoteBacklinkUris,
+    inboxBacklinksDeferNonce,
+    backlinksActiveBodyRef,
+    setBacklinksActiveBody,
+    scheduleBacklinksDeferOneFrameAfterLoad,
+    clearInboxBacklinksDeferAfterLoad,
+    clearBacklinkDiskBodyCache,
+  } = useWorkspaceBacklinks({
+    fs,
+    vaultRoot,
+    composingNewEntry,
+    selectedUri,
+    vaultMarkdownRefs,
+    inboxContentByUri,
+    selectedUriRef,
+    vaultMarkdownRefsRef,
+    inboxContentByUriRef,
+  });
 
   useLayoutEffect(() => {
     notesRef.current = notes;
@@ -782,96 +719,6 @@ export function useMainWindowWorkspace(options: {
       }),
     [composingNewEntry, activeTodayHubUri, selectedUri, editorWorkspaceTabs],
   );
-
-  const scheduleBacklinksDeferOneFrameAfterLoad = useCallback(() => {
-    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
-      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
-      inboxBacklinksDeferAfterLoadRafRef.current = null;
-    }
-    setInboxBacklinksDeferNonce(n => n + 1);
-    inboxBacklinksDeferAfterLoadRafRef.current = requestAnimationFrame(() => {
-      inboxBacklinksDeferAfterLoadRafRef.current = null;
-    });
-  }, []);
-
-  const clearInboxBacklinksDeferAfterLoad = useCallback(() => {
-    if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
-      cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
-      inboxBacklinksDeferAfterLoadRafRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (inboxBacklinksDeferAfterLoadRafRef.current != null) {
-        cancelAnimationFrame(inboxBacklinksDeferAfterLoadRafRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (composingNewEntry || !selectedUri || !vaultRoot) {
-      queueMicrotask(() => {
-        setSelectedNoteBacklinkUris([]);
-      });
-      return;
-    }
-
-    const selected = selectedUri;
-    let cancelled = false;
-
-    const runBacklinkScan = async () => {
-      const activeUri = selectedUriRef.current;
-      const activeBody = backlinksActiveBodyRef.current;
-      if (cancelled || activeUri !== selected) {
-        return;
-      }
-      try {
-        const {uris, pruned} = await computeSelectedNoteBacklinkUris({
-          fs,
-          vaultRoot,
-          targetUri: selected,
-          refs: vaultMarkdownRefsRef.current,
-          diskBodyCache: vaultBacklinkDiskBodyCacheRef.current,
-          inboxContentByUri: inboxContentByUriRef.current,
-          activeUri,
-          activeBody,
-        });
-        vaultBacklinkDiskBodyCacheRef.current = pruned;
-        if (cancelled || selectedUriRef.current !== selected) {
-          return;
-        }
-        setSelectedNoteBacklinkUris(prev =>
-          equalReadonlyStringArrays(prev, uris) ? prev : uris,
-        );
-      } catch {
-        if (cancelled || selectedUriRef.current !== selected) {
-          return;
-        }
-        setSelectedNoteBacklinkUris(prev => (prev.length === 0 ? prev : []));
-      }
-    };
-
-    const tid = window.setTimeout(() => {
-      if (cancelled) {
-        return;
-      }
-      void runBacklinkScan();
-    }, VAULT_BACKLINK_COMPUTE_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(tid);
-    };
-  }, [
-    composingNewEntry,
-    selectedUri,
-    vaultRoot,
-    vaultMarkdownRefs,
-    inboxContentByUri,
-    backlinksActiveBody,
-    fs,
-  ]);
 
   useEffect(() => {
     vaultMarkdownRefsRef.current = vaultMarkdownRefs;
@@ -2117,7 +1964,7 @@ export function useMainWindowWorkspace(options: {
       diskConflictSoftRef.current = null;
       resetRenameMaintenanceState();
       subtreeMarkdownCache.invalidateAll();
-      vaultBacklinkDiskBodyCacheRef.current = {};
+      clearBacklinkDiskBodyCache();
       setVaultSettings(null);
       try {
         await setVaultSession(root);
@@ -2199,7 +2046,14 @@ export function useMainWindowWorkspace(options: {
         setBusy(false);
       }
     },
-    [fs, refreshNotes, resetRenameMaintenanceState, bumpEditorClosedStack, subtreeMarkdownCache],
+    [
+      fs,
+      refreshNotes,
+      resetRenameMaintenanceState,
+      clearBacklinkDiskBodyCache,
+      bumpEditorClosedStack,
+      subtreeMarkdownCache,
+    ],
   );
 
   useEffect(() => {
@@ -2501,7 +2355,7 @@ export function useMainWindowWorkspace(options: {
         lastCoarseRefreshAtMs = now;
       }
       subtreeMarkdownCache.invalidateAll();
-      vaultBacklinkDiskBodyCacheRef.current = {};
+      clearBacklinkDiskBodyCache();
       void refreshNotes(vaultRoot);
       setFsRefreshNonce(n => n + 1);
       // Only rescan podcast catalog when podcast-relevant files change (YYYY podcasts.md or 📻 *.md).
@@ -2544,6 +2398,7 @@ export function useMainWindowWorkspace(options: {
     openMarkdownInEditor,
     loadFullMarkdownIntoInboxEditor,
     scheduleBacklinksDeferOneFrameAfterLoad,
+    clearBacklinkDiskBodyCache,
     subtreeMarkdownCache,
   ]);
 
