@@ -156,6 +156,7 @@ import type {
   WorkspaceFrontmatterController,
   WorkspaceLinkController,
   WorkspaceNotificationsState,
+  WorkspacePersistenceController,
   WorkspaceSelectionController,
   WorkspaceTabsController,
   WorkspaceTreeController,
@@ -481,12 +482,7 @@ export type UseMainWindowWorkspaceResult = {
   elevateDiskConflictSoftToBlocking: () => void;
   dismissDiskConflictSoft: () => void;
   hydrateVault: (root: string) => Promise<void>;
-  /** Ctrl/Cmd+S dispatch for Inbox editor (submit while composing, save otherwise). */
-  onInboxSaveShortcut: () => void;
-  /** Normalize markdown layout for the open vault note (body only; YAML unchanged). */
-  onCleanNoteInbox: () => void;
-  /** Await before closing the window or leaving the vault; cancels pending debounced save and runs persist. */
-  flushInboxSave: () => Promise<void>;
+  persistenceController: WorkspacePersistenceController;
   linkController: WorkspaceLinkController;
   treeController: WorkspaceTreeController;
   /** True once persisted inbox shell state has been considered for the current vault. */
@@ -4571,9 +4567,11 @@ export function useMainWindowWorkspace(options: {
     elevateDiskConflictSoftToBlocking,
     dismissDiskConflictSoft,
     hydrateVault,
-    onInboxSaveShortcut,
-    onCleanNoteInbox,
-    flushInboxSave,
+    persistenceController: {
+      onInboxSaveShortcut,
+      onCleanNoteInbox,
+      flushInboxSave,
+    },
     linkController: {onWikiLinkActivate, onMarkdownRelativeLinkActivate, onMarkdownExternalLinkOpen},
     treeController: {
       deleteNote,

@@ -859,9 +859,7 @@ export default function App() {
     podcastFsNonce,
     deviceInstanceId,
     hydrateVault,
-    onInboxSaveShortcut,
-    onCleanNoteInbox,
-    flushInboxSave,
+    persistenceController: workspacePersistenceController,
     linkController: workspaceLinkController,
     treeController: workspaceTreeController,
     inboxShellRestored,
@@ -926,6 +924,11 @@ export default function App() {
     bulkMoveVaultTreeItems,
     vaultTreeSelectionClearNonce,
   } = workspaceTreeController;
+  const {
+    onInboxSaveShortcut,
+    onCleanNoteInbox,
+    flushInboxSave,
+  } = workspacePersistenceController;
   const {
     err,
     setErr,
