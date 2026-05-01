@@ -153,6 +153,7 @@ import {
 import {planVaultFilesChangedEvent} from '../lib/vaultFilesChangedEventPlan';
 import {isPodcastRelevantVaultPath} from './workspacePodcastFsRelevance';
 import type {
+  WorkspaceConflictController,
   WorkspaceFrontmatterController,
   WorkspaceLinkController,
   WorkspaceNotificationsState,
@@ -470,17 +471,7 @@ export type UseMainWindowWorkspaceResult = {
   deviceInstanceId: string;
   selectionController: WorkspaceSelectionController;
   notificationsState: WorkspaceNotificationsState;
-  /**
-   * Disk diverged from last persisted content while the editor has local edits.
-   * Autosave is blocked until the user reloads or chooses to keep local edits (overwrite disk on next save).
-   */
-  diskConflict: DiskConflictState | null;
-  resolveDiskConflictReloadFromDisk: () => void;
-  resolveDiskConflictKeepLocal: () => void;
-  /** Softer notice: disk diverged but saving may continue until the user opens full resolve. */
-  diskConflictSoft: DiskConflictSoftState | null;
-  elevateDiskConflictSoftToBlocking: () => void;
-  dismissDiskConflictSoft: () => void;
+  conflictController: WorkspaceConflictController;
   hydrateVault: (root: string) => Promise<void>;
   persistenceController: WorkspacePersistenceController;
   linkController: WorkspaceLinkController;
@@ -521,23 +512,6 @@ export type UseMainWindowWorkspaceResult = {
    */
   workspaceSelectShowsActiveTabPill: boolean;
   frontmatterController: WorkspaceFrontmatterController;
-  /**
-   * Comparing a resolved `_autosync-backup-*` file with the note the link was opened from (`baseUri`),
-   * or comparing editor draft with a disk version from a disk conflict.
-   */
-  mergeView:
-    | null
-    | {kind: 'backup'; baseUri: string; backupUri: string}
-    | {kind: 'diskConflict'; baseUri: string; diskMarkdown: string};
-  closeMergeView: () => void;
-  /** Replaces the base note on disk and in the editor with the full backup file contents, then saves. For disk conflict kind: loads disk version and resolves the conflict. */
-  applyFullBackupFromMerge: () => Promise<void>;
-  /** For disk conflict merge view: marks local edits as primary and resolves the conflict. */
-  keepMyEditsFromMerge: () => void;
-  /** Opens the merge panel for the current disk conflict (hard or soft; promotes soft to hard). */
-  enterDiskConflictMergeView: () => void;
-  /** Applies a manually merged body to the editor, resolves any disk conflict, and saves. */
-  applyMergedBodyFromMerge: (body: string) => void;
 };
 
 
@@ -4560,12 +4534,20 @@ export function useMainWindowWorkspace(options: {
       err, setErr, wikiRenameNotice, renameLinkProgress, pendingWikiLinkAmbiguityRename,
       confirmPendingWikiLinkAmbiguityRename, cancelPendingWikiLinkAmbiguityRename,
     },
-    diskConflict,
-    resolveDiskConflictReloadFromDisk,
-    resolveDiskConflictKeepLocal,
-    diskConflictSoft,
-    elevateDiskConflictSoftToBlocking,
-    dismissDiskConflictSoft,
+    conflictController: {
+      diskConflict,
+      resolveDiskConflictReloadFromDisk,
+      resolveDiskConflictKeepLocal,
+      diskConflictSoft,
+      elevateDiskConflictSoftToBlocking,
+      dismissDiskConflictSoft,
+      mergeView,
+      closeMergeView,
+      applyFullBackupFromMerge,
+      keepMyEditsFromMerge,
+      enterDiskConflictMergeView,
+      applyMergedBodyFromMerge,
+    },
     hydrateVault,
     persistenceController: {
       onInboxSaveShortcut,
@@ -4610,11 +4592,5 @@ export function useMainWindowWorkspace(options: {
       applyFrontmatterInnerChange,
       syncFrontmatterStateFromDisk,
     },
-    mergeView,
-    closeMergeView,
-    applyFullBackupFromMerge,
-    keepMyEditsFromMerge,
-    enterDiskConflictMergeView,
-    applyMergedBodyFromMerge,
   };
 }

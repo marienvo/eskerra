@@ -849,12 +849,7 @@ export default function App() {
     selectionController: workspaceSelectionController,
     frontmatterController: workspaceFrontmatterController,
     notificationsState: workspaceNotificationsState,
-    diskConflict,
-    resolveDiskConflictReloadFromDisk,
-    resolveDiskConflictKeepLocal,
-    diskConflictSoft,
-    elevateDiskConflictSoftToBlocking,
-    dismissDiskConflictSoft,
+    conflictController: workspaceConflictController,
     fsRefreshNonce,
     podcastFsNonce,
     deviceInstanceId,
@@ -879,12 +874,6 @@ export default function App() {
     switchTodayHubWorkspace,
     focusActiveTodayHubNote,
     workspaceSelectShowsActiveTabPill,
-    mergeView,
-    closeMergeView,
-    applyFullBackupFromMerge,
-    keepMyEditsFromMerge,
-    enterDiskConflictMergeView,
-    applyMergedBodyFromMerge,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -938,6 +927,20 @@ export default function App() {
     confirmPendingWikiLinkAmbiguityRename,
     cancelPendingWikiLinkAmbiguityRename,
   } = workspaceNotificationsState;
+  const {
+    diskConflict,
+    resolveDiskConflictReloadFromDisk,
+    resolveDiskConflictKeepLocal,
+    diskConflictSoft,
+    elevateDiskConflictSoftToBlocking,
+    dismissDiskConflictSoft,
+    mergeView,
+    closeMergeView,
+    applyFullBackupFromMerge,
+    keepMyEditsFromMerge,
+    enterDiskConflictMergeView,
+    applyMergedBodyFromMerge,
+  } = workspaceConflictController;
 
   const openTodayHubInNewTabAfterActive = useCallback(
     (uri: string) => {
