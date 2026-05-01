@@ -860,20 +860,7 @@ export default function App() {
     inboxShellRestored,
     initialVaultHydrateAttemptDone,
     tabsController: workspaceTabsController,
-    showTodayHubCanvas,
-    todayHubSettings,
-    todayHubBridgeRef,
-    todayHubWikiNavParentRef,
-    todayHubCellEditorRef,
-    prehydrateTodayHubRows,
-    persistTodayHubRow,
-    todayHubCleanRowBlocked,
-    todayHubSelectorItems,
-    activeTodayHubUri,
-    todayHubWorkspacesForSave,
-    switchTodayHubWorkspace,
-    focusActiveTodayHubNote,
-    workspaceSelectShowsActiveTabPill,
+    todayHubController: workspaceTodayHubController,
   } = useMainWindowWorkspace({
     fs,
     inboxEditorRef,
@@ -941,6 +928,22 @@ export default function App() {
     enterDiskConflictMergeView,
     applyMergedBodyFromMerge,
   } = workspaceConflictController;
+  const {
+    showTodayHubCanvas,
+    todayHubSettings,
+    todayHubBridgeRef,
+    todayHubWikiNavParentRef,
+    todayHubCellEditorRef,
+    prehydrateTodayHubRows,
+    persistTodayHubRow,
+    todayHubCleanRowBlocked,
+    todayHubSelectorItems,
+    activeTodayHubUri,
+    todayHubWorkspacesForSave,
+    switchTodayHubWorkspace,
+    focusActiveTodayHubNote,
+    workspaceSelectShowsActiveTabPill,
+  } = workspaceTodayHubController;
 
   const openTodayHubInNewTabAfterActive = useCallback(
     (uri: string) => {

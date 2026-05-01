@@ -17,7 +17,6 @@ import {
   useRef,
   useState,
   type Dispatch,
-  type MutableRefObject,
   type RefObject,
   type SetStateAction,
 } from 'react';
@@ -160,6 +159,7 @@ import type {
   WorkspacePersistenceController,
   WorkspaceSelectionController,
   WorkspaceTabsController,
+  WorkspaceTodayHubController,
   WorkspaceTreeController,
 } from './workspaceReturnShape';
 import {
@@ -481,36 +481,7 @@ export type UseMainWindowWorkspaceResult = {
   /** True after the first vault bootstrap attempt from persisted session (success, empty, or error). */
   initialVaultHydrateAttemptDone: boolean;
   tabsController: WorkspaceTabsController;
-  /** Weekly hub grid under the main editor when `Today.md` is open. */
-  showTodayHubCanvas: boolean;
-  /** Parsed hub settings from merged `Today.md` markdown (body + shell-held YAML). */
-  todayHubSettings: TodayHubSettings | null;
-  todayHubBridgeRef: MutableRefObject<TodayHubWorkspaceBridge>;
-  todayHubWikiNavParentRef: MutableRefObject<string | null>;
-  todayHubCellEditorRef: RefObject<NoteMarkdownEditorHandle | null>;
-  prehydrateTodayHubRows: (rowUris: readonly string[]) => Promise<void>;
-  persistTodayHubRow: (
-    rowUri: string,
-    mergedMarkdown: string,
-    columnCount: number,
-  ) => Promise<void>;
-  /** Skip Today Hub week-row clean when the blocking disk conflict targets that file. */
-  todayHubCleanRowBlocked: (rowUri: string) => boolean;
-  /** Title bar: eligible `Today.md` hubs (vault scan), sorted for stable ordering. */
-  todayHubSelectorItems: readonly {todayNoteUri: string; label: string}[];
-  /** Canonical `Today.md` URI for the workspace whose tab bar is active. */
-  activeTodayHubUri: string | null;
-  /** Per-hub tab snapshots merged for `saveMainWindowUi`. */
-  todayHubWorkspacesForSave: Record<string, TodayHubWorkspaceSnapshot>;
-  /** Switch hub workspace (persists current tabs under the old hub first). */
-  switchTodayHubWorkspace: (todayNoteUri: string) => Promise<void>;
-  /** Open or focus the active hub note (main segment of split control). */
-  focusActiveTodayHubNote: () => void;
-  /**
-   * When true, the title bar workspace control should use the same active styling as an editor tab pill
-   * (active-hub Today visible without a tab row entry for that URI).
-   */
-  workspaceSelectShowsActiveTabPill: boolean;
+  todayHubController: WorkspaceTodayHubController;
   frontmatterController: WorkspaceFrontmatterController;
 };
 
@@ -4573,20 +4544,22 @@ export function useMainWindowWorkspace(options: {
       editorWorkspaceTabs, activeEditorTabId, activateOpenTab, closeEditorTab, reorderEditorWorkspaceTabs,
       closeOtherEditorTabs, closeAllEditorTabs, reopenLastClosedEditorTab, canReopenClosedEditorTab,
     },
-    showTodayHubCanvas,
-    todayHubSettings,
-    todayHubBridgeRef,
-    todayHubWikiNavParentRef,
-    todayHubCellEditorRef,
-    prehydrateTodayHubRows,
-    persistTodayHubRow,
-    todayHubCleanRowBlocked,
-    todayHubSelectorItems,
-    activeTodayHubUri,
-    todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,
-    switchTodayHubWorkspace,
-    focusActiveTodayHubNote,
-    workspaceSelectShowsActiveTabPill,
+    todayHubController: {
+      showTodayHubCanvas,
+      todayHubSettings,
+      todayHubBridgeRef,
+      todayHubWikiNavParentRef,
+      todayHubCellEditorRef,
+      prehydrateTodayHubRows,
+      persistTodayHubRow,
+      todayHubCleanRowBlocked,
+      todayHubSelectorItems,
+      activeTodayHubUri,
+      todayHubWorkspacesForSave: todayHubWorkspacesPersistFiltered,
+      switchTodayHubWorkspace,
+      focusActiveTodayHubNote,
+      workspaceSelectShowsActiveTabPill,
+    },
     frontmatterController: {
       inboxYamlFrontmatterInner,
       applyFrontmatterInnerChange,
